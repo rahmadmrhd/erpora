@@ -11,7 +11,9 @@ Platform ERP modular: **Go modular monolith + React/TypeScript PWA**, satu binar
 | `docs/architecture/api-guidelines.md` | Bentuk WAJIB setiap kontrak & endpoint API |
 | `docs/operations/deployment.md` | Deployment (draft) |
 | `docs/adr/` | Keputusan arsitektur |
-| `Blueprint.md`, `arsitektur.md` | Referensi awal — **abaikan bagian Laravel/PHP/Inertia** |
+| `docs/architecture/` | Draft desain untuk PRD berikutnya (tenancy, offline, events, marketplace, roadmap); indeks & pemetaan rujukan lama di `docs/architecture/README.md` |
+
+Rujukan "Blueprint §x" / "arsitektur §x" di PRD menunjuk dokumen awal yang sudah dihapus (asli ada di commit `c42d676`); lihat tabel pemetaan di `docs/architecture/README.md`. Dokumen **draft desain** bukan spesifikasi mengikat — hanya PRD, ADR, dan api-guidelines yang mengikat.
 
 Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** sebelum mengerjakan. Keputusan baru dicatat di tabel keputusan PRD terkait (Q-number) atau ADR.
 

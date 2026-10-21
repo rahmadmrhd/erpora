@@ -5,7 +5,7 @@
 | Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q20 diputuskan     |
 | Tanggal        | 21 Oktober 2026                                                       |
 | Fase roadmap   | Blueprint §14 fase **01 — Architecture foundation** + fase **03 — Module Registry & lifecycle** |
-| Sumber acuan   | `Blueprint.md` (tanpa bagian Laravel/PHP/Inertia), `arsitektur.md`    |
+| Sumber acuan   | Dokumen awal Blueprint & arsitektur (sudah dihapus; materinya ada di `docs/architecture/`, pemetaan rujukan di `docs/architecture/README.md`) |
 | Dokumen lanjut | **PRD-001 Core** (berikutnya), lalu PRD Tenancy, PRD Offline & Sync, PRD Notifications, dst. |
 
 ---
@@ -41,7 +41,7 @@ Multi-tenancy **bukan fokus**. Yang dibuat hanya struktur dan *seam*-nya, supaya
 
 ### 2.1. Goals
 
-1. **G1 — Struktur repository final**: sesuai Blueprint §5 dan arsitektur.md §7, diterjemahkan ke Go + Bun.
+1. **G1 — Struktur repository final**: sesuai Blueprint §5 dan arsitektur §7, diterjemahkan ke Go + Bun.
 2. **G2 — Batas modul ditegakkan secara teknis**: compiler Go dan architecture test menolak pelanggaran dependensi di backend maupun frontend.
 3. **G3 — Satu perintah build menghasilkan satu binary**: binary tersebut menyajikan API dan SPA/PWA.
 4. **G4 — Developer experience**: satu perintah menjalankan lingkungan dev (Go API + Bun dev server + PostgreSQL), dan hot reload berjalan.
@@ -345,7 +345,7 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 | -------------------- | --------------------------------------------------------------------------- |
 | `GET /healthz`       | Liveness, tanpa dependensi eksternal                                        |
 | `GET /readyz`        | Readiness: koneksi PostgreSQL + migrasi platform sudah diterapkan           |
-| `GET /api/bootstrap` | Bentuk arsitektur.md §6: `appVersion`, `tenantId` (tenant default), `modules[]` dari runtime snapshot (FR-19: `key`, `slug`, `version`, `status`, `basePath`, `offline`), `permissions: []`, `revision`. Header `ETag` = revision |
+| `GET /api/bootstrap` | Bootstrap manifest: `appVersion`, `tenantId` (tenant default), `modules[]` dari runtime snapshot (FR-19: `key`, `slug`, `version`, `status`, `basePath`, `offline`), `permissions: []`, `revision`. Header `ETag` = revision |
 | `GET /*`             | SPA handler: file statis dari embed. Path tanpa ekstensi dan bukan `/api/*` diarahkan ke `index.html` |
 
 - Router: `net/http.ServeMux` dengan pola method+path (Go ≥ 1.22). Tidak memakai framework router. ServeMux adalah **detail implementasi platform** dan tidak pernah diekspos ke modul (lihat FR-05). Karena itu platform bisa beralih ke router lain (mis. chi) tanpa breaking change pada modul.
@@ -358,7 +358,7 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 
 ### FR-05 — Kontrak modul (SDK Go) & registry
 
-Definisikan di `sdk/module` (kontrak publik, mengikuti arsitektur.md §2 dan lima kontrak Blueprint §6). **Modul tidak menerima router.** Modul mendeklarasikan route lewat API milik SDK, dan platform yang memasangnya. Ini menyimpang secara sengaja dari contoh `RegisterRoutes(mux *http.ServeMux)` di arsitektur.md (disetujui; dicatat di ADR-006).
+Definisikan di `sdk/module` (kontrak publik, mengikuti arsitektur §2 dan lima kontrak Blueprint §6). **Modul tidak menerima router.** Modul mendeklarasikan route lewat API milik SDK, dan platform yang memasangnya. Ini menyimpang secara sengaja dari contoh `RegisterRoutes(mux *http.ServeMux)` di dokumen arsitektur awal (disetujui; dicatat di ADR-006).
 
 ```go
 // Runtime contract
@@ -457,7 +457,7 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 ### FR-08 — Frontend application shell
 
 - React + TypeScript `strict` (plus `noUncheckedIndexedAccess`).
-- **TanStack Router** dengan **code-based routing**. Setiap modul mengekspor fungsi registrasi route yang menerima parent route bertipe spesifik (bukan `AnyRoute`, arsitektur.md §3). `app/router` mengagregasi route modul secara statis saat build. Halaman modul memakai `.lazy()` untuk code splitting.
+- **TanStack Router** dengan **code-based routing**. Setiap modul mengekspor fungsi registrasi route yang menerima parent route bertipe spesifik (bukan `AnyRoute`). `app/router` mengagregasi route modul secara statis saat build. Halaman modul memakai `.lazy()` untuk code splitting.
 - **Route guard**: route modul yang statusnya bukan `enabled` di bootstrap menampilkan halaman "Modul tidak aktif" (UX saja; backend tetap menolak, FR-19).
 - **TanStack Query**: satu `QueryClient`. Query key berprefiks scope `[tenantId, ...]`, dengan `tenantId` dari bootstrap (FR-21). Bootstrap di-refetch saat window focus dan setelah operasi modul, memakai `ETag`/revision.
 - **TanStack DB**: inisialisasi provider dan satu collection contoh (`example`) yang bersumber dari Query, sebagai bukti integrasi. Persistence IndexedDB menyusul di PRD offline.
@@ -469,12 +469,12 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 
 ### FR-09 — Frontend module registry & SDK TS
 
-- `packages/module-sdk` menyediakan `defineModule()` dan tipe `FrontendModule` (`key`, `slug`, `version`, `navigation[]`, `registerRoutes`, `offline: OfflinePolicy` UI-side). `OfflinePolicy` diambil dari arsitektur.md §5.
+- `packages/module-sdk` menyediakan `defineModule()` dan tipe `FrontendModule` (`key`, `slug`, `version`, `navigation[]`, `registerRoutes`, `offline: OfflinePolicy` UI-side). `OfflinePolicy` mengikuti `docs/architecture/offline-strategy.md` §3.
 - Frontend registry mencocokkan setiap modul frontend dengan entri bootstrap berdasarkan `key`:
   - Tidak ada di bootstrap → diabaikan, warning dicatat.
   - Versi frontend berbeda dari versi backend → warning (indikasi build tidak sinkron).
   - Hanya status `enabled` yang memunculkan navigasi.
-- **Backend tetap otoritas** (arsitektur.md §2).
+- **Backend tetap otoritas** (prinsip §7.2).
 
 **AC:** unit test (`bun test`) untuk filter modul aktif, penolakan `key` duplikat, dan perilaku bila modul tidak ada di bootstrap.
 
@@ -489,7 +489,7 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 
 ### FR-11 — Kerangka sync engine (struktur saja)
 
-- Backend `internal/platform/sync` dan frontend `src/platform/sync` berisi `README.md` plus tipe kontrak `OutboxOperation` (field mengikuti arsitektur.md §5: `operationId`, `module`, `action`, `tenantId`, `entityId`, `baseVersion`, `payload`, `status`, `traceparent?`).
+- Backend `internal/platform/sync` dan frontend `src/platform/sync` berisi `README.md` plus tipe kontrak `OutboxOperation` (field mengikuti `docs/architecture/offline-strategy.md` §4: `operationId`, `module`, `action`, `tenantId`, `entityId`, `baseVersion`, `payload`, `status`, `traceparent?`).
 - Belum ada logika. Protokol didefinisikan di PRD sync.
 
 **AC:** tipe `OutboxOperation` ada di Go dan TS, dan tes kontrak memastikan nama field JSON sama.

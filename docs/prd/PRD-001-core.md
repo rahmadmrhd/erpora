@@ -6,7 +6,7 @@
 | Tanggal        | 21 Oktober 2026                                                       |
 | Bergantung pada | PRD-000 (Accepted): Module Registry, SDK, seam tenancy, observability, CLI |
 | Fase roadmap   | Blueprint §14 fase **02 — Core platform** (tanpa tenancy) · Blueprint §14.1 urutan 1 "Core + Settings" |
-| Sumber acuan   | `Blueprint.md`, `arsitektur.md` §4 & §6, keputusan diskusi 21 Okt 2026 |
+| Sumber acuan   | Dokumen awal Blueprint & arsitektur §4 & §6 (sudah dihapus; lihat `docs/architecture/README.md`), keputusan diskusi 21 Okt 2026 |
 
 ---
 
@@ -19,7 +19,7 @@ PRD-000 menghasilkan platform yang dapat memuat, mengaktifkan, dan menonaktifkan
 3. **Settings**: konfigurasi platform dan modul berbasis schema.
 4. **Audit**: siapa melakukan apa, kapan, dan terhadap apa.
 
-Prinsip dari arsitektur.md tetap berlaku: **backend adalah otoritas**. Permission di frontend hanya untuk UX.
+Prinsip arsitektur tetap berlaku (PRD-000 §7): **backend adalah otoritas**. Permission di frontend hanya untuk UX.
 
 ## 2. Tujuan & non-goals
 
@@ -132,7 +132,7 @@ Mengikuti Blueprint §3.1: identitas global di **control DB**, hak akses bisnis 
 - **Rotasi kunci**: `erp core:rotate-keys` membuat kunci baru (`active`). Kunci lama berstatus `retiring` sampai seluruh token bertanda tangan kunci itu kedaluwarsa. Kunci publik diterbitkan di `GET /.well-known/jwks.json`. Kunci privat dienkripsi dengan `ERP_SECRET_KEY`.
 - **CSRF**: API memakai header `Authorization: Bearer` sehingga kebal CSRF. Satu-satunya endpoint berbasis cookie (`refresh`) dilindungi `SameSite=Strict` + pemeriksaan header `Origin`.
 - **CORS**: default same-origin saja. Origin klien eksternal (mis. app desktop berbasis web) diatur lewat allowlist di settings.
-- **Offline PWA**: snapshot bootstrap tetap dapat dibaca. Operasi outbox dikirim ulang setelah refresh token berhasil. Token kedaluwarsa tidak pernah dianggap otorisasi (arsitektur.md §6).
+- **Offline PWA**: snapshot bootstrap tetap dapat dibaca. Operasi outbox dikirim ulang setelah refresh token berhasil. Token kedaluwarsa tidak pernah dianggap otorisasi (`docs/architecture/offline-strategy.md` §5).
 
 **AC:** token dengan tanda tangan salah, `kid` tak dikenal, `exp` lewat, atau `sid` tercabut ditolak 401; reuse refresh token mencabut sesi; rotasi kunci tanpa downtime (token lama tetap valid sampai kedaluwarsa); access token tidak pernah ditulis ke `localStorage`/`sessionStorage` (diuji E2E dengan inspeksi storage).
 

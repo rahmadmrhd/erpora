@@ -168,7 +168,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 
 - Setiap respons record menyertakan `version` dan header `ETag: "3"`.
 - `PATCH`, `DELETE`, dan aksi record **SEBAIKNYA** mengirim `If-Match: "3"`. Bila versi di server sudah berbeda → `412 version_mismatch` beserta record terbaru di `error.details`.
-- Endpoint yang dipakai sync offline **WAJIB** mensyaratkan `If-Match` (setara `baseVersion` di arsitektur.md §5).
+- Endpoint yang dipakai sync offline **WAJIB** mensyaratkan `If-Match` (setara `baseVersion` di `offline-strategy.md` §4).
 
 ### 7.2. Idempotency
 
@@ -177,7 +177,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
   - Kunci sama + body sama → mengembalikan **respons pertama** apa adanya (tidak memproses ulang).
   - Kunci sama + body berbeda → `422 idempotency_key_reused`.
   - Permintaan pertama masih diproses → `409 request_in_progress`.
-- `operationId` di outbox arsitektur.md §5 dikirim sebagai `Idempotency-Key`.
+- `operationId` di outbox (`offline-strategy.md` §4) dikirim sebagai `Idempotency-Key`.
 
 ### 7.3. Validasi
 
