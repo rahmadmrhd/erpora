@@ -2,7 +2,7 @@
 
 | Atribut        | Nilai                                                                 |
 | -------------- | --------------------------------------------------------------------- |
-| Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q21 diputuskan     |
+| Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q22 diputuskan     |
 | Tanggal        | 21 Oktober 2026                                                       |
 | Fase roadmap   | Blueprint §14 fase **01 — Architecture foundation** + fase **03 — Module Registry & lifecycle** |
 | Sumber acuan   | Dokumen awal Blueprint & arsitektur (sudah dihapus; materinya ada di `docs/architecture/`, pemetaan rujukan di `docs/architecture/README.md`) |
@@ -932,6 +932,33 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 
 ---
 
+### FR-24 — Primitif keamanan platform
+
+Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap primitif keamanan sudah tersedia sebelum konsumen pertamanya ditulis**, sehingga modul tidak pernah membuat versinya sendiri yang kelak harus di-refactor.
+
+**24.1. M1 — rantai pasok & pelaporan**
+- `gosec` aktif di `golangci-lint` (sudah termasuk FR-14).
+- **SBOM** CycloneDX dibuat di CI untuk setiap Go module (`cyclonedx-gomod`) dan untuk dependensi frontend, diunggah sebagai artifact build.
+- `SECURITY.md` di root: cara melaporkan kerentanan secara privat dan target waktu perbaikan (security-guidelines §5).
+
+**24.2. M2 — primitif untuk modul**
+- **`sdk/egress`**: satu-satunya HTTP client keluar untuk modul dan platform (OIDC di PRD-001 memakainya). Aturan anti-SSRF sesuai security-guidelines §3.3 (allowlist skema, blokir alamat internal/metadata setelah resolve DNS, dial ke IP tervalidasi, validasi setiap redirect, timeout, batas ukuran). Arch test: `modules/**` dilarang memakai `http.DefaultClient`, `http.Get/Post/Head/PostForm`, atau membuat `http.Client` sendiri.
+- **Klasifikasi data**: field group di manifest memiliki `classification` (`public | internal | confidential | highly_confidential`); kontrak OpenAPI memakai `x-erp-classification` per properti. Linter kontrak (FR-23) menolak properti `highly_confidential` di respons, di parameter URL, dan tanpa klasifikasi untuk field sensitif yang dikenali (mis. nama `password`, `secret`, `token`, `nik`, `npwp`).
+- **Helper decode request** (`sdk/httpx.DecodeJSON`): batas ukuran body (default 1 MB, dapat ditimpa per route), batas kedalaman, `DisallowUnknownFields`, decode hanya ke DTO. Arch test: decode JSON ke tipe dari `internal/infrastructure` ditolak.
+- **Middleware `Cache-Control: no-store`** untuk respons route yang mengembalikan data `confidential`/`highly_confidential` (berdasarkan klasifikasi di kontrak).
+- **Helper ekspor** (`sdk/export`): CSV/XLSX dengan proteksi formula injection, menghormati `authz.MaskFields`, dan mencatat ekspor ke audit (audit aktif setelah PRD-001).
+
+**24.3. M3 — frontend**
+- Komponen `SafeHtml` di `@erp/ui` (DOMPurify, konfigurasi ketat); lint rule melarang `dangerouslySetInnerHTML` di luar komponen ini.
+- **OWASP ZAP baseline** di CI terhadap `erp serve` lokal (binary release + DB container), dengan daftar pengecualian yang di-review.
+
+**24.4. Di luar PRD-000** — pipeline upload file (security-guidelines §3.7) dibangun di **PRD Files**, sebelum fitur upload pertama.
+
+**AC:**
+- 24.1: artifact SBOM tersedia di setiap build CI; `SECURITY.md` ada dan dirujuk README.
+- 24.2: test tabel egress menolak `http://127.0.0.1`, `http://169.254.169.254`, `http://[::1]`, `http://10.0.0.1`, hostname yang resolve ke alamat privat, dan redirect ke alamat privat; arch test menolak fixture modul yang memakai `http.Get`; linter kontrak menolak fixture dengan `password` di respons atau token di query; `DecodeJSON` menolak body > batas, field tak dikenal, dan kedalaman berlebih; ekspor CSV mengawali `=1+1` dengan `'`.
+- 24.3: lint menolak `dangerouslySetInnerHTML` di luar `SafeHtml`; ZAP baseline tanpa temuan High di CI.
+
 ## 6. Kebutuhan non-fungsional
 
 | ID     | Kebutuhan                                                                                     |
@@ -992,11 +1019,12 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 | Q19 | Pedoman & penegakan kontrak API?               | ✅ `docs/architecture/api-guidelines.md` wajib diikuti; **setiap modul punya kontrak OpenAPI sendiri** (`modules/<x>/openapi.yaml`), platform hanya memiliki komponen bersama & endpoint platform; linter Spectral di CI (FR-04, FR-23) |
 | Q20 | Konvensi API dasar?                            | ✅ JSON camelCase; tanpa nomor versi di URL dan **tanpa breaking change** (expand → migrate → contract, ditegakkan `oasdiff`); pagination halaman untuk UI + cursor untuk sync/integrasi (api-guidelines §4, §6, §14) |
 | Q21 | Lokasi frontend modul?                         | ✅ **Co-location**: frontend setiap modul di `modules/<name>/web` (package `@erp/module-<name>`); komponen generik di `packages/ui`, layanan frontend platform di `packages/platform-web`; `web/` hanya app shell perakit. Batas ditegakkan lewat `package.json` (F1–F3) |
+| Q22 | Penjadwalan primitif keamanan? | ✅ Primitif tersedia sebelum konsumen pertama: M1 SBOM + `SECURITY.md` + gosec; M2 `sdk/egress`, klasifikasi data, `DecodeJSON`, `no-store`, `sdk/export`; M3 `SafeHtml` + ZAP; upload di PRD Files (FR-24) |
 | Q15 | Struktur Go module (`go.mod`) untuk SDK & modul? | ✅ **Multi-module + `go.work`**: root (platform), `sdk`, dan setiap `modules/<name>` adalah Go module sendiri dengan tag versi independen (§4, D5/D8/D9). Dicatat di ADR-006 |
 
 ## 10. Definition of Done
 
-- [ ] Semua AC FR-01 s.d. FR-23 terpenuhi.
+- [ ] Semua AC FR-01 s.d. FR-24 terpenuhi.
 - [ ] CI hijau di branch utama. PR uji pelanggaran batas modul (D2, D8, F2) terbukti gagal.
 - [ ] Seluruh skenario Blueprint §12.1 yang relevan untuk modul bawaan lulus di integration/E2E test (FR-19 AC).
 - [ ] `bin/erp` hasil CI dapat dijalankan di Linux dan Windows, menyajikan SPA yang installable sebagai PWA, dan dapat mengelola modul lewat CLI.
@@ -1008,9 +1036,9 @@ PRD ini dikerjakan dalam empat milestone. Setiap milestone harus lolos exit gate
 
 | Milestone | Cakupan | Exit gate |
 | --------- | ------- | --------- |
-| **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21 | `bin/erp` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
-| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-16 (ADR-006/007) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
-| **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3 | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
+| **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21, FR-24.1 | `bin/erp` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
+| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-24.2, FR-16 (ADR-006/007) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
+| **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3, FR-24.3 | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
 | **M4 — Observability lengkap** | FR-17.3–17.8 | Trace end-to-end browser → Go → DB terbukti; lifecycle modul ter-trace; `promtool` lolos |
 
 ## 12. Urutan pengerjaan yang disarankan

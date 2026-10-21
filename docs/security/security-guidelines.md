@@ -202,10 +202,13 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | Arch test D1–D11, header keamanan, request ID, DSN redaction, secret scan | **M1** (sedang dibangun) |
 | Route permission allowlist, kontrak ↔ route, linter kontrak | **M2** (PRD-000) |
 | Authz helper, test IDOR, analyzer authz, MFA, audit | **PRD-001** |
-| `sdk/egress`, helper ekspor CSV, `SafeHtml`, upload pipeline, `x-erp-classification`, SBOM, ZAP baseline, `SECURITY.md` | **Belum dijadwalkan**: perlu ditambahkan ke PRD/plan (lihat pertanyaan terbuka di bawah) |
+| SBOM, `SECURITY.md`, gosec | **M1** (PRD-000 FR-24.1) |
+| `sdk/egress`, klasifikasi data + `x-erp-classification`, `DecodeJSON`, `no-store`, `sdk/export` | **M2** (PRD-000 FR-24.2) |
+| `SafeHtml`, OWASP ZAP baseline | **M3** (PRD-000 FR-24.3) |
+| Pipeline upload file | **PRD Files** (sebelum fitur upload pertama) |
 
 ## 8. Pertanyaan terbuka
 
-1. Penjadwalan kontrol yang belum masuk PRD (§7 baris terakhir): ke PRD-000 M2, PRD-001, atau PRD tersendiri "Security Hardening"?
+1. ~~Penjadwalan kontrol~~ → diputuskan: PRD-000 FR-24 (Q22).
 2. Batas waktu perbaikan kerentanan (§5) dan target ASVS: Level 2 cukup, atau Level 3 untuk modul keuangan/HR?
 3. Pemindaian malware wajib juga untuk self-hosted, atau opsional?
