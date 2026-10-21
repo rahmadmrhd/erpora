@@ -8,6 +8,7 @@
 | [tenancy-design.md](tenancy-design.md) | Draft desain | Target database-per-tenant, control DB, resolver, isolasi → PRD Tenancy |
 | [module-integration.md](module-integration.md) | Draft desain | Kontrak antarmodul, sinkron vs event, outbox server → PRD Events & Jobs |
 | [extensions-and-marketplace.md](extensions-and-marketplace.md) | Draft desain | Kelas ekstensi, pipeline paket, persyaratan marketplace → PRD Marketplace / ADR-008 |
+| [transaction-data-standards.md](transaction-data-standards.md) | Draft v1 (review) | Standar transaksi & integritas data (ISO 8601/4217/15489, SoD, ledger, pembulatan, retensi) |
 | [roadmap-and-risks.md](roadmap-and-risks.md) | Draft desain | Roadmap fase, urutan modul, entitas domain, fondasi UX, testing, versi & rilis, scaling, daftar ADR, risiko |
 
 "Draft desain" berarti materi dari dokumen awal yang belum menjadi PRD; ia menjadi masukan saat PRD terkait ditulis, bukan spesifikasi yang mengikat.

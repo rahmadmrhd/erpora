@@ -9,6 +9,8 @@ Platform ERP modular: **Go modular monolith + React/TypeScript PWA**, satu binar
 | `docs/prd/PRD-000-inisialisasi-project.md` | Struktur repo, Module Registry, SDK, CLI, observability, seam tenancy (Accepted) |
 | `docs/prd/PRD-001-core.md` | Identity, RBAC, Settings, Audit (Accepted) |
 | `docs/architecture/api-guidelines.md` | Bentuk WAJIB setiap kontrak & endpoint API |
+| `docs/security/security-guidelines.md` | Pedoman keamanan (ISO/IEC 27001/27002, ASVS L2, OWASP, UU PDP): IDOR, injection, SSRF, sensitive data exposure, dll. |
+| `docs/architecture/transaction-data-standards.md` | Standar transaksi & integritas data (ISO 8601/4217/15489, SoD, immutabilitas, ledger, pembulatan, retensi) |
 | `docs/operations/deployment.md` | Deployment (draft) |
 | `docs/adr/` | Keputusan arsitektur |
 | `docs/architecture/` | Draft desain untuk PRD berikutnya (tenancy, offline, events, marketplace, roadmap); indeks & pemetaan rujukan lama di `docs/architecture/README.md` |
@@ -23,7 +25,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - **Fitur baru di luar PRD** (modul bisnis baru, integrasi baru, perubahan arsitektur, pekerjaan 4+ file) → **wajib memakai Kiro spec** (skill `kiro-spec`, command `/spec`):
   - Lokasi: `.kiro/specs/<nama-spec>/` berisi `.config.kiro`, `requirements.md`, `design.md`, `tasks.md`.
   - Alur default requirements-first: `/spec-req` → `/spec-design` → `/spec-task`, lalu eksekusi dengan `/spec-status`.
-  - Spec **harus patuh** pada PRD-000, PRD-001, dan api-guidelines; bagian design wajib menyebut resource/aksi permission, field group, scope, kontrak OpenAPI modul, dan migrasi.
+  - Spec **harus patuh** pada PRD-000, PRD-001, api-guidelines, security-guidelines, dan transaction-data-standards; bagian design wajib menyebut resource/aksi permission, field group + klasifikasi data, scope, kontrak OpenAPI modul, migrasi, bagian **Keamanan** (STRIDE, titik masuk ID/IDOR, koneksi keluar/SSRF, file, data offline), dan — untuk resource transaksional — checklist `transaction-data-standards.md` §15.
   - Bug fix kecil (1–3 file) atau perubahan minor boleh langsung dikerjakan tanpa spec.
 
 ## Aturan arsitektur (ditegakkan otomatis — jangan dilanggar)
