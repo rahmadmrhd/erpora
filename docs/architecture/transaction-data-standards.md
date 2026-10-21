@@ -85,9 +85,21 @@ Isolation level default `READ COMMITTED`; operasi yang membaca lalu menulis berd
 | Presisi penyimpanan | Uang: `numeric(20,6)` untuk perhitungan menengah; nilai final dibulatkan ke **minor unit ISO 4217** mata uangnya. Kuantitas: `numeric(20,6)`, dibulatkan ke presisi satuan |
 | Mata uang | Setiap nilai uang disimpan bersama kode mata uangnya. Dokumen multi-currency menyimpan **nilai transaksi** dan **nilai mata uang dasar** |
 | Kurs | Disimpan pada dokumen: nilai kurs (min. 6 desimal), tanggal kurs, sumber kurs. Kurs tidak dihitung ulang setelah dokumen di-submit |
-| Pembulatan | Metode dideklarasikan per company/modul (default **half-up**; **half-even** bila diminta kebijakan akuntansi) dan **titik pembulatannya** ditetapkan (per baris atau per dokumen). Selisih pembulatan diposting ke akun selisih pembulatan, bukan dibuang |
+| Pembulatan | **Dapat dikonfigurasi** (settings), dalam tiga lapis — lihat §6.1. Selisih pembulatan selalu diposting ke akun selisih pembulatan, bukan dibuang |
 | Pajak | Tarif pajak disimpan (snapshot) per baris dokumen; dasar pengenaan & pembulatan pajak mengikuti peraturan yang berlaku |
 | Satuan | Kode satuan konsisten (mis. UN/ECE Rec. 20); faktor konversi satuan disimpan pada baris transaksi (snapshot) |
+
+### 6.1. Konfigurasi pembulatan (tiga lapis)
+
+| Lapis | Pengaturan | Contoh |
+| --- | --- | --- |
+| **1. Presisi mata uang** (per mata uang) | Jumlah digit desimal, default dari minor unit ISO 4217 | IDR 2, JPY 0, KWD 3 |
+| **2. Metode pembulatan perhitungan** (per company, dapat ditimpa per modul) | `half_up` (pembulatan komersial, default), `half_even` (*banker's rounding*), `up`, `down`; dan **titik pembulatan**: per baris atau per total dokumen | Harga × kuantitas − diskon, pajak per baris |
+| **3. Pembulatan total / kas** (per tipe dokumen atau per POS/kanal) | Kelipatan (`increment`), arah (`nearest`/`up`/`down`), dan akun selisih | POS tunai: total dibulatkan ke **Rp 100** atau **Rp 500**; faktur: tanpa pembulatan total |
+
+- Pembulatan lapis 3 **tidak mengubah** nilai baris dan pajak. Ia menambah baris/komponen **"Pembulatan"** yang tercatat di dokumen dan diposting ke akun selisih pembulatan, sehingga jejaknya utuh dan pajak tetap dihitung dari nilai sebelum pembulatan.
+- Konfigurasi yang dipakai **disalin (snapshot) ke dokumen** saat submit (§7): perubahan konfigurasi tidak mengubah dokumen lama.
+- Konfigurasi pembulatan memakai Settings berbasis schema (PRD-001 FR-120), dan perubahannya tercatat di audit.
 
 ## 7. Snapshot data referensi
 
@@ -102,8 +114,9 @@ Transaksi **menyalin** nilai master data yang memengaruhi hasilnya pada saat dib
 
 ## 9. Pemisahan tugas & persetujuan (`ISO/IEC 27002:5.3`)
 
-- Resource yang berisiko (pembayaran, jurnal manual, penyesuaian stok bernilai besar, perubahan harga massal) dapat mendeklarasikan **maker-checker** di manifest: pembuat dokumen **tidak boleh** meng-`approve`/`post` dokumennya sendiri.
-- **Batas nilai** (mis. penyesuaian > Rp 10.000.000 butuh approval level 2) dideklarasikan sebagai aturan modul, dievaluasi server.
+- Modul mendeklarasikan resource yang **mendukung** maker-checker di manifest (mis. pembayaran, jurnal manual, penyesuaian stok, perubahan harga massal). **Aktif atau tidaknya diatur lewat konfigurasi** (Settings per company, per resource): bila aktif, pembuat dokumen **tidak boleh** meng-`approve`/`post` dokumennya sendiri.
+- **Batas nilai** (mis. penyesuaian > Rp 10.000.000 butuh approval level 2) juga dapat dikonfigurasi per resource dan dievaluasi server.
+- Perubahan konfigurasi maker-checker dan batas nilai tercatat di audit (karena mengubah kontrol internal).
 - Kombinasi role yang bertentangan (mis. "membuat vendor" + "membayar vendor") dapat ditandai sebagai **konflik SoD**. Penugasan role yang melanggar memberi peringatan, atau ditolak sesuai kebijakan, dan tercatat di audit.
 
 ## 10. Rekonsiliasi & kontrol berkala
@@ -128,9 +141,11 @@ Transaksi **menyalin** nilai master data yang memengaruhi hasilnya pada saat dib
 
 ## 13. Retensi, arsip, dan penghapusan (ISO 15489, `27002:8.10`, UU PDP)
 
-| Data | Kebijakan awal |
+Retensi **dapat dikonfigurasi per kategori data** (Settings), dengan nilai default di bawah. Bila admin menetapkan nilai di bawah **batas minimum hukum** yang tercatat untuk kategori tersebut, sistem menampilkan peringatan, meminta konfirmasi eksplisit, dan mencatatnya di audit. Retensi juga **tidak berarti data harus tetap di database utama**: rekaman lama dapat dipindah ke **arsip** (penyimpanan murah, read-only, tetap dapat dicari untuk audit), sehingga database operasional tetap ramping.
+
+| Data | Default |
 | --- | --- |
-| Dokumen & catatan pembukuan/transaksi | Disimpan minimal **10 tahun** (mengikuti kewajiban penyimpanan dokumen perpajakan di Indonesia — konfirmasi dengan konsultan) |
+| Dokumen & catatan pembukuan/transaksi | **10 tahun**: mengikuti kewajiban penyimpanan dokumen perpajakan di Indonesia (batas minimum hukum; konfirmasi dengan konsultan). Setelah melewati periode aktif (mis. 2 tahun), dipindah ke arsip |
 | Audit log | Sesuai settings (default 365 hari, PRD-001 FR-130). Untuk event terkait transaksi keuangan, diselaraskan dengan retensi dokumen |
 | Data pribadi | Diproses sesuai tujuan dan dasar hukum (UU PDP). Permintaan penghapusan dari subjek data yang berbenturan dengan kewajiban retensi diselesaikan dengan **pseudonimisasi** field pribadi, bukan menghapus rekaman transaksi |
 | Draft yang tidak pernah di-submit | Boleh dihapus permanen |
@@ -161,9 +176,11 @@ Penghapusan permanen dicatat di audit (apa, kapan, siapa, dasar).
 - [ ] Kebijakan retensi & penghapusan.
 - [ ] Test properti, konkurensi, idempotensi, immutabilitas.
 
-## 16. Pertanyaan terbuka
+## 16. Keputusan & pertanyaan terbuka
 
-1. Metode pembulatan default: half-up atau half-even?
-2. Dokumen apa saja yang wajib gapless pada rilis pertama?
-3. Apakah maker-checker wajib (bukan opsional) untuk jurnal manual dan pembayaran?
-4. Konfirmasi angka retensi 10 tahun dengan konsultan pajak.
+| # | Pertanyaan | Status |
+| --- | --- | --- |
+| T1 | Metode pembulatan? | ✅ **Konfigurasi tiga lapis** (presisi mata uang, metode perhitungan default `half_up`, pembulatan total/kas mis. Rp 100 untuk POS) — §6.1 |
+| T2 | Maker-checker wajib atau opsional? | ✅ **Diatur per konfigurasi** per resource yang mendukungnya — §9 |
+| T3 | Retensi? | ✅ **Dapat dikonfigurasi per kategori** dengan default dan peringatan bila di bawah batas minimum hukum; data lama dipindah ke arsip — §13. Angka minimum hukum tetap perlu dikonfirmasi konsultan pajak |
+| T4 | Dokumen apa saja yang wajib gapless pada rilis pertama? | ⏳ Terbuka — diputuskan di PRD modul Sales/Finance |
