@@ -17,6 +17,21 @@
 | 06 Hybrid release & marketplace beta | Container image, deployment profile, installer & upgrade self-hosted, signed package, publisher verification, isolated execution, release channel & rollback | SaaS dan self-hosted memakai release yang sama; lifecycle paket teraudit | Belum (lihat `extensions-and-marketplace.md`) |
 | 07 Production hardening & scaling | Load test, query profiling, horizontal scaling, worker, observability per tenant, backup drill, DR, security review | Target performa, availability, recovery, biaya terukur | Belum |
 
+### 1.1. PRD-002 Approval Workflow — keputusan awal (22 Okt 2026)
+
+Urutan: **PRD-000 → PRD-001 Core → PRD-002 Approval Workflow → modul bisnis pertama.** Approval harus ada sebelum modul bisnis agar tidak ada modul yang menulis logika approval sendiri lalu di-refactor.
+
+| Keputusan | Isi |
+| --- | --- |
+| Sifat | **Wajib di semua modul.** Setiap resource dokumen terintegrasi dengan approval; ada atau tidaknya tahap persetujuan ditentukan skema |
+| Lokasi | **Seluruhnya di modul Core** (`modules/core`): mesin approval, kontrak `modules/core/contract` (mis. `RequestApproval`, `Status`, `Decide`), UI kotak masuk, konfigurasi skema, riwayat. Platform tidak memanggil approval (pertanyaan penentu: hanya use case modul yang membutuhkannya), sehingga tidak diletakkan di platform |
+| Skema approval (diatur di Core) | Per resource + aksi (`submit`, `post`, `cancel`, …): tingkat bertahap (sekuensial/paralel), penentuan approver (role, unit organisasi, user tertentu, atasan pembuat), kondisi/batas nilai (mis. total > Rp 10 juta → tambah level), maker-checker, delegasi saat berhalangan, eskalasi/batas waktu. Perubahan skema tercatat di audit dan **di-snapshot** ke permintaan approval yang sedang berjalan |
+| Ketergantungan | Semua modul bisnis **wajib** mencantumkan `erp.core` di `dependencies` (eksplisit, sesuai D8/F2). Registry menolak modul bisnis tanpa dependensi ini |
+| Deklarasi di manifest | Setiap resource yang punya aksi dokumen (`submit`/`post`/`cancel`/`amend`) **wajib** mendeklarasikan `approval: { actions: [...] }`. Registry menolak manifest yang tidak mendeklarasikannya |
+| Penegakan agar tidak bisa dilewati | (1) Generator `make:handler` untuk aksi dokumen langsung memanggil kontrak approval; (2) analyzer `go vet` menolak handler aksi yang terdaftar di `approval.actions` tanpa memanggil kontrak approval; (3) template test: aksi dengan skema aktif tidak boleh langsung `submitted`; (4) audit mencatat setiap keputusan |
+| Status dokumen | Tambahan `pending_approval`; `reject` mengembalikan ke `draft` dengan alasan (transaction-data-standards §2) |
+| Bergantung pada PRD-001 | Principal, role & matriks (aksi `approve`), unit organisasi (approver per cabang/departemen), audit, mailer, settings |
+
 ### Urutan modul bisnis
 
 | # | Modul | Alasan |

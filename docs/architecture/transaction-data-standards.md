@@ -36,7 +36,10 @@ Kata **WAJIB**, **DILARANG**, dan **SEBAIKNYA** bersifat normatif.
 ## 2. Siklus hidup dokumen
 
 ```
-draft ──submit──▶ submitted ──post──▶ posted          (post opsional, untuk dokumen yang menghasilkan ledger)
+draft ──submit──▶ [pending_approval ──approve──▶] submitted ──post──▶ posted
+                         └──reject──▶ draft (dengan alasan)
+(pending_approval hanya terjadi bila skema approval aktif untuk resource/aksi tersebut — §9;
+ post opsional, untuk dokumen yang menghasilkan ledger)
   │                  │                   │
   │ PATCH/DELETE     └──cancel──▶ cancelled ──amend──▶ draft baru (amendedFromId)
   │                                      ▲
@@ -113,6 +116,8 @@ Transaksi **menyalin** nilai master data yang memengaruhi hasilnya pada saat dib
 - Server memakai sinkronisasi waktu (NTP); waktu dari klien tidak dipakai sebagai waktu rekaman.
 
 ## 9. Pemisahan tugas & persetujuan (`ISO/IEC 27002:5.3`)
+
+> **Approval adalah kapabilitas wajib** di semua modul: setiap resource dokumen terintegrasi dengan approval, dan **skema approval diatur terpusat di modul Core** (PRD-002 Approval Workflow). Bila tidak ada skema aktif untuk sebuah resource/aksi, approval dianggap otomatis disetujui, tetapi titik pemeriksaannya tetap ada di kode. Detail keputusan awal: `roadmap-and-risks.md` §1.1.
 
 - Modul mendeklarasikan resource yang **mendukung** maker-checker di manifest (mis. pembayaran, jurnal manual, penyesuaian stok, perubahan harga massal). **Aktif atau tidaknya diatur lewat konfigurasi** (Settings per company, per resource): bila aktif, pembuat dokumen **tidak boleh** meng-`approve`/`post` dokumennya sendiri.
 - **Batas nilai** (mis. penyesuaian > Rp 10.000.000 butuh approval level 2) juga dapat dikonfigurasi per resource dan dievaluasi server.
