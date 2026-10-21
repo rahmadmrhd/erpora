@@ -100,5 +100,5 @@ func printStatus(w io.Writer, st []migrate.TargetStatus) {
 	for _, s := range st {
 		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\n", s.Target, s.Current, s.Latest, s.Pending)
 	}
-	tw.Flush()
+	_ = tw.Flush()
 }

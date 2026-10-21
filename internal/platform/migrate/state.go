@@ -27,7 +27,7 @@ func EnsurePlatformState(ctx context.Context, db *database.DB, env config.Env, w
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", stateLockKey).Error; err != nil {
 			return err
 		}
-		candidate := uuid.Nil
+		var candidate uuid.UUID
 		if want != nil {
 			candidate = *want
 		} else {

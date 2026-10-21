@@ -37,9 +37,12 @@ tasks:
 
   lint:
     desc: Lint setiap Go module
+    vars:
+      LINT_BIN:
+        sh: go tool -n golangci-lint
     cmds:
       - for: { var: GO_MODULES }
-        cmd: echo "diisi di Task 13 ({{.ITEM}})"
+        cmd: cd "{{.ITEM}}" && "{{.LINT_BIN}}" run ./...
 
   test:
     desc: Jalankan unit test di setiap Go module
@@ -59,9 +62,12 @@ tasks:
 
   vuln:
     desc: Pemeriksaan kerentanan setiap Go module
+    vars:
+      VULN_BIN:
+        sh: go tool -n govulncheck
     cmds:
       - for: { var: GO_MODULES }
-        cmd: echo "diisi di Task 13 ({{.ITEM}})"
+        cmd: cd "{{.ITEM}}" && "{{.VULN_BIN}}" ./...
 
   check:gomod:
     desc: Cek versi go/toolchain seragam di semua go.mod
@@ -144,7 +150,22 @@ tasks:
     cmds:
       - bun run --filter @erp/web dev
 
+  web:check:
+    desc: Typecheck, lint, dan dependency rules frontend
+    cmds:
+      - bun install --frozen-lockfile
+      - bun run --filter @erp/web typecheck
+      - bun run --filter @erp/web lint
+      - bun run --filter @erp/web deps
+
   ci:
     desc: Jalankan seluruh gate CI secara lokal
     cmds:
-      - echo "diisi di Task 13"
+      - task: lint
+      - task: arch
+      - task: check:gowork-off
+      - task: test
+      - task: test:integration
+      - task: vuln
+      - task: web:check
+      - task: build

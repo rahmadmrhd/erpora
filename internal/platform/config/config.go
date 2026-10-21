@@ -51,7 +51,7 @@ type raw struct {
 func Load(envFile string) (Config, error) {
 	vars := map[string]string{}
 	if envFile != "" {
-		data, err := os.ReadFile(envFile)
+		data, err := os.ReadFile(envFile) //nolint:gosec // path env-file diberikan operator lewat flag --env-file
 		if err != nil {
 			return Config{}, fmt.Errorf("baca env-file %q: %w", envFile, err)
 		}

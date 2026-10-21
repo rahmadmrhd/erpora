@@ -68,7 +68,7 @@ func Load(root string) (Repo, error) {
 }
 
 func run(dir, name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) //nolint:gosec // dipanggil hanya dengan "go" dan argumen tetap
 	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -80,7 +80,7 @@ func run(dir, name string, args ...string) ([]byte, error) {
 }
 
 func loadGoMod(dir string) (GoMod, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod")) //nolint:gosec // dir berasal dari `go list -m`
 	if err != nil {
 		return GoMod{}, err
 	}
@@ -105,7 +105,7 @@ func loadGoMod(dir string) (GoMod, error) {
 }
 
 func loadManifest(dir string) (Manifest, bool, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "module.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "module.json")) //nolint:gosec // dir berasal dari `go list -m`
 	if os.IsNotExist(err) {
 		return Manifest{}, false, nil
 	}
