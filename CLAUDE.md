@@ -31,6 +31,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - Monorepo **multi Go module** (`go.work`): root `github.com/rahmadmrhd/erp-go` (platform + `cmd/erp` + `internal/app`), `sdk/`, dan setiap `modules/<name>/` = Go module sendiri. Semua `go.mod`: `go 1.27`, `toolchain go1.27.2`.
 - Modul hanya boleh mengakses modul lain lewat `modules/<x>/contract` **dan** hanya bila tercantum di `dependencies` manifest + `require` go.mod (D1, D8). Modul tidak boleh mengimpor root module; akses platform hanya lewat `sdk/` (D9).
 - `internal/platform/**` tidak boleh mengimpor `modules/**` (D2); hanya `internal/app` yang merakit modul (D7).
+- Frontend modul berada di dalam modulnya: `modules/<name>/web` (package `@erp/module-<name>`). Komponen generik dari `@erp/ui` (`packages/ui`), layanan frontend platform dari `@erp/platform-web` — **bukan** dari modul Core. `web/` hanya app shell yang merakit modul. Dependency `package.json` modul harus sama dengan `manifest.dependencies` (F1–F3).
 - Domain tanpa I/O (D3); GORM hanya di `*/internal/infrastructure`, `internal/platform/database`, `internal/platform/modules/store`, `sdk/data` (D3b); `AutoMigrate` dilarang — skema hanya lewat migrasi goose.
 - Router: `net/http.ServeMux`; modul mendaftarkan route lewat `Registrar.Handle(method, path, permission, h)` / `Public(...)`, tidak pernah menerima router.
 - Backend adalah otoritas: permission frontend hanya untuk UX.
