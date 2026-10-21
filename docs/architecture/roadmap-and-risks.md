@@ -17,9 +17,34 @@
 | 06 Hybrid release & marketplace beta | Container image, deployment profile, installer & upgrade self-hosted, signed package, publisher verification, isolated execution, release channel & rollback | SaaS dan self-hosted memakai release yang sama; lifecycle paket teraudit | Belum (lihat `extensions-and-marketplace.md`) |
 | 07 Production hardening & scaling | Load test, query profiling, horizontal scaling, worker, observability per tenant, backup drill, DR, security review | Target performa, availability, recovery, biaya terukur | Belum |
 
-### 1.1. PRD-002 Approval Workflow — keputusan awal (22 Okt 2026)
+### 1.1. PRD-002 Core Shared Capabilities — keputusan awal (22 Okt 2026)
 
-Urutan: **PRD-000 → PRD-001 Core → PRD-002 Approval Workflow → modul bisnis pertama.** Approval harus ada sebelum modul bisnis agar tidak ada modul yang menulis logika approval sendiri lalu di-refactor.
+Urutan: **PRD-000 → PRD-001 Core → PRD-002 Core Shared Capabilities → modul bisnis pertama.** Kapabilitas bersama harus ada sebelum modul bisnis agar tidak ada modul yang menulis versinya sendiri lalu di-refactor.
+
+PRD-002 berisi **kapabilitas bersama milik modul Core yang wajib dipakai setiap modul**, bukan hanya approval. Semuanya mengikuti pola yang sama:
+
+- **Lokasi**: modul `core` (mesin + kontrak `modules/core/contract` + UI di `modules/core/web`), karena hanya modul yang memanggilnya, bukan platform.
+- **Deklarasi**: modul menyatakan integrasinya di manifest (mis. `approval`, `print_templates`, `email_templates`), divalidasi registry saat startup.
+- **Dependensi eksplisit**: setiap modul bisnis wajib mencantumkan `erp.core` di `dependencies`.
+- **Konfigurasi terpusat**: admin mengatur skema/template/preferensi di Core, tanpa mengubah kode modul.
+- **Penegakan**: generator menghasilkan integrasinya, analyzer + registry menolak modul yang melewatinya.
+
+Kandidat cakupan (difinalisasi saat PRD-002 ditulis):
+
+| Kapabilitas | Isi |
+| --- | --- |
+| **Approval Workflow** | Rincian di tabel "Approval Workflow" di bawah |
+| **Email Template** | Template per event/resource, multi-bahasa, variabel dari kontrak resource, pratinjau; dikirim lewat mailer (PRD-001 FR-108) |
+| **Print Template** | Template cetak/PDF per resource (faktur, PO, slip), kop & tanda tangan per company, permission `print`, ter-versi |
+| **Saved Filter / Saved View** | Filter, kolom, dan urutan tersimpan per user, dapat dibagikan per role, untuk data grid setiap resource |
+| **Document Numbering Series** | Seri penomoran per company/tipe dokumen/periode, gapless bila diwajibkan (transaction-data-standards §5) |
+| **Attachment** | Lampiran file per record lewat pipeline upload aman (security-guidelines §3.7), mengikuti permission record |
+| **Activity Timeline & Comment** | Riwayat aktivitas, komentar, dan mention per record |
+| **Notification** | Notifikasi in-app + email per event (dasar untuk push notification di kemudian hari) |
+| **Import / Export framework** | Impor dengan dry-run dan ekspor aman (`sdk/export`) yang seragam untuk semua resource |
+| **Tag / Custom Field** | Penanda bebas dan field tambahan per resource yang dikonfigurasi admin |
+
+#### Approval Workflow
 
 | Keputusan | Isi |
 | --- | --- |
