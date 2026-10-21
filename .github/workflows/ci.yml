@@ -1,0 +1,209 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: "1.4.2"
+  POSTGRES_IMAGE: postgres:18-alpine
+
+jobs:
+  go-checks:
+    name: go-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # lint (golangci-lint + gosec), arch (D1-D11), build GOWORK=off, unit test, govulncheck
+      - run: task lint arch check:gowork-off test vuln
+
+  web-checks:
+    name: web-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter @erp/web typecheck
+      - run: bun run --filter @erp/web lint
+      - run: bun run --filter @erp/web deps
+      - run: bun audit
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest # Docker tersedia untuk testcontainers; termasuk TestServe_GracefulShutdown (!windows)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task test:integration
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: [go-checks, web-checks, integration, secrets]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git describe untuk versi
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --frozen-lockfile
+      - name: Build (frontend + binary)
+        run: task build
+      - name: Normalisasi nama binary
+        run: |
+          if [ "${GOOS}" = "windows" ]; then mv bin/erp bin/erp.exe 2>/dev/null || true; fi
+          ls -l bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: erp-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/erp*
+          if-no-files-found: error
+
+      # SBOM CycloneDX: sekali saja (leg linux/amd64) untuk semua Go module + frontend.
+      - name: SBOM Go modules
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        env:
+          GOOS: ""
+          GOARCH: ""
+        run: |
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0
+          mkdir -p "$GITHUB_WORKSPACE/sbom"
+          for dir in $(go list -m -f '{{.Dir}}'); do
+            name=$(go -C "$dir" list -m | tr '/' '_')
+            (cd "$dir" && cyclonedx-gomod mod -licenses -json -output "$GITHUB_WORKSPACE/sbom/${name}.cdx.json")
+          done
+      - name: SBOM frontend
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: bunx @cyclonedx/cdxgen@11 -t js -o sbom/web.cdx.json web
+      - uses: actions/upload-artifact@v4
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error
+
+  smoke-linux:
+    name: smoke-linux
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: erp
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp -d erp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ERP_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/erp?sslmode=disable
+      ERP_HTTP_ADDR: 127.0.0.1:8080
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: erp-linux-amd64
+      - run: chmod +x ./erp
+      - run: ./erp version
+      - run: ./erp migrate up
+      - name: Serve dan cek /readyz
+        run: |
+          ./erp serve &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then echo; exit 0; fi
+            sleep 1
+          done
+          echo "readyz tidak siap" >&2
+          exit 1
+
+  smoke-windows:
+    name: smoke-windows
+    needs: build
+    runs-on: windows-latest
+    env:
+      ERP_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/erp?sslmode=disable
+      ERP_HTTP_ADDR: 127.0.0.1:8080
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: erp-windows-amd64
+      - name: Jalankan PostgreSQL bawaan runner
+        shell: pwsh
+        run: |
+          & "$env:PGBIN\pg_ctl.exe" start -D "$env:PGDATA" -w
+          & "$env:PGBIN\psql.exe" -U postgres -c "CREATE ROLE erp LOGIN SUPERUSER PASSWORD 'erp'"
+          & "$env:PGBIN\psql.exe" -U postgres -c "CREATE DATABASE erp OWNER erp"
+      - name: Migrasi
+        shell: pwsh
+        run: |
+          .\erp.exe version
+          .\erp.exe migrate up
+      - name: Serve dan cek /readyz
+        shell: pwsh
+        run: |
+          Start-Process -FilePath .\erp.exe -ArgumentList "serve" -NoNewWindow
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/readyz
+              if ($r.StatusCode -eq 200) { $ok = $true; break }
+            } catch { Start-Sleep -Seconds 1 }
+          }
+          if (-not $ok) { throw "readyz tidak siap" }
