@@ -1,0 +1,19 @@
+# Live-reload API (task dev). Windows: biner .exe; Unix: tanpa ekstensi.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -tags devtools -o ./tmp/erp.exe ./cmd/erp"
+  entrypoint = ["./tmp/erp.exe", "serve", "--env-file", ".env"]
+  include_ext = ["go", "sql"]
+  exclude_dir = ["web", "tmp", "node_modules", "bin", "docs", ".git", ".superpowers"]
+  delay = 200
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

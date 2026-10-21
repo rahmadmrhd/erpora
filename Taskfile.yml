@@ -25,7 +25,9 @@ tasks:
   setup:
     desc: Pasang semua dependensi (Go modules, Bun, tool)
     cmds:
-      - echo "diisi di Task 12"
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" mod download
+      - bun install
 
   tidy:
     desc: Rapikan go.mod dan go.sum di setiap Go module
@@ -91,23 +93,56 @@ tasks:
 
   build:
     desc: Build binary release bin/erp
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty
+      COMMIT:
+        sh: git rev-parse --short HEAD
+      NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
     cmds:
-      - echo "diisi di Task 12"
+      - bun run --filter @erp/web build
+      - go build -trimpath -ldflags "-s -w -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Version={{.VERSION}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Commit={{.COMMIT}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erp{{exeExt}} ./cmd/erp
 
   build:dev:
     desc: Build binary dev bin/erp (flavor devtools)
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty
+      COMMIT:
+        sh: git rev-parse --short HEAD
+      NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
     cmds:
-      - echo "diisi di Task 12"
+      - bun run --filter @erp/web build
+      - go build -tags devtools -trimpath -ldflags "-s -w -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Version={{.VERSION}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Commit={{.COMMIT}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erp{{exeExt}} ./cmd/erp
 
   erp:
     desc: Jalankan CLI erp flavor dev (task erp -- <command>)
     cmds:
-      - echo "diisi di Task 12"
+      - go run -tags devtools ./cmd/erp {{.CLI_ARGS}}
 
   dev:
     desc: Jalankan mode pengembangan (API + web dev server)
     cmds:
-      - echo "diisi di Task 12"
+      - task: db:up
+      - task: migrate
+      - task: dev:run
+
+  dev:run:
+    desc: (internal) API live-reload + web dev server berjalan paralel
+    internal: true
+    deps: [dev:api, dev:web]
+
+  dev:api:
+    desc: (internal) API dengan air
+    internal: true
+    cmds:
+      - go tool air
+
+  dev:web:
+    desc: (internal) Web dev server Bun
+    internal: true
+    cmds:
+      - bun run --filter @erp/web dev
 
   ci:
     desc: Jalankan seluruh gate CI secara lokal

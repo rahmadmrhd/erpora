@@ -1,0 +1,18 @@
+{
+  "name": "@erp/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.ts",
+    "dev": "bun dev.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "deps": "cd .. && depcruise web/src --config .dependency-cruiser.cjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "@types/bun": "1.4.3",
+    "dependency-cruiser": "18.7.0",
+    "typescript": "6.0.3"
+  }
+}
