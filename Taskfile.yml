@@ -1,0 +1,110 @@
+# Taskfile.yml - satu-satunya entry point perintah proyek erp-go (go-task v3).
+#
+# Instalasi & pemanggilan per OS/terminal (PRD-000 FR-01):
+#   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@latest
+#   - Tanpa install global (sudah ada Bun):  bunx @go-task/cli <task>
+#   - Windows:  winget install Task.Task   atau   scoop install task
+#               Pemanggilannya sama di PowerShell, cmd, dan Git Bash: task <nama>
+#   - macOS:    brew install go-task
+#   - Linux:    sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
+#               atau paket distro/snap
+#
+# Pemanggilan sama di PowerShell, cmd, Git Bash, WSL, macOS, Linux: `task <nama>`
+#
+# Daftar task: `task --list`
+
+version: '3'
+
+vars:
+  # Semua Go module di workspace (root, sdk, modules/*), satu path per baris.
+  # {{.Dir}} di-escape lewat raw string Go template agar Task tidak merendernya sendiri.
+  GO_MODULES:
+    sh: 'go list -m -f "{{`{{.Dir}}`}}"'
+
+tasks:
+  setup:
+    desc: Pasang semua dependensi (Go modules, Bun, tool)
+    cmds:
+      - echo "diisi di Task 12"
+
+  tidy:
+    desc: Rapikan go.mod dan go.sum di setiap Go module
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" mod tidy
+
+  lint:
+    desc: Lint setiap Go module
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: echo "diisi di Task 13 ({{.ITEM}})"
+
+  test:
+    desc: Jalankan unit test di setiap Go module
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" test -race ./...
+
+  test:integration:
+    desc: Jalankan test integrasi (tag integration) di root module
+    cmds:
+      - go test -race -tags integration ./...
+
+  arch:
+    desc: Jalankan architecture checks (D1-D11)
+    cmds:
+      - echo "diisi di Task 4"
+
+  vuln:
+    desc: Pemeriksaan kerentanan setiap Go module
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: echo "diisi di Task 13 ({{.ITEM}})"
+
+  check:gowork-off:
+    desc: Pastikan setiap Go module ter-build dengan GOWORK=off
+    env:
+      GOWORK: "off"
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" build ./...
+
+  db:up:
+    desc: Jalankan PostgreSQL lokal via Docker Compose
+    cmds:
+      - echo "diisi di Task 8"
+
+  db:down:
+    desc: Hentikan PostgreSQL lokal via Docker Compose
+    cmds:
+      - echo "diisi di Task 8"
+
+  migrate:
+    desc: Jalankan migrasi platform (erp migrate up)
+    cmds:
+      - echo "diisi di Task 8"
+
+  build:
+    desc: Build binary release bin/erp
+    cmds:
+      - echo "diisi di Task 12"
+
+  build:dev:
+    desc: Build binary dev bin/erp (flavor devtools)
+    cmds:
+      - echo "diisi di Task 12"
+
+  erp:
+    desc: Jalankan CLI erp flavor dev (task erp -- <command>)
+    cmds:
+      - echo "diisi di Task 12"
+
+  dev:
+    desc: Jalankan mode pengembangan (API + web dev server)
+    cmds:
+      - echo "diisi di Task 12"
+
+  ci:
+    desc: Jalankan seluruh gate CI secara lokal
+    cmds:
+      - echo "diisi di Task 13"
