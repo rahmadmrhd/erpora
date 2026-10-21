@@ -43,23 +43,28 @@ tasks:
     desc: Jalankan unit test di setiap Go module
     cmds:
       - for: { var: GO_MODULES }
-        cmd: go -C "{{.ITEM}}" test -race ./...
+        cmd: go -C "{{.ITEM}}" test {{if ne OS "windows"}}-race{{end}} ./...
 
   test:integration:
     desc: Jalankan test integrasi (tag integration) di root module
     cmds:
-      - go test -race -tags integration ./...
+      - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
 
   arch:
     desc: Jalankan architecture checks (D1-D11)
     cmds:
-      - echo "diisi di Task 4"
+      - go test ./tests/architecture/... ./internal/archcheck/...
 
   vuln:
     desc: Pemeriksaan kerentanan setiap Go module
     cmds:
       - for: { var: GO_MODULES }
         cmd: echo "diisi di Task 13 ({{.ITEM}})"
+
+  check:gomod:
+    desc: Cek versi go/toolchain seragam di semua go.mod
+    cmds:
+      - go test ./internal/archcheck/... ./tests/architecture/... -run 'GoVersion|RepositoryArchitecture'
 
   check:gowork-off:
     desc: Pastikan setiap Go module ter-build dengan GOWORK=off

@@ -1,0 +1,244 @@
+package archcheck
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+var routerPrefixes = []string{
+	"github.com/go-chi/", "github.com/gorilla/mux", "github.com/gin-gonic/",
+	"github.com/labstack/echo", "github.com/gofiber/", "github.com/julienschmidt/httprouter",
+}
+
+func isInfraOrPresentation(imp string) bool {
+	return hasSeg(imp, "infrastructure") || hasSeg(imp, "presentation")
+}
+
+// Check menjalankan semua aturan dan mengembalikan pelanggaran (terurut stabil).
+func Check(r Repo) []Violation {
+	var v []Violation
+	add := func(rule, pkg, detail string) { v = append(v, Violation{rule, pkg, detail}) }
+
+	modPaths := map[string]bool{}
+	for _, m := range r.Mods {
+		modPaths[m.Path] = true
+	}
+	for p := range r.Manifests {
+		modPaths[p] = true
+	}
+	// owningModule: modul modules/* terpanjang yang memuat import path.
+	owningModule := func(imp string) string {
+		best := ""
+		for p := range modPaths {
+			if strings.HasPrefix(p, modulesBase) && underPath(imp, p) && len(p) > len(best) {
+				best = p
+			}
+		}
+		return best
+	}
+	allowedByManifest := func(x, y string) bool {
+		my, ok := r.Manifests[y]
+		if !ok {
+			return false
+		}
+		for _, d := range r.Manifests[x].Dependencies {
+			if d == my.Key {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, p := range r.Packages {
+		rp, inRepo := rel(p.ImportPath)
+		isPlatform := inRepo && strings.HasPrefix(rp, "internal/platform/")
+		isModulePkg := inRepo && strings.HasPrefix(rp, "modules/")
+		isSDK := inRepo && underPath(rp, "sdk")
+		isApp := inRepo && underPath(rp, "internal/app")
+		isArch := inRepo && underPath(rp, "internal/archcheck")
+		isDomain := hasSeg(p.ImportPath, "internal/domain")
+		isApplication := hasSeg(p.ImportPath, "internal/application")
+		gormOK := isArch ||
+			(isModulePkg && hasSeg(rp, "internal/infrastructure")) ||
+			underPath(rp, "internal/platform/database") ||
+			underPath(rp, "internal/platform/modules/store") ||
+			underPath(rp, "sdk/data")
+		dbOK := isArch || underPath(rp, "internal/platform/database")
+
+		for _, imp := range p.Imports {
+			if isPlatform && strings.HasPrefix(imp, modulesBase) {
+				add("D2", p.ImportPath, "internal/platform tidak boleh mengimpor modul: "+imp)
+			}
+			_, impInRepo := rel(imp)
+			if isDomain {
+				if imp == "net/http" || strings.HasPrefix(imp, "net/http/") ||
+					strings.HasPrefix(imp, "gorm.io/") || strings.HasPrefix(imp, "github.com/jackc/pgx") ||
+					imp == "database/sql" || strings.HasPrefix(imp, "database/sql/") ||
+					(impInRepo && isInfraOrPresentation(imp)) {
+					add("D3", p.ImportPath, "domain tidak boleh mengimpor "+imp)
+				}
+			}
+			if strings.HasPrefix(imp, "gorm.io/") && !gormOK {
+				add("D3b", p.ImportPath, "impor gorm.io hanya boleh di infrastructure/database/store/sdk-data: "+imp)
+			}
+			if isApplication && impInRepo && isInfraOrPresentation(imp) {
+				add("D4", p.ImportPath, "application tidak boleh mengimpor "+imp)
+			}
+			if inRepo && strings.HasPrefix(imp, modulesBase) && !isPlatform && !isModulePkg && !isApp {
+				add("D7", p.ImportPath, "hanya internal/app yang boleh mengimpor modul: "+imp)
+			}
+			if isModulePkg {
+				if y := owningModule(imp); y != "" && p.Module != "" && y != p.Module && !allowedByManifest(p.Module, y) {
+					add("D8", p.ImportPath, "impor modul "+y+" yang tidak ada di dependencies manifest: "+imp)
+				}
+			}
+			if isModulePkg || isSDK {
+				for _, rp2 := range routerPrefixes {
+					if strings.HasPrefix(imp, rp2) {
+						add("D10", p.ImportPath, "router pihak ketiga dilarang (pakai net/http.ServeMux): "+imp)
+						break
+					}
+				}
+			}
+			if (strings.HasPrefix(imp, "gorm.io/driver/postgres") || imp == "github.com/jackc/pgx/v5/pgxpool") && !dbOK {
+				add("DB-OPEN", p.ImportPath, "hanya internal/platform/database yang boleh membuka koneksi: "+imp)
+			}
+		}
+
+		for _, f := range p.GoFiles {
+			if strings.HasSuffix(f, "_test.go") {
+				continue
+			}
+			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(p.Dir, f), nil, 0)
+			if err != nil {
+				continue
+			}
+			found := false
+			ast.Inspect(file, func(n ast.Node) bool {
+				if c, ok := n.(*ast.CallExpr); ok {
+					if s, ok := c.Fun.(*ast.SelectorExpr); ok && s.Sel.Name == "AutoMigrate" {
+						found = true
+					}
+				}
+				return !found
+			})
+			if found {
+				add("AUTOMIGRATE", p.ImportPath, "AutoMigrate dilarang di kode non-test: "+f)
+			}
+		}
+	}
+
+	// Aturan level go.mod.
+	vers, tcs := map[string][]string{}, map[string][]string{}
+	for _, m := range r.Mods {
+		if m.Path == sdkModule {
+			for _, q := range m.Requires {
+				if q != m.Path && underPath(q, rootModule) {
+					add("D5", m.Path, "sdk tidak boleh me-require modul repo lain: "+q)
+				}
+			}
+		}
+		if strings.HasPrefix(m.Path, modulesBase) {
+			for _, q := range m.Requires {
+				if q == rootModule {
+					add("D9", m.Path, "modul tidak boleh me-require root module")
+				}
+				if strings.HasPrefix(q, modulesBase) && q != m.Path && !allowedByManifest(m.Path, q) {
+					add("D8", m.Path, "go.mod me-require modul "+q+" yang tidak ada di dependencies manifest")
+				}
+			}
+		}
+		if m.GoVersion == "" || m.Toolchain == "" {
+			add("GOVERSION", m.Path, "go.mod harus punya direktif go dan toolchain")
+		}
+		vers[m.GoVersion] = append(vers[m.GoVersion], m.Path)
+		tcs[m.Toolchain] = append(tcs[m.Toolchain], m.Path)
+	}
+	if len(vers) > 1 {
+		add("GOVERSION", "", "versi go tidak seragam: "+describe(vers))
+	}
+	if len(tcs) > 1 {
+		add("GOVERSION", "", "toolchain tidak seragam: "+describe(tcs))
+	}
+
+	// D11: siklus pada graf Requires antar modul repo.
+	graph := map[string][]string{}
+	for _, m := range r.Mods {
+		for _, q := range m.Requires {
+			if modPaths[q] && q != m.Path {
+				graph[m.Path] = append(graph[m.Path], q)
+			}
+		}
+	}
+	for _, cyc := range findCycles(r.Mods, graph) {
+		add("D11", cyc[0], "siklus require antar modul: "+strings.Join(cyc, " -> "))
+	}
+
+	sort.SliceStable(v, func(i, j int) bool {
+		if v[i].Rule != v[j].Rule {
+			return v[i].Rule < v[j].Rule
+		}
+		if v[i].Package != v[j].Package {
+			return v[i].Package < v[j].Package
+		}
+		return v[i].Detail < v[j].Detail
+	})
+	return v
+}
+
+func describe(m map[string][]string) string {
+	var parts []string
+	for k, mods := range m {
+		sort.Strings(mods)
+		parts = append(parts, "'"+k+"' ("+strings.Join(mods, ", ")+")")
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, " vs ")
+}
+
+// findCycles mengembalikan siklus yang ditemukan lewat DFS (satu per back-edge).
+func findCycles(mods []GoMod, g map[string][]string) [][]string {
+	const (
+		white = iota
+		grey
+		black
+	)
+	color := map[string]int{}
+	var stack []string
+	var out [][]string
+	var visit func(n string)
+	visit = func(n string) {
+		color[n] = grey
+		stack = append(stack, n)
+		for _, m := range g[n] {
+			switch color[m] {
+			case white:
+				visit(m)
+			case grey:
+				i := len(stack) - 1
+				for stack[i] != m {
+					i--
+				}
+				cyc := append([]string{}, stack[i:]...)
+				out = append(out, append(cyc, m))
+			}
+		}
+		stack = stack[:len(stack)-1]
+		color[n] = black
+	}
+	paths := make([]string, 0, len(mods))
+	for _, m := range mods {
+		paths = append(paths, m.Path)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		if color[p] == white {
+			visit(p)
+		}
+	}
+	return out
+}
