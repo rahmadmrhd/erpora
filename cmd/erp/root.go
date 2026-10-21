@@ -41,7 +41,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newVersionCmd(),
 		newInspectCmd(opts),
 		newListCmd(),
-		// newMigrateCmd(opts), // Task 8 (grup runtime)
+		newMigrateCmd(opts),
 		// newServeCmd(opts),   // Task 11 (grup runtime)
 	)
 	registerDevtools(root)

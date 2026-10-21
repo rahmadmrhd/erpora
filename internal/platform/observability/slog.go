@@ -20,8 +20,10 @@ func (h TraceHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.inner.Handle(ctx, r)
 }
 
-func (h TraceHandler) WithAttrs(a []slog.Attr) slog.Handler { return TraceHandler{h.inner.WithAttrs(a)} }
-func (h TraceHandler) WithGroup(n string) slog.Handler      { return TraceHandler{h.inner.WithGroup(n)} }
+func (h TraceHandler) WithAttrs(a []slog.Attr) slog.Handler {
+	return TraceHandler{h.inner.WithAttrs(a)}
+}
+func (h TraceHandler) WithGroup(n string) slog.Handler { return TraceHandler{h.inner.WithGroup(n)} }
 
 // NewLogger membuat logger slog ("json" atau selain itu text) yang dibungkus TraceHandler.
 func NewLogger(w io.Writer, format string, level slog.Level) *slog.Logger {

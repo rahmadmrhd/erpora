@@ -157,11 +157,11 @@ func TestDBOpen_OnlyDatabasePackage(t *testing.T) {
 }
 
 func TestAutoMigrate_InNonTestFile(t *testing.T) {
-	bad := pkg(root+"/internal/platform/x")
+	bad := pkg(root + "/internal/platform/x")
 	bad.Dir, bad.GoFiles = "testdata/automigrate_bad", []string{"bad.go"}
 	assertViolation(t, Check(repoWith(bad)), "AUTOMIGRATE")
 
-	ok := pkg(root+"/internal/platform/x")
+	ok := pkg(root + "/internal/platform/x")
 	ok.Dir, ok.GoFiles = "testdata/automigrate_ok", []string{"ok.go"}
 	assertNone(t, Check(repoWith(ok)), "AUTOMIGRATE")
 }

@@ -77,17 +77,17 @@ tasks:
   db:up:
     desc: Jalankan PostgreSQL lokal via Docker Compose
     cmds:
-      - echo "diisi di Task 8"
+      - docker compose -f infrastructure/docker/docker-compose.dev.yml up -d --wait
 
   db:down:
     desc: Hentikan PostgreSQL lokal via Docker Compose
     cmds:
-      - echo "diisi di Task 8"
+      - docker compose -f infrastructure/docker/docker-compose.dev.yml down
 
   migrate:
     desc: Jalankan migrasi platform (erp migrate up)
     cmds:
-      - echo "diisi di Task 8"
+      - go run -tags devtools ./cmd/erp migrate up --env-file .env
 
   build:
     desc: Build binary release bin/erp
