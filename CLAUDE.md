@@ -35,6 +35,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - Domain tanpa I/O (D3); GORM hanya di `*/internal/infrastructure`, `internal/platform/database`, `internal/platform/modules/store`, `sdk/data` (D3b); `AutoMigrate` dilarang — skema hanya lewat migrasi goose.
 - Router: `net/http.ServeMux`; modul mendaftarkan route lewat `Registrar.Handle(method, path, permission, h)` / `Public(...)`, tidak pernah menerima router.
 - Backend adalah otoritas: permission frontend hanya untuk UX.
+- **Cegah IDOR di setiap titik masuk ID** (PRD-001 FR-119): handler memuat record hanya lewat `authz.Check`/`authz.Filter`; ID referensi di body juga dicek; record di luar scope → 404. **Implementasi `contract/` menegakkan otorisasi sendiri** terhadap principal di context (jangan percaya pemanggil); parameter kontrak tidak boleh membawa `tenantId`/`userId`; hak sistem hanya lewat `authz.AsSystem(ctx, reason)` yang teraudit. Setiap endpoint/kontrak yang menerima ID wajib punya test IDOR (user A vs B).
 - Tenancy: mode single-tenant; selalu ambil tenant dari context (`tenancy.FromContext`, `sdk/data.DB(ctx)`), jangan pernah memegang pool DB langsung di modul.
 - Detail aturan & penegaknya: PRD-000 §4.2 dan `internal/archcheck`.
 

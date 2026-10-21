@@ -25,6 +25,7 @@ type ReceiveStockCommand struct {
 ```
 
 - Tenant, perusahaan, dan actor diambil dari **context tervalidasi**, bukan dari payload (`tenant_id` di payload mentah tidak dipercaya).
+- Implementasi kontrak **menegakkan otorisasinya sendiri** terhadap principal asli di context (`authz.Check`/`authz.Filter`); hak sistem hanya lewat `authz.AsSystem(ctx, reason)` yang teraudit (PRD-001 FR-119, pencegahan IDOR/confused deputy).
 
 **Use case Inventory** (sketsa):
 

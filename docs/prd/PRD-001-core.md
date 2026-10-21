@@ -317,6 +317,37 @@ authz.CheckWrite(ctx, "inventory.item", changedFields []string) error  // untuk 
 - Generator `erp make:handler` dan `make:repository` (PRD-000 FR-22) menghasilkan kode yang sudah memanggil `Filter`, `Check`, `MaskFields`, dan `CheckWrite`.
 - Arch/lint test: handler di `presentation/http` yang memanggil repository tanpa melalui helper authz diberi peringatan oleh analyzer kustom (`go vet` analyzer) sebagai pengaman tambahan.
 
+### FR-119 — Pencegahan IDOR (akses objek tanpa otorisasi)
+
+IDOR dicegah di **setiap titik masuk** yang menerima ID objek, bukan hanya di endpoint HTTP.
+
+**1. Endpoint HTTP**
+- Setiap handler yang menerima ID (path, query, body, termasuk ID di baris dokumen dan referensi seperti `warehouseId`) **wajib** memuat record lewat `authz.Check` / query ber-`authz.Filter`. Memuat record dengan `db.First(&x, id)` tanpa filter otorisasi dilarang.
+- ID **referensi** di body (mis. `warehouseId` saat membuat penyesuaian stok) juga diperiksa: user harus boleh `read` record yang dirujuk **dan** referensi itu harus berada dalam scope-nya. Kalau tidak, respons `422 validation_failed` dengan `code: not_found` pada field tersebut, sehingga keberadaan record tidak terungkap.
+- Record di luar scope → `404 not_found` (api-guidelines §8).
+
+**2. Kontrak antarmodul (mencegah *confused deputy*)**
+- Context yang diteruskan ke `contract/` **selalu** membawa `Principal` dan tenant pemanggil asli (FR-106). Modul pemanggil **tidak boleh** mengganti, membuang, atau membuat principal.
+- **Modul penyedia kontrak menegakkan otorisasi di implementasi kontraknya** dengan `authz.Check`/`authz.Filter` terhadap principal dari context. Modul penyedia tidak mempercayai bahwa pemanggil sudah memeriksa.
+- Parameter kontrak **tidak boleh** berisi `tenantId`, `userId`, atau penanda hak akses dari pemanggil. Identitas hanya berasal dari context.
+- Operasi yang memang harus berjalan dengan hak sistem (mis. posting jurnal otomatis dari Inventory ke Finance) memakai **`authz.AsSystem(ctx, reason string)`** secara eksplisit:
+  - hanya boleh dipanggil dari kode modul (bukan dari input pengguna), dengan `reason` yang jelas;
+  - setiap pemakaian tercatat di audit (`actor` = principal asli, `metadata.system_reason`);
+  - kontrak yang menerima konteks sistem mendeklarasikannya di dokumentasi kontrak (`// erp:system-call-allowed`), dan arch test memastikan `AsSystem` hanya muncul di paket `internal/application` modul.
+- Event asinkron (outbox) membawa principal pemicu dan tenant. Konsumen memeriksa ulang otorisasi atau memakai `AsSystem` dengan alasan yang tercatat.
+
+**3. Penegakan otomatis**
+- **Analyzer `go vet` kustom (FR-115)** diperluas: memberi error bila handler/implementasi kontrak memanggil method repository yang menerima ID tanpa melewati `authz.Check`/`authz.Filter`, dan bila `AsSystem` dipanggil di luar `internal/application`.
+- **Generator** (`erp make:handler`, `make:repository`, `make:contract`) menghasilkan kode yang sudah memanggil helper otorisasi, beserta **test IDOR** default.
+- **Test IDOR wajib** untuk setiap endpoint dan setiap metode kontrak yang menerima ID, dengan dua user fixture (A dan B) di scope berbeda:
+  - B membaca/mengubah/menghapus/menjalankan aksi pada record A → 404;
+  - B memakai ID record A sebagai referensi di body → 422 `not_found`;
+  - B memanggil kontrak (lewat modul lain) dengan ID record A → error `not_found`;
+  - list/ekspor/print B tidak pernah memuat record A, termasuk lewat filter dan `expand`.
+- Security test (PRD-000 FR-14) gagal bila ada endpoint di `Registry.Routes()` yang menerima parameter ID tanpa test IDOR terdaftar.
+
+**AC:** modul `example` dan `exampleaddon` lulus semua skenario test IDOR di atas, termasuk akses lewat kontrak `example/contract` dari `exampleaddon`; analyzer menolak fixture handler yang memuat record tanpa authz; `AsSystem` tanpa `reason` atau di luar `internal/application` ditolak.
+
 ### FR-116 — Performa & caching
 
 - Hak efektif per `(user, perm_rev)` dikompilasi menjadi struktur siap evaluasi dan di-cache di memori (LRU, invalidasi saat `permission_revision` naik).
@@ -387,7 +418,7 @@ authz.CheckWrite(ctx, "inventory.item", changedFields []string) error  // untuk 
 | Milestone | Cakupan | Exit gate |
 | --- | --- | --- |
 | **C1 — Identity lokal** | FR-101, FR-102, FR-106, FR-107, FR-108, modul `core` (`required`), `erp core:create-admin` | Login/logout/refresh/reset end-to-end; MFA wajib Administrator berjalan; stub authN PRD-000 diganti; ASVS checklist sesi lolos |
-| **C2 — Authorization** | FR-110–FR-118 | Semua tabel uji scope & field lulus (termasuk hierarki unit organisasi); matriks & penjelas akses di UI; modul `example` memakai resource, scope kustom, dan field group |
+| **C2 — Authorization** | FR-110–FR-119 | Semua tabel uji scope & field lulus (termasuk hierarki unit organisasi); matriks & penjelas akses di UI; modul `example` memakai resource, scope kustom, dan field group |
 | **C3 — Settings & Audit** | FR-120 (termasuk preferensi user), FR-130–FR-132 | Settings modul `example` diatur dari UI; semua event wajib tercatat; audit append-only terbukti |
 | **C4 — Integrasi** | FR-103, FR-104, FR-105 | SSO Google + Keycloak (test container) berjalan; PAT & client credentials dipakai oleh skrip integrasi di CI |
 
@@ -406,4 +437,5 @@ authz.CheckWrite(ctx, "inventory.item", changedFields []string) error  // untuk 
 | Q9 | MFA? | ✅ TOTP, wajib untuk Administrator, opsional untuk lainnya; user SSO mengikuti IdP (FR-107) |
 | Q10 | Metode autentikasi? | ✅ JWT access + refresh berotasi **untuk semua klien termasuk web** (FR-102), SSO OIDC (FR-103), PAT (FR-104), OAuth2 client credentials (FR-105). Alternatif session cookie untuk web (pola ERPNext/Odoo) dipertimbangkan dan **ditolak** dengan alasan kemudahan horizontal scaling: verifikasi token cukup dengan kunci publik + daftar pencabutan in-memory per instance, tanpa store sesi bersama di jalur request. Dicatat di ADR-013 |
 | Q11 | Model otorisasi? | ✅ Matriks per role, union tanpa deny, tiga lapis aksi/record/field, aksi standar + kustom, scope generik (FR-110–FR-117) |
+| Q13 | Dependensi antarmodul & IDOR? | ✅ Dependensi **eksplisit dan ketat** (manifest + `go.mod` + `package.json`, akses hanya lewat `contract/`/`index.ts`); IDOR dicegah di endpoint **dan** di kontrak antarmodul — modul penyedia kontrak menegakkan otorisasi terhadap principal asli, hak sistem hanya lewat `authz.AsSystem` yang teraudit (FR-119) |
 | Q12 | Penempatan Core? | ✅ Hibrida: mesin di platform, administrasi di modul `core` yang `required` (§3) |
