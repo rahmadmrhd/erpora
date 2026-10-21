@@ -1,1 +1,11 @@
 .superpowers/
+
+bin/
+.env
+web/dist/*
+!web/dist/.gitkeep
+node_modules/
+contracts/dist/
+tmp/
+*.test
+coverage.out
