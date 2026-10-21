@@ -18,6 +18,13 @@ const Image = "postgres:18-alpine"
 // Start menjalankan container PostgreSQL dan mengembalikan DSN; container dihentikan otomatis.
 func Start(t *testing.T) (dsn string) {
 	t.Helper()
+	dsn, _ = StartWithStop(t)
+	return dsn
+}
+
+// StartWithStop seperti Start, tetapi juga mengembalikan fungsi untuk menghentikan container lebih awal.
+func StartWithStop(t *testing.T) (dsn string, stop func()) {
+	t.Helper()
 	ctx := context.Background()
 	c, err := tcpostgres.Run(ctx, Image,
 		tcpostgres.WithDatabase("erp"),
@@ -37,5 +44,10 @@ func Start(t *testing.T) (dsn string) {
 	if err != nil {
 		t.Fatalf("connection string: %v", err)
 	}
-	return dsn
+	stopFn := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = testcontainers.TerminateContainer(c, testcontainers.StopContext(ctx))
+	}
+	return dsn, stopFn
 }

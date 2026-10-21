@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
@@ -115,14 +117,58 @@ func statusOf(ctx context.Context, p *goose.Provider, t Target) (TargetStatus, e
 }
 
 // Pending mengembalikan total migrasi yang belum diterapkan di semua target.
+// Murni baca (read-only): tidak membuat tabel apa pun, aman untuk /readyz dan startup serve.
+// Tabel versi goose yang belum ada berarti seluruh migrasi target itu pending.
 func Pending(ctx context.Context, db *database.DB) (int, error) {
-	sts, err := Status(ctx, db)
+	total := 0
+	for _, t := range targets {
+		embedded, err := embeddedVersions(t)
+		if err != nil {
+			return 0, err
+		}
+		table := "goose_" + string(t)
+		var reg *string
+		if err := db.WithContext(ctx).Raw("SELECT to_regclass(?)::text", table).Scan(&reg).Error; err != nil {
+			return 0, fmt.Errorf("pending %s: %w", t, err)
+		}
+		applied := map[int64]bool{}
+		if reg != nil {
+			var rows []int64
+			// Nama tabel berasal dari konstanta internal, bukan input pengguna.
+			if err := db.WithContext(ctx).Raw("SELECT version_id FROM " + table + " WHERE is_applied").Scan(&rows).Error; err != nil {
+				return 0, fmt.Errorf("pending %s: %w", t, err)
+			}
+			for _, v := range rows {
+				applied[v] = true
+			}
+		}
+		for _, v := range embedded {
+			if !applied[v] {
+				total++
+			}
+		}
+	}
+	return total, nil
+}
+
+// embeddedVersions membaca nomor versi dari nama file migrasi tertanam ("0001_nama.sql").
+func embeddedVersions(t Target) ([]int64, error) {
+	entries, err := fs.ReadDir(migrations.FS, string(t))
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	n := 0
-	for _, s := range sts {
-		n += s.Pending
+	var out []int64
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".sql") {
+			continue
+		}
+		prefix, _, _ := strings.Cut(name, "_")
+		v, err := strconv.ParseInt(prefix, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("nama migrasi %s/%s tidak valid: %w", t, name, err)
+		}
+		out = append(out, v)
 	}
-	return n, nil
+	return out, nil
 }

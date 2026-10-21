@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rahmadmrhd/erp-go/internal/app"
 	"github.com/rahmadmrhd/erp-go/internal/platform/config"
 )
 
@@ -42,7 +43,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newInspectCmd(opts),
 		newListCmd(),
 		newMigrateCmd(opts),
-		// newServeCmd(opts),   // Task 11 (grup runtime)
+		newServeCmd(opts),
 	)
 	registerDevtools(root)
 	return root
@@ -52,6 +53,10 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 func exitCode(err error) int {
 	if err == nil {
 		return 0
+	}
+	var xe *app.ExitError
+	if errors.As(err, &xe) {
+		return xe.Code
 	}
 	var ve config.ValidationError
 	if errors.As(err, &ve) {

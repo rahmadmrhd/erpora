@@ -176,3 +176,18 @@ func TestPending_BeforeUp(t *testing.T) {
 		t.Errorf("pending after Up = %d", n)
 	}
 }
+
+func TestPending_IsReadOnly(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, pgtest.Start(t))
+	if _, err := migrate.Pending(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var n int64
+	if err := db.Raw("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").Scan(&n).Error; err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("Pending created %d table(s) on an unmigrated database", n)
+	}
+}
