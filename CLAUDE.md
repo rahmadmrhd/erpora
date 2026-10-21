@@ -9,7 +9,7 @@ Platform ERP modular: **Go modular monolith + React/TypeScript PWA**, satu binar
 | `docs/prd/PRD-000-inisialisasi-project.md` | Struktur repo, Module Registry, SDK, CLI, observability, seam tenancy (Accepted) |
 | `docs/prd/PRD-001-core.md` | Identity, RBAC, Settings, Audit (Accepted) |
 | `docs/architecture/api-guidelines.md` | Bentuk WAJIB setiap kontrak & endpoint API |
-| `docs/security/security-guidelines.md` | Pedoman keamanan (ISO/IEC 27001/27002, ASVS L2, OWASP, UU PDP): IDOR, injection, SSRF, sensitive data exposure, dll. |
+| `docs/security/security-guidelines.md` | Pedoman keamanan (ISO/IEC 27001/27002, ASVS 5.0.0 L2 + L3 terpilih, OWASP, UU PDP): IDOR, injection, SSRF, sensitive data exposure, dll. |
 | `docs/architecture/transaction-data-standards.md` | Standar transaksi & integritas data (ISO 8601/4217/15489, SoD, immutabilitas, ledger, pembulatan, retensi) |
 | `docs/operations/deployment.md` | Deployment (draft) |
 | `docs/adr/` | Keputusan arsitektur |

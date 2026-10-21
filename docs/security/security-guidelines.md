@@ -17,7 +17,7 @@ Kata **WAJIB**, **DILARANG**, dan **SEBAIKNYA** bersifat normatif.
 | **ISO/IEC 27002:2022** | Katalog kontrol. Setiap aturan di dokumen ini merujuk nomor kontrolnya (mis. `27002:8.28`) |
 | **ISO/IEC 27701:2019** | Perluasan privasi untuk data pribadi (PII) |
 | **ISO/IEC 27017 / 27018** | Kontrol tambahan untuk deployment cloud dan PII di cloud (SaaS) |
-| **OWASP ASVS 4.0.3 Level 2** | Persyaratan verifikasi teknis yang dapat diuji (target minimum, sesuai PRD-001 NFR-101) |
+| **OWASP ASVS 5.0.0** — target **Level 2** untuk seluruh sistem + **kontrol Level 3 terpilih** untuk modul berisiko (keuangan, HR) | Persyaratan verifikasi teknis yang dapat diuji (PRD-001 NFR-101). Persyaratan dirujuk dengan format berversi `v5.0.0-<bab>.<seksi>.<butir>` (mis. `v5.0.0-8.2.1`) karena ID berubah antarversi. Bab yang paling relevan: V8 Authorization, V9 Self-contained Tokens, V10 OAuth & OIDC, V14 Data Protection, V16 Logging |
 | **OWASP Top 10 & OWASP API Security Top 10 (2023)** | Katalog celah yang paling sering dieksploitasi |
 | **UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP)** | Kewajiban hukum Indonesia atas data pribadi |
 
@@ -166,7 +166,7 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 
 | Tahap | Kewajiban |
 | --- | --- |
-| **Spec** (Kiro `design.md` / PRD) | Bagian **Keamanan** wajib: aset & klasifikasi data, permission/scope/field group, ancaman STRIDE singkat, titik masuk ID (IDOR), koneksi keluar (SSRF), penanganan file, data yang disimpan offline |
+| **Spec** (Kiro `design.md` / PRD) | Bagian **Keamanan** wajib (sekaligus memenuhi "documented security decisions" ASVS 5.0): daftar persyaratan ASVS yang relevan (`v5.0.0-…`), **kontrol L3 yang dipilih** bila modul berisiko, aset & klasifikasi data, permission/scope/field group, ancaman STRIDE singkat, titik masuk ID (IDOR), koneksi keluar (SSRF), penanganan file, data yang disimpan offline |
 | **Implementasi** | Mengikuti dokumen ini; generator menghasilkan kode aman secara default |
 | **Review** | Checklist §6; perubahan pada `internal/platform/identity`, `authorization`, `egress`, atau kriptografi butuh review keamanan khusus |
 | **CI** | gosec, analyzer kustom, arch test, test IDOR, secret scan (gitleaks), `govulncheck`, `bun audit`, linter kontrak (`x-erp-classification`), header test |
@@ -210,5 +210,5 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 ## 8. Pertanyaan terbuka
 
 1. ~~Penjadwalan kontrol~~ → diputuskan: PRD-000 FR-24 (Q22).
-2. Batas waktu perbaikan kerentanan (§5) dan target ASVS: Level 2 cukup, atau Level 3 untuk modul keuangan/HR?
+2. ~~Target ASVS~~ → diputuskan: ASVS 5.0.0 L2 + kontrol L3 terpilih per modul berisiko (§0, §4).
 3. Pemindaian malware wajib juga untuk self-hosted, atau opsional?

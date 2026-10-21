@@ -406,7 +406,7 @@ IDOR dicegah di **setiap titik masuk** yang menerima ID objek, bukan hanya di en
 
 | ID | Kebutuhan |
 | --- | --- |
-| NFR-101 | Target keamanan **OWASP ASVS Level 2** untuk area autentikasi, sesi, dan kontrol akses |
+| NFR-101 | Target keamanan **OWASP ASVS 5.0.0 Level 2** untuk autentikasi (V6), sesi (V7), otorisasi (V8), token (V9), dan OAuth/OIDC (V10); ditambah kontrol L3 terpilih untuk aksi kritis keuangan (mis. re-autentikasi saat approve pembayaran) |
 | NFR-102 | `Require` ≤ 20 µs p99 (cache hit); validasi JWT ≤ 100 µs p99 |
 | NFR-103 | Tidak ada rahasia (password, token, secret settings, refresh token) yang tercatat di log, trace, atau audit. Diuji dengan pemindai log di integration test |
 | NFR-104 | Variabel baru `ERP_SECRET_KEY` (wajib, 32 byte base64). Startup gagal bila tidak ada/terlalu pendek. Prosedur rotasinya didokumentasikan di `deployment.md` |
