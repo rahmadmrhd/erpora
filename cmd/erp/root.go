@@ -30,7 +30,6 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.CompletionOptions.DisableDefaultCmd = true
 	root.PersistentFlags().StringVar(&opts.envFile, "env-file", "", "path file .env (environment proses diutamakan)")
 	root.AddGroup(
 		&cobra.Group{ID: groupRuntime, Title: "Runtime"},

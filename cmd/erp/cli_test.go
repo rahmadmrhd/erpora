@@ -94,3 +94,13 @@ func TestList_ShowsCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletion_PowerShell(t *testing.T) {
+	out, err := run(t, "completion", "powershell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exitCode(err) != 0 || strings.TrimSpace(out) == "" {
+		t.Fatalf("empty completion output")
+	}
+}
