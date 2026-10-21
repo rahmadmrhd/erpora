@@ -17,17 +17,35 @@
 | 06 Hybrid release & marketplace beta | Container image, deployment profile, installer & upgrade self-hosted, signed package, publisher verification, isolated execution, release channel & rollback | SaaS dan self-hosted memakai release yang sama; lifecycle paket teraudit | Belum (lihat `extensions-and-marketplace.md`) |
 | 07 Production hardening & scaling | Load test, query profiling, horizontal scaling, worker, observability per tenant, backup drill, DR, security review | Target performa, availability, recovery, biaya terukur | Belum |
 
-### 1.1. PRD-002 Core Shared Capabilities — keputusan awal (22 Okt 2026)
+### 1.1. PRD-002 Document Framework — keputusan awal (22 Okt 2026)
 
-Urutan: **PRD-000 → PRD-001 Core → PRD-002 Core Shared Capabilities → modul bisnis pertama.** Kapabilitas bersama harus ada sebelum modul bisnis agar tidak ada modul yang menulis versinya sendiri lalu di-refactor.
+Urutan: **PRD-000 → PRD-001 Core → PRD-002 Document Framework → modul bisnis pertama.** Kapabilitas bersama harus ada sebelum modul bisnis agar tidak ada modul yang menulis versinya sendiri lalu di-refactor.
 
-PRD-002 berisi **kapabilitas bersama milik modul Core yang wajib dipakai setiap modul**, bukan hanya approval. Semuanya mengikuti pola yang sama:
+Tujuannya meniru model ERPNext/Frappe: **setiap resource yang dideklarasikan modul otomatis mendapat kapabilitas standar** (approval, penomoran, lampiran, komentar/timeline, cetak, email, saved view, custom field, impor/ekspor, notifikasi) tanpa modul harus memasangnya sendiri. Pemasangan otomatis itu dilakukan berdasarkan manifest yang dibaca registry, sehingga **mesinnya berada di platform** (pertanyaan penentu: platform perlu memanggilnya).
 
-- **Lokasi**: modul `core` (mesin + kontrak `modules/core/contract` + UI di `modules/core/web`), karena hanya modul yang memanggilnya, bukan platform.
-- **Deklarasi**: modul menyatakan integrasinya di manifest (mis. `approval`, `print_templates`, `email_templates`), divalidasi registry saat startup.
-- **Dependensi eksplisit**: setiap modul bisnis wajib mencantumkan `erp.core` di `dependencies`.
-- **Konfigurasi terpusat**: admin mengatur skema/template/preferensi di Core, tanpa mengubah kode modul.
-- **Penegakan**: generator menghasilkan integrasinya, analyzer + registry menolak modul yang melewatinya.
+| Lapisan | Isi |
+| --- | --- |
+| **Platform** (`internal/platform/doc*` + `sdk/doc`) | **Pipeline aksi dokumen**, approval engine, numbering series, attachment, comment & activity timeline, rendering print & email, saved view, custom field & tag, framework impor/ekspor, notifikasi. **Platform memiliki tabel datanya** |
+| **Modul Core** (`modules/core/web` + use case admin) | **Layar administrasi**: konfigurasi skema approval & kotak masuk approval, editor email/print template, seri penomoran, custom field, pengaturan notifikasi. Memakai API admin dari SDK (pola sama dengan PRD-001 §3) |
+| **Modul bisnis** | Mendeklarasikan resource, aksi, dan kapabilitas di manifest; mengisi **hook** domain (`Validate`, `Apply`, data untuk print/email). Tidak membuat ulang kapabilitas standar dan **tidak perlu** bergantung pada `erp.core` untuk memakainya |
+
+**Pipeline aksi dokumen** (dijalankan platform, sama untuk semua modul; *inversion of control* ala Frappe `validate`/`on_submit`):
+
+```
+POST /api/{slug}/{koleksi}/{id}/{aksi}
+  authz (permission + scope + field)        ← PRD-001
+  → muat & kunci dokumen, cek status & version
+  → hook modul: Validate()                   ← logika bisnis modul
+  → approval gate (skema dari Core)          → bila perlu: pending_approval, berhenti
+  → numbering series (saat submit)
+  → hook modul: Apply()                      ← efek domain (ledger, dsb.)
+  → audit + timeline + outbox + notifikasi
+  → commit (satu transaksi, transaction-data-standards §1)
+```
+
+**Endpoint otomatis per resource** (mengikuti permission & scope resource, api-guidelines): `/attachments`, `/comments`, `/timeline`, `/print`, saved views, custom field, impor/ekspor.
+
+**Batas desain** (menghindari risiko "module system terlalu generik"): platform mengatur **urutan dan kewajiban** (otorisasi → approval → nomor → audit), sedangkan **isi aturan bisnis tetap di hook modul**. Proses yang tidak berbentuk dokumen (mis. penutupan periode, rekonsiliasi) boleh memakai endpoint biasa lewat `Registrar.Handle`.
 
 Kandidat cakupan (difinalisasi saat PRD-002 ditulis):
 
@@ -48,12 +66,11 @@ Kandidat cakupan (difinalisasi saat PRD-002 ditulis):
 
 | Keputusan | Isi |
 | --- | --- |
-| Sifat | **Wajib di semua modul.** Setiap resource dokumen terintegrasi dengan approval; ada atau tidaknya tahap persetujuan ditentukan skema |
-| Lokasi | **Seluruhnya di modul Core** (`modules/core`): mesin approval, kontrak `modules/core/contract` (mis. `RequestApproval`, `Status`, `Decide`), UI kotak masuk, konfigurasi skema, riwayat. Platform tidak memanggil approval (pertanyaan penentu: hanya use case modul yang membutuhkannya), sehingga tidak diletakkan di platform |
+| Sifat | **Wajib di semua modul.** Setiap aksi dokumen melewati approval gate di pipeline; ada atau tidaknya tahap persetujuan ditentukan skema (tanpa skema aktif = otomatis lolos) |
+| Lokasi | **Mesin di platform** (approval gate di pipeline aksi dokumen, `sdk/doc`); **layar konfigurasi skema & kotak masuk approval di modul Core** |
 | Skema approval (diatur di Core) | Per resource + aksi (`submit`, `post`, `cancel`, …): tingkat bertahap (sekuensial/paralel), penentuan approver (role, unit organisasi, user tertentu, atasan pembuat), kondisi/batas nilai (mis. total > Rp 10 juta → tambah level), maker-checker, delegasi saat berhalangan, eskalasi/batas waktu. Perubahan skema tercatat di audit dan **di-snapshot** ke permintaan approval yang sedang berjalan |
-| Ketergantungan | Semua modul bisnis **wajib** mencantumkan `erp.core` di `dependencies` (eksplisit, sesuai D8/F2). Registry menolak modul bisnis tanpa dependensi ini |
-| Deklarasi di manifest | Setiap resource yang punya aksi dokumen (`submit`/`post`/`cancel`/`amend`) **wajib** mendeklarasikan `approval: { actions: [...] }`. Registry menolak manifest yang tidak mendeklarasikannya |
-| Penegakan agar tidak bisa dilewati | (1) Generator `make:handler` untuk aksi dokumen langsung memanggil kontrak approval; (2) analyzer `go vet` menolak handler aksi yang terdaftar di `approval.actions` tanpa memanggil kontrak approval; (3) template test: aksi dengan skema aktif tidak boleh langsung `submitted`; (4) audit mencatat setiap keputusan |
+| Deklarasi di manifest | Resource dengan aksi dokumen (`submit`/`post`/`cancel`/`amend`) mendeklarasikan aksinya; platform otomatis memasang approval gate pada aksi tersebut. Registry menolak aksi dokumen yang didaftarkan di luar pipeline (mis. lewat `Registrar.Handle` biasa) |
+| Penegakan | **Struktural**: aksi dokumen hanya bisa dijalankan lewat pipeline platform, sehingga approval tidak mungkin terlewat. Template test: aksi dengan skema aktif tidak boleh langsung `submitted`; audit mencatat setiap keputusan |
 | Status dokumen | Tambahan `pending_approval`; `reject` mengembalikan ke `draft` dengan alasan (transaction-data-standards §2) |
 | Bergantung pada PRD-001 | Principal, role & matriks (aksi `approve`), unit organisasi (approver per cabang/departemen), audit, mailer, settings |
 
