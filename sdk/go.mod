@@ -2,7 +2,7 @@ module github.com/rahmadmrhd/erp-go/sdk
 
 go 1.27
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
