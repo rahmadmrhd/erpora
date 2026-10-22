@@ -40,6 +40,9 @@ tasks:
 
   lint:
     desc: Lint setiap Go module
+    preconditions:
+      - sh: golangci-lint --version
+        msg: "golangci-lint tidak ditemukan di PATH. Jalankan `task setup` (memasang versi terpin {{.GOLANGCI_LINT_VERSION}} ke $GOPATH/bin) dan pastikan $GOPATH/bin ada di PATH."
     cmds:
       # golangci-lint dipasang oleh `task setup` (go install versi terpin) ke $GOPATH/bin.
       - for: { var: GO_MODULES }

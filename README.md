@@ -8,11 +8,12 @@ Platform ERP modular monolith dalam satu binary `erp`, dengan modul bisnis sebag
 - **Bun 1.4.2** (dipin di `package.json` dan `.bun-version`)
 - **Docker** untuk PostgreSQL 18 lokal
 - **go-task v3** sebagai entry point perintah. Pasang dengan `go install github.com/go-task/task/v3/cmd/task@latest`. Untuk OS lain lihat komentar di bagian atas `Taskfile.yml`.
+- **golangci-lint v2.15.0** (versi terpin) untuk `task lint`. Dipasang otomatis oleh `task setup` ke `$(go env GOPATH)/bin`; pastikan folder itu ada di `PATH`. Di CI dipasang oleh `golangci-lint-action` dengan versi yang sama.
 
 ## Quick start
 
 ```sh
-task setup
+task setup   # go mod download, bun install, dan golangci-lint terpin (dibutuhkan `task lint`)
 ```
 
 Salin `.env.example` menjadi `.env`:
