@@ -2,7 +2,7 @@
 
 | Atribut        | Nilai                                                                 |
 | -------------- | --------------------------------------------------------------------- |
-| Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q22 diputuskan     |
+| Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q23 diputuskan     |
 | Tanggal        | 21 Oktober 2026                                                       |
 | Fase roadmap   | Blueprint §14 fase **01 — Architecture foundation** + fase **03 — Module Registry & lifecycle** |
 | Sumber acuan   | Dokumen awal Blueprint & arsitektur (sudah dihapus; materinya ada di `docs/architecture/`, pemetaan rujukan di `docs/architecture/README.md`) |
@@ -432,7 +432,7 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
   2. **`AutoMigrate` dilarang** di luar test. Skema dikelola oleh migrasi SQL versioned (goose). Arch test atau linter menolak pemanggilan `AutoMigrate` di kode non-test.
   3. **Tipe koneksi terpisah**: `database.ControlDB` dan `database.TenantDB` membungkus `*gorm.DB`, sehingga keduanya tidak bisa tertukar saat compile.
   4. **Transaksi eksplisit**: operasi kritis memakai `db.Transaction(...)` dan locking eksplisit (`clause.Locking{Strength: "UPDATE"}`). Query kompleks (laporan, CTE) boleh memakai `db.Raw` dengan parameter binding, tanpa string concatenation.
-  5. **Observabilitas query**: logger GORM diarahkan ke `slog`, mencatat slow query (ambang dapat dikonfigurasi). Di mode dev, mode `PrepareStmt` dan deteksi N+1 dipantau lewat log.
+  5. **Observabilitas query**: logger GORM diarahkan ke `slog`, mencatat slow query (ambang dapat dikonfigurasi), tanpa nilai parameter SQL. **(M2, keputusan Q23)** `PrepareStmt` aktif di semua mode; di mode development, log memberi peringatan bila satu request menjalankan lebih dari N query dengan bentuk SQL yang sama (indikasi N+1; N dapat dikonfigurasi, default 10).
   6. **Preload, bukan lazy load**: relasi selalu dimuat eksplisit (`Preload`/`Joins`). Relasi lintas modul dilarang (Blueprint §3.3), sehingga model GORM hanya punya asosiasi di dalam modulnya sendiri.
 - Tool migrasi: `goose` (Provider API, migrasi di-embed), dipisah per target dengan tabel versi masing-masing:
 
@@ -1020,6 +1020,7 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 | Q20 | Konvensi API dasar?                            | ✅ JSON camelCase; tanpa nomor versi di URL dan **tanpa breaking change** (expand → migrate → contract, ditegakkan `oasdiff`); pagination halaman untuk UI + cursor untuk sync/integrasi (api-guidelines §4, §6, §14) |
 | Q21 | Lokasi frontend modul?                         | ✅ **Co-location**: frontend setiap modul di `modules/<name>/web` (package `@erp/module-<name>`); komponen generik di `packages/ui`, layanan frontend platform di `packages/platform-web`; `web/` hanya app shell perakit. Batas ditegakkan lewat `package.json` (F1–F3) |
 | Q22 | Penjadwalan primitif keamanan? | ✅ Primitif tersedia sebelum konsumen pertama: M1 SBOM + `SECURITY.md` + gosec; M2 `sdk/egress`, klasifikasi data, `DecodeJSON`, `no-store`, `sdk/export`; M3 `SafeHtml` + ZAP; upload di PRD Files (FR-24) |
+| Q23 | Temuan review akhir M1 yang butuh keputusan | ✅ (M4) kode `tenant_unresolved`, `method_not_allowed`, `not_ready` masuk katalog api-guidelines §8; (M10) workflow validasi tag rilis ditunda ke **M2**, gate `bun test` ke **M3**; (M11) FR-07 guardrail 5 diperjelas dan ditunda ke **M2**; (NV1) server memakai `otelhttp.WithPublicEndpoint()` — `traceparent`/`baggage` dari klien tidak dipercaya |
 | Q15 | Struktur Go module (`go.mod`) untuk SDK & modul? | ✅ **Multi-module + `go.work`**: root (platform), `sdk`, dan setiap `modules/<name>` adalah Go module sendiri dengan tag versi independen (§4, D5/D8/D9). Dicatat di ADR-006 |
 
 ## 10. Definition of Done
@@ -1037,8 +1038,8 @@ PRD ini dikerjakan dalam empat milestone. Setiap milestone harus lolos exit gate
 | Milestone | Cakupan | Exit gate |
 | --------- | ------- | --------- |
 | **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21, FR-24.1 | `bin/erp` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
-| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-24.2, FR-16 (ADR-006/007) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
-| **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3, FR-24.3 | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
+| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-24.2, FR-16 (ADR-006/007), FR-07 guardrail 5, FR-14 workflow validasi tag rilis (Q23) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
+| **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3, FR-24.3, FR-14 gate `bun test` (Q23) | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
 | **M4 — Observability lengkap** | FR-17.3–17.8 | Trace end-to-end browser → Go → DB terbukti; lifecycle modul ter-trace; `promtool` lolos |
 
 ## 12. Urutan pengerjaan yang disarankan

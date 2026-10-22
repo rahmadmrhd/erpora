@@ -210,6 +210,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | Status | `code` | Kapan |
 | --- | --- | --- |
 | 400 | `bad_request`, `invalid_filter`, `invalid_sort` | Parameter/format request salah |
+| 400 | `tenant_unresolved` | Tenant untuk request tidak dapat ditentukan oleh resolver |
 | 401 | `unauthenticated`, `token_expired` | Token tidak ada/tidak valid/kedaluwarsa |
 | 403 | `permission_denied` | Tidak punya permission aksi |
 | 403 | `field_forbidden` | Membaca/memfilter/mengubah field terlarang |
@@ -222,7 +223,9 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak |
 | 429 | `rate_limited` | Dengan header `Retry-After` |
 | 500 | `internal_error` | Kesalahan server |
+| 405 | `method_not_allowed` | Metode HTTP tidak didukung path tersebut; respons menyertakan header `Allow` |
 | 503 | `module_unavailable` | Modul `upgrade_pending`/`failed` |
+| 503 | `not_ready` | `/readyz`: aplikasi belum siap (database tidak terjangkau atau migrasi belum diterapkan) |
 
 **Record di luar scope → 404, bukan 403.** Membalas 403 berarti mengonfirmasi bahwa record itu ada, misalnya bahwa dokumen bernomor tertentu ada di cabang lain. Pengecualian: record yang **terlihat** oleh user tetapi aksinya tidak diizinkan → 403 `permission_denied`.
 
