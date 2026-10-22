@@ -155,7 +155,7 @@ func listPackages(dir, defaultModule string) ([]Package, error) {
 	results := make([][]listedPackage, len(buildVariants))
 	errs := make([]error, len(buildVariants))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 12) // batasi proses go list paralel
+	sem := make(chan struct{}, 12) // batasi jumlah proses go list yang berjalan bersamaan
 	for i, v := range buildVariants {
 		wg.Add(1)
 		go func() {
