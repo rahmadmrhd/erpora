@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/buildinfo"
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
+	"erpora/internal/platform/buildinfo"
+	"erpora/internal/platform/config"
 )
 
 func newInspectCmd(opts *rootOpts) *cobra.Command {

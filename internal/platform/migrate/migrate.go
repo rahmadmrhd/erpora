@@ -13,9 +13,9 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/migrations"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
+	"erpora/migrations"
 )
 
 // Target adalah kelompok migrasi: "control" atau "tenant".

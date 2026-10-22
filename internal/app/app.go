@@ -11,14 +11,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/buildinfo"
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/internal/platform/httpserver"
-	"github.com/rahmadmrhd/erp-go/internal/platform/migrate"
-	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
-	"github.com/rahmadmrhd/erp-go/web"
+	"erpora/internal/platform/buildinfo"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/httpserver"
+	"erpora/internal/platform/migrate"
+	"erpora/internal/platform/observability"
+	"erpora/internal/platform/tenancy"
+	"erpora/web"
 )
 
 const (

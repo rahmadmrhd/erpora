@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/pgtest"
 )
 
 var erpBin string

@@ -16,7 +16,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 	"gorm.io/plugin/opentelemetry/tracing"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
+	"erpora/internal/platform/config"
 )
 
 const pingTimeout = 5 * time.Second

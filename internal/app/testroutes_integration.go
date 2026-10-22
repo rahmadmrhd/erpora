@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/httpserver"
+	"erpora/internal/platform/httpserver"
 )
 
 // registerTestRoutes menambah route lambat HANYA pada biner yang dibangun dengan tag `integration`

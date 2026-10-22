@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rahmadmrhd/erp-go/internal/archcheck"
+	"erpora/internal/archcheck"
 )
 
 func load(t *testing.T) archcheck.Repo {

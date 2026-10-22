@@ -24,10 +24,10 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
-	"github.com/rahmadmrhd/erp-go/sdk/data"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/observability"
+	"erpora/internal/platform/tenancy"
+	"erpora/sdk/data"
 )
 
 type fakeReady struct{ err error }

@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
 )
 
 const (

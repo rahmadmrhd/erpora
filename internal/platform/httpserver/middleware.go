@@ -14,9 +14,9 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
-	"github.com/rahmadmrhd/erp-go/sdk/data"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/tenancy"
+	"erpora/sdk/data"
 )
 
 const (

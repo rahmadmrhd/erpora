@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rahmadmrhd/erp-go/internal/app"
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
+	"erpora/internal/app"
+	"erpora/internal/platform/config"
 )
 
 // Grup command untuk `erp list` dan help.

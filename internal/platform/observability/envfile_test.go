@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/observability"
 )
 
 // Finding 7: OTEL_* dari --env-file harus sampai ke Setup (sama seperti ERP_*).

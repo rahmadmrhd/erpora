@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/pgtest"
 )
 
 // FR-03: Shutdown menunggu request AKTIF (handler masih berjalan) selesai. Memakai route lambat yang

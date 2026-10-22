@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/bootstrap"
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
+	"erpora/internal/platform/bootstrap"
+	"erpora/internal/platform/tenancy"
 )
 
 // NewRouter membuat router dengan /healthz, /readyz, /api/bootstrap, /api/ (404 JSON), dan / (SPA).

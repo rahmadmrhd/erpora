@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/buildinfo"
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/internal/platform/migrate"
-	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
+	"erpora/internal/platform/buildinfo"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/migrate"
+	"erpora/internal/platform/observability"
 )
 
 // openDB memuat config, menyiapkan observability, dan membuka database. cleanup wajib dipanggil.

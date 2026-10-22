@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
+	"erpora/internal/platform/config"
 )
 
 func run(t *testing.T, args ...string) (string, error) {
