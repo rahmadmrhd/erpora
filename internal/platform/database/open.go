@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -106,7 +107,10 @@ func (l *slogLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
 		sql, rows := fc()
-		l.log.ErrorContext(ctx, "database error", "error", err, "elapsed_ms", elapsed.Milliseconds(), "rows", rows, "sql", sql)
+		// Teks error driver dapat memantulkan literal input pengguna (mis. UUID/enum tidak valid),
+		// jadi hanya field terstruktur yang aman yang dicatat.
+		attrs := append(safeErrorAttrs(err), "elapsed_ms", elapsed.Milliseconds(), "rows", rows, "sql", sql)
+		l.log.ErrorContext(ctx, "database error", attrs...)
 	case l.slow > 0 && elapsed > l.slow:
 		sql, rows := fc()
 		l.log.WarnContext(ctx, "slow query", "elapsed_ms", elapsed.Milliseconds(), "rows", rows, "sql", sql)
@@ -117,4 +121,30 @@ func (l *slogLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 // berparameter ($1, $2, ...) dan tidak pernah data (PII/rahasia) milik pengguna.
 func (l *slogLogger) ParamsFilter(_ context.Context, sql string, _ ...any) (string, []any) {
 	return sql, nil
+}
+
+// safeErrorAttrs menurunkan atribut log yang aman dari error database: SQLSTATE, severity, serta
+// nama schema/tabel/kolom/constraint untuk PostgreSQL; kategori generik untuk context; selain itu
+// hanya tipe error. Message/Detail/Where driver TIDAK dicatat karena dapat memuat data pengguna.
+func safeErrorAttrs(err error) []any {
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.As(err, &pgErr):
+		attrs := []any{"sqlstate", pgErr.Code, "severity", pgErr.Severity}
+		for _, kv := range [][2]string{
+			{"schema", pgErr.SchemaName}, {"table", pgErr.TableName}, {"column", pgErr.ColumnName},
+			{"constraint", pgErr.ConstraintName}, {"datatype", pgErr.DataTypeName},
+		} {
+			if kv[1] != "" {
+				attrs = append(attrs, kv[0], kv[1])
+			}
+		}
+		return attrs
+	case errors.Is(err, context.DeadlineExceeded):
+		return []any{"reason", "deadline_exceeded"}
+	case errors.Is(err, context.Canceled):
+		return []any{"reason", "canceled"}
+	default:
+		return []any{"error_type", fmt.Sprintf("%T", err)}
+	}
 }

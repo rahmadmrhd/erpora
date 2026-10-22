@@ -72,6 +72,12 @@ func DSNParts(dsn string) (host string, secrets []string) {
 			if pw, has := u.User.Password(); has {
 				add(pw)
 				add(url.PathEscape(pw))
+				add(url.QueryEscape(pw))
+				// Bentuk MENTAH persis seperti tertulis di DSN (mis. p%40ss%3Aw%2Frd%25), karena driver
+				// dapat memantulkannya apa adanya di pesan error.
+				if raw, ok := rawURLPassword(dsn); ok {
+					add(raw)
+				}
 			}
 		}
 		for _, part := range strings.Split(u.RawQuery, "&") {
@@ -208,4 +214,21 @@ func parseKV(s string) ([]kvToken, bool) {
 		return nil, false
 	}
 	return toks, true
+}
+
+// rawURLPassword mengambil password dari userinfo URL persis seperti tertulis (belum didekode).
+func rawURLPassword(dsn string) (string, bool) {
+	_, rest, ok := strings.Cut(dsn, "://")
+	if !ok {
+		return "", false
+	}
+	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
+		rest = rest[:end]
+	}
+	at := strings.LastIndex(rest, "@")
+	if at < 0 {
+		return "", false
+	}
+	_, pw, has := strings.Cut(rest[:at], ":")
+	return pw, has && pw != ""
 }

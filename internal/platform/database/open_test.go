@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -88,5 +90,61 @@ func TestSlogLogger_DoesNotLogParameterValues(t *testing.T) {
 	}
 	if strings.Contains(out, "victim@example.com") {
 		t.Fatalf("parameter value leaked into log: %s", out)
+	}
+}
+
+// Finding 1: password URL ber-percent-encoding tidak boleh muncul dalam bentuk mentah di pesan error.
+func TestConnError_RedactsRawPercentEncodedPassword(t *testing.T) {
+	dsn := "postgres://erp:p%40ss%3Aw%2Frd%25@db.local:5432/erp?sslmode=disable"
+	cases := []string{
+		`dial error: password p%40ss%3Aw%2Frd%25 rejected`, // bentuk mentah dari DSN
+		`auth failed for p@ss:w/rd% at db.local`,           // bentuk terdekode
+		`x p@ss:w%2Frd%25 y`,                               // bentuk PathEscape
+	}
+	for _, txt := range cases {
+		got := connError(dsn, errors.New(txt)).Error()
+		for _, leak := range []string{"p%40ss", "p@ss", "w%2Frd", "w/rd"} {
+			if strings.Contains(got, leak) {
+				t.Errorf("error %q -> %q leaks %q", txt, got, leak)
+			}
+		}
+		if !strings.Contains(got, "host=db.local:5432") {
+			t.Errorf("host hilang: %q", got)
+		}
+	}
+}
+
+// Finding 2: error driver dapat memuat literal input pengguna; log hanya memuat field aman.
+func TestSlogLogger_ErrorLogHasOnlySafeFields(t *testing.T) {
+	var buf bytes.Buffer
+	l := newSlogLogger(slog.New(slog.NewTextHandler(&buf, nil)), time.Second)
+	pgErr := &pgconn.PgError{
+		Severity:       "ERROR",
+		Code:           "22P02",
+		Message:        `invalid input syntax for type uuid: "victim@example.com"`,
+		Detail:         `Key (email)=(victim@example.com) already exists.`,
+		TableName:      "users",
+		ConstraintName: "users_email_key",
+		ColumnName:     "email",
+	}
+	l.Trace(context.Background(), time.Now(), func() (string, int64) { return "SELECT * FROM users WHERE id = $1", 0 },
+		fmt.Errorf("wrapped: %w", pgErr))
+	out := buf.String()
+	if strings.Contains(out, "victim@example.com") {
+		t.Fatalf("literal pengguna bocor ke log: %s", out)
+	}
+	for _, want := range []string{"22P02", "users", "users_email_key", "$1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log tanpa %q: %s", want, out)
+		}
+	}
+
+	buf.Reset()
+	l.Trace(context.Background(), time.Now(), func() (string, int64) { return "SELECT 1", 0 }, errors.New(`boom "secret-literal"`))
+	if strings.Contains(buf.String(), "secret-literal") {
+		t.Fatalf("error generik bocor: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "database error") {
+		t.Fatalf("log error tidak tercatat: %s", buf.String())
 	}
 }
