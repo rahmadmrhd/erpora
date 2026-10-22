@@ -159,3 +159,29 @@ func TestRedactDSN_SpecialCharacters(t *testing.T) {
 		t.Fatal("invalid dsn not handled")
 	}
 }
+
+func TestLoad_OTelVarsFromEnvFileReachProcessEnv(t *testing.T) {
+	clearEnv(t)
+	for _, k := range []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_SERVICE_NAME", "OTEL_TRACES_SAMPLER"} {
+		t.Setenv(k, "") // pulihkan nilai awal saat test selesai
+		os.Unsetenv(k)
+	}
+	t.Setenv("OTEL_SERVICE_NAME", "dari-proses") // environment proses menang atas file
+	p := filepath.Join(t.TempDir(), ".env")
+	body := "ERP_DATABASE_URL=postgres://u:p@h/db\nOTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318\nOTEL_SERVICE_NAME=dari-file\nOTEL_TRACES_SAMPLER=always_off\n"
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(p); err != nil {
+		t.Fatal(err)
+	}
+	if got := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); got != "http://127.0.0.1:4318" {
+		t.Errorf("endpoint = %q", got)
+	}
+	if got := os.Getenv("OTEL_TRACES_SAMPLER"); got != "always_off" {
+		t.Errorf("sampler = %q", got)
+	}
+	if got := os.Getenv("OTEL_SERVICE_NAME"); got != "dari-proses" {
+		t.Errorf("service name = %q (proses harus menang)", got)
+	}
+}

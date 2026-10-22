@@ -48,6 +48,7 @@ type raw struct {
 }
 
 // Load membaca konfigurasi. envFile "" = tanpa file; environment proses menang atas isi file.
+// Variabel OTEL_* dari file diteruskan ke environment proses (bila belum ada) agar terbaca SDK OpenTelemetry.
 func Load(envFile string) (Config, error) {
 	vars := map[string]string{}
 	if envFile != "" {
@@ -62,6 +63,15 @@ func Load(envFile string) (Config, error) {
 		}
 		for k, v := range parsed {
 			vars[k] = v
+			// SDK OpenTelemetry membaca OTEL_* langsung dari environment proses (endpoint, protokol, sampler,
+			// header, timeout, dst.), jadi nilai dari file diteruskan ke proses bila belum ditetapkan di sana.
+			if strings.HasPrefix(k, "OTEL_") {
+				if _, set := os.LookupEnv(k); !set {
+					if err := os.Setenv(k, v); err != nil {
+						return Config{}, fmt.Errorf("set %s dari env-file: %w", k, err)
+					}
+				}
+			}
 		}
 	}
 	for _, kv := range os.Environ() {
