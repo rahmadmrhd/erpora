@@ -37,6 +37,7 @@ require (
 require (
 	dario.cat/mergo v1.0.2 // indirect
 	erpora/modules/example v0.0.0
+	erpora/modules/exampleaddon v0.0.0
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
 	github.com/ClickHouse/ch-go v0.74.0 // indirect
@@ -142,6 +143,7 @@ require (
 
 replace (
 	erpora/modules/example => ./modules/example
+	erpora/modules/exampleaddon => ./modules/exampleaddon
 	erpora/sdk => ./sdk
 )
 
