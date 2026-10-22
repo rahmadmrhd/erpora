@@ -9,7 +9,8 @@ import (
 type StubMode string
 
 // Stub adalah Authorizer sementara sampai mesin permission PRD-001 tersedia.
-// Mode selain "allow" selalu menolak (fail closed). Setiap keputusan dicatat.
+// Mode selain "allow" selalu menolak (fail closed). Keputusan allow dicatat
+// pada level DEBUG, keputusan deny pada level WARN.
 type Stub struct {
 	Mode StubMode
 	Log  *slog.Logger
@@ -22,6 +23,10 @@ func (s Stub) Allow(ctx context.Context, permission string) bool {
 	if log == nil {
 		log = slog.Default()
 	}
-	log.InfoContext(ctx, "otorisasi stub", "permission", permission, "mode", string(s.Mode), "allowed", allowed)
+	level := slog.LevelWarn
+	if allowed {
+		level = slog.LevelDebug
+	}
+	log.Log(ctx, level, "otorisasi stub", "permission", permission, "mode", string(s.Mode), "allowed", allowed)
 	return allowed
 }

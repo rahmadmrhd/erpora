@@ -1,9 +1,9 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -66,12 +66,23 @@ type fixture struct {
 	snap   *Snapshot
 	rec    *tracetest.SpanRecorder
 	hits   *int
+	logs   *bytes.Buffer
 }
 
 func newFixture(t *testing.T, authz Authorizer, order *[]string) fixture {
 	t.Helper()
 	hits := 0
-	reg, err := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0"},
+	reg, err := registry.Build(registry.Options{
+		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
+		PlatformCapabilities: []string{"platform.modules.read"},
+		Platform: func(r module.Registrar) error {
+			r.Handle("GET", "/modules", "platform.modules.read", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits++
+				w.WriteHeader(http.StatusOK)
+			}))
+			return nil
+		},
+	},
 		fakeModule{m: notesManifest(), register: func(r module.Registrar) error {
 			r.Handle("GET", "/items", "notes.items.read", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				hits++
@@ -103,8 +114,10 @@ func newFixture(t *testing.T, authz Authorizer, order *[]string) fixture {
 			*order = append(*order, s)
 		}
 	}
+	logs := &bytes.Buffer{}
+	log := slog.New(slog.NewTextHandler(logs, nil))
 	router := httpserver.NewRouter(httpserver.Deps{
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger: log,
 		Tracer: tp,
 		Resolver: resolverFunc(func(*http.Request) (tenancy.TenantID, error) {
 			note("tenant")
@@ -119,8 +132,8 @@ func newFixture(t *testing.T, authz Authorizer, order *[]string) fixture {
 		},
 	})
 	snap := NewSnapshot()
-	Mount(router, reg, snap, authz)
-	return fixture{router: router, snap: snap, rec: sr, hits: &hits}
+	Mount(router, reg, snap, authz, log)
+	return fixture{router: router, snap: snap, rec: sr, hits: &hits, logs: logs}
 }
 
 func (f fixture) do(method, target string) *httptest.ResponseRecorder {
@@ -211,6 +224,42 @@ func TestMount_MiddlewareOrder(t *testing.T) {
 	}
 	if !found {
 		t.Error("atribut span erp.module.id tidak ditemukan")
+	}
+	// M1: access log route modul memuat atribut module.
+	var access string
+	for _, l := range strings.Split(f.logs.String(), "\n") {
+		if strings.Contains(l, "msg=\"http request\"") && strings.Contains(l, "/api/notes/items") {
+			access = l
+		}
+	}
+	if !strings.Contains(access, "module=acme.notes") {
+		t.Errorf("access log tanpa module=acme.notes: %q", access)
+	}
+}
+
+// M11: route platform.core dipasang lewat Mount; guard selalu enabled, permission tetap berlaku.
+func TestMount_PlatformRoutes(t *testing.T) {
+	f := newFixture(t, allowAll, nil)
+	if rec := f.do("GET", "/api/platform/modules"); rec.Code != 200 {
+		t.Fatalf("allow: %d %s", rec.Code, rec.Body.String())
+	}
+	f = newFixture(t, denyAll, nil)
+	rec := f.do("GET", "/api/platform/modules")
+	if rec.Code != 403 || errCode(t, rec) != "permission_denied" || *f.hits != 0 {
+		t.Fatalf("deny: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// M3: penolakan karena Authorizer nil dicatat lewat logger aplikasi, bukan slog.Default.
+func TestMount_NilAuthorizerDeniesAndLogsViaAppLogger(t *testing.T) {
+	f := newFixture(t, nil, nil)
+	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	rec := f.do("GET", "/api/notes/items")
+	if rec.Code != 403 {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if !strings.Contains(f.logs.String(), "permission ditolak") {
+		t.Errorf("log aplikasi tanpa penolakan: %q", f.logs.String())
 	}
 }
 

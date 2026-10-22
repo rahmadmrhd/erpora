@@ -25,16 +25,14 @@ type Mounter interface {
 
 // Mount mendaftarkan semua route modul dari registry ke router. Tiap handler
 // dibungkus guard status modul, lalu pengecekan permission (kecuali Public).
+// Route platform.core ikut dipasang di sini: guard selalu enabled, permission tetap berlaku.
 // Rantai penuh: otel -> recover -> requestScope -> Authenticate (kecuali Public)
 // -> tenantContext -> guard -> permission -> handler.
-func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer) {
+func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, log *slog.Logger) {
 	for _, rt := range reg.Routes() {
-		if rt.Module == registry.PlatformKey {
-			continue // route platform dipasang oleh perakit aplikasi
-		}
 		h := rt.Handler
 		if !rt.Public {
-			h = permissionMW(authz, rt.Permission, rt.Module, h)
+			h = permissionMW(authz, rt.Permission, rt.Module, log, h)
 		}
 		h = guardMW(snap, rt.Module, h)
 		var opts []httpserver.RouteOption
@@ -48,6 +46,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer) 
 func guardMW(snap *Snapshot, key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("erp.module.id", key))
+		httpserver.SetModule(r.Context(), key)
 		tid, _ := tenancy.FromContext(r.Context())
 		switch st := snap.Status(tid, key); st {
 		case StatusEnabled:
@@ -65,10 +64,13 @@ func guardMW(snap *Snapshot, key string, next http.Handler) http.Handler {
 	})
 }
 
-func permissionMW(authz Authorizer, permission, module string, next http.Handler) http.Handler {
+func permissionMW(authz Authorizer, permission, module string, log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authz == nil {
+			// Tanpa Authorizer: tolak (fail closed). Penolakan oleh Authorizer dicatat Authorizer itu sendiri.
+			log.WarnContext(r.Context(), "permission ditolak: authorizer tidak dikonfigurasi", "module", module, "permission", permission)
+		}
 		if authz == nil || !authz.Allow(r.Context(), permission) {
-			slog.WarnContext(r.Context(), "permission ditolak", "module", module, "permission", permission)
 			httpserver.WriteError(w, r, http.StatusForbidden, "permission_denied", "tidak memiliki izin", nil)
 			return
 		}

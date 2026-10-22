@@ -42,6 +42,8 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 	log := observability.NewLogger(stdout, cfg.LogFormat, slog.LevelInfo)
 
 	// Katalog modul divalidasi sebelum DB dibuka; katalog rusak adalah bug build (exit 2).
+	warnInsecureConfig(log, cfg)
+
 	reg, err := BuildRegistry()
 	if err != nil {
 		return &ExitError{Code: 2, Err: fmt.Errorf("katalog modul tidak valid: %w", err)}
@@ -105,7 +107,7 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		},
 	})
 	// Snapshot kosong: semua modul berstatus available (404 module_not_found) sampai M2b mengisinya.
-	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.Stub{Mode: authorization.StubMode(cfg.AuthzStub), Log: log})
+	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.Stub{Mode: authorization.StubMode(cfg.AuthzStub), Log: log}, log)
 	registerTestRoutes(router)
 	srv := httpserver.New(cfg.HTTPAddr, router)
 
@@ -159,4 +161,13 @@ func (r dbReadiness) Ready(ctx context.Context) error {
 		return fmt.Errorf("%d migrasi belum diterapkan", n)
 	}
 	return nil
+}
+
+// warnInsecureConfig mencatat satu WARN saat konfigurasi stub berbahaya dipakai.
+// ERP_AUTHZ_STUB=allow di production membuat semua route modul terproteksi terbuka
+// bagi klien anonim (authN masih stub sampai PRD-001).
+func warnInsecureConfig(log *slog.Logger, cfg config.Config) {
+	if cfg.AuthzStub == "allow" && cfg.Env == config.EnvProduction {
+		log.Warn("ERP_AUTHZ_STUB=allow di production: otorisasi dimatikan untuk semua route modul; jangan dipakai di lingkungan nyata")
+	}
 }
