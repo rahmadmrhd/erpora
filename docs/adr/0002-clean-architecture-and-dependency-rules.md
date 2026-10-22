@@ -32,6 +32,8 @@ Memilih opsi 3. Aturan berikut wajib berlaku dan diuji di CI:
 | D10 | `modules/**` dan `sdk` tidak boleh mengimpor library router pihak ketiga | Arch test |
 | D11 | Dependensi antar-Go-module tidak boleh siklik | Compiler/`go mod` + arch test |
 
+Catatan D3b: paket platform (`internal/platform/**`, `internal/app`, `cmd/erp`) boleh memakai alias tipe `database.DB` (= `gorm.DB`) tanpa mengimpor `gorm.io`; modul tidak dapat, karena `internal/platform/database` berada di `internal/` root module dan tidak dapat diimpor oleh modul (dipaksa compiler).
+
 Aturan frontend (dicek lewat dependency-cruiser dan `package.json`):
 
 | # | Aturan |

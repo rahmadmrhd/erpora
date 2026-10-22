@@ -7,7 +7,7 @@
     "dev": "bun dev.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "deps": "cd .. && depcruise web/src --config .dependency-cruiser.cjs"
+    "deps": "bun deps.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

@@ -1,5 +1,5 @@
 /**
- * Aturan batas frontend (PRD-000 §4.2 / Q21). Dijalankan dari root repo: `depcruise web/src --config .dependency-cruiser.cjs`.
+ * Aturan batas frontend (PRD-000 §4.2 / Q21). Dijalankan lewat `bun run --filter @erp/web deps` (web/deps.ts memindai web/src, packages, modules; folder yang belum ada dilewati).
  * Struktur target: web/ = app shell; packages/{ui,platform-web,module-sdk,platform-contracts};
  * modules/<name>/web = frontend modul. Folder modul/packages belum ada di M1; aturan tetap valid dan aktif.
  */

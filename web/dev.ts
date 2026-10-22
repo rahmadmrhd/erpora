@@ -3,6 +3,7 @@ import index from "./src/index.html";
 const API = "http://127.0.0.1:8080";
 
 Bun.serve({
+  hostname: "127.0.0.1", // jangan buka proxy API loopback ke LAN
   port: 5173,
   routes: {
     "/*": index,
