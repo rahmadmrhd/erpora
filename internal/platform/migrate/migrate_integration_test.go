@@ -191,3 +191,25 @@ func TestPending_IsReadOnly(t *testing.T) {
 		t.Fatalf("Pending created %d table(s) on an unmigrated database", n)
 	}
 }
+
+func TestStatus_IsReadOnlyAndAccurate(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, pgtest.Start(t))
+
+	st, err := migrate.Status(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tables int64
+	if err := db.Raw("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").Scan(&tables).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tables != 0 {
+		t.Fatalf("Status created %d table(s) on an unmigrated database", tables)
+	}
+	for _, s := range st {
+		if s.Current != 0 || s.Latest < 1 || s.Pending != int(s.Latest) {
+			t.Errorf("unmigrated %s: %+v", s.Target, s)
+		}
+	}
+}

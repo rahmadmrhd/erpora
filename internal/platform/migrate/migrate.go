@@ -77,78 +77,73 @@ func UpWithTenant(ctx context.Context, db *database.DB, env config.Env, want *uu
 	return err
 }
 
-// Status melaporkan keadaan tiap target. Catatan: goose membuat tabel versi (goose_*) bila belum ada.
+// Status melaporkan keadaan tiap target. Murni baca (read-only): tidak membuat tabel goose_*;
+// tabel versi yang belum ada berarti Current=0 dan seluruh migrasi target itu pending.
 func Status(ctx context.Context, db *database.DB) ([]TargetStatus, error) {
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
 	var out []TargetStatus
 	for _, t := range targets {
-		p, err := provider(sqlDB, t)
-		if err != nil {
-			return nil, fmt.Errorf("status %s: %w", t, err)
-		}
-		st, err := statusOf(ctx, p, t)
+		embedded, err := embeddedVersions(t)
 		if err != nil {
 			return nil, err
+		}
+		applied, err := appliedVersions(ctx, db, t)
+		if err != nil {
+			return nil, err
+		}
+		st := TargetStatus{Target: t}
+		for _, v := range embedded {
+			if v > st.Latest {
+				st.Latest = v
+			}
+			if !applied[v] {
+				st.Pending++
+			}
+		}
+		for v := range applied {
+			if v > st.Current {
+				st.Current = v
+			}
 		}
 		out = append(out, st)
 	}
 	return out, nil
 }
 
-func statusOf(ctx context.Context, p *goose.Provider, t Target) (TargetStatus, error) {
-	cur, latest, err := p.GetVersions(ctx)
+// Pending mengembalikan total migrasi yang belum diterapkan di semua target (read-only, lihat Status).
+func Pending(ctx context.Context, db *database.DB) (int, error) {
+	sts, err := Status(ctx, db)
 	if err != nil {
-		return TargetStatus{}, fmt.Errorf("status %s: %w", t, err)
+		return 0, err
 	}
-	ms, err := p.Status(ctx)
-	if err != nil {
-		return TargetStatus{}, fmt.Errorf("status %s: %w", t, err)
+	n := 0
+	for _, s := range sts {
+		n += s.Pending
 	}
-	pending := 0
-	for _, m := range ms {
-		if m.State == goose.StatePending {
-			pending++
-		}
-	}
-	return TargetStatus{Target: t, Current: cur, Latest: latest, Pending: pending}, nil
+	return n, nil
 }
 
-// Pending mengembalikan total migrasi yang belum diterapkan di semua target.
-// Murni baca (read-only): tidak membuat tabel apa pun, aman untuk /readyz dan startup serve.
-// Tabel versi goose yang belum ada berarti seluruh migrasi target itu pending.
-func Pending(ctx context.Context, db *database.DB) (int, error) {
-	total := 0
-	for _, t := range targets {
-		embedded, err := embeddedVersions(t)
-		if err != nil {
-			return 0, err
-		}
-		table := "goose_" + string(t)
-		var reg *string
-		if err := db.WithContext(ctx).Raw("SELECT to_regclass(?)::text", table).Scan(&reg).Error; err != nil {
-			return 0, fmt.Errorf("pending %s: %w", t, err)
-		}
-		applied := map[int64]bool{}
-		if reg != nil {
-			var rows []int64
-			// Nama tabel berasal dari konstanta internal, bukan input pengguna.
-			if err := db.WithContext(ctx).Raw("SELECT version_id FROM " + table + " WHERE is_applied").Scan(&rows).Error; err != nil {
-				return 0, fmt.Errorf("pending %s: %w", t, err)
-			}
-			for _, v := range rows {
-				applied[v] = true
-			}
-		}
-		for _, v := range embedded {
-			if !applied[v] {
-				total++
-			}
+// appliedVersions membaca versi yang sudah diterapkan lewat to_regclass + SELECT (tanpa menulis).
+func appliedVersions(ctx context.Context, db *database.DB, t Target) (map[int64]bool, error) {
+	table := "goose_" + string(t)
+	var reg *string
+	if err := db.WithContext(ctx).Raw("SELECT to_regclass(?)::text", table).Scan(&reg).Error; err != nil {
+		return nil, fmt.Errorf("status %s: %w", t, err)
+	}
+	applied := map[int64]bool{}
+	if reg == nil {
+		return applied, nil
+	}
+	var rows []int64
+	// Nama tabel berasal dari konstanta internal, bukan input pengguna.
+	if err := db.WithContext(ctx).Raw("SELECT version_id FROM " + table + " WHERE is_applied").Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("status %s: %w", t, err)
+	}
+	for _, v := range rows {
+		if v > 0 { // baris versi 0 adalah penanda awal goose
+			applied[v] = true
 		}
 	}
-	return total, nil
+	return applied, nil
 }
 
 // embeddedVersions membaca nomor versi dari nama file migrasi tertanam ("0001_nama.sql").
