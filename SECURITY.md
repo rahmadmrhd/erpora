@@ -5,7 +5,7 @@
 Jangan membuka issue publik untuk kerentanan. Laporkan secara privat lewat salah satu cara berikut:
 
 - **GitHub private vulnerability reporting** (tab *Security* > *Report a vulnerability* / security advisories) pada repositori ini.
-- Email: `security@example.invalid` (placeholder; pemilik repositori wajib menggantinya dengan kontak sebenarnya).
+- Email: `rahmadm.rhd@gmail.com`.
 
 Sertakan deskripsi, langkah reproduksi, versi/commit yang terdampak, dan dampak yang Anda perkirakan.
 Kami akan mengonfirmasi penerimaan laporan dan memberi kabar perkembangan perbaikan.
