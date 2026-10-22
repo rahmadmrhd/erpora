@@ -12,7 +12,10 @@ type fakeRepo struct {
 	notes        []domain.Note
 	offset, size int
 	added        []domain.Note
+	addManyCalls int
+	addCalls     int
 	err          error
+	addManyErr   error
 }
 
 func (f *fakeRepo) List(_ context.Context, offset, limit int) ([]domain.Note, error) {
@@ -20,7 +23,17 @@ func (f *fakeRepo) List(_ context.Context, offset, limit int) ([]domain.Note, er
 	return f.notes, f.err
 }
 func (f *fakeRepo) Count(context.Context) (int64, error) { return int64(len(f.notes)), f.err }
+func (f *fakeRepo) AddMany(_ context.Context, ns []domain.Note) error {
+	f.addManyCalls++
+	if f.addManyErr != nil {
+		return f.addManyErr // atomik: tidak ada note yang tersimpan
+	}
+	f.added = append(f.added, ns...)
+	f.notes = append(f.notes, ns...)
+	return f.err
+}
 func (f *fakeRepo) Add(_ context.Context, n domain.Note) error {
+	f.addCalls++
 	f.added = append(f.added, n)
 	f.notes = append(f.notes, n)
 	return f.err
@@ -79,5 +92,31 @@ func TestSeedDev_OnlyBelowTwenty(t *testing.T) {
 	}
 	if len(repo.added) != 20 {
 		t.Errorf("ditambahkan %d, ingin 20", len(repo.added))
+	}
+}
+
+// M10: seed awal atomik lewat satu AddMany; kegagalan tidak meninggalkan seed sebagian.
+func TestSeedInitial_UsesSingleAtomicBatch(t *testing.T) {
+	repo := &fakeRepo{}
+	if err := NewService(repo).SeedInitial(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if repo.addManyCalls != 1 || repo.addCalls != 0 || len(repo.added) != 3 {
+		t.Errorf("AddMany=%d Add=%d added=%d", repo.addManyCalls, repo.addCalls, len(repo.added))
+	}
+}
+
+func TestSeedInitial_FailureLeavesNothingAndIsRetryable(t *testing.T) {
+	repo := &fakeRepo{addManyErr: errors.New("insert gagal")}
+	s := NewService(repo)
+	if err := s.SeedInitial(context.Background()); err == nil {
+		t.Fatal("error diharapkan")
+	}
+	if len(repo.added) != 0 {
+		t.Fatalf("seed sebagian tersimpan: %d", len(repo.added))
+	}
+	repo.addManyErr = nil
+	if err := s.SeedInitial(context.Background()); err != nil || len(repo.added) != 3 {
+		t.Fatalf("ulang gagal melengkapi seed: err=%v added=%d", err, len(repo.added))
 	}
 }

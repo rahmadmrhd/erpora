@@ -31,15 +31,16 @@ func (s *Service) SeedDev(ctx context.Context) error {
 	return s.add(ctx, "Catatan dev", 20)
 }
 
+// add membuat count note lalu menyimpannya atomik; kegagalan tidak meninggalkan seed sebagian,
+// sehingga pemanggilan ulang hook (count masih 0) melengkapi seed.
 func (s *Service) add(ctx context.Context, prefix string, count int) error {
+	notes := make([]domain.Note, 0, count)
 	for i := 1; i <= count; i++ {
 		note, err := domain.NewNote(fmt.Sprintf("%s %d", prefix, i))
 		if err != nil {
 			return err
 		}
-		if err := s.repo.Add(ctx, note); err != nil {
-			return err
-		}
+		notes = append(notes, note)
 	}
-	return nil
+	return s.repo.AddMany(ctx, notes)
 }

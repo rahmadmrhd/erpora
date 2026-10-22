@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"erpora/modules/example/internal/domain"
 	"erpora/sdk/data"
@@ -73,6 +74,29 @@ func (NotesRepo) Add(ctx context.Context, n domain.Note) error {
 	}
 	if err := db.WithContext(ctx).Create(&noteRow{ID: id, Title: n.Title}).Error; err != nil {
 		return fmt.Errorf("simpan note: %w", err)
+	}
+	return nil
+}
+
+// AddMany menyimpan semua note dalam satu transaksi.
+func (NotesRepo) AddMany(ctx context.Context, notes []domain.Note) error {
+	db, err := data.DB(ctx)
+	if err != nil {
+		return err
+	}
+	rows := make([]noteRow, len(notes))
+	for i, n := range notes {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("buat id: %w", err)
+		}
+		rows[i] = noteRow{ID: id, Title: n.Title}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return tx.Create(&rows).Error }); err != nil {
+		return fmt.Errorf("simpan notes: %w", err)
 	}
 	return nil
 }
