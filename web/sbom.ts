@@ -105,7 +105,7 @@ const components = keys.map((key) => {
 });
 
 const bomRef = (key: string): string => `${ref(key)}#${key}`;
-const rootName = lock.workspaces[""]?.name ?? "erp-go";
+const rootName = lock.workspaces[""]?.name ?? "erpora";
 const bom = {
   bomFormat: "CycloneDX",
   specVersion: "1.5",

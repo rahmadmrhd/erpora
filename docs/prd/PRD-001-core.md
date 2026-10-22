@@ -54,7 +54,7 @@ Prinsip arsitektur tetap berlaku (PRD-000 §7): **backend adalah otoritas**. Per
 | **SDK** (`sdk/authz`, `sdk/identity`, `sdk/settings`, `sdk/audit`) | Interface yang dipakai modul, diimplementasikan platform (dependency inversion, PRD-000 D5/D9) | Modul tidak boleh mengimpor platform |
 | **Modul `modules/core`** (key `erp.core`, slug `core`, **`required: true`**) | Use case & API administrasi: user, role, matriks permission, scope assignment, identity provider, OAuth client, PAT, settings UI, audit viewer + halaman frontend-nya | Fitur administrasi berkembang seperti modul biasa (rilis, migrasi UI, command), tetapi tidak bisa di-disable |
 
-- Field manifest baru **`required`**: modul `required` di-install & di-enable otomatis oleh `erp migrate up`, serta tidak bisa di-`disable`/`uninstall` (perluasan PRD-000 FR-19, ditolak dengan `module_required`).
+- Field manifest baru **`required`**: modul `required` di-install & di-enable otomatis oleh `erpora migrate up`, serta tidak bisa di-`disable`/`uninstall` (perluasan PRD-000 FR-19, ditolak dengan `module_required`).
 - Modul `core` mengakses data identity/authz **hanya** lewat antarmuka admin di SDK (`sdk/identity.Admin`, `sdk/authz.Admin`). Ia tidak memiliki tabel identity sendiri.
 
 ## 4. Model data (ringkas)
@@ -92,7 +92,7 @@ Mengikuti Blueprint §3.1: identitas global di **control DB**, hak akses bisnis 
 - Password di-hash dengan **argon2id** (parameter dapat dikonfigurasi; default mengikuti rekomendasi OWASP terkini). Kebijakan password: panjang minimum 12, cek terhadap daftar password umum, tanpa aturan komposisi yang memaksa.
 - **Rate limit & lockout**: per akun dan per IP (mis. 5 gagal → jeda bertingkat; 20 gagal → `locked` sampai di-unlock admin atau via reset). Pesan error login tidak membedakan "email tidak ada" dan "password salah".
 - **Reset password** lewat tautan email sekali pakai (berlaku 30 menit, hash disimpan), dikirim memakai mailer FR-108.
-- **Admin pertama** dibuat lewat command modul: `erp core:create-admin --email ...` (PRD-000 FR-22.4). Tidak ada endpoint setup publik.
+- **Admin pertama** dibuat lewat command modul: `erpora core:create-admin --email ...` (PRD-000 FR-22.4). Tidak ada endpoint setup publik.
 - Endpoint: `POST /api/core/auth/login`, `POST /api/core/auth/logout`, `POST /api/core/auth/password/forgot`, `POST /api/core/auth/password/reset`, `POST /api/core/auth/password/change`. Semua masuk allowlist route publik PRD-000 kecuali `change` dan `logout`.
 
 **AC:** brute-force simulasi terkena lockout; timing respons login untuk email ada/tidak ada tidak berbeda signifikan; password lama tidak berlaku setelah reset, dan semua sesi lain dicabut.
@@ -105,7 +105,7 @@ Mengikuti Blueprint §3.1: identitas global di **control DB**, hak akses bisnis 
 - Anti-replay: kode yang sama tidak bisa dipakai dua kali dalam jendela waktunya (`last_used_step`).
 - Rate limit verifikasi kode mengikuti FR-101 (lockout).
 - User SSO tidak diminta TOTP ERP; MFA mengikuti kebijakan IdP. Klaim `amr` dari IdP dicatat di sesi.
-- Admin dapat **me-reset MFA** user lain (tercatat di audit). Administrator terakhir hanya bisa di-reset lewat `erp core:reset-mfa` di server.
+- Admin dapat **me-reset MFA** user lain (tercatat di audit). Administrator terakhir hanya bisa di-reset lewat `erpora core:reset-mfa` di server.
 - Klaim `amr` access token berisi `pwd`+`otp` setelah MFA. Endpoint sensitif (mis. mengubah matriks role, membuat OAuth client) dapat mensyaratkan MFA lewat opsi `RequireMFA` di `Registrar.Handle`.
 
 **AC:** Administrator tanpa MFA tidak bisa memanggil API apa pun selain pendaftaran MFA dan logout; kode replay ditolak; recovery code hanya berlaku sekali; reset MFA oleh admin tercatat di audit.
@@ -129,7 +129,7 @@ Mengikuti Blueprint §3.1: identitas global di **control DB**, hak akses bisnis 
 - Klaim access token: `iss`, `sub` (user id), `sid` (session id), `tid` (tenant id), `aud`, `exp`, `iat`, `jti`, `perm_rev`, `amr` (metode login), `scope` (untuk PAT/OAuth client). **Daftar permission tidak dimasukkan ke JWT** (ukuran dan risiko basi), dan dievaluasi di server dari cache (§6.7).
 - **Rotasi refresh token** setiap dipakai. Pemakaian ulang token lama (*reuse*) → seluruh *family* dan sesinya dicabut, dan dicatat sebagai event audit keamanan.
 - **Pencabutan instan**: middleware memeriksa `sid` terhadap **daftar sesi tercabut di memori**, bukan query database per request. Daftar ini hanya berisi sesi tercabut yang access token-nya belum kedaluwarsa (≤ umur access token), sehingga tetap kecil. Saat horizontal scaling, perubahan disebarkan ke semua instance lewat `StateNotifier` (PRD-000 FR-19.7, `LISTEN/NOTIFY`), dan instance baru memuat daftar awal saat startup. User `disabled`, ganti password, dan "logout semua perangkat" berlaku segera, bukan menunggu token kedaluwarsa.
-- **Rotasi kunci**: `erp core:rotate-keys` membuat kunci baru (`active`). Kunci lama berstatus `retiring` sampai seluruh token bertanda tangan kunci itu kedaluwarsa. Kunci publik diterbitkan di `GET /.well-known/jwks.json`. Kunci privat dienkripsi dengan `ERP_SECRET_KEY`.
+- **Rotasi kunci**: `erpora core:rotate-keys` membuat kunci baru (`active`). Kunci lama berstatus `retiring` sampai seluruh token bertanda tangan kunci itu kedaluwarsa. Kunci publik diterbitkan di `GET /.well-known/jwks.json`. Kunci privat dienkripsi dengan `ERP_SECRET_KEY`.
 - **CSRF**: API memakai header `Authorization: Bearer` sehingga kebal CSRF. Satu-satunya endpoint berbasis cookie (`refresh`) dilindungi `SameSite=Strict` + pemeriksaan header `Origin`.
 - **CORS**: default same-origin saja. Origin klien eksternal (mis. app desktop berbasis web) diatur lewat allowlist di settings.
 - **Offline PWA**: snapshot bootstrap tetap dapat dibaca. Operasi outbox dikirim ulang setelah refresh token berhasil. Token kedaluwarsa tidak pernah dianggap otorisasi (`docs/architecture/offline-strategy.md` §5).
@@ -314,7 +314,7 @@ authz.CheckWrite(ctx, "inventory.item", changedFields []string) error  // untuk 
 ```
 
 - Middleware `Registrar.Handle` memeriksa lapis aksi **tanpa** data record. Aturan bersyarat (owner/scope) membuat lolos middleware hanya berarti "punya izin di sebagian data"; handler **wajib** memanggil `Filter`/`Check`.
-- Generator `erp make:handler` dan `make:repository` (PRD-000 FR-22) menghasilkan kode yang sudah memanggil `Filter`, `Check`, `MaskFields`, dan `CheckWrite`.
+- Generator `erpora make:handler` dan `make:repository` (PRD-000 FR-22) menghasilkan kode yang sudah memanggil `Filter`, `Check`, `MaskFields`, dan `CheckWrite`.
 - Arch/lint test: handler di `presentation/http` yang memanggil repository tanpa melalui helper authz diberi peringatan oleh analyzer kustom (`go vet` analyzer) sebagai pengaman tambahan.
 
 ### FR-119 — Pencegahan IDOR (akses objek tanpa otorisasi)
@@ -338,7 +338,7 @@ IDOR dicegah di **setiap titik masuk** yang menerima ID objek, bukan hanya di en
 
 **3. Penegakan otomatis**
 - **Analyzer `go vet` kustom (FR-115)** diperluas: memberi error bila handler/implementasi kontrak memanggil method repository yang menerima ID tanpa melewati `authz.Check`/`authz.Filter`, dan bila `AsSystem` dipanggil di luar `internal/application`.
-- **Generator** (`erp make:handler`, `make:repository`, `make:contract`) menghasilkan kode yang sudah memanggil helper otorisasi, beserta **test IDOR** default.
+- **Generator** (`erpora make:handler`, `make:repository`, `make:contract`) menghasilkan kode yang sudah memanggil helper otorisasi, beserta **test IDOR** default.
 - **Test IDOR wajib** untuk setiap endpoint dan setiap metode kontrak yang menerima ID, dengan dua user fixture (A dan B) di scope berbeda:
   - B membaca/mengubah/menghapus/menjalankan aksi pada record A → 404;
   - B memakai ID record A sebagai referensi di body → 422 `not_found`;
@@ -386,7 +386,7 @@ IDOR dicegah di **setiap titik masuk** yang menerima ID objek, bukan hanya di en
   - Lifecycle modul: dicerminkan dari `module_lifecycle_events` (PRD-000).
   - **Penolakan akses** (403) pada aksi selain `read` (dibatasi laju agar tidak membanjiri).
 - SDK `audit.Record(ctx, audit.Event{...})` untuk event bisnis modul (mis. "Dokumen disubmit").
-- Retensi diatur lewat settings (default 365 hari); pembersihan oleh command terjadwal `erp core:audit-prune` dan dicatat sebagai event audit.
+- Retensi diatur lewat settings (default 365 hari); pembersihan oleh command terjadwal `erpora core:audit-prune` dan dicatat sebagai event audit.
 
 ### FR-131 — Audit perubahan data (opt-in per resource)
 
@@ -417,7 +417,7 @@ IDOR dicegah di **setiap titik masuk** yang menerima ID objek, bukan hanya di en
 
 | Milestone | Cakupan | Exit gate |
 | --- | --- | --- |
-| **C1 — Identity lokal** | FR-101, FR-102, FR-106, FR-107, FR-108, modul `core` (`required`), `erp core:create-admin` | Login/logout/refresh/reset end-to-end; MFA wajib Administrator berjalan; stub authN PRD-000 diganti; ASVS checklist sesi lolos |
+| **C1 — Identity lokal** | FR-101, FR-102, FR-106, FR-107, FR-108, modul `core` (`required`), `erpora core:create-admin` | Login/logout/refresh/reset end-to-end; MFA wajib Administrator berjalan; stub authN PRD-000 diganti; ASVS checklist sesi lolos |
 | **C2 — Authorization** | FR-110–FR-119 | Semua tabel uji scope & field lulus (termasuk hierarki unit organisasi); matriks & penjelas akses di UI; modul `example` memakai resource, scope kustom, dan field group |
 | **C3 — Settings & Audit** | FR-120 (termasuk preferensi user), FR-130–FR-132 | Settings modul `example` diatur dari UI; semua event wajib tercatat; audit append-only terbukti |
 | **C4 — Integrasi** | FR-103, FR-104, FR-105 | SSO Google + Keycloak (test container) berjalan; PAT & client credentials dipakai oleh skrip integrasi di CI |

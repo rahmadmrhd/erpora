@@ -1,10 +1,10 @@
-# Live-reload API (task dev). Nama biner selalu ./tmp/erp.exe di semua OS (hanya nama file; di Unix tetap dapat dieksekusi).
+# Live-reload API (task dev). Nama biner selalu ./tmp/erpora.exe di semua OS (hanya nama file; di Unix tetap dapat dieksekusi).
 root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -tags devtools -o ./tmp/erp.exe ./cmd/erp"
-  entrypoint = ["./tmp/erp.exe", "serve", "--env-file", ".env"]
+  cmd = "go build -tags devtools -o ./tmp/erpora.exe ./cmd/erpora"
+  entrypoint = ["./tmp/erpora.exe", "serve", "--env-file", ".env"]
   include_ext = ["go", "sql"]
   exclude_dir = ["web", "tmp", "node_modules", "bin", "docs", ".git", ".superpowers"]
   delay = 200

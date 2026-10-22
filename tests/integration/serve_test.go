@@ -16,23 +16,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/pgtest"
 )
 
 var erpBin string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "erp-it-")
+	dir, err := os.MkdirTemp("", "erpora-it-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	name := "erp"
+	name := "erpora"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
 	erpBin = filepath.Join(dir, name)
-	build := exec.Command("go", "build", "-tags", "devtools,integration", "-o", erpBin, "../../cmd/erp")
+	build := exec.Command("go", "build", "-tags", "devtools,integration", "-o", erpBin, "../../cmd/erpora")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "build erp:", err)
@@ -165,7 +165,7 @@ func TestServe_UnmigratedDatabase(t *testing.T) {
 	if err := p.waitExit(t, 20*time.Second); err == nil {
 		t.Fatal("expected non-zero exit")
 	}
-	if !strings.Contains(p.stderr.String(), "erp migrate up") {
+	if !strings.Contains(p.stderr.String(), "erpora migrate up") {
 		t.Fatalf("stderr = %s", p.stderr)
 	}
 }
@@ -219,12 +219,12 @@ func TestServe_PortInUse(t *testing.T) {
 
 // Route uji (/__test/slow) hanya boleh ada pada biner bertag `integration`, tidak pada biner normal.
 func TestServe_NormalBinaryHasNoTestRoute(t *testing.T) {
-	name := "erp-plain"
+	name := "erpora-plain"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
 	bin := filepath.Join(t.TempDir(), name)
-	build := exec.Command("go", "build", "-tags", "devtools", "-o", bin, "../../cmd/erp")
+	build := exec.Command("go", "build", "-tags", "devtools", "-o", bin, "../../cmd/erpora")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		t.Fatal(err)

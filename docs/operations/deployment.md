@@ -2,7 +2,7 @@
 
 > **Status: DRAF.** Dokumen ini ditulis berdasarkan PRD-000 sebelum binary-nya ada. Setiap perintah wajib diverifikasi terhadap binary nyata sebelum milestone M2 ditutup (PRD-000 FR-16). Bagian yang belum terverifikasi ditandai 🔶.
 
-Aplikasi ini didistribusikan sebagai **satu binary** (`erp` / `erp.exe`). Binary tersebut sudah berisi API dan frontend (PWA). Satu-satunya dependensi eksternal wajib adalah **PostgreSQL**.
+Aplikasi ini didistribusikan sebagai **satu binary** (`erpora` / `erpora.exe`). Binary tersebut sudah berisi API dan frontend (PWA). Satu-satunya dependensi eksternal wajib adalah **PostgreSQL**.
 
 ---
 
@@ -15,7 +15,7 @@ Aplikasi ini didistribusikan sebagai **satu binary** (`erp` / `erp.exe`). Binary
 | VPS / bare metal Linux (x86_64, arm64) | ✅ Direkomendasikan | systemd + Caddy |
 | Windows Server / Windows 10+ | ✅ Didukung | Dijalankan sebagai Windows service (§5) |
 | Container (Docker/Podman) | ✅ Didukung | Image dari `infrastructure/docker/Dockerfile` |
-| PaaS berbasis container (Fly.io, Railway, Render, dsb.) | ✅ Didukung | Harus menyediakan cara menjalankan perintah one-off (`erp migrate`, `erp modules`) |
+| PaaS berbasis container (Fly.io, Railway, Render, dsb.) | ✅ Didukung | Harus menyediakan cara menjalankan perintah one-off (`erpora migrate`, `erpora modules`) |
 | **Shared hosting PHP (cPanel, DirectAdmin, Plesk shared)** | ❌ **Tidak didukung** | Lihat §1.3 |
 
 ### 1.2. Spesifikasi minimum
@@ -38,7 +38,7 @@ Aplikasi ini adalah **proses yang berjalan terus** (long-running). Beberapa fitu
 - operasi lifecycle modul memegang lock database selama operasi berlangsung,
 - telemetry dikirim secara batch.
 
-Shared hosting berbasis PHP menjalankan kode per request dan biasanya mematikan proses latar. Selain itu umumnya hanya menyediakan MySQL dan tidak memberi akses shell untuk `erp migrate` / `erp modules`.
+Shared hosting berbasis PHP menjalankan kode per request dan biasanya mematikan proses latar. Selain itu umumnya hanya menyediakan MySQL dan tidak memberi akses shell untuk `erpora migrate` / `erpora modules`.
 
 ---
 
@@ -47,20 +47,20 @@ Shared hosting berbasis PHP menjalankan kode per request dan biasanya mematikan 
 ### 2.1. Single node (rekomendasi awal)
 
 ```
-Internet ──443──▶ Caddy (TLS) ──▶ erp serve (127.0.0.1:8080) ──▶ PostgreSQL (localhost:5432)
+Internet ──443──▶ Caddy (TLS) ──▶ erpora serve (127.0.0.1:8080) ──▶ PostgreSQL (localhost:5432)
 ```
 
-Semuanya berada di satu VPS. Karena `erp` hanya listen di `127.0.0.1`, aplikasi tidak bisa diakses langsung dari internet tanpa melewati reverse proxy.
+Semuanya berada di satu VPS. Karena `erpora` hanya listen di `127.0.0.1`, aplikasi tidak bisa diakses langsung dari internet tanpa melewati reverse proxy.
 
 ### 2.2. Aplikasi + managed PostgreSQL
 
 ```
-Internet ──443──▶ Caddy ──▶ erp serve ──TLS──▶ Managed PostgreSQL
+Internet ──443──▶ Caddy ──▶ erpora serve ──TLS──▶ Managed PostgreSQL
 ```
 
 Cocok bila backup dan high availability database ingin diserahkan ke penyedia.
 
-> Horizontal scaling (beberapa instance `erp` di belakang load balancer) **belum didukung** pada PRD-000. Snapshot status modul masih in-process (FR-19.7), dan sinkronisasi antar-instance via `LISTEN/NOTIFY` menyusul.
+> Horizontal scaling (beberapa instance `erpora` di belakang load balancer) **belum didukung** pada PRD-000. Snapshot status modul masih in-process (FR-19.7), dan sinkronisasi antar-instance via `LISTEN/NOTIFY` menyusul.
 
 ---
 
@@ -79,9 +79,9 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 | `ERP_DEFAULT_TENANT_ID` | | (dibuat otomatis) | UUID tenant default |
 | `ERP_MODULES_ADMIN_API` | | `false` | **Biarkan `false` di production** sampai autentikasi tersedia; kelola modul lewat CLI |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | (kosong = telemetry nonaktif) | Endpoint OpenTelemetry Collector |
-| `OTEL_SERVICE_NAME` | | `erp` | |
+| `OTEL_SERVICE_NAME` | | `erpora` | |
 
-Simpan konfigurasi di file env dengan izin terbatas, lalu muat dengan `erp serve --env-file <path>` 🔶.
+Simpan konfigurasi di file env dengan izin terbatas, lalu muat dengan `erpora serve --env-file <path>` 🔶.
 
 ---
 
@@ -99,12 +99,12 @@ sudo -u postgres psql -c "CREATE DATABASE erp OWNER erp;"
 ### 4.2. User sistem & direktori
 
 ```bash
-sudo useradd --system --home /opt/erp --shell /usr/sbin/nologin erp
-sudo mkdir -p /opt/erp/bin /etc/erp
-sudo cp erp /opt/erp/bin/erp && sudo chmod 755 /opt/erp/bin/erp
+sudo useradd --system --home /opt/erpora --shell /usr/sbin/nologin erpora
+sudo mkdir -p /opt/erpora/bin /etc/erpora
+sudo cp erpora /opt/erpora/bin/erpora && sudo chmod 755 /opt/erpora/bin/erpora
 ```
 
-`/etc/erp/erp.env` (izin `640`, owner `root:erp`):
+`/etc/erpora/erpora.env` (izin `640`, owner `root:erpora`):
 
 ```bash
 ERP_DATABASE_URL=postgres://erp:GANTI_DENGAN_PASSWORD_KUAT@localhost:5432/erp?sslmode=disable
@@ -115,33 +115,33 @@ ERP_HTTP_ADDR=127.0.0.1:8080
 ### 4.3. Migrasi & aktivasi modul (sekali, saat instalasi)
 
 ```bash
-sudo -u erp /opt/erp/bin/erp migrate up --env-file /etc/erp/erp.env
-sudo -u erp /opt/erp/bin/erp modules install --all --enable --env-file /etc/erp/erp.env
-sudo -u erp /opt/erp/bin/erp modules list --env-file /etc/erp/erp.env
+sudo -u erpora /opt/erpora/bin/erpora migrate up --env-file /etc/erpora/erpora.env
+sudo -u erpora /opt/erpora/bin/erpora modules install --all --enable --env-file /etc/erpora/erpora.env
+sudo -u erpora /opt/erpora/bin/erpora modules list --env-file /etc/erpora/erpora.env
 
 # Administrator pertama (sejak PRD-001); password diminta secara interaktif
-sudo -u erp /opt/erp/bin/erp core:create-admin --email admin@example.com --env-file /etc/erp/erp.env
+sudo -u erpora /opt/erpora/bin/erpora core:create-admin --email admin@example.com --env-file /etc/erpora/erpora.env
 ```
 
-Saat login pertama, Administrator wajib mendaftarkan MFA (TOTP). Simpan recovery code di tempat aman. Bila Administrator terakhir kehilangan akses MFA, jalankan `erp core:reset-mfa` di server.
+Saat login pertama, Administrator wajib mendaftarkan MFA (TOTP). Simpan recovery code di tempat aman. Bila Administrator terakhir kehilangan akses MFA, jalankan `erpora core:reset-mfa` di server.
 
 Pengaturan SMTP untuk email reset password diisi lewat menu **Settings → Platform → Email** setelah login (bukan env).
 
 ### 4.4. Service systemd
 
-`/etc/systemd/system/erp.service`:
+`/etc/systemd/system/erpora.service`:
 
 ```ini
 [Unit]
-Description=ERP Platform
+Description=ERPora
 After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=erp
-Group=erp
-ExecStart=/opt/erp/bin/erp serve --env-file /etc/erp/erp.env
+User=erpora
+Group=erpora
+ExecStart=/opt/erpora/bin/erpora serve --env-file /etc/erpora/erpora.env
 Restart=on-failure
 RestartSec=5
 # Memberi waktu graceful shutdown (FR-03)
@@ -151,7 +151,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadOnlyPaths=/opt/erp
+ReadOnlyPaths=/opt/erpora
 
 [Install]
 WantedBy=multi-user.target
@@ -159,8 +159,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now erp
-sudo systemctl status erp
+sudo systemctl enable --now erpora
+sudo systemctl status erpora
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
@@ -169,7 +169,7 @@ curl -fsS http://127.0.0.1:8080/readyz
 `/etc/caddy/Caddyfile`:
 
 ```
-erp.example.com {
+erpora.example.com {
     encode zstd gzip
     reverse_proxy 127.0.0.1:8080
 }
@@ -182,17 +182,17 @@ Caddy mengurus sertifikat TLS (Let's Encrypt) secara otomatis. Nginx juga bisa d
 ## 5. Instalasi di Windows
 
 1. Pasang PostgreSQL untuk Windows (installer resmi), lalu buat role & database seperti §4.1 melalui `psql`.
-2. Letakkan `erp.exe` di `C:\erp\bin\` dan file env di `C:\erp\erp.env` (batasi izin akses ke Administrators dan akun service).
+2. Letakkan `erpora.exe` di `C:\erpora\bin\` dan file env di `C:\erpora\erpora.env` (batasi izin akses ke Administrators dan akun service).
 3. Migrasi & modul (PowerShell sebagai Administrator):
    ```powershell
-   C:\erp\bin\erp.exe migrate up --env-file C:\erp\erp.env
-   C:\erp\bin\erp.exe modules install --all --enable --env-file C:\erp\erp.env
+   C:\erpora\bin\erpora.exe migrate up --env-file C:\erpora\erpora.env
+   C:\erpora\bin\erpora.exe modules install --all --enable --env-file C:\erpora\erpora.env
    ```
 4. Daftarkan sebagai Windows service memakai pembungkus seperti **WinSW** atau **NSSM** 🔶 (dukungan service native di binary belum termasuk PRD-000). Contoh dengan NSSM:
    ```powershell
-   nssm install erp C:\erp\bin\erp.exe serve --env-file C:\erp\erp.env
-   nssm set erp AppStopMethodConsole 30000
-   nssm start erp
+   nssm install erpora C:\erpora\bin\erpora.exe serve --env-file C:\erpora\erpora.env
+   nssm set erpora AppStopMethodConsole 30000
+   nssm start erpora
    ```
 5. Gunakan Caddy untuk Windows atau IIS (ARR + URL Rewrite) sebagai reverse proxy + TLS.
 
@@ -201,14 +201,14 @@ Caddy mengurus sertifikat TLS (Let's Encrypt) secara otomatis. Nginx juga bisa d
 ## 6. Instalasi dengan Docker
 
 ```bash
-docker run -d --name erp \
-  --env-file ./erp.env \
+docker run -d --name erpora \
+  --env-file ./erpora.env \
   -p 127.0.0.1:8080:8080 \
   -e ERP_HTTP_ADDR=0.0.0.0:8080 \
-  ghcr.io/rahmadmrhd/erp-go:<versi>        # 🔶 lokasi registry final ditentukan saat rilis
+  ghcr.io/rahmadmrhd/erpora:<versi>        # 🔶 lokasi registry final ditentukan saat rilis
 
-docker exec erp erp migrate up
-docker exec erp erp modules install --all --enable
+docker exec erpora erpora migrate up
+docker exec erpora erpora modules install --all --enable
 ```
 
 Di dalam container, `ERP_HTTP_ADDR` harus `0.0.0.0:8080` agar bisa dijangkau. Pembatasan aksesnya dilakukan di port mapping (`127.0.0.1:8080:8080`).
@@ -221,16 +221,16 @@ Urutannya penting. **Migrasi tidak pernah berjalan otomatis** saat `serve` (PRD-
 
 1. **Backup database** (§8), lalu pastikan file backup bisa dibaca.
 2. Unduh binary versi baru dan cek checksum-nya.
-3. Hentikan service: `sudo systemctl stop erp`.
-4. Ganti binary (simpan binary lama sebagai `erp.prev` untuk rollback).
-5. Jalankan migrasi platform: `erp migrate up --env-file ...`
+3. Hentikan service: `sudo systemctl stop erpora`.
+4. Ganti binary (simpan binary lama sebagai `erpora.prev` untuk rollback).
+5. Jalankan migrasi platform: `erpora migrate up --env-file ...`
 6. Lihat modul yang perlu di-upgrade, lalu jalankan upgradenya:
    ```bash
-   erp modules list --env-file /etc/erp/erp.env          # cari status upgrade_pending
-   erp modules plan upgrade --all --env-file /etc/erp/erp.env   # dry-run
-   erp modules upgrade --all --env-file /etc/erp/erp.env
+   erpora modules list --env-file /etc/erpora/erpora.env          # cari status upgrade_pending
+   erpora modules plan upgrade --all --env-file /etc/erpora/erpora.env   # dry-run
+   erpora modules upgrade --all --env-file /etc/erpora/erpora.env
    ```
-7. Jalankan service: `sudo systemctl start erp`, lalu cek `/readyz` dan `erp modules list`.
+7. Jalankan service: `sudo systemctl start erpora`, lalu cek `/readyz` dan `erpora modules list`.
 
 Selama langkah 6 belum dijalankan, modul berstatus `upgrade_pending` dan route-nya mengembalikan `503`. Ini disengaja, agar kode baru tidak berjalan di atas skema lama.
 
@@ -238,7 +238,7 @@ Selama langkah 6 belum dijalankan, modul berstatus `upgrade_pending` dan route-n
 
 - **Sebelum** `migrate up` / `modules upgrade`: cukup kembalikan binary lama.
 - **Sesudah** migrasi: binary lama akan menolak modul yang versinya lebih baru (`downgrade_not_supported`). Rollback berarti **restore database dari backup langkah 1** dan memakai binary lama. Karena itu backup sebelum upgrade wajib dilakukan.
-- Operasi modul yang gagal di tengah jalan bisa dilanjutkan dengan `erp modules retry <operation-id>` setelah penyebabnya diperbaiki.
+- Operasi modul yang gagal di tengah jalan bisa dilanjutkan dengan `erpora modules retry <operation-id>` setelah penyebabnya diperbaiki.
 
 ---
 
@@ -246,10 +246,10 @@ Selama langkah 6 belum dijalankan, modul berstatus `upgrade_pending` dan route-n
 
 ```bash
 # Backup (format custom, terkompresi)
-pg_dump --format=custom --file=erp-$(date +%F).dump "$ERP_DATABASE_URL"
+pg_dump --format=custom --file=erpora-$(date +%F).dump "$ERP_DATABASE_URL"
 
 # Restore ke database kosong
-pg_restore --clean --if-exists --no-owner --dbname="$ERP_DATABASE_URL" erp-2026-10-21.dump
+pg_restore --clean --if-exists --no-owner --dbname="$ERP_DATABASE_URL" erpora-2026-10-21.dump
 ```
 
 - Jadwalkan backup harian (cron / systemd timer / Task Scheduler) dan simpan **di luar server** aplikasi.
@@ -265,21 +265,21 @@ pg_restore --clean --if-exists --no-owner --dbname="$ERP_DATABASE_URL" erp-2026-
 | `GET /healthz` | Proses hidup | Restart otomatis / liveness probe |
 | `GET /readyz` | Database terhubung & migrasi platform sudah diterapkan | Load balancer / readiness probe |
 
-- Log aplikasi: `journalctl -u erp -f` (Linux) atau log NSSM/WinSW (Windows).
+- Log aplikasi: `journalctl -u erpora -f` (Linux) atau log NSSM/WinSW (Windows).
 - Telemetry: isi `OTEL_EXPORTER_OTLP_ENDPOINT` untuk mengirim trace/metric ke OpenTelemetry Collector (`infrastructure/monitoring/otel-collector.yaml`).
 
 ---
 
 ## 10. Checklist hardening
 
-- [ ] `erp` listen di `127.0.0.1` dan hanya dapat diakses lewat reverse proxy ber-TLS.
+- [ ] `erpora` listen di `127.0.0.1` dan hanya dapat diakses lewat reverse proxy ber-TLS.
 - [ ] Firewall hanya membuka 22 (atau port SSH lain), 80, dan 443.
 - [ ] PostgreSQL tidak listen di interface publik (`listen_addresses = 'localhost'`), kecuali memakai managed DB dengan TLS.
 - [ ] File env berizin `640` dan tidak berada di repositori.
 - [ ] `ERP_ENV=production` dan `ERP_MODULES_ADMIN_API=false`.
-- [ ] Service berjalan sebagai user non-root (`erp`).
+- [ ] Service berjalan sebagai user non-root (`erpora`).
 - [ ] Backup harian aktif dan restore sudah diuji.
 - [ ] `ERP_SECRET_KEY` dicadangkan di tempat terpisah dari backup database (mis. password manager tim).
 - [ ] Binary diverifikasi dengan checksum sebelum dipasang.
-- [ ] `erp version` menampilkan flavor **`release`**. Binary flavor `dev` (berisi `make:*`, `db:fresh`) tidak boleh dipasang di server production.
-- [ ] Database production dibuat dengan `ERP_ENV=production` saat `erp migrate up` pertama, sehingga penanda lingkungannya `production`. Cek dengan `erp inspect config`.
+- [ ] `erpora version` menampilkan flavor **`release`**. Binary flavor `dev` (berisi `make:*`, `db:fresh`) tidak boleh dipasang di server production.
+- [ ] Database production dibuat dengan `ERP_ENV=production` saat `erpora migrate up` pertama, sehingga penanda lingkungannya `production`. Cek dengan `erpora inspect config`.

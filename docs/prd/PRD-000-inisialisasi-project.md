@@ -12,7 +12,7 @@
 
 ## 1. Latar belakang
 
-Kita membangun **ERP Platform** dan bukan sekadar aplikasi ERP. Platform ini menyediakan identitas, tenancy, module runtime, otorisasi, konfigurasi, event, migrasi, dan mekanisme ekstensi. Modul bisnis (Inventory, Purchasing, Sales, Finance, Assets) dibangun di atas fondasi tersebut.
+Kita membangun **ERPora**, sebuah platform ERP, dan bukan sekadar aplikasi ERP. Platform ini menyediakan identitas, tenancy, module runtime, otorisasi, konfigurasi, event, migrasi, dan mekanisme ekstensi. Modul bisnis (Inventory, Purchasing, Sales, Finance, Assets) dibangun di atas fondasi tersebut.
 
 Blueprint aslinya ditulis untuk Laravel. Prinsip arsitekturnya tetap berlaku. PRD ini hanya mengganti implementasinya ke stack berikut:
 
@@ -45,7 +45,7 @@ Multi-tenancy **bukan fokus**. Yang dibuat hanya struktur dan *seam*-nya, supaya
 2. **G2 — Batas modul ditegakkan secara teknis**: compiler Go dan architecture test menolak pelanggaran dependensi di backend maupun frontend.
 3. **G3 — Satu perintah build menghasilkan satu binary**: binary tersebut menyajikan API dan SPA/PWA.
 4. **G4 — Developer experience**: satu perintah menjalankan lingkungan dev (Go API + Bun dev server + PostgreSQL), dan hot reload berjalan.
-5. **G5 — Kontrak tersedia**: `module.schema.json`, SDK Go `sdk/module`, dan SDK TS `@erp/module-sdk` divalidasi oleh dua modul referensi.
+5. **G5 — Kontrak tersedia**: `module.schema.json`, SDK Go `sdk/module`, dan SDK TS `@erpora/module-sdk` divalidasi oleh dua modul referensi.
 6. **G6 — CI quality gates**: format, lint, type check, unit test, architecture test, integration test, dan build berjalan di setiap PR.
 7. **G7 — ADR**: ADR-001, 002, 003, 006, dan 007 final; sisanya stub.
 8. **G8 — Module Registry & lifecycle**: modul dapat di-install, di-enable, di-disable, di-upgrade, dan di-uninstall dengan aman, teraudit, dapat di-retry, dan tanpa menghapus data (Blueprint §7, exit gate fase 03).
@@ -81,16 +81,16 @@ Monorepo **multi Go module** yang disatukan dengan `go.work`, ditambah **Bun wor
 
 | Go module                                        | Lokasi              | Isi                                              | Versi/tag               |
 | ------------------------------------------------ | ------------------- | ------------------------------------------------ | ----------------------- |
-| `github.com/rahmadmrhd/erp-go`                    | root                | Platform (`internal/platform`), composition root (`internal/app`), `cmd/erp`, `web` (embed) | `vX.Y.Z` (= versi platform) |
-| `github.com/rahmadmrhd/erp-go/sdk`                | `sdk/`              | SDK publik (`module`, `data`)                    | `sdk/vX.Y.Z` (= `SDKVersion`) |
-| `github.com/rahmadmrhd/erp-go/modules/<name>`     | `modules/<name>/`   | Satu ERP module                                  | `modules/<name>/vX.Y.Z` (= `version` di manifest) |
+| `erpora`                    | root                | Platform (`internal/platform`), composition root (`internal/app`), `cmd/erpora`, `web` (embed) | `vX.Y.Z` (= versi platform) |
+| `erpora/sdk`                | `sdk/`              | SDK publik (`module`, `data`)                    | `sdk/vX.Y.Z` (= `SDKVersion`) |
+| `erpora/modules/<name>`     | `modules/<name>/`   | Satu ERP module                                  | `modules/<name>/vX.Y.Z` (= `version` di manifest) |
 
 Arah dependensi Go module (tidak boleh dibalik): **root → modules/* → sdk**, dan **root → sdk**. `sdk` tidak bergantung pada siapa pun di repo ini.
 
 ```
-erp-go/
+erpora/
 ├── go.work                        # menyatukan root, sdk, dan semua modules/* (di-commit, bersama go.work.sum)
-├── go.mod                         # module github.com/rahmadmrhd/erp-go (platform + composition root)
+├── go.mod                         # module erpora (platform + composition root)
 ├── package.json                   # Bun workspaces root: ["web", "packages/*", "modules/*/web"]
 ├── bun.lock
 ├── Taskfile.yml                   # go-task: entry point semua perintah (lintas OS)
@@ -98,7 +98,7 @@ erp-go/
 ├── README.md
 │
 ├── cmd/
-│   └── erp/                       # SATU CLI ala Artisan (FR-03, FR-22)
+│   └── erpora/                       # SATU CLI ala Artisan (FR-03, FR-22)
 │       ├── main.go                # serve | migrate | modules | inspect | <modul>:<cmd> | version
 │       ├── devtools_on.go         # //go:build devtools  → mendaftarkan developer tools
 │       └── devtools_off.go        # //go:build !devtools → no-op (binary release)
@@ -152,10 +152,10 @@ erp-go/
 │   └── data/
 │       └── data.go                # akses TenantDB untuk lapisan infrastructure modul
 │
-├── web/                           # APP SHELL saja: Bun workspace "@erp/web" DAN Go package (embed)
+├── web/                           # APP SHELL saja: Bun workspace "@erpora/web" DAN Go package (embed)
 │   ├── embed.go                   # //go:embed all:dist
 │   ├── dist/.gitkeep              # placeholder agar `go build` tanpa build frontend tetap lolos
-│   ├── package.json               # dependencies: @erp/ui, @erp/platform-web, @erp/module-* (semua modul yang dikompilasi)
+│   ├── package.json               # dependencies: @erpora/ui, @erpora/platform-web, @erpora/module-* (semua modul yang dikompilasi)
 │   ├── tsconfig.json
 │   ├── build.ts                   # Bun.build app + service worker + Workbox injectManifest
 │   ├── dev.ts                     # Bun dev server + proxy /api → Go
@@ -173,8 +173,8 @@ erp-go/
 │           └── settings/modules/  # halaman manajemen modul (FR-20)
 │
 ├── packages/                      # paket TS bersama milik PLATFORM (bukan milik modul mana pun)
-│   ├── ui/                        # "@erp/ui": design system (shadcn), komponen generik tanpa pengetahuan bisnis
-│   ├── platform-web/              # "@erp/platform-web": registry modul, api client, permissions (UX), tenancy scope,
+│   ├── ui/                        # "@erpora/ui": design system (shadcn), komponen generik tanpa pengetahuan bisnis
+│   ├── platform-web/              # "@erpora/platform-web": registry modul, api client, permissions (UX), tenancy scope,
 │   │                              #   offline, sync (stub), TanStack DB, observability (OTel Web lazy)
 │   ├── platform-contracts/        # tipe hasil generate dari contracts/openapi/ (common + platform)
 │   ├── module-sdk/                # defineModule(), tipe FrontendModule & OfflinePolicy
@@ -223,7 +223,7 @@ Blueprint §5.1 diterjemahkan ke Go. Setiap ERP module adalah **Go module tersen
 
 ```
 modules/<name>/
-├── go.mod                   # module github.com/rahmadmrhd/erp-go/modules/<name>
+├── go.mod                   # module erpora/modules/<name>
 │                            # require: .../sdk + HANYA modul yang ada di manifest.dependencies
 │                            # replace ke path relatif untuk sibling module yang belum dirilis
 ├── module.go                # implementasi sdk/module.Module (+ hook lifecycle opsional)
@@ -232,9 +232,9 @@ modules/<name>/
 ├── contract/                # PUBLIC port modul untuk modul lain (interface + DTO)
 ├── migrations/              # migrasi tenant milik modul (di-embed, versioned)
 ├── README.md                # deskripsi, capability, dependency, catatan upgrade
-├── web/                     # FRONTEND MILIK MODUL INI — Bun workspace package "@erp/module-<name>"
-│   ├── package.json         # dependencies: @erp/ui, @erp/platform-web, @erp/module-sdk,
-│   │                        #   + @erp/module-<x> HANYA untuk modul di manifest.dependencies
+├── web/                     # FRONTEND MILIK MODUL INI — Bun workspace package "@erpora/module-<name>"
+│   ├── package.json         # dependencies: @erpora/ui, @erpora/platform-web, @erpora/module-sdk,
+│   │                        #   + @erpora/module-<x> HANYA untuk modul di manifest.dependencies
 │   ├── index.ts             # SATU-SATUNYA public entry frontend modul
 │   ├── module.ts            # frontend manifest (routes, navigasi, offline policy UI)
 │   ├── api/contract.gen.ts  # tipe & client hasil generate dari ../openapi.yaml
@@ -250,7 +250,7 @@ modules/<name>/
 
 Clean Architecture bersifat **selektif** (Blueprint §5.1). Modul CRUD sederhana boleh meringkas `application`/`domain`. Satu-satunya yang tidak boleh dilanggar adalah aturan `internal/`, karena itu yang menjamin batas modul.
 
-**Frontend modul berada di dalam modulnya** (`modules/<name>/web/`, package `@erp/module-<name>`), sehingga satu modul = satu folder mandiri (backend, frontend, kontrak, migrasi) yang ter-versi dan ter-tag bersama. Modul tetap **dibundel saat build** oleh app shell `web/` (build-time module, §7.5); co-location hanya memindahkan lokasi source. Komponen generik berasal dari `@erp/ui` dan layanan frontend platform dari `@erp/platform-web`, keduanya milik platform, bukan milik modul Core.
+**Frontend modul berada di dalam modulnya** (`modules/<name>/web/`, package `@erpora/module-<name>`), sehingga satu modul = satu folder mandiri (backend, frontend, kontrak, migrasi) yang ter-versi dan ter-tag bersama. Modul tetap **dibundel saat build** oleh app shell `web/` (build-time module, §7.5); co-location hanya memindahkan lokasi source. Komponen generik berasal dari `@erpora/ui` dan layanan frontend platform dari `@erpora/platform-web`, keduanya milik platform, bukan milik modul Core.
 
 **Versi & rilis modul**:
 - `version` di `module.json` **harus sama** dengan tag Go module (`modules/<name>/vX.Y.Z`). Ini diperiksa oleh CI saat tag dibuat.
@@ -273,9 +273,9 @@ Clean Architecture bersifat **selektif** (Blueprint §5.1). Modul CRUD sederhana
 | D9  | `modules/**` tidak boleh mengimpor root module (`internal/platform/**`, `internal/app`); akses platform hanya lewat `sdk` | Compiler (`internal/` root tidak bisa diimpor dari Go module lain) + arch test (`go.mod` modul tidak boleh me-`require` root module) |
 | D10 | `modules/**` dan `sdk` tidak boleh mengimpor library router pihak ketiga                | Arch test           |
 | D11 | Dependensi antar-Go-module tidak boleh siklik (`go.mod` require graph)                  | Compiler/`go mod` + arch test |
-| F1  | `@erp/ui`, `@erp/platform-web`, `@erp/module-sdk` tidak boleh bergantung pada `@erp/module-*` | `package.json` (Bun workspace) + dependency-cruiser |
-| F2  | Frontend modul hanya boleh mengimpor `@erp/ui`, `@erp/platform-web`, `@erp/module-sdk`, `@erp/platform-contracts`, dan `@erp/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` (deep import dilarang) | `package.json` + dependency-cruiser + arch test: dependencies `package.json` modul == `manifest.dependencies` |
-| F3  | Hanya app shell `web/` yang boleh bergantung pada semua `@erp/module-*` dan merakitnya   | `package.json` + dependency-cruiser |
+| F1  | `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk` tidak boleh bergantung pada `@erpora/module-*` | `package.json` (Bun workspace) + dependency-cruiser |
+| F2  | Frontend modul hanya boleh mengimpor `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, dan `@erpora/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` (deep import dilarang) | `package.json` + dependency-cruiser + arch test: dependencies `package.json` modul == `manifest.dependencies` |
+| F3  | Hanya app shell `web/` yang boleh bergantung pada semua `@erpora/module-*` dan merakitnya   | `package.json` + dependency-cruiser |
 
 D8 dan D9 membuat graf dependensi kode **identik** dengan graf dependensi di manifest. Resolver (FR-18) pun bisa dipercaya: tidak ada dependensi tersembunyi yang lolos dari pemeriksaan lifecycle.
 
@@ -289,9 +289,9 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 
 - Git repository, `.gitignore` (Go, Bun, `web/dist/*` kecuali `.gitkeep`, `.env`), `.editorconfig`, `.gitattributes` (LF).
 - `go.work` di root (di-commit bersama `go.work.sum`) mencakup root, `sdk`, dan setiap `modules/*`. Semua `go.mod` memakai versi Go dan `toolchain` yang sama, dikunci ke rilis stabil terbaru saat inisialisasi. Konsistensinya diperiksa oleh `task check:gomod`.
-- Taskfile menyediakan task yang berjalan untuk **setiap Go module** (`task tidy`, `task lint`, `task test`, `task vuln`), sehingga developer tidak perlu masuk ke setiap folder. Pembuatan kode (modul baru, migrasi, dsb.) memakai developer tools di CLI `erp` flavor dev (FR-22), bukan Taskfile. Task `task erp -- <command>` menjalankan `go run -tags devtools ./cmd/erp <command>`, dan `task build:dev` menghasilkan `bin/erp{{exeExt}}` flavor dev.
+- Taskfile menyediakan task yang berjalan untuk **setiap Go module** (`task tidy`, `task lint`, `task test`, `task vuln`), sehingga developer tidak perlu masuk ke setiap folder. Pembuatan kode (modul baru, migrasi, dsb.) memakai developer tools di CLI `erp` flavor dev (FR-22), bukan Taskfile. Task `task erpora -- <command>` menjalankan `go run -tags devtools ./cmd/erpora <command>`, dan `task build:dev` menghasilkan `bin/erpora{{exeExt}}` flavor dev.
 - Root `package.json` dengan Bun workspaces dan versi Bun dikunci (`packageManager` / `.bun-version`).
-- Go module path: **`github.com/rahmadmrhd/erp-go`**.
+- Go module path: **`erpora`**.
 - **`Taskfile.yml` ([go-task](https://taskfile.dev))** sebagai satu-satunya entry point perintah. Alasan pemilihan: go-task adalah satu binary Go dan menjalankan perintah lewat interpreter shell POSIX bawaannya (`mvdan/sh`). Akibatnya `task dev` berperilaku sama di PowerShell, cmd, Git Bash, WSL, macOS, dan Linux tanpa `make` atau bash.
   - Bagian atas `Taskfile.yml` **wajib** berisi komentar cara instalasi dan cara menjalankan per OS/terminal:
     - Semua OS (sudah ada Go): `go install github.com/go-task/task/v3/cmd/task@latest`
@@ -299,7 +299,7 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
     - Windows: `winget install Task.Task` atau `scoop install task`. Pemanggilannya sama di PowerShell, cmd, dan Git Bash: `task <nama>`
     - macOS: `brew install go-task`
     - Linux: `sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin`, atau paket distro/snap
-  - Setiap task memiliki `desc`. Task yang perilakunya berbeda per OS memakai `platforms:` atau `{{OS}}`/`{{exeExt}}` (mis. `bin/erp{{exeExt}}`).
+  - Setiap task memiliki `desc`. Task yang perilakunya berbeda per OS memakai `platforms:` atau `{{OS}}`/`{{exeExt}}` (mis. `bin/erpora{{exeExt}}`).
   - Perintah di dalam task tidak memakai utilitas khusus Unix (`rm -rf`, `cp`, `sed`). Operasi file ditulis sebagai skrip Go/Bun kecil, atau memakai fitur bawaan Taskfile.
 
 **AC:** `task --list` menampilkan semua task beserta deskripsinya. Clone baru lalu `task setup` memasang semua dependensi tanpa langkah manual lain (selain Docker), dan ini diverifikasi di PowerShell (Windows) serta bash (Linux/macOS).
@@ -310,29 +310,29 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 
 ### FR-03 — Backend binary & subcommand
 
-`cmd/erp` menyediakan:
+`cmd/erpora` menyediakan:
 
 | Perintah                     | Perilaku                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------ |
-| `erp serve`                  | Reconcile status modul (FR-19), lalu menjalankan HTTP server (API + SPA)  |
-| `erp migrate up`             | Migrasi platform: target `control` lalu `tenant` (tenant default)        |
-| `erp migrate status`         | Status migrasi platform dan per modul                                    |
-| `erp modules <subcommand>`   | Manajemen modul (FR-20)                                                  |
-| `erp inspect routes [--module <key>] [--json]` | Tabel route dari `Registry.Routes()`: method, pattern, permission, public, modul |
-| `erp inspect permissions [--module <key>]` | Daftar capability per modul                                   |
-| `erp inspect config`         | Konfigurasi efektif dengan nilai rahasia disensor (`ERP_DATABASE_URL` → `postgres://erp:****@...`), flavor build, dan penanda lingkungan database (FR-22.5) |
-| `erp <slug>:<command>`       | Command runtime yang didaftarkan modul (FR-22.4)                         |
-| `erp version`                | Versi platform, versi SDK, commit, waktu build (di-inject via `-ldflags`) |
+| `erpora serve`                  | Reconcile status modul (FR-19), lalu menjalankan HTTP server (API + SPA)  |
+| `erpora migrate up`             | Migrasi platform: target `control` lalu `tenant` (tenant default)        |
+| `erpora migrate status`         | Status migrasi platform dan per modul                                    |
+| `erpora modules <subcommand>`   | Manajemen modul (FR-20)                                                  |
+| `erpora inspect routes [--module <key>] [--json]` | Tabel route dari `Registry.Routes()`: method, pattern, permission, public, modul |
+| `erpora inspect permissions [--module <key>]` | Daftar capability per modul                                   |
+| `erpora inspect config`         | Konfigurasi efektif dengan nilai rahasia disensor (`ERP_DATABASE_URL` → `postgres://erp:****@...`), flavor build, dan penanda lingkungan database (FR-22.5) |
+| `erpora <slug>:<command>`       | Command runtime yang didaftarkan modul (FR-22.4)                         |
+| `erpora version`                | Versi platform, versi SDK, commit, waktu build (di-inject via `-ldflags`) |
 
-- CLI dibangun dengan **`spf13/cobra`**: help per command, `erp list` untuk melihat semua command (setara `php artisan list`), dan shell completion (`erp completion bash|zsh|fish|powershell`). Tipe cobra **tidak** diekspos ke modul (lihat FR-22.4), mengikuti prinsip yang sama dengan router di FR-05.
+- CLI dibangun dengan **`spf13/cobra`**: help per command, `erpora list` untuk melihat semua command (setara `php artisan list`), dan shell completion (`erpora completion bash|zsh|fish|powershell`). Tipe cobra **tidak** diekspos ke modul (lihat FR-22.4), mengikuti prinsip yang sama dengan router di FR-05.
 - Semua command `inspect` bersifat read-only, sehingga aman dijalankan di production.
 
 - Konfigurasi dibaca dari environment variable (prefix `ERP_`) dengan validasi saat startup. Bila ada yang tidak valid, proses gagal cepat dengan pesan yang jelas. Variabel minimum: `ERP_DATABASE_URL` (wajib), `ERP_ENV` (`development | production`, default `production`), `ERP_HTTP_ADDR` (default `127.0.0.1:8080`, yaitu hanya localhost karena diasumsikan berada di belakang reverse proxy), `ERP_LOG_FORMAT` (`json | text`), ditambah variabel FR-17, FR-20, dan FR-21. PRD-001 menambahkan `ERP_SECRET_KEY` (wajib sejak PRD-001).
-- Opsional: `erp serve` dapat membaca file env lewat flag `--env-file <path>`. Ini memudahkan systemd/Windows service tanpa mengekspor variabel secara global.
+- Opsional: `erpora serve` dapat membaca file env lewat flag `--env-file <path>`. Ini memudahkan systemd/Windows service tanpa mengekspor variabel secara global.
 - Graceful shutdown pada SIGINT/SIGTERM.
 - Logging terstruktur `log/slog` (JSON di production, text di dev) dengan `request_id`.
 
-**AC:** `erp version` menampilkan keempat nilai. `erp serve` tanpa `ERP_DATABASE_URL` gagal dengan pesan yang menyebut variabel tersebut. Shutdown menunggu request aktif sampai batas timeout.
+**AC:** `erpora version` menampilkan keempat nilai. `erpora serve` tanpa `ERP_DATABASE_URL` gagal dengan pesan yang menyebut variabel tersebut. Shutdown menunggu request aktif sampai batas timeout.
 
 ### FR-04 — HTTP server & endpoint dasar
 
@@ -379,7 +379,7 @@ type Upgrader       interface { Upgrade(ctx context.Context, env Env, from, to s
 type EnableHook     interface { OnEnable(ctx context.Context, env Env) error }
 type DisableHook    interface { OnDisable(ctx context.Context, env Env) error }
 type HealthChecker  interface { Health(ctx context.Context, env Env) error }
-// Data contoh untuk development; hanya dipanggil oleh `erp db:seed` (flavor dev), tidak pernah di production.
+// Data contoh untuk development; hanya dipanggil oleh `erpora db:seed` (flavor dev), tidak pernah di production.
 type DevSeeder      interface { SeedDev(ctx context.Context, env Env) error }
 
 // Env: konteks terbatas yang diberikan platform ke hook (tenant ID, logger, akses data
@@ -438,16 +438,16 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 
 | Target   | Sumber                              | Tabel versi                 | Dijalankan oleh                 |
 | -------- | ----------------------------------- | --------------------------- | ------------------------------- |
-| control  | `migrations/control/`               | `goose_control`             | `erp migrate up`                |
-| tenant   | `migrations/tenant/`                | `goose_tenant`              | `erp migrate up` (tenant default) |
+| control  | `migrations/control/`               | `goose_control`             | `erpora migrate up`                |
+| tenant   | `migrations/tenant/`                | `goose_tenant`              | `erpora migrate up` (tenant default) |
 | modul    | `modules/<x>/migrations/`           | `goose_module_<slug_snake>` (slug `example-addon` → `goose_module_example_addon`) | Lifecycle install/upgrade (FR-19) |
 
 - Migrasi platform awal:
   - **control**: `platform_state`, `tenant_state`, `module_installations`, `module_operations`, `module_lifecycle_events`. Detail di FR-19.
   - **tenant**: `module_migrations` (Blueprint §13.2: `module_key`, `module_version`, `migration_key`, `checksum`, `applied_at`, `execution_status`) sebagai catatan audit di samping tabel versi goose.
-- Migrasi **tidak pernah** berjalan otomatis pada HTTP request maupun saat `serve` (Blueprint §13.2). Migrasi hanya berjalan lewat `erp migrate` dan operasi lifecycle.
+- Migrasi **tidak pernah** berjalan otomatis pada HTTP request maupun saat `serve` (Blueprint §13.2). Migrasi hanya berjalan lewat `erpora migrate` dan operasi lifecycle.
 
-**AC:** `task db:up` lalu `task migrate` lolos pada DB kosong. Menjalankannya ulang menghasilkan no-op. `erp migrate status` menampilkan versi tiap target, termasuk tiap modul yang terpasang. `erp serve` pada DB yang migrasi platformnya belum diterapkan gagal dengan pesan "jalankan erp migrate up".
+**AC:** `task db:up` lalu `task migrate` lolos pada DB kosong. Menjalankannya ulang menghasilkan no-op. `erpora migrate status` menampilkan versi tiap target, termasuk tiap modul yang terpasang. `erpora serve` pada DB yang migrasi platformnya belum diterapkan gagal dengan pesan "jalankan erpora migrate up".
 
 ### FR-08 — Frontend application shell
 
@@ -456,7 +456,7 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 - **Route guard**: route modul yang statusnya bukan `enabled` di bootstrap menampilkan halaman "Modul tidak aktif" (UX saja; backend tetap menolak, FR-19).
 - **TanStack Query**: satu `QueryClient`. Query key berprefiks scope `[tenantId, ...]`, dengan `tenantId` dari bootstrap (FR-21). Bootstrap di-refetch saat window focus dan setelah operasi modul, memakai `ETag`/revision.
 - **TanStack DB**: inisialisasi provider dan satu collection contoh (`example`) yang bersumber dari Query, sebagai bukti integrasi. Persistence IndexedDB menyusul di PRD offline.
-- UI system: **Tailwind CSS** (via `bun-plugin-tailwind` pada `Bun.build`/dev server) + **shadcn/ui**. Komponen shadcn disalin ke `packages/ui` (`@erp/ui`) dan menjadi milik repo; Tailwind memindai `packages/ui` dan `modules/*/web` lewat `@source`. Fase ini hanya memasang komponen yang dipakai shell dan halaman modul (button, sidebar, sheet, toast, table, badge, dialog).
+- UI system: **Tailwind CSS** (via `bun-plugin-tailwind` pada `Bun.build`/dev server) + **shadcn/ui**. Komponen shadcn disalin ke `packages/ui` (`@erpora/ui`) dan menjadi milik repo; Tailwind memindai `packages/ui` dan `modules/*/web` lewat `@source`. Fase ini hanya memasang komponen yang dipakai shell dan halaman modul (button, sidebar, sheet, toast, table, badge, dialog).
 - Shell: layout dengan sidebar yang dibangun dari frontend module registry dan difilter oleh modul `enabled` dari `/api/bootstrap`.
 - Halaman: `/` (dashboard kosong), `/example` dan `/example-addon` (route modul referensi, lazy), `/settings/modules` (FR-20), 404.
 
@@ -492,18 +492,18 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 ### FR-12 — Build tunggal & embed
 
 `task build` (flavor **release**, tanpa developer tools; `task build:dev` menambahkan `-tags devtools`, lihat FR-22):
-1. `bun run --filter @erp/web build` → `web/dist/` (aset ber-hash + `sw.js` + precache manifest).
-2. `go build -trimpath -ldflags "-s -w -X ...version=..." -o bin/erp{{exeExt}} ./cmd/erp`.
+1. `bun run --filter @erpora/web build` → `web/dist/` (aset ber-hash + `sw.js` + precache manifest).
+2. `go build -trimpath -ldflags "-s -w -X ...version=..." -o bin/erpora{{exeExt}} ./cmd/erpora`.
 
 - `web/embed.go`: `//go:embed all:dist`.
 - `web/dist/.gitkeep` memastikan `go build` tetap lolos tanpa build frontend. Dalam kondisi itu SPA handler menampilkan halaman "frontend belum di-build" di mode dev.
 
-**AC:** `bin/erp serve` di mesin bersih (tanpa Bun/Node) menyajikan SPA dan API. Cross-compile `GOOS=linux GOARCH=amd64` dan `GOOS=windows` berhasil.
+**AC:** `bin/erpora serve` di mesin bersih (tanpa Bun/Node) menyajikan SPA dan API. Cross-compile `GOOS=linux GOARCH=amd64` dan `GOOS=windows` berhasil.
 
 ### FR-13 — Lingkungan pengembangan
 
 - `task dev` menjalankan paralel: PostgreSQL (docker compose), Go API flavor dev (`-tags devtools`) dengan live reload (`air`) di `:8080`, dan Bun dev server (`web/dev.ts`, HMR) di `:5173` yang mem-proxy `/api/*` ke `:8080`.
-- `task dev:setup` = `erp migrate up` + `erp modules install --all --enable` agar lingkungan dev langsung berisi modul aktif.
+- `task dev:setup` = `erpora migrate up` + `erpora modules install --all --enable` agar lingkungan dev langsung berisi modul aktif.
 - `.env.example` mendokumentasikan semua variabel.
 
 **AC:** mengubah file `.tsx` memicu HMR tanpa reload penuh. Mengubah file `.go` me-restart API dalam ≤ 3 detik pada modul skeleton. Clone baru → `task setup` → `task dev:setup` → `task dev` menampilkan kedua modul referensi aktif.
@@ -522,14 +522,14 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 | E2E                   | Playwright: enable/disable modul dari UI  |                                          |
 | Security/dependency   | `govulncheck`, gitleaks                   | `bun audit` (atau setara)                |
 | Observability rules   | `promtool check rules`                    |                                          |
-| Kontrak API (FR-23)   | Test kesesuaian route ↔ kontrak; test kontrak respons | `erp contracts:lint` (Spectral); hasil `contracts:generate` sinkron |
+| Kontrak API (FR-23)   | Test kesesuaian route ↔ kontrak; test kontrak respons | `erpora contracts:lint` (Spectral); hasil `contracts:generate` sinkron |
 | Build                 | `task build` → artifact binary            |                                          |
 
 GitHub Actions `ci.yml` menjalankan semua gate pada PR dan menyimpan binary sebagai artifact.
 
 CI juga memiliki workflow rilis: tag `modules/<name>/vX.Y.Z` atau `sdk/vX.Y.Z` memicu validasi bahwa versi tag sama dengan `version` di manifest atau `SDKVersion`.
 
-**AC:** PR yang menambahkan import `internal/platform/x` → `modules/example` **gagal** di CI dengan pesan yang menyebut aturan D2. PR yang membuat `example` mengimpor `exampleaddon/contract` (tidak ada di `dependencies` maupun `require`) gagal di build `GOWORK=off` (D8). PR yang menambah `require` di `go.mod` tanpa menambah `dependencies` di manifest gagal di arch test D8. PR yang membuat frontend `exampleaddon` mengimpor modul yang tidak ada di `dependencies`-nya, atau melakukan deep import `@erp/module-example/components/...`, gagal di F2.
+**AC:** PR yang menambahkan import `internal/platform/x` → `modules/example` **gagal** di CI dengan pesan yang menyebut aturan D2. PR yang membuat `example` mengimpor `exampleaddon/contract` (tidak ada di `dependencies` maupun `require`) gagal di build `GOWORK=off` (D8). PR yang menambah `require` di `go.mod` tanpa menambah `dependencies` di manifest gagal di arch test D8. PR yang membuat frontend `exampleaddon` mengimpor modul yang tidak ada di `dependencies`-nya, atau melakukan deep import `@erpora/module-example/components/...`, gagal di F2.
 
 ### FR-15 — Modul referensi `example` & `exampleaddon`
 
@@ -541,7 +541,7 @@ Dua modul minimal yang membuktikan seluruh kontrak sekaligus menjadi template:
 | Endpoint       | `GET /api/example/ping` (`example.ping.read`); `GET /api/example/notes` (`example.notes.read`) | `GET /api/example-addon/summary` (`example-addon.summary.read`) yang memanggil `example/contract` |
 | Migrasi        | `0001_create_example_notes.sql` (+ seed via `Installer`) | tanpa migrasi (`strategy: none`)                             |
 | Hook lifecycle | `Installer`, `HealthChecker`, `DevSeeder`               | `EnableHook`, `DisableHook` (mencatat log)                   |
-| Command CLI    | `erp example:recount` (menghitung ulang jumlah notes)   | —                                                            |
+| Command CLI    | `erpora example:recount` (menghitung ulang jumlah notes)   | —                                                            |
 | Frontend       | `module.ts`, route lazy, satu item navigasi              | `module.ts`, route lazy, satu item navigasi                  |
 
 - Modul fixture tambahan untuk test (manifest rusak, dependensi siklik, versi tidak kompatibel, migrasi gagal, health check gagal) berada di `internal/platform/modules/testdata/` dan **tidak** dikompilasi ke binary.
@@ -610,7 +610,7 @@ Cakupan: semua lapisan observability **kecuali dashboard/visualisasi** (Grafana,
 
 **AC:**
 - Request ke `/api/example/notes` dengan collector aktif menghasilkan **satu trace** yang memuat span browser (fetch) → span HTTP Go → span query GORM, dan log request memiliki `trace_id` yang sama.
-- `erp modules enable acme.example` menghasilkan span `module.enable` beserta child span langkah-langkahnya.
+- `erpora modules enable acme.example` menghasilkan span `module.enable` beserta child span langkah-langkahnya.
 - Tanpa `OTEL_EXPORTER_OTLP_ENDPOINT`, aplikasi berjalan normal, tidak ada koneksi keluar, dan frontend tidak memuat SDK OTel.
 - Panic pada handler uji menghasilkan respons 500 envelope, span berstatus error dengan event `exception`, dan log ERROR.
 - Unit test: `InjectContext`/`ExtractContext` mempertahankan trace ID lewat carrier map. `erp.module.key` dan `erp.tenant.id` terisi otomatis pada span route modul.
@@ -663,7 +663,7 @@ Kondisi turunan yang tidak disimpan sebagai status: `incompatible` (FR-18) dan `
 | `uninstall` | `installed`, `disabled`                      | `uninstalled`              | Tidak ada modul ter-install yang bergantung wajib padanya         |
 | `retry`     | `failed`                                     | target operasi yang gagal  | Melanjutkan operasi terakhir dari langkah yang gagal              |
 
-- Modul bertanda **`required: true`** (diperkenalkan PRD-001, mis. `erp.core`) di-install & di-enable otomatis oleh `erp migrate up`, serta menolak `disable`/`uninstall` dengan error `module_required`.
+- Modul bertanda **`required: true`** (diperkenalkan PRD-001, mis. `erp.core`) di-install & di-enable otomatis oleh `erpora migrate up`, serta menolak `disable`/`uninstall` dengan error `module_required`.
 - Downgrade (versi binary < versi ter-install) **ditolak**. Modul ditandai `failed` dengan alasan `downgrade_not_supported` dan route-nya tidak aktif.
 - `uninstall` **tidak** menghapus tabel atau data (Blueprint §7). Install ulang setelah uninstall menjalankan migrasi yang belum diterapkan saja (no-op bila versi sama).
 
@@ -692,7 +692,7 @@ uninstall: check dependents → status uninstalled → revision++
 - Migrasi modul memakai transaksi per file migrasi (DDL PostgreSQL bersifat transaksional). `retry` melanjutkan dari migrasi berikutnya yang belum diterapkan.
 - Hook modul harus idempoten (didokumentasikan di `docs/module-sdk/lifecycle.md`), karena `retry` dapat memanggilnya ulang.
 
-**19.6. Reconcile saat startup** (`erp serve`)
+**19.6. Reconcile saat startup** (`erpora serve`)
 1. Muat katalog modul terkompilasi, lalu validasi (FR-05) dan resolve (FR-18). Error validasi katalog = **startup gagal** (bug build, bukan kondisi runtime). Karena seluruh modul berada di binary yang sama, pemeriksaan ini juga menjamin bahwa versi baru sebuah modul tetap memenuhi constraint modul lain yang bergantung padanya, **sebelum** `upgrade` dijalankan.
 2. Bandingkan dengan `module_installations` tenant default:
    - Versi binary > versi ter-install → `upgrade_pending`.
@@ -732,7 +732,7 @@ uninstall: check dependents → status uninstalled → revision++
 
 ### FR-20 — Manajemen modul: CLI, API, dan UI
 
-**20.1. CLI** (`erp modules ...`). Ini antarmuka utama, termasuk untuk production.
+**20.1. CLI** (`erpora modules ...`). Ini antarmuka utama, termasuk untuk production.
 
 | Perintah                                         | Keterangan                                              |
 | ------------------------------------------------ | ------------------------------------------------------- |
@@ -781,7 +781,7 @@ Tujuan: tenancy bisa diimplementasikan penuh di PRD Tenancy **tanpa mengubah mod
 - **`internal/platform/tenancy`**:
   - Tipe `TenantID` (UUID) dan helper `WithTenant(ctx)` / `FromContext(ctx)`.
   - Interface `Resolver { Resolve(r *http.Request) (TenantID, error) }`.
-  - Implementasi fase ini: **`SingleTenantResolver`**, yang selalu mengembalikan tenant default dari `ERP_DEFAULT_TENANT_ID`. Bila tidak diisi, nilainya dibuat oleh `erp migrate up` pertama dan disimpan di control DB (`platform_state`).
+  - Implementasi fase ini: **`SingleTenantResolver`**, yang selalu mengembalikan tenant default dari `ERP_DEFAULT_TENANT_ID`. Bila tidak diisi, nilainya dibuat oleh `erpora migrate up` pertama dan disimpan di control DB (`platform_state`).
   - `ERP_TENANCY_MODE=single` (satu-satunya nilai valid di fase ini; nilai `multi` dicadangkan).
 - **`internal/platform/database`**:
   - `ControlDB` dan `TenantDB` sebagai tipe berbeda.
@@ -799,7 +799,7 @@ Tujuan: tenancy bisa diimplementasikan penuh di PRD Tenancy **tanpa mengubah mod
 - Integration test: semua baris di `module_installations`, `module_operations`, dan `module_lifecycle_events` memiliki `tenant_id` = tenant default.
 - Dokumen `docs/architecture/tenancy-seams.md` menjelaskan titik-titik yang diganti saat PRD Tenancy: resolver, connector, migrasi tenant per database, dan FK `tenants`.
 
-### FR-22 — CLI `erp` dengan developer tools (setara Artisan)
+### FR-22 — CLI `erpora` dengan developer tools (setara Artisan)
 
 Tujuannya agar pekerjaan rutin, seperti membuat modul, migrasi, dan lapisan Clean Architecture, menghasilkan kode yang **langsung mengikuti aturan PRD ini** dan lolos semua quality gate tanpa disalin manual dari `example`. Pengalamannya satu pintu seperti `php artisan`: **semua command ada di bawah `erp`**.
 
@@ -807,18 +807,18 @@ Tujuannya agar pekerjaan rutin, seperti membuat modul, migrasi, dan lapisan Clea
 
 | Flavor build | Cara membuat | Command tersedia | Dipakai di |
 | ------------ | ------------ | ---------------- | ---------- |
-| **dev**      | `task build:dev` → `go build -tags devtools ./cmd/erp`; atau langsung `task erp -- <command>` (`go run -tags devtools ./cmd/erp`) | Semua: runtime (`serve`, `migrate`, `modules`, `inspect`, command modul) **+** developer tools (22.2) | Mesin developer, CI |
-| **release**  | `task build` → `go build ./cmd/erp` (tanpa tag) | Runtime saja. Developer tools **secara fisik tidak ada** di binary | Production / rilis |
+| **dev**      | `task build:dev` → `go build -tags devtools ./cmd/erpora`; atau langsung `task erpora -- <command>` (`go run -tags devtools ./cmd/erpora`) | Semua: runtime (`serve`, `migrate`, `modules`, `inspect`, command modul) **+** developer tools (22.2) | Mesin developer, CI |
+| **release**  | `task build` → `go build ./cmd/erpora` (tanpa tag) | Runtime saja. Developer tools **secara fisik tidak ada** di binary | Production / rilis |
 
-- Kode developer tools berada di `internal/devtools/` (commands + templates). Satu-satunya titik masuknya adalah `cmd/erp/devtools_on.go` dengan `//go:build devtools`, sedangkan `cmd/erp/devtools_off.go` (`//go:build !devtools`) adalah no-op.
-- `erp version` menampilkan flavor build (`release` / `dev`). Binary dev menampilkan banner peringatan di setiap command.
+- Kode developer tools berada di `internal/devtools/` (commands + templates). Satu-satunya titik masuknya adalah `cmd/erpora/devtools_on.go` dengan `//go:build devtools`, sedangkan `cmd/erpora/devtools_off.go` (`//go:build !devtools`) adalah no-op.
+- `erpora version` menampilkan flavor build (`release` / `dev`). Binary dev menampilkan banner peringatan di setiap command.
 - **Binary dev menolak menjalankan command yang menulis** (`serve`, `migrate`, `modules` mutasi, command modul, `db:*`) terhadap database yang ditandai `production` (22.5). Hanya command read-only (`inspect`, `modules list/status`) yang diizinkan.
 
 **22.2. Daftar developer tools** (hanya di flavor dev)
 
 | Grup | Command | Fungsi |
 | ---- | ------- | ------ |
-| **make** | `make:module <name> [--frontend] [--depends <key,...>]` | Membuat Go module baru di `modules/<name>` (go.mod, manifest, `module.go`, `contract/`, `internal/` lengkap, README, test), mendaftarkannya ke `go.work`, root `go.mod`, `internal/app/modules.go`, dan (dengan `--frontend`) membuat package `modules/<name>/web` (`@erp/module-<name>`) lalu mendaftarkannya di `web/package.json` + `web/src/app/modules.ts` |
+| **make** | `make:module <name> [--frontend] [--depends <key,...>]` | Membuat Go module baru di `modules/<name>` (go.mod, manifest, `module.go`, `contract/`, `internal/` lengkap, README, test), mendaftarkannya ke `go.work`, root `go.mod`, `internal/app/modules.go`, dan (dengan `--frontend`) membuat package `modules/<name>/web` (`@erpora/module-<name>`) lalu mendaftarkannya di `web/package.json` + `web/src/app/modules.ts` |
 | | `make:migration <module> <name>` | File migrasi goose bernomor urut berikutnya di `modules/<module>/migrations/` (atau `migrations/control|tenant` dengan `--platform control|tenant`) |
 | | `make:entity <module> <Name>` | Entity + test di `internal/domain` |
 | | `make:usecase <module> <Name> [--query]` | Command/query handler + DTO + test di `internal/application` |
@@ -830,7 +830,7 @@ Tujuannya agar pekerjaan rutin, seperti membuat modul, migrasi, dan lapisan Clea
 | **db** | `db:fresh [--seed]` | Drop semua tabel → `migrate up` → `modules install --all --enable` → (opsional) seed |
 | | `db:seed [module]` | Menjalankan `DevSeeder` modul dalam urutan topologis |
 | **module** | `module:check [name]` | Validasi manifest (schema), `require` go.mod == `dependencies`, prefix capability, versi Go/toolchain seragam |
-| **inspect** | `route:list`, `permission:list` | Alias ke `erp inspect ...` agar familier bagi pengguna Artisan (alias ini juga ada di flavor release karena read-only) |
+| **inspect** | `route:list`, `permission:list` | Alias ke `erpora inspect ...` agar familier bagi pengguna Artisan (alias ini juga ada di flavor release karena read-only) |
 | **contracts** | `contracts:generate [module]` | Kontrak platform → `packages/platform-contracts`; kontrak setiap modul → `modules/<name>/web/api/contract.gen.ts`; `module.schema.json` → `packages/module-sdk`; serta spec gabungan untuk dokumentasi (FR-23) |
 | | `contracts:lint [module]` | Menjalankan linter Spectral (FR-23) pada kontrak platform dan/atau modul |
 | **lainnya** | `doctor` | Memeriksa versi Go, Bun, Task, Docker, koneksi PostgreSQL, dan file `.env` |
@@ -844,29 +844,29 @@ Tujuannya agar pekerjaan rutin, seperti membuat modul, migrasi, dan lapisan Clea
 
 **22.4. Command runtime milik modul** (setara command kustom Artisan dari package)
 - Modul mendaftarkan command lewat `Registrar.Command(sdk.Command{Name, Short, Flags, Run})`. Tipe `sdk.Command` milik SDK; cobra tidak bocor ke modul.
-- Nama akhir otomatis `<slug>:<name>` (mis. `erp example:recount`), sehingga tidak bisa bentrok dengan command platform atau modul lain. Bentrokan nama ditolak saat registrasi, mengikuti aturan route di FR-05.
+- Nama akhir otomatis `<slug>:<name>` (mis. `erpora example:recount`), sehingga tidak bisa bentrok dengan command platform atau modul lain. Bentrokan nama ditolak saat registrasi, mengikuti aturan route di FR-05.
 - Saat dijalankan, command mendapat context yang sama dengan request HTTP: tenant (FR-21), `sdk/data`, logger, dan span OTel. Command **hanya berjalan bila modul berstatus `enabled`**. Bila tidak, command gagal dengan exit code 3 dan pesan status modul.
 - Setiap eksekusi command modul dicatat ke log dengan actor `cli:<os-user>`.
 
 **22.5. Pengaman berlapis**
 
 1. **Lapis build (utama):** developer tools tidak di-compile ke binary release. Salah konfigurasi apa pun di server production tidak bisa memunculkan `db:fresh` atau `make:*`.
-2. **Lapis data, penanda lingkungan di database:** `erp migrate up` pertama kali menulis `platform_state.environment` = nilai `ERP_ENV` (`development` / `production`). Nilai ini **tidak dapat diubah lewat CLI** (hanya lewat SQL manual yang disengaja).
+2. **Lapis data, penanda lingkungan di database:** `erpora migrate up` pertama kali menulis `platform_state.environment` = nilai `ERP_ENV` (`development` / `production`). Nilai ini **tidak dapat diubah lewat CLI** (hanya lewat SQL manual yang disengaja).
    - `db:fresh` dan `db:seed` hanya berjalan bila penanda DB = `development` **dan** `ERP_ENV=development`.
    - Binary dev menolak semua command yang menulis ke DB berpenanda `production` (22.1).
    - Penanda ini sengaja **tidak bergantung pada host database**, karena di topologi single-node production (deployment.md §2.1) PostgreSQL juga berada di `localhost`.
 3. **Lapis interaksi:** `db:fresh` meminta pengguna **mengetik nama database** sebagai konfirmasi. `--yes` (untuk CI/skrip) hanya diterima bila syarat lapis 2 terpenuhi.
 
 **AC:**
-- `erp make:module inventory --frontend --depends acme.example` (flavor dev) menghasilkan modul yang **langsung** lolos `task lint`, `task test`, arch test D1–D11, build `GOWORK=off`, dan `erp module:check`. Modul itu juga terdaftar dan dapat di-install/enable lewat `erp modules`. Ini diuji otomatis di CI pada direktori sementara.
+- `erpora make:module inventory --frontend --depends acme.example` (flavor dev) menghasilkan modul yang **langsung** lolos `task lint`, `task test`, arch test D1–D11, build `GOWORK=off`, dan `erpora module:check`. Modul itu juga terdaftar dan dapat di-install/enable lewat `erpora modules`. Ini diuji otomatis di CI pada direktori sementara.
 - Setiap generator `make:*` memiliki golden test (output template dibandingkan dengan file acuan).
 - `--dry-run` tidak mengubah file apa pun (diverifikasi lewat checksum seluruh repo sebelum dan sesudah).
 - `db:fresh` gagal tanpa menyentuh database bila `ERP_ENV=production`, **atau** bila penanda DB = `production` walaupun `ERP_ENV=development` (simulasi salah konfigurasi).
-- Binary dev yang diarahkan ke DB berpenanda `production`: `erp serve`, `erp migrate up`, dan `erp modules enable` ditolak; `erp inspect routes` tetap berjalan.
-- `erp example:recount` (command contoh di modul `example`) berjalan saat modul `enabled` dan gagal dengan exit code 3 saat `disabled`.
-- **Binary release tidak memuat developer tools**: `go list -deps ./cmd/erp` (tanpa tag) tidak mengandung `internal/devtools`, dan `erp make:module` pada binary release menghasilkan "unknown command". Keduanya diperiksa di CI terhadap artifact rilis.
-- Arch test: hanya `cmd/erp/devtools_on.go` yang boleh mengimpor `internal/devtools/**`.
-- `erp list` menampilkan semua command yang tersedia di flavor tersebut, dikelompokkan (runtime, inspect, make, db, modul).
+- Binary dev yang diarahkan ke DB berpenanda `production`: `erpora serve`, `erpora migrate up`, dan `erpora modules enable` ditolak; `erpora inspect routes` tetap berjalan.
+- `erpora example:recount` (command contoh di modul `example`) berjalan saat modul `enabled` dan gagal dengan exit code 3 saat `disabled`.
+- **Binary release tidak memuat developer tools**: `go list -deps ./cmd/erpora` (tanpa tag) tidak mengandung `internal/devtools`, dan `erpora make:module` pada binary release menghasilkan "unknown command". Keduanya diperiksa di CI terhadap artifact rilis.
+- Arch test: hanya `cmd/erpora/devtools_on.go` yang boleh mengimpor `internal/devtools/**`.
+- `erpora list` menampilkan semua command yang tersedia di flavor tersebut, dikelompokkan (runtime, inspect, make, db, modul).
 
 ### FR-23 — Kontrak API per modul & linter kontrak
 
@@ -909,17 +909,17 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 | Rujukan `erp:<modul>` hanya ke modul yang ada di `dependencies` | 23.1 |
 | Setiap operasi punya contoh request/respons dan mendokumentasikan kode errornya | §13 |
 
-- Dijalankan lewat `erp contracts:lint`, di pre-commit (opsional, via Taskfile), dan di CI.
+- Dijalankan lewat `erpora contracts:lint`, di pre-commit (opsional, via Taskfile), dan di CI.
 - **Deteksi breaking change**: CI membandingkan kontrak setiap modul (dan platform) dengan kontrak pada tag rilis terakhirnya memakai `oasdiff`. Perubahan breaking menggagalkan CI kecuali memenuhi syarat api-guidelines §14.3 langkah 3 (rilis MAJOR + bukti tidak dipakai + label persetujuan di PR). Modul yang belum pernah dirilis dikecualikan.
 - Metrik `erp.api.deprecated_usage` (OTel, FR-17) dicatat otomatis oleh middleware untuk setiap operasi/field yang ditandai `deprecated` di kontrak.
 
 **23.4. Generate & publikasi**
-- `erp contracts:generate` (FR-22):
+- `erpora contracts:generate` (FR-22):
   - kontrak platform → `packages/platform-contracts`;
   - kontrak setiap modul → `modules/<name>/web/api/contract.gen.ts` (tipe + client fetch bertipe), sehingga frontend modul hanya memakai kontrak modulnya sendiri dan kontrak dependency-nya;
   - **spec gabungan** (`common` + `platform` + semua modul) → artifact build `contracts/dist/openapi.json` untuk dokumentasi integrator.
 - File hasil generate di-commit dan diberi header "jangan diedit". CI memastikan hasil generate selalu sinkron (`contracts:generate` lalu `git diff --exit-code`).
-- `erp make:module` membuat kerangka `openapi.yaml`, dan `erp make:handler` menambahkan operasi ke kontrak modul bersamaan dengan pendaftaran route (FR-22).
+- `erpora make:module` membuat kerangka `openapi.yaml`, dan `erpora make:handler` menambahkan operasi ke kontrak modul bersamaan dengan pendaftaran route (FR-22).
 
 **AC:**
 - Kontrak `example` dan `exampleaddon` lolos linter; `exampleaddon` merujuk `erp:example#/…` dan lolos karena `acme.example` ada di dependencies-nya.
@@ -949,8 +949,8 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 - **Helper ekspor** (`sdk/export`): CSV/XLSX dengan proteksi formula injection, menghormati `authz.MaskFields`, dan mencatat ekspor ke audit (audit aktif setelah PRD-001).
 
 **24.3. M3 — frontend**
-- Komponen `SafeHtml` di `@erp/ui` (DOMPurify, konfigurasi ketat); lint rule melarang `dangerouslySetInnerHTML` di luar komponen ini.
-- **OWASP ZAP baseline** di CI terhadap `erp serve` lokal (binary release + DB container), dengan daftar pengecualian yang di-review.
+- Komponen `SafeHtml` di `@erpora/ui` (DOMPurify, konfigurasi ketat); lint rule melarang `dangerouslySetInnerHTML` di luar komponen ini.
+- **OWASP ZAP baseline** di CI terhadap `erpora serve` lokal (binary release + DB container), dengan daftar pengecualian yang di-review.
 
 **24.4. Di luar PRD-000** — pipeline upload file (security-guidelines §3.7) dibangun di **PRD Files**, sebelum fitur upload pertama.
 
@@ -973,7 +973,7 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 | NFR-08 | Header keamanan dasar: CSP ketat untuk SPA, `X-Content-Type-Options`, `Referrer-Policy`        |
 | NFR-09 | Module status guard menambah overhead ≤ 50 µs p99 per request (lookup snapshot in-memory, tanpa query DB) |
 | NFR-10 | Startup (validasi + resolve + reconcile) ≤ 1 detik untuk 50 modul (diuji dengan fixture sintetis) |
-| NFR-11 | **Lingkungan hosting minimum**: lingkungan yang mengizinkan proses long-running (VPS, bare metal, container, atau PaaS), PostgreSQL sesuai versi minimum di ADR-003, akses shell/CLI untuk `erp migrate` dan `erp modules`, serta RAM ≥ 1 GB untuk aplikasi + PostgreSQL di satu mesin (2 GB disarankan). **Shared hosting berbasis PHP (cPanel/DirectAdmin) tidak didukung.** Rinciannya ada di `docs/operations/deployment.md` |
+| NFR-11 | **Lingkungan hosting minimum**: lingkungan yang mengizinkan proses long-running (VPS, bare metal, container, atau PaaS), PostgreSQL sesuai versi minimum di ADR-003, akses shell/CLI untuk `erpora migrate` dan `erpora modules`, serta RAM ≥ 1 GB untuk aplikasi + PostgreSQL di satu mesin (2 GB disarankan). **Shared hosting berbasis PHP (cPanel/DirectAdmin) tidak didukung.** Rinciannya ada di `docs/operations/deployment.md` |
 
 ## 7. Prinsip yang dibawa dari dokumen acuan
 
@@ -999,7 +999,7 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 
 | #  | Pertanyaan                                     | Keputusan                                                        |
 | -- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| Q1 | Go module path?                                | ✅ **`github.com/rahmadmrhd/erp-go`** (akun pribadi untuk sementara) |
+| Q1 | Go module path?                                | ✅ **`erpora`** (akun pribadi untuk sementara) |
 | Q2 | Linter/formatter frontend?                     | ✅ **Biome**. Batas modul tetap memakai dependency-cruiser       |
 | Q3 | Akses data?                                    | ✅ **GORM**: fleksibilitas & kecepatan pengembangan mendekati Eloquent, dengan guardrail di FR-07. Alternatif yang ditolak: sqlc (lambat untuk CRUD/filter dinamis), ent (kurva belajar & codegen) |
 | Q4 | Task runner?                                   | ✅ **Taskfile (go-task)**, lintas OS, dengan komentar cara menjalankan per OS (FR-01) |
@@ -1013,14 +1013,15 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 | Q12 | Field manifest `trust`?                        | ✅ Ya; fase ini hanya `builtin` (FR-06)                          |
 | Q13 | CLI `plan` & `history`?                        | ✅ Ya (FR-20.1)                                                  |
 | Q14 | Target NFR-09 & NFR-10?                        | ✅ Disetujui sebagai target awal; dievaluasi ulang setelah M2    |
-| Q16 | Command untuk development ala Artisan?        | ✅ **Satu CLI `erp`** dengan dua flavor build: dev (`-tags devtools`, berisi generator & `db:*`) dan release (runtime saja). Ditambah penanda lingkungan di database dan konfirmasi nama DB. Framework CLI: cobra (FR-03, FR-22) |
+| Q16 | Command untuk development ala Artisan?        | ✅ **Satu CLI `erpora`** dengan dua flavor build: dev (`-tags devtools`, berisi generator & `db:*`) dan release (runtime saja). Ditambah penanda lingkungan di database dan konfirmasi nama DB. Framework CLI: cobra (FR-03, FR-22) |
 | Q17 | Command runtime milik modul?                   | ✅ **Setiap modul** boleh mendaftarkan command miliknya lewat `Registrar.Command`; nama berprefiks slug dan hanya berjalan saat modul `enabled` (FR-22.4) |
 | Q18 | Konfigurasi runtime dasar?                     | ✅ `ERP_HTTP_ADDR` (default `127.0.0.1:8080`), `ERP_LOG_FORMAT`, default `ERP_ENV=production`, flag `--env-file` (FR-03) |
 | Q19 | Pedoman & penegakan kontrak API?               | ✅ `docs/architecture/api-guidelines.md` wajib diikuti; **setiap modul punya kontrak OpenAPI sendiri** (`modules/<x>/openapi.yaml`), platform hanya memiliki komponen bersama & endpoint platform; linter Spectral di CI (FR-04, FR-23) |
 | Q20 | Konvensi API dasar?                            | ✅ JSON camelCase; tanpa nomor versi di URL dan **tanpa breaking change** (expand → migrate → contract, ditegakkan `oasdiff`); pagination halaman untuk UI + cursor untuk sync/integrasi (api-guidelines §4, §6, §14) |
-| Q21 | Lokasi frontend modul?                         | ✅ **Co-location**: frontend setiap modul di `modules/<name>/web` (package `@erp/module-<name>`); komponen generik di `packages/ui`, layanan frontend platform di `packages/platform-web`; `web/` hanya app shell perakit. Batas ditegakkan lewat `package.json` (F1–F3) |
+| Q21 | Lokasi frontend modul?                         | ✅ **Co-location**: frontend setiap modul di `modules/<name>/web` (package `@erpora/module-<name>`); komponen generik di `packages/ui`, layanan frontend platform di `packages/platform-web`; `web/` hanya app shell perakit. Batas ditegakkan lewat `package.json` (F1–F3) |
 | Q22 | Penjadwalan primitif keamanan? | ✅ Primitif tersedia sebelum konsumen pertama: M1 SBOM + `SECURITY.md` + gosec; M2 `sdk/egress`, klasifikasi data, `DecodeJSON`, `no-store`, `sdk/export`; M3 `SafeHtml` + ZAP; upload di PRD Files (FR-24) |
 | Q23 | Temuan review akhir M1 yang butuh keputusan | ✅ (M4) kode `tenant_unresolved`, `method_not_allowed`, `not_ready` masuk katalog api-guidelines §8; (M10) workflow validasi tag rilis ditunda ke **M2**, gate `bun test` ke **M3**; (M11) FR-07 guardrail 5 diperjelas dan ditunda ke **M2**; (NV1) server memakai `otelhttp.WithPublicEndpoint()` — `traceparent`/`baggage` dari klien tidak dipercaya |
+| Q24 | Penamaan produk? | ✅ (22 Okt 2026) Produk bernama **ERPora**. (1) Path Go module tanpa domain: root `erpora`, sdk `erpora/sdk`, modul `erpora/modules/<name>`; sengaja bare untuk saat ini, tidak dapat di-`go get` pihak ketiga, dan **wajib pindah ke vanity domain (mis. `erpora.dev/...`) sebelum SDK dipublikasikan** untuk modul pihak ketiga (ADR-001). (2) CLI/binary `erp` → `erpora` (`cmd/erpora`, `task erpora -- <command>`, artefak CI `erpora-<os>-<arch>`). (3) Prefix env var tetap `ERP_` (tidak diubah). (4) Scope npm `@erp/*` → `@erpora/*` (web, `packages/*`, `modules/*/web`; aturan dependency-cruiser F1–F3). (5) `service.name` OTel default `erpora`. (6) Nama tampilan "ERPora" di web (judul/PWA), README, SECURITY.md, CLAUDE.md, dan dokumen docs/. Dokumen historis (`docs/superpowers/plans/*`, `.superpowers/**`) dan rujukan "Blueprint §x" ke commit `c42d676` tidak diubah. Nama role/database PostgreSQL dev (`erp`), skema URI kontrak `erp:`, ekstensi `x-erp-*`, atribut OTel `erp.*`, dan key modul `erp.core` tidak berubah. |
 | Q15 | Struktur Go module (`go.mod`) untuk SDK & modul? | ✅ **Multi-module + `go.work`**: root (platform), `sdk`, dan setiap `modules/<name>` adalah Go module sendiri dengan tag versi independen (§4, D5/D8/D9). Dicatat di ADR-006 |
 
 ## 10. Definition of Done
@@ -1028,7 +1029,7 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 - [ ] Semua AC FR-01 s.d. FR-24 terpenuhi.
 - [ ] CI hijau di branch utama. PR uji pelanggaran batas modul (D2, D8, F2) terbukti gagal.
 - [ ] Seluruh skenario Blueprint §12.1 yang relevan untuk modul bawaan lulus di integration/E2E test (FR-19 AC).
-- [ ] `bin/erp` hasil CI dapat dijalankan di Linux dan Windows, menyajikan SPA yang installable sebagai PWA, dan dapat mengelola modul lewat CLI.
+- [ ] `bin/erpora` hasil CI dapat dijalankan di Linux dan Windows, menyajikan SPA yang installable sebagai PWA, dan dapat mengelola modul lewat CLI.
 - [ ] ADR-001, 002, 003, 006, 007 berstatus *Accepted*.
 
 ## 11. Milestone & exit gate
@@ -1037,8 +1038,8 @@ PRD ini dikerjakan dalam empat milestone. Setiap milestone harus lolos exit gate
 
 | Milestone | Cakupan | Exit gate |
 | --------- | ------- | --------- |
-| **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21, FR-24.1 | `bin/erp` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
-| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-24.2, FR-16 (ADR-006/007), FR-07 guardrail 5, FR-14 workflow validasi tag rilis (Q23) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
+| **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21, FR-24.1 | `bin/erpora` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
+| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-24.2, FR-16 (ADR-006/007), FR-07 guardrail 5, FR-14 workflow validasi tag rilis (Q23) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erpora make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
 | **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3, FR-24.3, FR-14 gate `bun test` (Q23) | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
 | **M4 — Observability lengkap** | FR-17.3–17.8 | Trace end-to-end browser → Go → DB terbukti; lifecycle modul ter-trace; `promtool` lolos |
 
@@ -1053,7 +1054,7 @@ PRD ini dikerjakan dalam empat milestone. Setiap milestone harus lolos exit gate
 7. **Lifecycle**: FR-19 → state machine, persistensi, migrasi modul, reconcile, runtime guard.
 8. **Modul referensi**: FR-15 → `example` + `exampleaddon` + fixture test.
 9. **Manajemen**: FR-20.1–20.2 → CLI + API.
-9a. **Developer tools**: FR-22 → flavor dev `erp` (template diturunkan dari modul `example` yang sudah terbukti), penanda lingkungan DB, `erp inspect`, command modul.
+9a. **Developer tools**: FR-22 → flavor dev `erpora` (template diturunkan dari modul `example` yang sudah terbukti), penanda lingkungan DB, `erpora inspect`, command modul.
 10. **Frontend**: FR-08, FR-09, FR-20.3 → shell, registry TS, halaman modul.
 11. **PWA & binary**: FR-10, FR-12.
 12. **Pelengkap**: FR-11, FR-17.3–17.8 → kerangka sync, atribut, frontend tracing, error tracking, collector, SLO & alert.

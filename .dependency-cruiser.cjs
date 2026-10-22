@@ -1,5 +1,5 @@
 /**
- * Aturan batas frontend (PRD-000 §4.2 / Q21). Dijalankan lewat `bun run --filter @erp/web deps` (web/deps.ts memindai web/src, packages, modules; folder yang belum ada dilewati).
+ * Aturan batas frontend (PRD-000 §4.2 / Q21). Dijalankan lewat `bun run --filter @erpora/web deps` (web/deps.ts memindai web/src, packages, modules; folder yang belum ada dilewati).
  * Struktur target: web/ = app shell; packages/{ui,platform-web,module-sdk,platform-contracts};
  * modules/<name>/web = frontend modul. Folder modul/packages belum ada di M1; aturan tetap valid dan aktif.
  */
@@ -11,15 +11,15 @@ module.exports = {
   forbidden: [
     {
       name: "F1-shared-must-not-depend-on-modules",
-      comment: "@erp/ui, @erp/platform-web, @erp/module-sdk tidak boleh bergantung pada @erp/module-*.",
+      comment: "@erpora/ui, @erpora/platform-web, @erpora/module-sdk tidak boleh bergantung pada @erpora/module-*.",
       severity: "error",
       from: { path: SHARED },
-      to: { path: [MODULE_WEB, "node_modules/@erp/module-"] },
+      to: { path: [MODULE_WEB, "node_modules/@erpora/module-"] },
     },
     {
       name: "F2-module-only-uses-allowed-packages",
       comment:
-        "Paket web modul hanya boleh mengimpor @erp/ui, @erp/platform-web, @erp/module-sdk, @erp/platform-contracts " +
+        "Paket web modul hanya boleh mengimpor @erpora/ui, @erpora/platform-web, @erpora/module-sdk, @erpora/platform-contracts " +
         "dan modul lain yang ada di dependencies manifest (divalidasi terpisah), tidak pernah app shell.",
       severity: "error",
       from: { path: MODULE_WEB },
@@ -47,7 +47,7 @@ module.exports = {
     },
     {
       name: "F3-only-shell-aggregates-modules",
-      comment: "Hanya web/ (app shell) yang boleh bergantung pada banyak @erp/module-*.",
+      comment: "Hanya web/ (app shell) yang boleh bergantung pada banyak @erpora/module-*.",
       severity: "error",
       from: { path: "^packages/" , pathNot: "^packages/(module-sdk|platform-contracts)/node_modules/" },
       to: { path: MODULE_WEB },

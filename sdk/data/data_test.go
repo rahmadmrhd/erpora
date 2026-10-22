@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/rahmadmrhd/erp-go/sdk/data"
+	"erpora/sdk/data"
 )
 
 type ctxKey struct{}

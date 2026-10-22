@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
 )
 
 const (
@@ -69,7 +69,7 @@ func DefaultTenantID(ctx context.Context, db *database.DB) (uuid.UUID, error) {
 		return uuid.Nil, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return uuid.Nil, fmt.Errorf("default tenant belum diinisialisasi; jalankan `erp migrate up`")
+		return uuid.Nil, fmt.Errorf("default tenant belum diinisialisasi; jalankan `erpora migrate up`")
 	}
 	return uuid.Parse(v)
 }

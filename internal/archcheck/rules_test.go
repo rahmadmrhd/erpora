@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	root    = "github.com/rahmadmrhd/erp-go"
+	root    = "erpora"
 	sdk     = root + "/sdk"
 	example = root + "/modules/example"
 	addon   = root + "/modules/exampleaddon"

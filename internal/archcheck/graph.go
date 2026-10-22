@@ -36,7 +36,7 @@ type Repo struct {
 type Violation struct{ Rule, Package, Detail string }
 
 const (
-	rootModule  = "github.com/rahmadmrhd/erp-go"
+	rootModule  = "erpora"
 	modulesBase = rootModule + "/modules/"
 	sdkModule   = rootModule + "/sdk"
 )

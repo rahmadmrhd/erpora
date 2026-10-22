@@ -20,5 +20,5 @@ func Flavor() string {
 	return "release"
 }
 
-// SetFlavor dipanggil dari cmd/erp/devtools_on.go.
+// SetFlavor dipanggil dari cmd/erpora/devtools_on.go.
 func SetFlavor(f string) { flavor.Store(f) }

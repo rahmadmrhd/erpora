@@ -1,15 +1,16 @@
-module github.com/rahmadmrhd/erp-go
+module erpora
 
 go 1.27
 
 toolchain go1.27.3
 
 require (
+	erpora/sdk v0.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.29.0
-	github.com/rahmadmrhd/erp-go/sdk v0.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
@@ -32,6 +33,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	erpora/modules/example v0.0.0
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
 	github.com/ClickHouse/ch-go v0.74.0 // indirect
@@ -73,7 +75,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
@@ -101,7 +102,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
-	github.com/rahmadmrhd/erp-go/modules/example v0.0.0
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
@@ -140,8 +140,8 @@ require (
 )
 
 replace (
-	github.com/rahmadmrhd/erp-go/modules/example => ./modules/example
-	github.com/rahmadmrhd/erp-go/sdk => ./sdk
+	erpora/modules/example => ./modules/example
+	erpora/sdk => ./sdk
 )
 
 tool (

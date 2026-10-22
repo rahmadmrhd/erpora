@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rahmadmrhd/erp-go/internal/app"
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
+	"erpora/internal/app"
+	"erpora/internal/platform/config"
 )
 
-// Grup command untuk `erp list` dan help.
+// Grup command untuk `erpora list` dan help.
 const (
 	groupRuntime = "runtime"
 	groupInspect = "inspect"
@@ -24,8 +24,8 @@ type rootOpts struct{ envFile string }
 func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	opts := &rootOpts{}
 	root := &cobra.Command{
-		Use:           "erp",
-		Short:         "ERP platform CLI",
+		Use:           "erpora",
+		Short:         "ERPora platform CLI",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

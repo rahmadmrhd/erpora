@@ -14,10 +14,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/internal/platform/migrate"
-	"github.com/rahmadmrhd/erp-go/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/migrate"
+	"erpora/internal/platform/testsupport/pgtest"
 )
 
 func open(t *testing.T, dsn string) *gorm.DB {

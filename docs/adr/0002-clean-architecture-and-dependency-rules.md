@@ -32,15 +32,15 @@ Memilih opsi 3. Aturan berikut wajib berlaku dan diuji di CI:
 | D10 | `modules/**` dan `sdk` tidak boleh mengimpor library router pihak ketiga | Arch test |
 | D11 | Dependensi antar-Go-module tidak boleh siklik | Compiler/`go mod` + arch test |
 
-Catatan D3b: paket platform (`internal/platform/**`, `internal/app`, `cmd/erp`) boleh memakai alias tipe `database.DB` (= `gorm.DB`) tanpa mengimpor `gorm.io`; modul tidak dapat, karena `internal/platform/database` berada di `internal/` root module dan tidak dapat diimpor oleh modul (dipaksa compiler).
+Catatan D3b: paket platform (`internal/platform/**`, `internal/app`, `cmd/erpora`) boleh memakai alias tipe `database.DB` (= `gorm.DB`) tanpa mengimpor `gorm.io`; modul tidak dapat, karena `internal/platform/database` berada di `internal/` root module dan tidak dapat diimpor oleh modul (dipaksa compiler).
 
 Aturan frontend (dicek lewat dependency-cruiser dan `package.json`):
 
 | # | Aturan |
 | --- | --- |
-| F1 | `@erp/ui`, `@erp/platform-web`, `@erp/module-sdk` tidak boleh bergantung pada `@erp/module-*` |
-| F2 | Frontend modul hanya boleh mengimpor paket platform/UI bersama dan `@erp/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` |
-| F3 | Hanya app shell `web/` yang boleh bergantung pada semua `@erp/module-*` dan merakitnya |
+| F1 | `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk` tidak boleh bergantung pada `@erpora/module-*` |
+| F2 | Frontend modul hanya boleh mengimpor paket platform/UI bersama dan `@erpora/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` |
+| F3 | Hanya app shell `web/` yang boleh bergantung pada semua `@erpora/module-*` dan merakitnya |
 
 Penegak di repo:
 

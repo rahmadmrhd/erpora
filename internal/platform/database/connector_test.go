@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
+	"erpora/internal/platform/tenancy"
 )
 
 func TestSingleTenantConnector_ReturnsDB(t *testing.T) {

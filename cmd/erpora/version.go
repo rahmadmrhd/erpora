@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/buildinfo"
-	"github.com/rahmadmrhd/erp-go/sdk/module"
+	"erpora/internal/platform/buildinfo"
+	"erpora/sdk/module"
 )
 
 func newVersionCmd() *cobra.Command {

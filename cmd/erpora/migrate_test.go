@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/migrate"
+	"erpora/internal/platform/migrate"
 )
 
 func TestMigrateStatus_Format(t *testing.T) {

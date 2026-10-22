@@ -14,9 +14,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/database"
-	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/observability"
+	"erpora/internal/platform/tenancy"
 )
 
 // ReadinessChecker memeriksa kesiapan layanan; nil = siap. Implementasi WAJIB read-only.

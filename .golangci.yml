@@ -43,4 +43,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/rahmadmrhd/erp-go
+        - erpora

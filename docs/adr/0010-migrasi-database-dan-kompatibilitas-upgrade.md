@@ -10,4 +10,4 @@ Rujukan: ADR-003 dan `docs/architecture/roadmap-and-risks.md` §5 (versi, migras
 
 ## Keputusan
 
-Belum diputuskan secara lengkap. Prinsip dasar sudah ditetapkan di ADR-003: migrasi versioned, terpisah per target, dan hanya dijalankan lewat `erp migrate` atau operasi lifecycle.
+Belum diputuskan secara lengkap. Prinsip dasar sudah ditetapkan di ADR-003: migrasi versioned, terpisah per target, dan hanya dijalankan lewat `erpora migrate` atau operasi lifecycle.

@@ -15,7 +15,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/config"
+	"erpora/internal/platform/config"
 )
 
 // Open harus menghormati ctx pada koneksi pertama (bukan ping otomatis GORM tanpa timeout).

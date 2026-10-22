@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
+	"erpora/internal/platform/tenancy"
 )
 
 // ErrUnknownTenant dikembalikan connector untuk tenant yang tidak dikenal.

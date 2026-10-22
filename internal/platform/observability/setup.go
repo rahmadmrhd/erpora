@@ -47,7 +47,7 @@ func Setup(ctx context.Context, o Options) (Providers, func(context.Context) err
 
 	name := os.Getenv("OTEL_SERVICE_NAME")
 	if name == "" {
-		name = "erp"
+		name = "erpora"
 	}
 	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
 		attribute.String("service.name", name),
