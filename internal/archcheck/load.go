@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.org/x/mod/modfile"
 )
@@ -37,39 +38,23 @@ func Load(root string) (Repo, error) {
 		if ok {
 			repo.Manifests[gm.Path] = mf
 		}
-		pk, err := run(dir, "go", "list", "-json", "./...")
+		pkgs, err := listPackages(dir, gm.Path)
 		if err != nil {
 			return repo, err
 		}
-		dec := json.NewDecoder(bytes.NewReader(pk))
-		for {
-			var p struct {
-				ImportPath string
-				Dir        string
-				Imports    []string
-				GoFiles    []string
-				Module     *struct{ Path string }
-			}
-			if err := dec.Decode(&p); err == io.EOF {
-				break
-			} else if err != nil {
-				return repo, fmt.Errorf("parse go list %s: %w", dir, err)
-			}
-			mod := gm.Path
-			if p.Module != nil {
-				mod = p.Module.Path
-			}
-			repo.Packages = append(repo.Packages, Package{
-				ImportPath: p.ImportPath, Module: mod, Dir: p.Dir, Imports: p.Imports, GoFiles: p.GoFiles,
-			})
-		}
+		repo.Packages = append(repo.Packages, pkgs...)
 	}
 	return repo, nil
 }
 
-func run(dir, name string, args ...string) ([]byte, error) {
+func run(dir, name string, args ...string) ([]byte, error) { return runEnv(dir, nil, name, args...) }
+
+func runEnv(dir string, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.Command(name, args...) //nolint:gosec // dipanggil hanya dengan "go" dan argumen tetap
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -127,4 +112,109 @@ func loadManifest(dir string) (Manifest, bool, error) {
 		m.Dependencies = append(m.Dependencies, d.Module)
 	}
 	return m, true, nil
+}
+
+// buildVariant adalah satu kombinasi build untuk `go list`. Aturan arsitektur harus berlaku untuk
+// SEMUA flavor (devtools, integration) dan file khusus-OS, bukan hanya build default host.
+type buildVariant struct {
+	goos string // "" = default host
+	tags string
+}
+
+var buildVariants = []buildVariant{
+	{},
+	{goos: "linux", tags: "devtools,integration"},
+	{goos: "windows", tags: "devtools,integration"},
+	{goos: "darwin", tags: "devtools,integration"},
+}
+
+type listedPackage struct {
+	ImportPath string
+	Dir        string
+	Imports    []string
+	GoFiles    []string
+	Module     *struct{ Path string }
+}
+
+// listPackages menjalankan `go list -json ./...` per varian build dan menggabungkan hasilnya
+// (union impor dan GoFiles per import path).
+func listPackages(dir, defaultModule string) ([]Package, error) {
+	results := make([][]listedPackage, len(buildVariants))
+	errs := make([]error, len(buildVariants))
+	var wg sync.WaitGroup
+	for i, v := range buildVariants {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			args := []string{"list", "-json"}
+			if v.tags != "" {
+				args = append(args, "-tags", v.tags)
+			}
+			args = append(args, "./...")
+			var env []string
+			if v.goos != "" {
+				env = []string{"GOOS=" + v.goos}
+			}
+			out, err := runEnv(dir, env, "go", args...)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			dec := json.NewDecoder(bytes.NewReader(out))
+			for {
+				var p listedPackage
+				if err := dec.Decode(&p); err == io.EOF {
+					return
+				} else if err != nil {
+					errs[i] = fmt.Errorf("parse go list %s: %w", dir, err)
+					return
+				}
+				results[i] = append(results[i], p)
+			}
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	byPath := map[string]*Package{}
+	var order []string
+	for _, res := range results {
+		for _, p := range res {
+			cur, ok := byPath[p.ImportPath]
+			if !ok {
+				mod := defaultModule
+				if p.Module != nil {
+					mod = p.Module.Path
+				}
+				cur = &Package{ImportPath: p.ImportPath, Module: mod, Dir: p.Dir}
+				byPath[p.ImportPath] = cur
+				order = append(order, p.ImportPath)
+			}
+			cur.Imports = unionStrings(cur.Imports, p.Imports)
+			cur.GoFiles = unionStrings(cur.GoFiles, p.GoFiles)
+		}
+	}
+	out := make([]Package, 0, len(order))
+	for _, ip := range order {
+		out = append(out, *byPath[ip])
+	}
+	return out, nil
+}
+
+func unionStrings(a, b []string) []string {
+	seen := make(map[string]bool, len(a))
+	for _, s := range a {
+		seen[s] = true
+	}
+	for _, s := range b {
+		if !seen[s] {
+			a = append(a, s)
+			seen[s] = true
+		}
+	}
+	return a
 }
