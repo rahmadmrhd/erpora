@@ -25,7 +25,12 @@ func Load(root string) (Repo, error) {
 	if err != nil {
 		return repo, err
 	}
-	for _, dir := range strings.Fields(string(out)) {
+	// Satu direktori per baris: path boleh memuat spasi (mis. "C:\Users\Nama Pengguna\...").
+	for _, dir := range strings.Split(string(out), "\n") {
+		dir = strings.TrimSpace(strings.TrimSuffix(dir, "\r"))
+		if dir == "" {
+			continue
+		}
 		gm, err := loadGoMod(dir)
 		if err != nil {
 			return repo, err
@@ -121,11 +126,19 @@ type buildVariant struct {
 	tags string
 }
 
-var buildVariants = []buildVariant{
-	{},
-	{goos: "linux", tags: "devtools,integration"},
-	{goos: "windows", tags: "devtools,integration"},
-	{goos: "darwin", tags: "devtools,integration"},
+var buildVariants = makeBuildVariants()
+
+// makeBuildVariants: kombinasi tag {none, devtools, integration, devtools+integration} x GOOS
+// {linux, windows, darwin}, agar file dengan constraint saling-eksklusif (mis. `devtools && !integration`,
+// `windows && !devtools`) pun terbaca.
+func makeBuildVariants() []buildVariant {
+	var out []buildVariant
+	for _, goos := range []string{"linux", "windows", "darwin"} {
+		for _, tags := range []string{"", "devtools", "integration", "devtools,integration"} {
+			out = append(out, buildVariant{goos: goos, tags: tags})
+		}
+	}
+	return out
 }
 
 type listedPackage struct {
@@ -142,11 +155,14 @@ func listPackages(dir, defaultModule string) ([]Package, error) {
 	results := make([][]listedPackage, len(buildVariants))
 	errs := make([]error, len(buildVariants))
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, 12) // batasi proses go list paralel
 	for i, v := range buildVariants {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			args := []string{"list", "-json"}
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			args := []string{"list", "-json=ImportPath,Dir,Imports,GoFiles,Module"}
 			if v.tags != "" {
 				args = append(args, "-tags", v.tags)
 			}
