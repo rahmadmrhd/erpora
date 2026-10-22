@@ -1,4 +1,4 @@
-# Taskfile.yml - satu-satunya entry point perintah proyek erp-go (go-task v3).
+# Taskfile.yml - satu-satunya entry point perintah proyek ERPora (go-task v3).
 #
 # Instalasi & pemanggilan per OS/terminal (PRD-000 FR-01):
 #   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@latest
@@ -97,12 +97,12 @@ tasks:
       - docker compose -f infrastructure/docker/docker-compose.dev.yml down
 
   migrate:
-    desc: Jalankan migrasi platform (erp migrate up)
+    desc: Jalankan migrasi platform (erpora migrate up)
     cmds:
-      - go run -tags devtools ./cmd/erp migrate up --env-file .env
+      - go run -tags devtools ./cmd/erpora migrate up --env-file .env
 
   build:
-    desc: Build binary release bin/erp
+    desc: Build binary release bin/erpora
     vars:
       VERSION:
         sh: git describe --tags --always --dirty
@@ -111,10 +111,10 @@ tasks:
       NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
     cmds:
       - bun run --filter @erp/web build
-      - go build -trimpath -ldflags "-s -w -X erpora/internal/platform/buildinfo.Version={{.VERSION}} -X erpora/internal/platform/buildinfo.Commit={{.COMMIT}} -X erpora/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erp{{exeExt}} ./cmd/erp
+      - go build -trimpath -ldflags "-s -w -X erpora/internal/platform/buildinfo.Version={{.VERSION}} -X erpora/internal/platform/buildinfo.Commit={{.COMMIT}} -X erpora/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erpora{{exeExt}} ./cmd/erpora
 
   build:dev:
-    desc: Build binary dev bin/erp (flavor devtools)
+    desc: Build binary dev bin/erpora (flavor devtools)
     vars:
       VERSION:
         sh: git describe --tags --always --dirty
@@ -123,12 +123,12 @@ tasks:
       NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
     cmds:
       - bun run --filter @erp/web build
-      - go build -tags devtools -trimpath -ldflags "-s -w -X erpora/internal/platform/buildinfo.Version={{.VERSION}} -X erpora/internal/platform/buildinfo.Commit={{.COMMIT}} -X erpora/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erp{{exeExt}} ./cmd/erp
+      - go build -tags devtools -trimpath -ldflags "-s -w -X erpora/internal/platform/buildinfo.Version={{.VERSION}} -X erpora/internal/platform/buildinfo.Commit={{.COMMIT}} -X erpora/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erpora{{exeExt}} ./cmd/erpora
 
-  erp:
-    desc: Jalankan CLI erp flavor dev (task erp -- <command>)
+  erpora:
+    desc: Jalankan CLI erpora flavor dev (task erpora -- <command>)
     cmds:
-      - go run -tags devtools ./cmd/erp {{.CLI_ARGS}}
+      - go run -tags devtools ./cmd/erpora {{.CLI_ARGS}}
 
   dev:
     desc: Jalankan mode pengembangan (API + web dev server)

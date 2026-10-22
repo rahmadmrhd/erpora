@@ -1,4 +1,4 @@
-// Command erp adalah entry point binary platform ERP.
+// Command erpora adalah entry point binary platform ERPora.
 package main
 
 import (

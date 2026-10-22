@@ -56,7 +56,7 @@ func TestSetup_WithEndpointEnabled(t *testing.T) {
 	for _, kv := range p.Resource.Attributes() {
 		got[string(kv.Key)] = kv.Value.AsString()
 	}
-	if got["service.name"] != "erp" || got["service.version"] != "1.2.3" || got["deployment.environment"] != "staging" {
+	if got["service.name"] != "erpora" || got["service.version"] != "1.2.3" || got["deployment.environment"] != "staging" {
 		t.Fatalf("resource = %v", got)
 	}
 }

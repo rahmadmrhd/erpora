@@ -1,4 +1,4 @@
-// Package app adalah composition root: merakit platform (dan nanti modul) menjadi proses `erp serve`.
+// Package app adalah composition root: merakit platform (dan nanti modul) menjadi proses `erpora serve`.
 package app
 
 import (
@@ -68,7 +68,7 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		return fmt.Errorf("periksa migrasi: %w", err)
 	}
 	if pending > 0 {
-		return errors.New("migrasi platform belum diterapkan: jalankan erp migrate up")
+		return errors.New("migrasi platform belum diterapkan: jalankan erpora migrate up")
 	}
 
 	tenantID, err := migrate.DefaultTenantID(ctx, db)

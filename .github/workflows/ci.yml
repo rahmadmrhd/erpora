@@ -137,12 +137,12 @@ jobs:
         run: task build
       - name: Normalisasi nama binary
         run: |
-          if [ "${GOOS}" = "windows" ]; then mv bin/erp bin/erp.exe 2>/dev/null || true; fi
+          if [ "${GOOS}" = "windows" ]; then mv bin/erpora bin/erpora.exe 2>/dev/null || true; fi
           ls -l bin
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: erp-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: bin/erp*
+          name: erpora-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/erpora*
           if-no-files-found: error
 
       # SBOM CycloneDX: sekali saja (leg linux/amd64) untuk semua Go module + frontend.
@@ -206,13 +206,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: erp-linux-amd64
-      - run: chmod +x ./erp
-      - run: ./erp version
-      - run: ./erp migrate up
+          name: erpora-linux-amd64
+      - run: chmod +x ./erpora
+      - run: ./erpora version
+      - run: ./erpora migrate up
       - name: Serve dan cek /readyz
         run: |
-          ./erp serve &
+          ./erpora serve &
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/readyz; then echo; exit 0; fi
             sleep 1
@@ -230,7 +230,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: erp-windows-amd64
+          name: erpora-windows-amd64
       - name: Jalankan PostgreSQL bawaan runner
         shell: pwsh
         run: |
@@ -240,12 +240,12 @@ jobs:
       - name: Migrasi
         shell: pwsh
         run: |
-          .\erp.exe version
-          .\erp.exe migrate up
+          .\erpora.exe version
+          .\erpora.exe migrate up
       - name: Serve dan cek /readyz
         shell: pwsh
         run: |
-          Start-Process -FilePath .\erp.exe -ArgumentList "serve" -NoNewWindow
+          Start-Process -FilePath .\erpora.exe -ArgumentList "serve" -NoNewWindow
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
             try {
