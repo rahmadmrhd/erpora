@@ -22,9 +22,7 @@ type errorEnvelope struct {
 // WriteError menulis amplop error standar. Pesan tidak boleh memuat detail internal (5xx).
 func WriteError(w http.ResponseWriter, r *http.Request, status int, code, message string, details any) {
 	traceID := ""
-	if m := metaFrom(r.Context()); m != nil && m.traceID != "" {
-		traceID = m.traceID
-	} else if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+	if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
 		traceID = sc.TraceID().String()
 	}
 	writeJSON(w, status, errorEnvelope{Error: errorBody{

@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/rahmadmrhd/erp-go/internal/platform/database"
@@ -24,21 +26,12 @@ const (
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 
-// requestMeta dibagi antara middleware luar (recover) dan dalam (requestID) agar error panic
-// tetap membawa traceId.
-type requestMeta struct{ traceID string }
-
-type metaKey struct{}
-
-func metaFrom(ctx context.Context) *requestMeta {
-	m, _ := ctx.Value(metaKey{}).(*requestMeta)
-	return m
-}
-
-// recoverMW mengubah panic menjadi 500 internal_error tanpa membocorkan pesan panic.
+// recoverMW berjalan DI DALAM span otelhttp: panic dicatat pada span aktif (event exception +
+// status Error) dan log membawa trace_id/span_id. Bila respons belum ditulis, kirim 500 internal_error
+// (tanpa pesan panic). Bila respons SUDAH mulai ditulis, koneksi diputus dengan http.ErrAbortHandler
+// agar klien tidak mengira respons yang terpotong itu utuh.
 func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r = r.WithContext(context.WithValue(r.Context(), metaKey{}, &requestMeta{}))
 		sw := &statusWriter{ResponseWriter: w}
 		defer func() {
 			rec := recover()
@@ -48,11 +41,16 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 			if rec == http.ErrAbortHandler {
 				panic(rec)
 			}
+			span := trace.SpanFromContext(r.Context())
+			// Hanya tipe panic yang dicatat di span (nilai panic bisa memuat data).
+			span.RecordError(fmt.Errorf("panic dalam handler: %T", rec))
+			span.SetStatus(codes.Error, "panic")
 			log.ErrorContext(r.Context(), "panic dalam handler",
 				"panic", rec, "stack", string(debug.Stack()))
-			if !sw.wrote {
-				WriteError(w, r, http.StatusInternalServerError, "internal_error", "terjadi kesalahan pada server", nil)
+			if sw.wrote {
+				panic(http.ErrAbortHandler)
 			}
+			WriteError(w, r, http.StatusInternalServerError, "internal_error", "terjadi kesalahan pada server", nil)
 		}()
 		next.ServeHTTP(sw, r)
 	})
@@ -61,12 +59,6 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 // requestScope menetapkan X-Request-Id, security headers, dan access log.
 func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if m := metaFrom(r.Context()); m != nil {
-			if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
-				m.traceID = sc.TraceID().String()
-			}
-		}
-
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
 		completed := false // tetap false bila handler panic (recoverMW menulis 500 sesudahnya)

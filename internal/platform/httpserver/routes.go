@@ -13,7 +13,7 @@ import (
 // NewRouter membuat router dengan /healthz, /readyz, /api/bootstrap, /api/ (404 JSON), dan / (SPA).
 func NewRouter(d Deps) *Router {
 	d = withDefaults(d)
-	r := &Router{mux: http.NewServeMux(), deps: d}
+	r := &Router{mux: http.NewServeMux(), probe: http.NewServeMux(), deps: d}
 
 	r.Handle("GET /healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		WriteData(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -33,6 +33,12 @@ func NewRouter(d Deps) *Router {
 	r.Handle("GET /api/bootstrap", bootstrapHandler(d.AppVersion))
 
 	r.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Path dikenal dengan method lain -> 405 + Allow; path tidak dikenal -> 404.
+		if allowed := r.allowedMethods(req); len(allowed) > 0 {
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
+			WriteError(w, req, http.StatusMethodNotAllowed, "method_not_allowed", "metode tidak diizinkan untuk endpoint ini", nil)
+			return
+		}
 		WriteError(w, req, http.StatusNotFound, "not_found", "endpoint tidak ditemukan", nil)
 	}))
 

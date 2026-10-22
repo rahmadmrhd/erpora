@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -46,6 +47,9 @@ func WithoutTenant() RouteOption { return func(c *routeConfig) { c.noTenant = tr
 type Router struct {
 	mux  *http.ServeMux
 	deps Deps
+	// probe memuat semua pattern ber-method yang terdaftar (handler kosong) untuk menentukan
+	// method apa yang diizinkan pada sebuah path (405 + Allow), termasuk route modul di masa depan.
+	probe *http.ServeMux
 }
 
 // ServeHTTP mengimplementasikan http.Handler.
@@ -59,7 +63,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.ServeHTTP(w, req)
 }
 
-// Handle mendaftarkan pattern dengan rantai: recover -> otelhttp -> requestScope -> tenantContext -> h.
+// Handle mendaftarkan pattern dengan rantai: otelhttp -> recover -> requestScope -> tenantContext -> h.
+// recover berada di dalam span otelhttp agar panic tercatat pada span aktif (lihat recoverMW).
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	var cfg routeConfig
 	for _, o := range opts {
@@ -69,6 +74,7 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 		h = tenantContext(r.deps.Resolver, r.deps.Connector, h)
 	}
 	h = requestScope(r.deps.Logger, pattern, h)
+	h = recoverMW(r.deps.Logger, h)
 	h = otelhttp.NewHandler(h, pattern,
 		otelhttp.WithTracerProvider(r.deps.Tracer),
 		// Endpoint publik: traceparent klien tidak menjadi parent (hanya link pada span root baru).
@@ -76,8 +82,30 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 		// Hanya W3C trace context yang diekstrak; baggage inbound tidak dipercaya.
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 	)
-	h = recoverMW(r.deps.Logger, h)
 	r.mux.Handle(pattern, h)
+	if hasMethod(pattern) {
+		r.probe.Handle(pattern, http.NotFoundHandler())
+	}
+}
+
+// hasMethod: pattern berbentuk "METHOD /path".
+func hasMethod(pattern string) bool {
+	m, _, ok := strings.Cut(pattern, " ")
+	return ok && m != "" && !strings.Contains(m, "/")
+}
+
+var probeMethods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions}
+
+// allowedMethods mengembalikan method (terurut seperti probeMethods) yang punya route terdaftar untuk path request.
+func (r *Router) allowedMethods(req *http.Request) []string {
+	var out []string
+	for _, m := range probeMethods {
+		probeReq := &http.Request{Method: m, URL: req.URL, Host: req.Host, Header: http.Header{}}
+		if _, pat := r.probe.Handler(probeReq); pat != "" {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // New membuat http.Server dengan ReadHeaderTimeout 10 detik dan IdleTimeout 120 detik.

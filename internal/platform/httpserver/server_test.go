@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
@@ -405,4 +406,107 @@ func mustSpanID(t *testing.T, s string) trace.SpanID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// Finding 3: panic ditangani di dalam span aktif: log membawa trace id, span ditandai Error.
+func TestPanic_RecordedOnActiveSpanWithTraceIDsInLog(t *testing.T) {
+	var buf bytes.Buffer
+	sr := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sr))
+	r := NewRouter(Deps{
+		Logger:    observability.NewLogger(&buf, "text", slog.LevelDebug),
+		Tracer:    tp,
+		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:    fstest.MapFS{"index.html": {Data: []byte("x")}},
+	})
+	r.Handle("GET /test/panic3", http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("kaboom") }))
+	rec := do(r, "GET", "/test/panic3", nil)
+	if rec.Code != 500 {
+		t.Fatalf("code %d", rec.Code)
+	}
+	spans := sr.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d", len(spans))
+	}
+	s := spans[0]
+	if s.Status().Code != codes.Error {
+		t.Fatalf("status span = %v, want Error", s.Status())
+	}
+	var hasException bool
+	for _, ev := range s.Events() {
+		if ev.Name == "exception" {
+			hasException = true
+		}
+	}
+	if !hasException {
+		t.Fatalf("span tanpa event exception: %+v", s.Events())
+	}
+	tid := s.SpanContext().TraceID().String()
+	var logged bool
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.Contains(line, "panic dalam handler") {
+			logged = true
+			if !strings.Contains(line, "trace_id="+tid) {
+				t.Fatalf("log panic tanpa trace_id server: %s", line)
+			}
+		}
+	}
+	if !logged {
+		t.Fatalf("log panic tidak ada: %s", buf.String())
+	}
+	e := decode(t, rec)["error"].(map[string]any)
+	if e["traceId"] != tid {
+		t.Fatalf("envelope traceId = %v, want %s", e["traceId"], tid)
+	}
+}
+
+// Finding 4: panic SETELAH response mulai ditulis harus memutus koneksi, bukan selesai bersih.
+func TestPanic_AfterResponseStarted_AbortsConnection(t *testing.T) {
+	r, _ := newTestRouter(t, nil)
+	r.Handle("GET /test/partial", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial"))
+		_ = http.NewResponseController(w).Flush()
+		panic("setelah menulis")
+	}))
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/test/partial")
+	if err != nil {
+		return // koneksi putus sebelum header terbaca: juga perilaku abort yang benar
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err == nil {
+		t.Fatalf("klien melihat respons 200 bersih (%q); seharusnya koneksi diputus", body)
+	}
+}
+
+// Finding 8: method salah pada path yang dikenal -> 405 + Allow; path tidak dikenal tetap 404.
+func TestWrongMethodOnKnownAPIPath_405WithAllow(t *testing.T) {
+	r, _ := newTestRouter(t, nil)
+	r.Handle("GET /api/test/items/{id}", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { WriteData(w, 200, "ok") }))
+	r.Handle("POST /api/test/items/{id}", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { WriteData(w, 200, "ok") }))
+
+	rec := do(r, "POST", "/api/bootstrap", nil)
+	if rec.Code != 405 || rec.Header().Get("Allow") != "GET, HEAD" {
+		t.Fatalf("POST /api/bootstrap: %d Allow=%q", rec.Code, rec.Header().Get("Allow"))
+	}
+	if decode(t, rec)["error"].(map[string]any)["code"] != "method_not_allowed" {
+		t.Fatalf("%s", rec.Body)
+	}
+
+	rec = do(r, "DELETE", "/api/test/items/42", nil)
+	if rec.Code != 405 || rec.Header().Get("Allow") != "GET, HEAD, POST" {
+		t.Fatalf("DELETE items: %d Allow=%q", rec.Code, rec.Header().Get("Allow"))
+	}
+
+	rec = do(r, "POST", "/api/unknown", nil)
+	if rec.Code != 404 || rec.Header().Get("Allow") != "" {
+		t.Fatalf("unknown path: %d Allow=%q", rec.Code, rec.Header().Get("Allow"))
+	}
+	if decode(t, rec)["error"].(map[string]any)["code"] != "not_found" {
+		t.Fatalf("%s", rec.Body)
+	}
 }
