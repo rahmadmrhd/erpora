@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 		name += ".exe"
 	}
 	erpBin = filepath.Join(dir, name)
-	build := exec.Command("go", "build", "-tags", "devtools", "-o", erpBin, "../../cmd/erp")
+	build := exec.Command("go", "build", "-tags", "devtools,integration", "-o", erpBin, "../../cmd/erp")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "build erp:", err)
@@ -80,7 +80,12 @@ type proc struct {
 
 func startServe(t *testing.T, dsn, addr string) *proc {
 	t.Helper()
-	cmd := exec.Command(erpBin, "serve")
+	return startServeBin(t, erpBin, dsn, addr)
+}
+
+func startServeBin(t *testing.T, bin, dsn, addr string) *proc {
+	t.Helper()
+	cmd := exec.Command(bin, "serve")
 	cmd.Env = baseEnv(dsn, addr)
 	p := &proc{cmd: cmd, stderr: &bytes.Buffer{}, done: make(chan error, 1)}
 	cmd.Stderr = p.stderr
@@ -209,5 +214,33 @@ func TestServe_PortInUse(t *testing.T) {
 	}
 	if !strings.Contains(p.stderr.String(), addr) {
 		t.Fatalf("stderr = %s", p.stderr)
+	}
+}
+
+// Route uji (/__test/slow) hanya boleh ada pada biner bertag `integration`, tidak pada biner normal.
+func TestServe_NormalBinaryHasNoTestRoute(t *testing.T) {
+	name := "erp-plain"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	bin := filepath.Join(t.TempDir(), name)
+	build := exec.Command("go", "build", "-tags", "devtools", "-o", bin, "../../cmd/erp")
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		t.Fatal(err)
+	}
+	dsn := pgtest.Start(t)
+	migrateUp(t, dsn)
+	addr := freeAddr(t)
+	startServeBin(t, bin, dsn, addr)
+	base := "http://" + addr
+	waitStatus(t, base+"/readyz", 200, 20*time.Second)
+	// Tanpa route uji, path ini jatuh ke fallback SPA; yang penting bukan respons route lambat.
+	_, body, err := get(base + "/__test/slow?ms=10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "slow-done") {
+		t.Fatalf("biner normal memuat route uji: %s", body)
 	}
 }

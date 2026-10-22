@@ -89,6 +89,7 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		Assets:     web.Dist(),
 		AppVersion: buildinfo.Version,
 	})
+	registerTestRoutes(router)
 	srv := httpserver.New(cfg.HTTPAddr, router)
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)
