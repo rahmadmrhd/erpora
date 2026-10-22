@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"time"
 
+	"erpora/internal/platform/authorization"
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/migrate"
+	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 	"erpora/web"
@@ -38,6 +40,12 @@ func (e *ExitError) Unwrap() error { return e.Err }
 // Run menjalankan server sampai ctx dibatalkan. serve tidak pernah menulis platform_state.
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 	log := observability.NewLogger(stdout, cfg.LogFormat, slog.LevelInfo)
+
+	// Katalog modul divalidasi sebelum DB dibuka; katalog rusak adalah bug build (exit 2).
+	reg, err := BuildRegistry()
+	if err != nil {
+		return &ExitError{Code: 2, Err: fmt.Errorf("katalog modul tidak valid: %w", err)}
+	}
 
 	prov, shutdownOTel, err := observability.Setup(ctx, observability.Options{
 		ServiceVersion: buildinfo.Version, Environment: string(cfg.Env),
@@ -88,7 +96,16 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		Readiness:  dbReadiness{db: db},
 		Assets:     web.Dist(),
 		AppVersion: buildinfo.Version,
+		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
+		Authenticate: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				log.DebugContext(r.Context(), "authN stub")
+				next.ServeHTTP(w, r)
+			})
+		},
 	})
+	// Snapshot kosong: semua modul berstatus available (404 module_not_found) sampai M2b mengisinya.
+	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.Stub{Mode: authorization.StubMode(cfg.AuthzStub), Log: log})
 	registerTestRoutes(router)
 	srv := httpserver.New(cfg.HTTPAddr, router)
 

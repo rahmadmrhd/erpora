@@ -42,6 +42,8 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newVersionCmd(),
 		newInspectCmd(opts),
 		newListCmd(),
+		newInspectRoutesCmd("route:list", true),
+		newInspectPermissionsCmd("permission:list", true),
 		newMigrateCmd(opts),
 		newServeCmd(opts),
 	)

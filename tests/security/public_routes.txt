@@ -1,0 +1,2 @@
+# Allowlist route publik modul (tanpa permission). Satu pola "METHOD /path" per baris.
+# Setiap penambahan wajib melewati review keamanan. Modul referensi tidak punya route publik.

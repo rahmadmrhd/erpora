@@ -51,5 +51,6 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 			return nil
 		},
 	})
+	inspect.AddCommand(newInspectRoutesCmd("routes", false), newInspectModulesCmd(), newInspectPermissionsCmd("permissions", false))
 	return inspect
 }
