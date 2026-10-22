@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "types": ["bun"]
   },
-  "include": ["src", "build.ts", "dev.ts", "deps.ts", "csp-check.ts"]
+  "include": ["src", "build.ts", "dev.ts", "deps.ts", "csp-check.ts", "sbom.ts"]
 }
