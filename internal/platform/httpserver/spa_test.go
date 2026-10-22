@@ -81,3 +81,12 @@ func TestSPA_NotBuiltPage(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 }
+
+func TestSPA_MethodNotAllowedHasAllowHeader(t *testing.T) {
+	req := httptest.NewRequest("POST", "/", nil)
+	rec := httptest.NewRecorder()
+	NewSPA(spaFS()).ServeHTTP(rec, req)
+	if rec.Code != 405 || rec.Header().Get("Allow") != "GET, HEAD" {
+		t.Fatalf("%d Allow=%q", rec.Code, rec.Header().Get("Allow"))
+	}
+}

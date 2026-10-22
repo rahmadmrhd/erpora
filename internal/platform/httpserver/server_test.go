@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,12 +13,18 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/baggage"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"github.com/rahmadmrhd/erp-go/internal/platform/database"
+	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
 	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
 	"github.com/rahmadmrhd/erp-go/sdk/data"
 )
@@ -36,7 +43,7 @@ func newTestRouter(t *testing.T, ready error) (*Router, *tracetest.SpanRecorder)
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Tracer:     tp,
 		Resolver:   tenancy.SingleTenantResolver{ID: defaultTenant},
-		Connector:  database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{}},
+		Connector:  database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
 		Readiness:  fakeReady{ready},
 		Assets:     fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}},
 		AppVersion: "9.9.9",
@@ -232,4 +239,170 @@ func TestWithoutTenant_SkipsTenantContext(t *testing.T) {
 	if ok {
 		t.Fatal("tenant must not be injected")
 	}
+}
+
+func newLoggedRouter(t *testing.T) (*Router, *bytes.Buffer) {
+	t.Helper()
+	var buf bytes.Buffer
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(tracetest.NewSpanRecorder()))
+	return NewRouter(Deps{
+		Logger:     observability.NewLogger(&buf, "text", slog.LevelDebug),
+		Tracer:     tp,
+		Resolver:   tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector:  database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Readiness:  fakeReady{nil},
+		Assets:     fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}},
+		AppVersion: "9.9.9",
+	}), &buf
+}
+
+func dryRunDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(postgres.New(postgres.Config{DSN: "host=127.0.0.1 user=x dbname=x"}),
+		&gorm.Config{DisableAutomaticPing: true, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func TestRequestID_InLogsEmittedByHandlers(t *testing.T) {
+	r, buf := newLoggedRouter(t)
+	r.Handle("GET /api/test/log", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		r.deps.Logger.InfoContext(req.Context(), "dari handler")
+		WriteData(w, 200, "ok")
+	}))
+	rec := do(r, "GET", "/api/test/log", map[string]string{"X-Request-Id": "rid-777"})
+	if rec.Code != 200 {
+		t.Fatal(rec.Code)
+	}
+	var found bool
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.Contains(line, "dari handler") {
+			found = true
+			if !strings.Contains(line, "request_id=rid-777") {
+				t.Fatalf("log tanpa request_id: %s", line)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("log handler tidak ditemukan: %s", buf.String())
+	}
+}
+
+func TestAccessLog_PanicRecordedAs500(t *testing.T) {
+	r, buf := newLoggedRouter(t)
+	r.Handle("GET /test/panic2", http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("x") }))
+	do(r, "GET", "/test/panic2", nil)
+	var ok bool
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.Contains(line, "http request") && strings.Contains(line, "/test/panic2") {
+			ok = true
+			if !strings.Contains(line, "status=500") {
+				t.Fatalf("access log: %s", line)
+			}
+		}
+	}
+	if !ok {
+		t.Fatalf("access log tidak ditemukan: %s", buf.String())
+	}
+}
+
+func TestServer_Timeouts(t *testing.T) {
+	r, _ := newTestRouter(t, nil)
+	s := New("127.0.0.1:0", r)
+	if s.ReadHeaderTimeout != 10*time.Second || s.IdleTimeout != 120*time.Second {
+		t.Fatalf("timeouts: header=%v idle=%v", s.ReadHeaderTimeout, s.IdleTimeout)
+	}
+}
+
+// Respons yang dibuat ServeMux sendiri (redirect path non-kanonik) tetap membawa header keamanan + request id.
+func TestMuxGeneratedResponses_HaveSecurityHeaders(t *testing.T) {
+	r, _ := newTestRouter(t, nil)
+	for _, p := range []string{"/a/./b", "//x", "/api/../healthz"} {
+		rec := do(r, "GET", p, nil)
+		if rec.Code != http.StatusMovedPermanently && rec.Code != http.StatusTemporaryRedirect && rec.Code != http.StatusPermanentRedirect {
+			t.Logf("%s: code %d (bukan redirect, tetap diperiksa headernya)", p, rec.Code)
+		}
+		for _, h := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Request-Id"} {
+			if rec.Header().Get(h) == "" {
+				t.Errorf("%s: header %s kosong (code %d)", p, h, rec.Code)
+			}
+		}
+	}
+}
+
+func TestDataDB_BoundToRequestContext(t *testing.T) {
+	r, _ := newTestRouter(t, nil)
+	r.deps.Connector = database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}}
+	type ctxKey struct{}
+	var stmtCtx, reqCtx context.Context
+	r.Handle("GET /api/test/dbctx", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		reqCtx = req.Context()
+		db, err := data.DB(req.Context())
+		if err != nil {
+			t.Error(err)
+			WriteData(w, 500, nil)
+			return
+		}
+		stmtCtx = db.Statement.Context
+		WriteData(w, 200, "ok")
+	}))
+	do(r, "GET", "/api/test/dbctx", nil)
+	if reqCtx == nil || stmtCtx != reqCtx {
+		t.Fatalf("Statement.Context bukan context request")
+	}
+}
+
+// NV1: traceparent dari klien tidak boleh menjadi parent span server (endpoint publik):
+// trace id baru, konteks klien hanya sebagai link; baggage inbound dibuang.
+func TestPublicEndpoint_ClientTraceparentIsLinkOnly(t *testing.T) {
+	r, sr := newTestRouter(t, nil)
+	var bag int
+	r.Handle("GET /api/test/bag", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		bag = baggage.FromContext(req.Context()).Len()
+		WriteData(w, 200, "ok")
+	}))
+	const clientTrace = "4bf92f3577b34da6a3ce929d0e0e4736"
+	const clientSpan = "00f067aa0ba902b7"
+	hdr := map[string]string{
+		"traceparent": "00-" + clientTrace + "-" + clientSpan + "-01",
+		"baggage":     "userId=123,secret=abc",
+	}
+
+	rec := do(r, "GET", "/api/unknown", hdr)
+	tid, _ := decode(t, rec)["error"].(map[string]any)["traceId"].(string)
+	if tid == "" || tid == clientTrace {
+		t.Fatalf("traceId envelope = %q (harus trace id server)", tid)
+	}
+	spans := sr.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d", len(spans))
+	}
+	s := spans[0]
+	if s.SpanContext().TraceID().String() == clientTrace || s.SpanContext().TraceID().String() != tid {
+		t.Fatalf("span trace id = %s, envelope = %s", s.SpanContext().TraceID(), tid)
+	}
+	if s.Parent().IsValid() {
+		t.Fatalf("span punya parent dari klien: %v", s.Parent())
+	}
+	links := s.Links()
+	if len(links) != 1 || links[0].SpanContext.TraceID().String() != clientTrace ||
+		links[0].SpanContext.SpanID() != mustSpanID(t, clientSpan) {
+		t.Fatalf("links = %+v", links)
+	}
+
+	do(r, "GET", "/api/test/bag", hdr)
+	if bag != 0 {
+		t.Fatalf("baggage inbound terbawa ke context: %d anggota", bag)
+	}
+}
+
+func mustSpanID(t *testing.T, s string) trace.SpanID {
+	t.Helper()
+	id, err := trace.SpanIDFromHex(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

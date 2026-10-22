@@ -14,6 +14,9 @@ type TraceHandler struct{ inner slog.Handler }
 func (h TraceHandler) Enabled(ctx context.Context, l slog.Level) bool { return h.inner.Enabled(ctx, l) }
 
 func (h TraceHandler) Handle(ctx context.Context, r slog.Record) error {
+	if id, ok := RequestIDFromContext(ctx); ok {
+		r.AddAttrs(slog.String("request_id", id))
+	}
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 		r.AddAttrs(slog.String("trace_id", sc.TraceID().String()), slog.String("span_id", sc.SpanID().String()))
 	}

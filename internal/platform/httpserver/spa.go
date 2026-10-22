@@ -17,6 +17,7 @@ const notBuiltPage = `<!doctype html><html lang="id"><head><meta charset="utf-8"
 func NewSPA(assets fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
 			WriteError(w, r, http.StatusMethodNotAllowed, "method_not_allowed", "metode tidak diizinkan", nil)
 			return
 		}

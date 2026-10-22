@@ -122,3 +122,27 @@ func TestLogger_TextFormat(t *testing.T) {
 		t.Fatalf("got %s", buf.String())
 	}
 }
+
+func TestLogger_AddsRequestID(t *testing.T) {
+	var buf bytes.Buffer
+	log := NewLogger(&buf, "json", slog.LevelInfo)
+
+	log.InfoContext(context.Background(), "tanpa id")
+	if bytes.Contains(buf.Bytes(), []byte("request_id")) {
+		t.Fatalf("request_id tanpa konteks: %s", buf.String())
+	}
+	if _, ok := RequestIDFromContext(context.Background()); ok {
+		t.Fatal("ok=true tanpa request id")
+	}
+
+	buf.Reset()
+	ctx := WithRequestID(context.Background(), "req-123")
+	log.InfoContext(ctx, "dengan id")
+	var rec map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &rec); err != nil {
+		t.Fatal(err)
+	}
+	if rec["request_id"] != "req-123" {
+		t.Fatalf("rec = %v", rec)
+	}
+}

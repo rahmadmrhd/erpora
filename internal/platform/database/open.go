@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strings"
 	"time"
 
@@ -28,7 +27,10 @@ func Open(ctx context.Context, cfg config.Config, tp trace.TracerProvider, log *
 		log = slog.Default()
 	}
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
-		Logger: newSlogLogger(log, cfg.DBSlowQuery),
+		// Ping otomatis GORM memakai context.Background() tanpa timeout; koneksi pertama dilakukan
+		// oleh PingContext(ctx) di bawah agar menghormati ctx dan batas 5 detik.
+		DisableAutomaticPing: true,
+		Logger:               newSlogLogger(log, cfg.DBSlowQuery),
 	})
 	if err != nil {
 		return nil, connError(cfg.DatabaseURL, err)
@@ -52,17 +54,25 @@ func Open(ctx context.Context, cfg config.Config, tp trace.TracerProvider, log *
 	return db, nil
 }
 
-// connError membungkus error tanpa membocorkan password DSN.
+// connError membungkus error koneksi: menyebut host, tidak pernah membocorkan password DSN
+// (bentuk URL, query, maupun keyword=value). Secret pendek (< 4 karakter) tidak dapat disensor
+// dengan aman dari teks error, sehingga detail error disembunyikan seluruhnya.
 func connError(dsn string, err error) error {
-	host := "?"
+	host, secrets := config.DSNParts(dsn)
 	msg := err.Error()
-	if u, perr := url.Parse(dsn); perr == nil {
-		host = u.Host
-		if u.User != nil {
-			if pw, ok := u.User.Password(); ok && pw != "" {
-				msg = strings.ReplaceAll(msg, pw, "****")
-			}
+	if host == "?" {
+		// DSN tidak dapat di-parse: kita tidak tahu bagian mana yang rahasia, jadi jangan tampilkan detail.
+		msg = "DSN tidak dapat dibaca; detail disembunyikan"
+	}
+	for _, s := range secrets {
+		if !strings.Contains(msg, s) {
+			continue
 		}
+		if len(s) < 4 {
+			msg = "detail disembunyikan"
+			break
+		}
+		msg = strings.ReplaceAll(msg, s, "****")
 	}
 	return errors.New("database tidak terjangkau (host=" + host + "): " + msg)
 }
@@ -101,4 +111,10 @@ func (l *slogLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 		sql, rows := fc()
 		l.log.WarnContext(ctx, "slow query", "elapsed_ms", elapsed.Milliseconds(), "rows", rows, "sql", sql)
 	}
+}
+
+// ParamsFilter (gorm.ParamsFilter) membuang nilai parameter sehingga log hanya memuat SQL
+// berparameter ($1, $2, ...) dan tidak pernah data (PII/rahasia) milik pengguna.
+func (l *slogLogger) ParamsFilter(_ context.Context, sql string, _ ...any) (string, []any) {
+	return sql, nil
 }

@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -48,8 +49,7 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 				panic(rec)
 			}
 			log.ErrorContext(r.Context(), "panic dalam handler",
-				"panic", rec, "stack", string(debug.Stack()),
-				"request_id", w.Header().Get(headerRequestID))
+				"panic", rec, "stack", string(debug.Stack()))
 			if !sw.wrote {
 				WriteError(w, r, http.StatusInternalServerError, "internal_error", "terjadi kesalahan pada server", nil)
 			}
@@ -61,20 +61,6 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 // requestScope menetapkan X-Request-Id, security headers, dan access log.
 func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get(headerRequestID)
-		if !requestIDPattern.MatchString(id) {
-			if u, err := uuid.NewV7(); err == nil {
-				id = u.String()
-			} else {
-				id = uuid.NewString()
-			}
-		}
-		h := w.Header()
-		h.Set(headerRequestID, id)
-		h.Set("Content-Security-Policy", csp)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-
 		if m := metaFrom(r.Context()); m != nil {
 			if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
 				m.traceID = sc.TraceID().String()
@@ -83,17 +69,21 @@ func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Hand
 
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
+		completed := false // tetap false bila handler panic (recoverMW menulis 500 sesudahnya)
 		defer func() {
 			status := sw.status
-			if status == 0 {
+			switch {
+			case !completed:
+				status = http.StatusInternalServerError
+			case status == 0:
 				status = http.StatusOK
 			}
 			log.InfoContext(r.Context(), "http request",
 				"method", r.Method, "route", pattern, "path", r.URL.Path,
-				"status", status, "duration_ms", time.Since(start).Milliseconds(),
-				"request_id", id)
+				"status", status, "duration_ms", time.Since(start).Milliseconds())
 		}()
 		next.ServeHTTP(sw, r)
+		completed = true
 	})
 }
 
@@ -123,7 +113,11 @@ func (p connectorProvider) DB(ctx context.Context) (*database.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return tdb.DB, nil
+	if tdb.DB == nil {
+		return nil, errors.New("database tenant belum tersedia")
+	}
+	// Session terikat context request: query ikut dibatalkan dan span DB menjadi anak span HTTP.
+	return tdb.DB.WithContext(ctx), nil
 }
 
 // statusWriter mencatat status dan apakah header sudah ditulis.
@@ -149,3 +143,22 @@ func (s *statusWriter) Write(b []byte) (int, error) {
 
 // Unwrap memungkinkan http.ResponseController mengakses writer asli (Flush, dst).
 func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// requestIDFor memakai X-Request-Id masuk bila valid, selain itu membuat UUIDv7.
+func requestIDFor(r *http.Request) string {
+	if id := r.Header.Get(headerRequestID); requestIDPattern.MatchString(id) {
+		return id
+	}
+	if u, err := uuid.NewV7(); err == nil {
+		return u.String()
+	}
+	return uuid.NewString()
+}
+
+// setBaseHeaders memasang X-Request-Id dan header keamanan pada setiap respons.
+func setBaseHeaders(h http.Header, id string) {
+	h.Set(headerRequestID, id)
+	h.Set("Content-Security-Policy", csp)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+}

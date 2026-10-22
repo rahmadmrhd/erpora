@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/rahmadmrhd/erp-go/internal/platform/database"
+	"github.com/rahmadmrhd/erp-go/internal/platform/observability"
 	"github.com/rahmadmrhd/erp-go/internal/platform/tenancy"
 )
 
@@ -47,7 +49,15 @@ type Router struct {
 }
 
 // ServeHTTP mengimplementasikan http.Handler.
-func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) { r.mux.ServeHTTP(w, req) }
+// ServeHTTP menetapkan request id + header keamanan SEBELUM ServeMux, sehingga respons buatan mux
+// sendiri (mis. redirect path non-kanonik) pun membawanya. Baggage inbound dibuang (tidak dipercaya).
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	req.Header.Del("Baggage")
+	id := requestIDFor(req)
+	setBaseHeaders(w.Header(), id)
+	req = req.WithContext(observability.WithRequestID(req.Context(), id))
+	r.mux.ServeHTTP(w, req)
+}
 
 // Handle mendaftarkan pattern dengan rantai: recover -> otelhttp -> requestScope -> tenantContext -> h.
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
@@ -59,14 +69,20 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 		h = tenantContext(r.deps.Resolver, r.deps.Connector, h)
 	}
 	h = requestScope(r.deps.Logger, pattern, h)
-	h = otelhttp.NewHandler(h, pattern, otelhttp.WithTracerProvider(r.deps.Tracer))
+	h = otelhttp.NewHandler(h, pattern,
+		otelhttp.WithTracerProvider(r.deps.Tracer),
+		// Endpoint publik: traceparent klien tidak menjadi parent (hanya link pada span root baru).
+		otelhttp.WithPublicEndpointFn(func(*http.Request) bool { return true }),
+		// Hanya W3C trace context yang diekstrak; baggage inbound tidak dipercaya.
+		otelhttp.WithPropagators(propagation.TraceContext{}),
+	)
 	h = recoverMW(r.deps.Logger, h)
 	r.mux.Handle(pattern, h)
 }
 
-// New membuat http.Server dengan ReadHeaderTimeout 10 detik.
+// New membuat http.Server dengan ReadHeaderTimeout 10 detik dan IdleTimeout 120 detik.
 func New(addr string, r *Router) *http.Server {
-	return &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 10 * time.Second}
+	return &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
 }
 
 func withDefaults(d Deps) Deps {
