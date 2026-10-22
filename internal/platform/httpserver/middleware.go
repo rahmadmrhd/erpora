@@ -117,7 +117,7 @@ func (p connectorProvider) DB(ctx context.Context) (*database.DB, error) {
 		return nil, errors.New("database tenant belum tersedia")
 	}
 	// Session terikat context request: query ikut dibatalkan dan span DB menjadi anak span HTTP.
-	return tdb.DB.WithContext(ctx), nil
+	return tdb.WithContext(ctx), nil
 }
 
 // statusWriter mencatat status dan apakah header sudah ditulis.
