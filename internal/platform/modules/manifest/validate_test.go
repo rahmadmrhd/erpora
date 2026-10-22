@@ -85,3 +85,13 @@ func assertProblems(t *testing.T, got []Problem, want []wantProblem) {
 		}
 	}
 }
+
+// M7: struct yang berbeda dari Raw harus dilaporkan.
+func TestValidate_ManifestMismatch(t *testing.T) {
+	m := load(t, "valid_full.json")
+	m.Slug = "Bad/Slug"
+	got := Validate(m)
+	if len(got) != 1 || got[0].Code != "manifest_mismatch" {
+		t.Fatalf("problems = %+v", got)
+	}
+}

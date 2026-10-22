@@ -11,8 +11,7 @@ import (
 type recorder struct {
 	key      string
 	slug     string
-	platform bool            // platform.core tidak dibatasi manifest capabilities
-	caps     map[string]bool // capability yang dideklarasikan manifest
+	caps     map[string]bool // capability yang dideklarasikan manifest (atau Options.PlatformCapabilities)
 	routes   []RouteInfo
 	cmds     []CommandInfo
 	cmdNames map[string]bool
@@ -37,13 +36,22 @@ func (r *recorder) validRoute(method, path string) bool {
 	return ok
 }
 
+// validHandler menolak handler nil (akan panic saat request pertama).
+func (r *recorder) validHandler(method, path string, h http.Handler) bool {
+	if h == nil {
+		r.problem(CodeInvalidRoute, "route %s %s memakai handler nil", method, path)
+		return false
+	}
+	return true
+}
+
 func (r *recorder) Handle(method, path, permission string, h http.Handler) {
-	valid := r.validRoute(method, path)
+	valid := r.validRoute(method, path) && r.validHandler(method, path, h)
 	switch {
 	case permission == "":
 		r.problem(CodePermissionMissing, "route %s %s tidak punya permission; gunakan Public bila memang publik", method, path)
 		valid = false
-	case !r.platform && !r.caps[permission]:
+	case !r.caps[permission]:
 		r.problem(CodePermissionUndeclared, "permission %q pada route %s %s tidak ada di capabilities manifest", permission, method, path)
 		valid = false
 	}
@@ -57,7 +65,7 @@ func (r *recorder) Handle(method, path, permission string, h http.Handler) {
 }
 
 func (r *recorder) Public(method, path string, h http.Handler) {
-	if !r.validRoute(method, path) {
+	if !r.validRoute(method, path) || !r.validHandler(method, path, h) {
 		return
 	}
 	r.routes = append(r.routes, RouteInfo{

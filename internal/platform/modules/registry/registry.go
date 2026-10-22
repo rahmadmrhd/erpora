@@ -26,6 +26,9 @@ type Options struct {
 	PlatformVersion, SDKVersion string
 	// Platform mendaftarkan route/command milik platform.core (dipakai M2b untuk /api/platform/modules).
 	Platform func(r module.Registrar) error
+	// PlatformCapabilities adalah capability yang dideklarasikan platform.core;
+	// route platform tunduk pada aturan permission_undeclared seperti modul lain.
+	PlatformCapabilities []string
 }
 
 // RouteInfo adalah satu route terdaftar. Pattern adalah path penuh "/api/{slug}{path}".
@@ -63,11 +66,18 @@ type Registry struct {
 func Build(opts Options, mods ...module.Module) (*Registry, error) {
 	var problems []Problem
 
-	platform := module.Manifest{Key: PlatformKey, Slug: PlatformSlug, Version: opts.PlatformVersion, Trust: "builtin"}
+	platform := module.Manifest{
+		Key: PlatformKey, Slug: PlatformSlug, Version: opts.PlatformVersion, Trust: "builtin",
+		Capabilities: slices.Clone(opts.PlatformCapabilities),
+	}
 	byKey := map[string]Entry{PlatformKey: {Manifest: platform}}
 	var unique []Entry // modul non-platform dengan key unik, urutan input
-	for _, m := range mods {
-		mf := m.Manifest()
+	for i, m := range mods {
+		mf, perr := safeManifest(m)
+		if perr != "" {
+			problems = append(problems, Problem{Module: fmt.Sprintf("modules[%d]", i), Code: CodeRegisterFailed, Message: perr})
+			continue
+		}
 		for _, p := range manifest.Validate(mf) {
 			problems = append(problems, Problem{Module: p.Module, Field: p.Field, Code: p.Code, Message: p.Message})
 		}
@@ -107,9 +117,9 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 
 	col := &collector{}
 	if opts.Platform != nil {
-		r := &recorder{key: PlatformKey, slug: PlatformSlug}
-		if err := opts.Platform(r); err != nil {
-			problems = append(problems, Problem{Module: PlatformKey, Code: CodeRegisterFailed, Message: fmt.Sprintf("Register gagal: %v", err)})
+		r := &recorder{key: PlatformKey, slug: PlatformSlug, caps: capSet(platform)}
+		if msg := safeRegister(opts.Platform, r); msg != "" {
+			problems = append(problems, Problem{Module: PlatformKey, Code: CodeRegisterFailed, Message: msg})
 		}
 		col.add(r)
 	}
@@ -121,8 +131,8 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 			continue
 		}
 		r := &recorder{key: key, slug: e.Manifest.Slug, caps: capSet(e.Manifest)}
-		if err := e.Module.Register(r); err != nil {
-			problems = append(problems, Problem{Module: key, Code: CodeRegisterFailed, Message: fmt.Sprintf("Register gagal: %v", err)})
+		if msg := safeRegister(e.Module.Register, r); msg != "" {
+			problems = append(problems, Problem{Module: key, Code: CodeRegisterFailed, Message: msg})
 		}
 		col.add(r)
 	}
@@ -144,6 +154,32 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 	}
 	slices.Sort(reg.caps)
 	return reg, nil
+}
+
+// safeManifest memanggil m.Manifest() dengan recover; modul nil atau panic dilaporkan sebagai pesan.
+func safeManifest(m module.Module) (mf module.Manifest, problem string) {
+	if m == nil {
+		return mf, "modul nil tidak dapat didaftarkan"
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			problem = fmt.Sprintf("Manifest() panic: %v", p)
+		}
+	}()
+	return m.Manifest(), ""
+}
+
+// safeRegister memanggil register dengan recover; mengembalikan pesan bila gagal atau panic.
+func safeRegister(register func(module.Registrar) error, r module.Registrar) (problem string) {
+	defer func() {
+		if p := recover(); p != nil {
+			problem = fmt.Sprintf("Register panic: %v", p)
+		}
+	}()
+	if err := register(r); err != nil {
+		return fmt.Sprintf("Register gagal: %v", err)
+	}
+	return ""
 }
 
 func nodeOf(m module.Manifest) resolver.Node {
@@ -213,6 +249,10 @@ func checkIdentity(mods []Entry) []Problem {
 	capOwner := map[string]string{}
 	for _, e := range mods {
 		m := e.Manifest
+		if !dependsOnPlatform(m) {
+			out = append(out, Problem{Module: m.Key, Field: "/dependencies", Code: resolver.CodeMissingDependency,
+				Message: "modul wajib bergantung (non-opsional) pada " + PlatformKey})
+		}
 		if reservedSlugs[m.Slug] {
 			out = append(out, Problem{Module: m.Key, Field: "/slug", Code: CodeReservedSlug,
 				Message: fmt.Sprintf("slug %q dicadangkan untuk platform", m.Slug)})
@@ -239,6 +279,18 @@ func checkIdentity(mods []Entry) []Problem {
 	return out
 }
 
+func dependsOnPlatform(m module.Manifest) bool {
+	for _, d := range m.Dependencies {
+		if d.Module == PlatformKey && !d.Optional {
+			return true
+		}
+	}
+	return false
+}
+
+// muxRegister dapat diganti test agar klasifikasi konflik terbukti tidak bergantung pada teks panic.
+var muxRegister = tryRegister
+
 // checkRouteConflicts mendaftarkan semua pola ke ServeMux sementara; panic
 // karena konflik atau pola rusak diubah menjadi Problem.
 func checkRouteConflicts(routes []RouteInfo) []Problem {
@@ -246,17 +298,19 @@ func checkRouteConflicts(routes []RouteInfo) []Problem {
 	mux := http.NewServeMux()
 	var seen []RouteInfo
 	for _, rt := range routes {
-		switch msg := tryRegister(mux, rt); {
-		case msg == "":
+		msg := muxRegister(mux, rt)
+		if msg == "" {
 			seen = append(seen, rt)
-		case strings.Contains(msg, "conflicts with"):
-			other := findConflict(seen, rt)
-			out = append(out, Problem{Module: rt.Module, Code: CodeRouteConflict,
-				Message: fmt.Sprintf("route %s %s (%s) bentrok dengan %s (%s)", rt.Method, rt.Pattern, rt.Module, other.Pattern, other.Module)})
-		default:
-			out = append(out, Problem{Module: rt.Module, Code: CodeInvalidRoute,
-				Message: fmt.Sprintf("pola route %s %s ditolak: %s", rt.Method, rt.Pattern, msg)})
+			continue
 		}
+		// Panic apa pun: cari dulu pendaftaran lain yang bentrok (tanpa membaca teks panic).
+		if other := findConflict(seen, rt); other.Pattern != "" {
+			out = append(out, Problem{Module: rt.Module, Code: CodeRouteConflict,
+				Message: fmt.Sprintf("route %s %s (%s) bentrok dengan %s %s (%s)", rt.Method, rt.Pattern, rt.Module, other.Method, other.Pattern, other.Module)})
+			continue
+		}
+		out = append(out, Problem{Module: rt.Module, Code: CodeInvalidRoute,
+			Message: fmt.Sprintf("pola route %s %s ditolak: %s", rt.Method, rt.Pattern, msg)})
 	}
 	return out
 }
@@ -278,7 +332,7 @@ func tryRegister(mux *http.ServeMux, rt RouteInfo) (msg string) {
 func findConflict(seen []RouteInfo, rt RouteInfo) RouteInfo {
 	for _, prev := range seen {
 		m := http.NewServeMux()
-		if tryRegister(m, prev) == "" && tryRegister(m, rt) != "" {
+		if muxRegister(m, prev) == "" && muxRegister(m, rt) != "" {
 			return prev
 		}
 	}

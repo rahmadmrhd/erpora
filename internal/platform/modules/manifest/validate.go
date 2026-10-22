@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ const (
 	CodeInvalidVersion     = "invalid_version"
 	CodeInvalidConstraint  = "invalid_constraint"
 	CodeRawMissing         = "raw_missing"
+	CodeManifestMismatch   = "manifest_mismatch"
 	moduleSchemaResourceID = "https://erpora.dev/contracts/module.schema.json"
 )
 
@@ -61,6 +63,7 @@ func Validate(m module.Manifest) []Problem {
 	}
 
 	problems := validateSchema(m)
+	problems = append(problems, checkMatchesRaw(m)...)
 	schemaFields := make(map[string]bool, len(problems))
 	for _, p := range problems {
 		schemaFields[p.Field] = true
@@ -84,6 +87,22 @@ func Validate(m module.Manifest) []Problem {
 		problems = appendConstraint(problems, m.Key, "/dependencies/"+strconv.Itoa(i)+"/version", d.Version, schemaFields)
 	}
 	return problems
+}
+
+// checkMatchesRaw memastikan field struct sama dengan hasil decode Raw, sehingga
+// registry tidak memakai nilai yang lolos schema hanya karena Raw-nya valid.
+func checkMatchesRaw(m module.Manifest) []Problem {
+	decoded, err := module.ParseManifest(m.Raw)
+	if err != nil {
+		return nil // JSON rusak sudah dilaporkan sebagai schema_invalid
+	}
+	a, b := m, decoded
+	a.Raw, b.Raw = nil, nil
+	if reflect.DeepEqual(a, b) {
+		return nil
+	}
+	return []Problem{{Module: m.Key, Code: CodeManifestMismatch,
+		Message: "field Manifest berbeda dari isi Raw (module.json); gunakan hasil ParseManifest tanpa modifikasi"}}
 }
 
 func appendConstraint(problems []Problem, key, field, value string, schemaFields map[string]bool) []Problem {
