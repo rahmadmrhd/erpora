@@ -17,7 +17,7 @@ func NewRouter(d Deps) *Router {
 
 	r.Handle("GET /healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		WriteData(w, http.StatusOK, map[string]string{"status": "ok"})
-	}), WithoutTenant())
+	}), WithoutTenant(), Public())
 
 	r.Handle("GET /readyz", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if d.Readiness != nil {
@@ -28,9 +28,9 @@ func NewRouter(d Deps) *Router {
 			}
 		}
 		WriteData(w, http.StatusOK, map[string]string{"status": "ready"})
-	}), WithoutTenant())
+	}), WithoutTenant(), Public())
 
-	r.Handle("GET /api/bootstrap", bootstrapHandler(d.AppVersion))
+	r.Handle("GET /api/bootstrap", bootstrapHandler(d.AppVersion), Public())
 
 	r.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Path dikenal dengan method lain -> 405 + Allow; path tidak dikenal -> 404.
@@ -40,13 +40,13 @@ func NewRouter(d Deps) *Router {
 			return
 		}
 		WriteError(w, req, http.StatusNotFound, "not_found", "endpoint tidak ditemukan", nil)
-	}))
+	}), Public())
 
 	assets := d.Assets
 	if assets == nil {
 		assets = emptyFS{}
 	}
-	r.Handle("/", NewSPA(assets))
+	r.Handle("/", NewSPA(assets), Public())
 	return r
 }
 
