@@ -1,5 +1,5 @@
 {
-  "name": "erp-go",
+  "name": "erpora",
   "private": true,
   "packageManager": "bun@1.4.2",
   "workspaces": ["web", "packages/*", "modules/*/web"]

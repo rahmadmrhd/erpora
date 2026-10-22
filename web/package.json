@@ -1,5 +1,5 @@
 {
-  "name": "@erp/web",
+  "name": "@erpora/web",
   "private": true,
   "type": "module",
   "scripts": {

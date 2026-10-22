@@ -70,9 +70,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bun run --filter @erp/web typecheck
-      - run: bun run --filter @erp/web lint
-      - run: bun run --filter @erp/web deps
+      - run: bun run --filter @erpora/web typecheck
+      - run: bun run --filter @erpora/web lint
+      - run: bun run --filter @erpora/web deps
       - run: bun audit
 
   integration:

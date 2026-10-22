@@ -110,7 +110,7 @@ tasks:
         sh: git rev-parse --short HEAD
       NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
     cmds:
-      - bun run --filter @erp/web build
+      - bun run --filter @erpora/web build
       - go build -trimpath -ldflags "-s -w -X erpora/internal/platform/buildinfo.Version={{.VERSION}} -X erpora/internal/platform/buildinfo.Commit={{.COMMIT}} -X erpora/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erpora{{exeExt}} ./cmd/erpora
 
   build:dev:
@@ -122,7 +122,7 @@ tasks:
         sh: git rev-parse --short HEAD
       NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
     cmds:
-      - bun run --filter @erp/web build
+      - bun run --filter @erpora/web build
       - go build -tags devtools -trimpath -ldflags "-s -w -X erpora/internal/platform/buildinfo.Version={{.VERSION}} -X erpora/internal/platform/buildinfo.Commit={{.COMMIT}} -X erpora/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erpora{{exeExt}} ./cmd/erpora
 
   erpora:
@@ -152,15 +152,15 @@ tasks:
     desc: (internal) Web dev server Bun
     internal: true
     cmds:
-      - bun run --filter @erp/web dev
+      - bun run --filter @erpora/web dev
 
   web:check:
     desc: Typecheck, lint, dan dependency rules frontend
     cmds:
       - bun install --frozen-lockfile
-      - bun run --filter @erp/web typecheck
-      - bun run --filter @erp/web lint
-      - bun run --filter @erp/web deps
+      - bun run --filter @erpora/web typecheck
+      - bun run --filter @erpora/web lint
+      - bun run --filter @erpora/web deps
 
   ci:
     desc: Jalankan seluruh gate CI secara lokal
