@@ -16,6 +16,8 @@
 version: '3'
 
 vars:
+  # Versi golangci-lint terpin; harus sama dengan GOLANGCI_LINT_VERSION di .github/workflows/ci.yml.
+  GOLANGCI_LINT_VERSION: v2.15.0
   # Semua Go module di workspace (root, sdk, modules/*), satu path per baris.
   # {{.Dir}} di-escape lewat raw string Go template agar Task tidak merendernya sendiri.
   GO_MODULES:
@@ -28,6 +30,7 @@ tasks:
       - for: { var: GO_MODULES }
         cmd: go -C "{{.ITEM}}" mod download
       - bun install
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
 
   tidy:
     desc: Rapikan go.mod dan go.sum di setiap Go module
@@ -37,12 +40,10 @@ tasks:
 
   lint:
     desc: Lint setiap Go module
-    vars:
-      LINT_BIN:
-        sh: go tool -n golangci-lint
     cmds:
+      # golangci-lint dipasang oleh `task setup` (go install versi terpin) ke $GOPATH/bin.
       - for: { var: GO_MODULES }
-        cmd: cd "{{.ITEM}}" && "{{.LINT_BIN}}" run ./...
+        cmd: cd "{{.ITEM}}" && golangci-lint run ./...
 
   test:
     desc: Jalankan unit test di setiap Go module
