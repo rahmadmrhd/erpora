@@ -17,12 +17,13 @@ ERP ini akan berisi banyak modul bisnis (keuangan, HR, inventori, dan seterusnya
 
 Memilih opsi 3:
 
-- Root module `github.com/rahmadmrhd/erp-go` berisi platform (`internal/platform`), composition root (`internal/app`), dan `cmd/erp`.
-- `sdk/` adalah Go module publik (`github.com/rahmadmrhd/erp-go/sdk`) yang tidak bergantung pada root maupun `modules/*`.
-- Setiap `modules/<name>/` adalah Go module sendiri (`github.com/rahmadmrhd/erp-go/modules/<name>`) dengan tag versi independen.
+- Root module `erpora` berisi platform (`internal/platform`), composition root (`internal/app`), dan `cmd/erpora`.
+- `sdk/` adalah Go module publik (`erpora/sdk`) yang tidak bergantung pada root maupun `modules/*`.
+- Setiap `modules/<name>/` adalah Go module sendiri (`erpora/modules/<name>`) dengan tag versi independen.
 - `go.work` di root menyatukan semua module untuk pengembangan lokal. Build `GOWORK=off` per module wajib lulus (lihat ADR-002).
-- Frontend setiap modul di-co-locate di `modules/<name>/web` (package `@erp/module-<name>`). Komponen UI generik berada di `packages/ui`, yang dibuat pada M3, dan app shell perakit berada di `web/`. Batas frontend ditegakkan lewat `package.json` (F1–F3).
+- Frontend setiap modul di-co-locate di `modules/<name>/web` (package `@erpora/module-<name>`). Komponen UI generik berada di `packages/ui`, yang dibuat pada M3, dan app shell perakit berada di `web/`. Batas frontend ditegakkan lewat `package.json` (F1–F3).
 - Binary platform memuat modul pada build-time (`internal/app/modules.go`), sedangkan enable/disable modul terjadi pada runtime (FR-19).
+- **Catatan path module (keputusan 22 Okt 2026, PRD-000 Q24):** path Go `erpora` (tanpa domain) sengaja dipakai untuk saat ini. Path tanpa domain tidak dapat di-`go get` oleh pihak ketiga, jadi harus dipindah ke vanity domain (mis. `erpora.dev/...`) **sebelum SDK dipublikasikan** untuk modul pihak ketiga/marketplace. Perpindahan itu mengubah semua import, `go.mod`, dan `replace`, dan dilakukan sekali dengan rename mekanis seperti yang dilakukan pada Q24.
 
 ## Konsekuensi
 

@@ -1,4 +1,4 @@
-# ERP Platform (erp-go) — Aturan Proyek
+# ERPora — Aturan Proyek
 
 Platform ERP modular: **Go modular monolith + React/TypeScript PWA**, satu binary dengan frontend ter-embed. Semua komunikasi dengan user dalam **Bahasa Indonesia**; identifier kode tetap bahasa Inggris.
 
@@ -30,10 +30,10 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 
 ## Aturan arsitektur (ditegakkan otomatis — jangan dilanggar)
 
-- Monorepo **multi Go module** (`go.work`): root `github.com/rahmadmrhd/erp-go` (platform + `cmd/erp` + `internal/app`), `sdk/`, dan setiap `modules/<name>/` = Go module sendiri. Semua `go.mod`: `go 1.27`, `toolchain go1.27.3`.
+- Monorepo **multi Go module** (`go.work`): root `erpora` (platform + `cmd/erpora` + `internal/app`), `sdk/`, dan setiap `modules/<name>/` = Go module sendiri. Semua `go.mod`: `go 1.27`, `toolchain go1.27.3`.
 - Modul hanya boleh mengakses modul lain lewat `modules/<x>/contract` **dan** hanya bila tercantum di `dependencies` manifest + `require` go.mod (D1, D8). Modul tidak boleh mengimpor root module; akses platform hanya lewat `sdk/` (D9).
 - `internal/platform/**` tidak boleh mengimpor `modules/**` (D2); hanya `internal/app` yang merakit modul (D7).
-- Frontend modul berada di dalam modulnya: `modules/<name>/web` (package `@erp/module-<name>`). Komponen generik dari `@erp/ui` (`packages/ui`), layanan frontend platform dari `@erp/platform-web` — **bukan** dari modul Core. `web/` hanya app shell yang merakit modul. Dependency `package.json` modul harus sama dengan `manifest.dependencies` (F1–F3).
+- Frontend modul berada di dalam modulnya: `modules/<name>/web` (package `@erpora/module-<name>`). Komponen generik dari `@erpora/ui` (`packages/ui`), layanan frontend platform dari `@erpora/platform-web` — **bukan** dari modul Core. `web/` hanya app shell yang merakit modul. Dependency `package.json` modul harus sama dengan `manifest.dependencies` (F1–F3).
 - Domain tanpa I/O (D3); GORM hanya di `*/internal/infrastructure`, `internal/platform/database`, `internal/platform/modules/store`, `sdk/data` (D3b); `AutoMigrate` dilarang — skema hanya lewat migrasi goose.
 - Router: `net/http.ServeMux`; modul mendaftarkan route lewat `Registrar.Handle(method, path, permission, h)` / `Public(...)`, tidak pernah menerima router.
 - Backend adalah otoritas: permission frontend hanya untuk UX.
@@ -45,11 +45,11 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 
 - Ikuti `docs/architecture/api-guidelines.md`: URL kebab-case jamak + endpoint aksi (`POST …/{id}/submit`), JSON camelCase, amplop `data`/`error`, uang & kuantitas **string desimal**, record di luar scope → 404.
 - **Tidak boleh ada breaking change API** (tanpa versi di URL): hanya menambah; perubahan struktur memakai expand → migrate → contract.
-- Setiap modul punya kontrak sendiri `modules/<x>/openapi.yaml`; jalankan `erp contracts:lint` dan `erp contracts:generate` (tersedia mulai M2).
+- Setiap modul punya kontrak sendiri `modules/<x>/openapi.yaml`; jalankan `erpora contracts:lint` dan `erpora contracts:generate` (tersedia mulai M2).
 
 ## Perintah
 
-- Semua perintah lewat **Taskfile** (`task --list`). Developer CLI: `task erp -- <command>` (build tag `devtools`).
+- Semua perintah lewat **Taskfile** (`task --list`). Developer CLI: `task erpora -- <command>` (build tag `devtools`).
 - Gate lokal sebelum commit: `task lint arch check:gowork-off test` (+ `task test:integration` bila menyentuh DB, butuh Docker).
 - Di Windows, `-race` dilewati (tidak ada cgo/gcc); CI Linux tetap menjalankannya.
 - Jangan menambah perintah Taskfile yang memakai `rm`/`cp`/`sed` atau utilitas khusus Unix.

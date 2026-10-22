@@ -43,7 +43,7 @@ ERP membutuhkan transaksi ACID, locking eksplisit, dan query yang kompleks (lapo
 | tenant | `migrations/tenant/` | `goose_tenant` |
 | modul | `modules/<x>/migrations/` | `goose_module_<slug_snake>` |
 
-- Migrasi tidak pernah berjalan otomatis pada HTTP request atau saat `serve`. Migrasi hanya berjalan lewat `erp migrate` dan operasi lifecycle modul.
+- Migrasi tidak pernah berjalan otomatis pada HTTP request atau saat `serve`. Migrasi hanya berjalan lewat `erpora migrate` dan operasi lifecycle modul.
 
 ## Konsekuensi
 

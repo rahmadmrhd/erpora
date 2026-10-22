@@ -14,7 +14,7 @@ Pedoman ini mengatur **bentuk kontrak** API supaya setiap modul terlihat seperti
 
 1. **REST untuk data, endpoint aksi untuk proses bisnis.** CRUD memakai metode HTTP standar; operasi seperti `submit`, `cancel`, `approve` memakai `POST .../{id}/{aksi}`.
 2. **Satu endpoint = satu permission.** Setiap endpoint dipetakan ke tepat satu `<resource>.<action>` (PRD-001 FR-110). Bila sebuah endpoint terasa butuh dua permission, kemungkinan besar ia harus dipecah.
-3. **Kontrak dulu, kode kemudian.** Endpoint baru ditulis di OpenAPI sebelum diimplementasikan; tipe TS dibangkitkan dari situ (`erp contracts:generate`).
+3. **Kontrak dulu, kode kemudian.** Endpoint baru ditulis di OpenAPI sebelum diimplementasikan; tipe TS dibangkitkan dari situ (`erpora contracts:generate`).
 4. **Aman secara default.** Data di luar scope tidak terlihat (404), field terlarang tidak muncul, dan operasi tulis tahan retry (idempotency).
 5. **Perubahan bersifat aditif.** Klien lama tidak boleh rusak karena rilis baru (§14).
 
@@ -306,7 +306,7 @@ draft ──submit──▶ submitted ──cancel──▶ cancelled ──amen
 
 - **Setiap modul memiliki kontraknya sendiri** di `modules/<x>/openapi.yaml`. Kontrak platform berada di `contracts/openapi/platform.yaml`. Tidak ada file OpenAPI yang diedit bersama oleh beberapa modul (PRD-000 FR-23).
 - Rujukan ke kontrak lain memakai URI `erp:`: `erp:common#/…` selalu boleh; `erp:<modul>#/…` hanya ke modul yang ada di `dependencies` manifest.
-- Kepatuhan terhadap pedoman ini diperiksa otomatis oleh linter (`erp contracts:lint`, ruleset `contracts/spectral.yaml`) di CI.
+- Kepatuhan terhadap pedoman ini diperiksa otomatis oleh linter (`erpora contracts:lint`, ruleset `contracts/spectral.yaml`) di CI.
 - Setiap endpoint **WAJIB** ada di kontrak modulnya sebelum di-merge, lengkap dengan: permission (`x-erp-permission: inventory.item.update`), field filterable/sortable (`x-erp-filterable`, `x-erp-sortable`), field group setiap field (`x-erp-field-group`), contoh request/respons, dan semua kode error yang mungkin.
 - Skema bersama (amplop `data`, `error`, `page`, tipe desimal, UUID, timestamp) didefinisikan sekali di `contracts/openapi/common.yaml` dan dirujuk lewat `$ref: 'erp:common#/components/schemas/…'`.
 - Route yang didaftarkan lewat `Registrar.Handle` dan operasi di kontrak harus cocok satu-satu (method, path, permission); ketidakcocokan menggagalkan CI.
@@ -348,8 +348,8 @@ Endpoint yang perilakunya harus berubah secara mendasar dibuat sebagai **endpoin
 
 - [ ] Path mengikuti §2 (jamak, kebab-case, maks. satu tingkat nesting, aksi berupa kata kerja).
 - [ ] Tepat satu permission `<resource>.<action>` dan terdaftar di manifest.
-- [ ] Didefinisikan di `modules/<x>/openapi.yaml` dengan `x-erp-permission`, filterable/sortable, field group, contoh, dan semua error; `erp contracts:lint` lolos.
-- [ ] `erp contracts:generate` dijalankan dan hasilnya ikut di-commit.
+- [ ] Didefinisikan di `modules/<x>/openapi.yaml` dengan `x-erp-permission`, filterable/sortable, field group, contoh, dan semua error; `erpora contracts:lint` lolos.
+- [ ] `erpora contracts:generate` dijalankan dan hasilnya ikut di-commit.
 - [ ] Query daftar memakai `authz.Filter`; record tunggal memakai `authz.Check`; respons memakai `authz.MaskFields`; update memakai `authz.CheckWrite` (PRD-001 FR-115).
 - [ ] Record di luar scope menghasilkan 404.
 - [ ] Uang/kuantitas berupa string desimal; waktu UTC ISO 8601.

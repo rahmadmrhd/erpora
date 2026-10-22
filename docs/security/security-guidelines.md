@@ -98,7 +98,7 @@ Setiap koneksi keluar yang tujuannya dipengaruhi data (webhook, OIDC discovery, 
 | Error 5xx generik; detail hanya di log dengan `requestId` | api-guidelines §8 |
 | **Log/trace/audit**: field *Sangat rahasia* tidak pernah dicatat; *Rahasia* disamarkan. Parameter SQL tidak direkam di trace | Pemindai log di integration test (PRD-001 NFR-103) |
 | Kriptografi hanya dari stdlib/library terkurasi: AES-256-GCM, ChaCha20-Poly1305, Ed25519, SHA-256/512, HMAC-SHA-256, argon2id, `crypto/rand`. DILARANG MD5/SHA-1 untuk keamanan, `math/rand` untuk token, ECB, kunci hard-coded | gosec G401–G505 + review |
-| Rotasi kunci terdokumentasi (`erp core:rotate-keys`, `ERP_SECRET_KEY`) | deployment.md |
+| Rotasi kunci terdokumentasi (`erpora core:rotate-keys`, `ERP_SECRET_KEY`) | deployment.md |
 | Offline: data *Rahasia* di IndexedDB hanya bila `OfflinePolicy` modul mengizinkan, dienkripsi, dan dihapus saat logout | PRD Offline & Sync |
 
 ### 3.5. Autentikasi & sesi (`27002:5.17`, `8.5`; OWASP A07, API2)
@@ -112,7 +112,7 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 
 | Aturan | Penegak |
 | --- | --- |
-| **XSS**: React melakukan escape otomatis. `dangerouslySetInnerHTML` DILARANG kecuali melalui komponen `@erp/ui` `SafeHtml` yang memakai DOMPurify dengan konfigurasi ketat | Biome lint rule + review |
+| **XSS**: React melakukan escape otomatis. `dangerouslySetInnerHTML` DILARANG kecuali melalui komponen `@erpora/ui` `SafeHtml` yang memakai DOMPurify dengan konfigurasi ketat | Biome lint rule + review |
 | CSP ketat tanpa `unsafe-inline` untuk script (PRD-000 Global Constraints); tanpa `eval`/`new Function` | Header test |
 | **CSRF**: API memakai Bearer token; satu-satunya endpoint berbasis cookie (`refresh`) memakai `SameSite=Strict` + cek `Origin` | PRD-001 FR-102 |
 | **Clickjacking**: `frame-ancestors 'none'` | Header test |

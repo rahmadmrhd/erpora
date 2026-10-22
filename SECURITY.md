@@ -1,4 +1,4 @@
-# Kebijakan Keamanan
+# Kebijakan Keamanan ERPora
 
 ## Melaporkan kerentanan
 

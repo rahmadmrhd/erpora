@@ -33,7 +33,7 @@
 
 ## 3. Deskriptor kebijakan (`OfflinePolicy`)
 
-Kontrak rancangan platform (bukan fitur bawaan TanStack). Sisi backend (`manifest.offline`) adalah otoritas; sisi frontend (`@erp/module-sdk`) memakai bentuk yang sama untuk UX.
+Kontrak rancangan platform (bukan fitur bawaan TanStack). Sisi backend (`manifest.offline`) adalah otoritas; sisi frontend (`@erpora/module-sdk`) memakai bentuk yang sama untuk UX.
 
 ```ts
 type OfflinePolicy = {

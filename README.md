@@ -1,6 +1,6 @@
-# erp-go
+# ERPora
 
-Platform ERP modular monolith dalam satu binary `erp`, dengan modul bisnis sebagai Go module terpisah dan frontend React di satu app shell. Keputusan arsitektur ada di [`docs/adr/`](docs/adr/).
+Platform ERP modular monolith dalam satu binary `erpora`, dengan modul bisnis sebagai Go module terpisah dan frontend React di satu app shell. Keputusan arsitektur ada di [`docs/adr/`](docs/adr/).
 
 ## Prasyarat
 
@@ -37,13 +37,13 @@ Daftar perintah lengkap: `task --list`.
 
 | Folder | Isi |
 | --- | --- |
-| `cmd/erp` | Entry point CLI `erp` (serve, migrate, version) |
+| `cmd/erpora` | Entry point CLI `erpora` (serve, migrate, version) |
 | `internal/platform` | Runtime platform: config, database, migrate, httpserver, observability, tenancy, dan modul-modul platform |
 | `internal/app` | Composition root: merakit platform dan modul |
 | `internal/archcheck`, `tests/architecture` | Pemeriksaan aturan dependensi D1–D11 |
 | `sdk/` | SDK publik Go (`module`, `data`), Go module tersendiri |
 | `modules/<name>/` | Modul ERP, setiap folder adalah Go module sendiri. Saat ini ada `example` |
-| `web/` | App shell frontend (Bun workspace `@erp/web`) |
+| `web/` | App shell frontend (Bun workspace `@erpora/web`) |
 | `packages/` | Paket TypeScript bersama |
 | `contracts/` | Kontrak OpenAPI dan JSON Schema milik platform |
 | `migrations/` | Migrasi goose untuk target `control` dan `tenant` |
