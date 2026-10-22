@@ -1,0 +1,175 @@
+# Taskfile.yml - satu-satunya entry point perintah proyek erp-go (go-task v3).
+#
+# Instalasi & pemanggilan per OS/terminal (PRD-000 FR-01):
+#   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@latest
+#   - Tanpa install global (sudah ada Bun):  bunx @go-task/cli <task>
+#   - Windows:  winget install Task.Task   atau   scoop install task
+#               Pemanggilannya sama di PowerShell, cmd, dan Git Bash: task <nama>
+#   - macOS:    brew install go-task
+#   - Linux:    sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
+#               atau paket distro/snap
+#
+# Pemanggilan sama di PowerShell, cmd, Git Bash, WSL, macOS, Linux: `task <nama>`
+#
+# Daftar task: `task --list`
+
+version: '3'
+
+vars:
+  # Versi golangci-lint terpin; harus sama dengan GOLANGCI_LINT_VERSION di .github/workflows/ci.yml.
+  GOLANGCI_LINT_VERSION: v2.15.0
+  # Semua Go module di workspace (root, sdk, modules/*), satu path per baris.
+  # {{.Dir}} di-escape lewat raw string Go template agar Task tidak merendernya sendiri.
+  GO_MODULES:
+    sh: 'go list -m -f "{{`{{.Dir}}`}}"'
+
+tasks:
+  setup:
+    desc: Pasang semua dependensi (Go modules, Bun, tool)
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" mod download
+      - bun install
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
+
+  tidy:
+    desc: Rapikan go.mod dan go.sum di setiap Go module
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" mod tidy
+
+  lint:
+    desc: Lint setiap Go module
+    preconditions:
+      - sh: golangci-lint --version
+        msg: "golangci-lint tidak ditemukan di PATH. Jalankan `task setup` (memasang versi terpin {{.GOLANGCI_LINT_VERSION}} ke $GOPATH/bin) dan pastikan $GOPATH/bin ada di PATH."
+    cmds:
+      # golangci-lint dipasang oleh `task setup` (go install versi terpin) ke $GOPATH/bin.
+      - for: { var: GO_MODULES }
+        cmd: cd "{{.ITEM}}" && golangci-lint run ./...
+
+  test:
+    desc: Jalankan unit test di setiap Go module
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" test {{if ne OS "windows"}}-race{{end}} ./...
+
+  test:integration:
+    desc: Jalankan test integrasi (tag integration) di root module
+    cmds:
+      - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
+
+  arch:
+    desc: Jalankan architecture checks (D1-D11)
+    cmds:
+      - go test ./tests/architecture/... ./internal/archcheck/...
+
+  vuln:
+    desc: Pemeriksaan kerentanan setiap Go module
+    vars:
+      VULN_BIN:
+        sh: go tool -n govulncheck
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: cd "{{.ITEM}}" && "{{.VULN_BIN}}" ./...
+
+  check:gomod:
+    desc: Cek versi go/toolchain seragam di semua go.mod
+    cmds:
+      - go test ./internal/archcheck/... ./tests/architecture/... -run 'GoVersion|RepositoryArchitecture'
+
+  check:gowork-off:
+    desc: Pastikan setiap Go module ter-build dengan GOWORK=off
+    env:
+      GOWORK: "off"
+    cmds:
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" build ./...
+
+  db:up:
+    desc: Jalankan PostgreSQL lokal via Docker Compose
+    cmds:
+      - docker compose -f infrastructure/docker/docker-compose.dev.yml up -d --wait
+
+  db:down:
+    desc: Hentikan PostgreSQL lokal via Docker Compose
+    cmds:
+      - docker compose -f infrastructure/docker/docker-compose.dev.yml down
+
+  migrate:
+    desc: Jalankan migrasi platform (erp migrate up)
+    cmds:
+      - go run -tags devtools ./cmd/erp migrate up --env-file .env
+
+  build:
+    desc: Build binary release bin/erp
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty
+      COMMIT:
+        sh: git rev-parse --short HEAD
+      NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
+    cmds:
+      - bun run --filter @erp/web build
+      - go build -trimpath -ldflags "-s -w -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Version={{.VERSION}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Commit={{.COMMIT}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erp{{exeExt}} ./cmd/erp
+
+  build:dev:
+    desc: Build binary dev bin/erp (flavor devtools)
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty
+      COMMIT:
+        sh: git rev-parse --short HEAD
+      NOW: '{{dateInZone "2006-01-02T15:04:05Z" now "UTC"}}'
+    cmds:
+      - bun run --filter @erp/web build
+      - go build -tags devtools -trimpath -ldflags "-s -w -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Version={{.VERSION}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.Commit={{.COMMIT}} -X github.com/rahmadmrhd/erp-go/internal/platform/buildinfo.BuildTime={{.NOW}}" -o bin/erp{{exeExt}} ./cmd/erp
+
+  erp:
+    desc: Jalankan CLI erp flavor dev (task erp -- <command>)
+    cmds:
+      - go run -tags devtools ./cmd/erp {{.CLI_ARGS}}
+
+  dev:
+    desc: Jalankan mode pengembangan (API + web dev server)
+    cmds:
+      - task: db:up
+      - task: migrate
+      - task: dev:run
+
+  dev:run:
+    desc: (internal) API live-reload + web dev server berjalan paralel
+    internal: true
+    deps: [dev:api, dev:web]
+
+  dev:api:
+    desc: (internal) API dengan air
+    internal: true
+    cmds:
+      - go tool air
+
+  dev:web:
+    desc: (internal) Web dev server Bun
+    internal: true
+    cmds:
+      - bun run --filter @erp/web dev
+
+  web:check:
+    desc: Typecheck, lint, dan dependency rules frontend
+    cmds:
+      - bun install --frozen-lockfile
+      - bun run --filter @erp/web typecheck
+      - bun run --filter @erp/web lint
+      - bun run --filter @erp/web deps
+
+  ci:
+    desc: Jalankan seluruh gate CI secara lokal
+    cmds:
+      - task: lint
+      - task: arch
+      - task: check:gowork-off
+      - task: test
+      - task: test:integration
+      - task: vuln
+      - task: web:check
+      - task: build

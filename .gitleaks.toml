@@ -1,0 +1,8 @@
+title = "erp-go gitleaks"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Nilai contoh pengembangan lokal (bukan rahasia)"
+paths = ['''^\.env\.example$''', '''^infrastructure/docker/docker-compose\.dev\.yml$''']

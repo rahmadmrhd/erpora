@@ -2,10 +2,10 @@
 
 | Atribut        | Nilai                                                                 |
 | -------------- | --------------------------------------------------------------------- |
-| Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q20 diputuskan     |
+| Status         | **Accepted** (21 Oktober 2026), semua pertanyaan Q1–Q23 diputuskan     |
 | Tanggal        | 21 Oktober 2026                                                       |
 | Fase roadmap   | Blueprint §14 fase **01 — Architecture foundation** + fase **03 — Module Registry & lifecycle** |
-| Sumber acuan   | `Blueprint.md` (tanpa bagian Laravel/PHP/Inertia), `arsitektur.md`    |
+| Sumber acuan   | Dokumen awal Blueprint & arsitektur (sudah dihapus; materinya ada di `docs/architecture/`, pemetaan rujukan di `docs/architecture/README.md`) |
 | Dokumen lanjut | **PRD-001 Core** (berikutnya), lalu PRD Tenancy, PRD Offline & Sync, PRD Notifications, dst. |
 
 ---
@@ -41,7 +41,7 @@ Multi-tenancy **bukan fokus**. Yang dibuat hanya struktur dan *seam*-nya, supaya
 
 ### 2.1. Goals
 
-1. **G1 — Struktur repository final**: sesuai Blueprint §5 dan arsitektur.md §7, diterjemahkan ke Go + Bun.
+1. **G1 — Struktur repository final**: sesuai Blueprint §5 dan arsitektur §7, diterjemahkan ke Go + Bun.
 2. **G2 — Batas modul ditegakkan secara teknis**: compiler Go dan architecture test menolak pelanggaran dependensi di backend maupun frontend.
 3. **G3 — Satu perintah build menghasilkan satu binary**: binary tersebut menyajikan API dan SPA/PWA.
 4. **G4 — Developer experience**: satu perintah menjalankan lingkungan dev (Go API + Bun dev server + PostgreSQL), dan hot reload berjalan.
@@ -91,7 +91,7 @@ Arah dependensi Go module (tidak boleh dibalik): **root → modules/* → sdk**,
 erp-go/
 ├── go.work                        # menyatukan root, sdk, dan semua modules/* (di-commit, bersama go.work.sum)
 ├── go.mod                         # module github.com/rahmadmrhd/erp-go (platform + composition root)
-├── package.json                   # Bun workspaces root: ["web", "packages/*"]
+├── package.json                   # Bun workspaces root: ["web", "packages/*", "modules/*/web"]
 ├── bun.lock
 ├── Taskfile.yml                   # go-task: entry point semua perintah (lintas OS)
 ├── .env.example
@@ -152,10 +152,10 @@ erp-go/
 │   └── data/
 │       └── data.go                # akses TenantDB untuk lapisan infrastructure modul
 │
-├── web/                           # Bun workspace "@erp/web" DAN Go package (embed)
+├── web/                           # APP SHELL saja: Bun workspace "@erp/web" DAN Go package (embed)
 │   ├── embed.go                   # //go:embed all:dist
 │   ├── dist/.gitkeep              # placeholder agar `go build` tanpa build frontend tetap lolos
-│   ├── package.json
+│   ├── package.json               # dependencies: @erp/ui, @erp/platform-web, @erp/module-* (semua modul yang dikompilasi)
 │   ├── tsconfig.json
 │   ├── build.ts                   # Bun.build app + service worker + Workbox injectManifest
 │   ├── dev.ts                     # Bun dev server + proxy /api → Go
@@ -163,34 +163,21 @@ erp-go/
 │   └── src/
 │       ├── main.tsx
 │       ├── index.html
+│       ├── styles.css             # Tailwind; @source ke packages/ui dan modules/*/web
 │       ├── sw.ts                  # service worker (Workbox)
-│       ├── app/
-│       │   ├── router/            # root route + agregasi route modul
-│       │   ├── bootstrap/         # fetch /api/bootstrap, snapshot, revision
-│       │   ├── providers/         # QueryClient, DB, Router providers
-│       │   └── settings/modules/  # halaman manajemen modul (FR-20)
-│       ├── platform/              # = core frontend; TIDAK boleh import src/modules
-│       │   ├── modules/           # frontend module registry
-│       │   ├── tenancy/           # tenant scope dari bootstrap (seam)
-│       │   ├── permissions/       # (UX only)
-│       │   ├── offline/           # SW registration, update flow
-│       │   ├── sync/              # (stub) client sync engine + outbox
-│       │   ├── db/                # TanStack DB collections & IndexedDB persistence
-│       │   ├── observability/     # OTel Web (lazy), error boundary reporter
-│       │   └── api/               # fetch client, error envelope
-│       ├── shared/                # ui (shadcn), hooks, utils (tanpa pengetahuan modul)
-│       └── modules/
-│           ├── example/
-│           │   ├── index.ts       # SATU-SATUNYA public entry modul
-│           │   ├── module.ts      # frontend manifest (routes, nav, offline UI)
-│           │   ├── api/contract.gen.ts  # tipe & client hasil generate dari modules/example/openapi.yaml
-│           │   ├── routes/
-│           │   └── components/
-│           └── exampleaddon/
+│       └── app/
+│           ├── modules.ts         # daftar modul frontend yang dirakit (penanda erp:generated:modules)
+│           ├── router/            # root route + agregasi route modul
+│           ├── bootstrap/         # fetch /api/bootstrap, snapshot, revision
+│           ├── providers/         # QueryClient, DB, Router providers
+│           └── settings/modules/  # halaman manajemen modul (FR-20)
 │
-├── packages/                      # paket TS yang dapat dipublikasikan
+├── packages/                      # paket TS bersama milik PLATFORM (bukan milik modul mana pun)
+│   ├── ui/                        # "@erp/ui": design system (shadcn), komponen generik tanpa pengetahuan bisnis
+│   ├── platform-web/              # "@erp/platform-web": registry modul, api client, permissions (UX), tenancy scope,
+│   │                              #   offline, sync (stub), TanStack DB, observability (OTel Web lazy)
 │   ├── platform-contracts/        # tipe hasil generate dari contracts/openapi/ (common + platform)
-│   ├── module-sdk/                # defineModule(), tipe OfflinePolicy, dsb.
+│   ├── module-sdk/                # defineModule(), tipe FrontendModule & OfflinePolicy
 │   └── ui-contracts/              # kontrak UI extension (stub)
 │
 ├── contracts/                     # kontrak MILIK PLATFORM + aturan bersama (bukan kontrak modul)
@@ -245,6 +232,14 @@ modules/<name>/
 ├── contract/                # PUBLIC port modul untuk modul lain (interface + DTO)
 ├── migrations/              # migrasi tenant milik modul (di-embed, versioned)
 ├── README.md                # deskripsi, capability, dependency, catatan upgrade
+├── web/                     # FRONTEND MILIK MODUL INI — Bun workspace package "@erp/module-<name>"
+│   ├── package.json         # dependencies: @erp/ui, @erp/platform-web, @erp/module-sdk,
+│   │                        #   + @erp/module-<x> HANYA untuk modul di manifest.dependencies
+│   ├── index.ts             # SATU-SATUNYA public entry frontend modul
+│   ├── module.ts            # frontend manifest (routes, navigasi, offline policy UI)
+│   ├── api/contract.gen.ts  # tipe & client hasil generate dari ../openapi.yaml
+│   ├── routes/              # halaman (lazy)
+│   └── components/          # komponen khusus modul
 └── internal/                # TIDAK dapat diimpor dari luar modules/<name>/
     ├── domain/              # entity, value object, domain event, policy (tanpa I/O)
     ├── application/         # command/query handler, use case
@@ -255,7 +250,7 @@ modules/<name>/
 
 Clean Architecture bersifat **selektif** (Blueprint §5.1). Modul CRUD sederhana boleh meringkas `application`/`domain`. Satu-satunya yang tidak boleh dilanggar adalah aturan `internal/`, karena itu yang menjamin batas modul.
 
-**Frontend modul** tetap berada di `web/src/modules/<name>/` pada fase ini, karena dibundel bersama app shell oleh Bun saat build. Co-location frontend ke `modules/<name>/web/` dievaluasi bersamaan dengan format paket modul (fase 06).
+**Frontend modul berada di dalam modulnya** (`modules/<name>/web/`, package `@erp/module-<name>`), sehingga satu modul = satu folder mandiri (backend, frontend, kontrak, migrasi) yang ter-versi dan ter-tag bersama. Modul tetap **dibundel saat build** oleh app shell `web/` (build-time module, §7.5); co-location hanya memindahkan lokasi source. Komponen generik berasal dari `@erp/ui` dan layanan frontend platform dari `@erp/platform-web`, keduanya milik platform, bukan milik modul Core.
 
 **Versi & rilis modul**:
 - `version` di `module.json` **harus sama** dengan tag Go module (`modules/<name>/vX.Y.Z`). Ini diperiksa oleh CI saat tag dibuat.
@@ -278,9 +273,9 @@ Clean Architecture bersifat **selektif** (Blueprint §5.1). Modul CRUD sederhana
 | D9  | `modules/**` tidak boleh mengimpor root module (`internal/platform/**`, `internal/app`); akses platform hanya lewat `sdk` | Compiler (`internal/` root tidak bisa diimpor dari Go module lain) + arch test (`go.mod` modul tidak boleh me-`require` root module) |
 | D10 | `modules/**` dan `sdk` tidak boleh mengimpor library router pihak ketiga                | Arch test           |
 | D11 | Dependensi antar-Go-module tidak boleh siklik (`go.mod` require graph)                  | Compiler/`go mod` + arch test |
-| F1  | `web/src/platform/**` dan `web/src/shared/**` tidak boleh mengimpor `web/src/modules/**` | dependency-cruiser |
-| F2  | Antarmodul frontend hanya boleh melalui `modules/<x>/index.ts`; deep import dilarang     | dependency-cruiser |
-| F3  | Hanya `web/src/app/**` yang boleh mengagregasi modul                                     | dependency-cruiser |
+| F1  | `@erp/ui`, `@erp/platform-web`, `@erp/module-sdk` tidak boleh bergantung pada `@erp/module-*` | `package.json` (Bun workspace) + dependency-cruiser |
+| F2  | Frontend modul hanya boleh mengimpor `@erp/ui`, `@erp/platform-web`, `@erp/module-sdk`, `@erp/platform-contracts`, dan `@erp/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` (deep import dilarang) | `package.json` + dependency-cruiser + arch test: dependencies `package.json` modul == `manifest.dependencies` |
+| F3  | Hanya app shell `web/` yang boleh bergantung pada semua `@erp/module-*` dan merakitnya   | `package.json` + dependency-cruiser |
 
 D8 dan D9 membuat graf dependensi kode **identik** dengan graf dependensi di manifest. Resolver (FR-18) pun bisa dipercaya: tidak ada dependensi tersembunyi yang lolos dari pemeriksaan lifecycle.
 
@@ -345,7 +340,7 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 | -------------------- | --------------------------------------------------------------------------- |
 | `GET /healthz`       | Liveness, tanpa dependensi eksternal                                        |
 | `GET /readyz`        | Readiness: koneksi PostgreSQL + migrasi platform sudah diterapkan           |
-| `GET /api/bootstrap` | Bentuk arsitektur.md §6: `appVersion`, `tenantId` (tenant default), `modules[]` dari runtime snapshot (FR-19: `key`, `slug`, `version`, `status`, `basePath`, `offline`), `permissions: []`, `revision`. Header `ETag` = revision |
+| `GET /api/bootstrap` | Bootstrap manifest: `appVersion`, `tenantId` (tenant default), `modules[]` dari runtime snapshot (FR-19: `key`, `slug`, `version`, `status`, `basePath`, `offline`), `permissions: []`, `revision`. Header `ETag` = revision |
 | `GET /*`             | SPA handler: file statis dari embed. Path tanpa ekstensi dan bukan `/api/*` diarahkan ke `index.html` |
 
 - Router: `net/http.ServeMux` dengan pola method+path (Go ≥ 1.22). Tidak memakai framework router. ServeMux adalah **detail implementasi platform** dan tidak pernah diekspos ke modul (lihat FR-05). Karena itu platform bisa beralih ke router lain (mis. chi) tanpa breaking change pada modul.
@@ -358,7 +353,7 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 
 ### FR-05 — Kontrak modul (SDK Go) & registry
 
-Definisikan di `sdk/module` (kontrak publik, mengikuti arsitektur.md §2 dan lima kontrak Blueprint §6). **Modul tidak menerima router.** Modul mendeklarasikan route lewat API milik SDK, dan platform yang memasangnya. Ini menyimpang secara sengaja dari contoh `RegisterRoutes(mux *http.ServeMux)` di arsitektur.md (disetujui; dicatat di ADR-006).
+Definisikan di `sdk/module` (kontrak publik, mengikuti arsitektur §2 dan lima kontrak Blueprint §6). **Modul tidak menerima router.** Modul mendeklarasikan route lewat API milik SDK, dan platform yang memasangnya. Ini menyimpang secara sengaja dari contoh `RegisterRoutes(mux *http.ServeMux)` di dokumen arsitektur awal (disetujui; dicatat di ADR-006).
 
 ```go
 // Runtime contract
@@ -437,7 +432,7 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
   2. **`AutoMigrate` dilarang** di luar test. Skema dikelola oleh migrasi SQL versioned (goose). Arch test atau linter menolak pemanggilan `AutoMigrate` di kode non-test.
   3. **Tipe koneksi terpisah**: `database.ControlDB` dan `database.TenantDB` membungkus `*gorm.DB`, sehingga keduanya tidak bisa tertukar saat compile.
   4. **Transaksi eksplisit**: operasi kritis memakai `db.Transaction(...)` dan locking eksplisit (`clause.Locking{Strength: "UPDATE"}`). Query kompleks (laporan, CTE) boleh memakai `db.Raw` dengan parameter binding, tanpa string concatenation.
-  5. **Observabilitas query**: logger GORM diarahkan ke `slog`, mencatat slow query (ambang dapat dikonfigurasi). Di mode dev, mode `PrepareStmt` dan deteksi N+1 dipantau lewat log.
+  5. **Observabilitas query**: logger GORM diarahkan ke `slog`, mencatat slow query (ambang dapat dikonfigurasi), tanpa nilai parameter SQL. **(M2, keputusan Q23)** `PrepareStmt` aktif di semua mode; di mode development, log memberi peringatan bila satu request menjalankan lebih dari N query dengan bentuk SQL yang sama (indikasi N+1; N dapat dikonfigurasi, default 10).
   6. **Preload, bukan lazy load**: relasi selalu dimuat eksplisit (`Preload`/`Joins`). Relasi lintas modul dilarang (Blueprint §3.3), sehingga model GORM hanya punya asosiasi di dalam modulnya sendiri.
 - Tool migrasi: `goose` (Provider API, migrasi di-embed), dipisah per target dengan tabel versi masing-masing:
 
@@ -457,11 +452,11 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 ### FR-08 — Frontend application shell
 
 - React + TypeScript `strict` (plus `noUncheckedIndexedAccess`).
-- **TanStack Router** dengan **code-based routing**. Setiap modul mengekspor fungsi registrasi route yang menerima parent route bertipe spesifik (bukan `AnyRoute`, arsitektur.md §3). `app/router` mengagregasi route modul secara statis saat build. Halaman modul memakai `.lazy()` untuk code splitting.
+- **TanStack Router** dengan **code-based routing**. Setiap modul mengekspor fungsi registrasi route yang menerima parent route bertipe spesifik (bukan `AnyRoute`). `app/router` mengagregasi route modul secara statis saat build. Halaman modul memakai `.lazy()` untuk code splitting.
 - **Route guard**: route modul yang statusnya bukan `enabled` di bootstrap menampilkan halaman "Modul tidak aktif" (UX saja; backend tetap menolak, FR-19).
 - **TanStack Query**: satu `QueryClient`. Query key berprefiks scope `[tenantId, ...]`, dengan `tenantId` dari bootstrap (FR-21). Bootstrap di-refetch saat window focus dan setelah operasi modul, memakai `ETag`/revision.
 - **TanStack DB**: inisialisasi provider dan satu collection contoh (`example`) yang bersumber dari Query, sebagai bukti integrasi. Persistence IndexedDB menyusul di PRD offline.
-- UI system: **Tailwind CSS** (via `bun-plugin-tailwind` pada `Bun.build`/dev server) + **shadcn/ui**. Komponen shadcn disalin ke `web/src/shared/ui/` dan menjadi milik repo. Fase ini hanya memasang komponen yang dipakai shell dan halaman modul (button, sidebar, sheet, toast, table, badge, dialog).
+- UI system: **Tailwind CSS** (via `bun-plugin-tailwind` pada `Bun.build`/dev server) + **shadcn/ui**. Komponen shadcn disalin ke `packages/ui` (`@erp/ui`) dan menjadi milik repo; Tailwind memindai `packages/ui` dan `modules/*/web` lewat `@source`. Fase ini hanya memasang komponen yang dipakai shell dan halaman modul (button, sidebar, sheet, toast, table, badge, dialog).
 - Shell: layout dengan sidebar yang dibangun dari frontend module registry dan difilter oleh modul `enabled` dari `/api/bootstrap`.
 - Halaman: `/` (dashboard kosong), `/example` dan `/example-addon` (route modul referensi, lazy), `/settings/modules` (FR-20), 404.
 
@@ -469,12 +464,12 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 
 ### FR-09 — Frontend module registry & SDK TS
 
-- `packages/module-sdk` menyediakan `defineModule()` dan tipe `FrontendModule` (`key`, `slug`, `version`, `navigation[]`, `registerRoutes`, `offline: OfflinePolicy` UI-side). `OfflinePolicy` diambil dari arsitektur.md §5.
+- `packages/module-sdk` menyediakan `defineModule()` dan tipe `FrontendModule` (`key`, `slug`, `version`, `navigation[]`, `registerRoutes`, `offline: OfflinePolicy` UI-side). `OfflinePolicy` mengikuti `docs/architecture/offline-strategy.md` §3.
 - Frontend registry mencocokkan setiap modul frontend dengan entri bootstrap berdasarkan `key`:
   - Tidak ada di bootstrap → diabaikan, warning dicatat.
   - Versi frontend berbeda dari versi backend → warning (indikasi build tidak sinkron).
   - Hanya status `enabled` yang memunculkan navigasi.
-- **Backend tetap otoritas** (arsitektur.md §2).
+- **Backend tetap otoritas** (prinsip §7.2).
 
 **AC:** unit test (`bun test`) untuk filter modul aktif, penolakan `key` duplikat, dan perilaku bila modul tidak ada di bootstrap.
 
@@ -489,7 +484,7 @@ Field marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`,
 
 ### FR-11 — Kerangka sync engine (struktur saja)
 
-- Backend `internal/platform/sync` dan frontend `src/platform/sync` berisi `README.md` plus tipe kontrak `OutboxOperation` (field mengikuti arsitektur.md §5: `operationId`, `module`, `action`, `tenantId`, `entityId`, `baseVersion`, `payload`, `status`, `traceparent?`).
+- Backend `internal/platform/sync` dan frontend `src/platform/sync` berisi `README.md` plus tipe kontrak `OutboxOperation` (field mengikuti `docs/architecture/offline-strategy.md` §4: `operationId`, `module`, `action`, `tenantId`, `entityId`, `baseVersion`, `payload`, `status`, `traceparent?`).
 - Belum ada logika. Protokol didefinisikan di PRD sync.
 
 **AC:** tipe `OutboxOperation` ada di Go dan TS, dan tes kontrak memastikan nama field JSON sama.
@@ -534,7 +529,7 @@ GitHub Actions `ci.yml` menjalankan semua gate pada PR dan menyimpan binary seba
 
 CI juga memiliki workflow rilis: tag `modules/<name>/vX.Y.Z` atau `sdk/vX.Y.Z` memicu validasi bahwa versi tag sama dengan `version` di manifest atau `SDKVersion`.
 
-**AC:** PR yang menambahkan import `internal/platform/x` → `modules/example` **gagal** di CI dengan pesan yang menyebut aturan D2. PR yang membuat `example` mengimpor `exampleaddon/contract` (tidak ada di `dependencies` maupun `require`) gagal di build `GOWORK=off` (D8). PR yang menambah `require` di `go.mod` tanpa menambah `dependencies` di manifest gagal di arch test D8. PR yang melakukan deep import `modules/example/components/...` dari modul lain gagal di F2.
+**AC:** PR yang menambahkan import `internal/platform/x` → `modules/example` **gagal** di CI dengan pesan yang menyebut aturan D2. PR yang membuat `example` mengimpor `exampleaddon/contract` (tidak ada di `dependencies` maupun `require`) gagal di build `GOWORK=off` (D8). PR yang menambah `require` di `go.mod` tanpa menambah `dependencies` di manifest gagal di arch test D8. PR yang membuat frontend `exampleaddon` mengimpor modul yang tidak ada di `dependencies`-nya, atau melakukan deep import `@erp/module-example/components/...`, gagal di F2.
 
 ### FR-15 — Modul referensi `example` & `exampleaddon`
 
@@ -553,7 +548,7 @@ Dua modul minimal yang membuktikan seluruh kontrak sekaligus menjadi template:
 - Versi `1.1.0` modul `example` (dengan migrasi `0002_...`) disimulasikan di integration test untuk menguji upgrade.
 - Dokumentasi `docs/module-sdk/creating-a-module.md` dan `docs/module-sdk/lifecycle.md` menggunakan kedua modul ini sebagai contoh.
 
-**AC:** semua tes FR-05, FR-08, FR-09, FR-18, dan FR-19 memakai modul-modul ini. Menyalin `example` → `foo` dan mengganti `key`/`slug` menghasilkan modul baru yang lolos semua gate tanpa menyentuh kode `platform`, kecuali satu baris pendaftaran di `internal/app/modules.go` dan `web/src/app/router`.
+**AC:** semua tes FR-05, FR-08, FR-09, FR-18, dan FR-19 memakai modul-modul ini. Menyalin `example` → `foo` dan mengganti `key`/`slug` menghasilkan modul baru yang lolos semua gate tanpa menyentuh kode `platform`, kecuali satu baris pendaftaran di `internal/app/modules.go` dan `web/src/app/modules.ts` (+ dependency di `web/package.json`).
 
 ### FR-16 — ADR & dokumentasi
 
@@ -594,7 +589,7 @@ Cakupan: semua lapisan observability **kecuali dashboard/visualisasi** (Grafana,
 - Setiap operasi lifecycle (FR-19) menjadi span `module.<operation>` dengan child span per langkah (resolve, migrate, hook, health). Metrik: `erp.module.operations` (counter per operation/result) dan `erp.module.operation.duration` (histogram).
 - `observability` menyediakan helper `StartJobSpan`, `InjectContext(carrier)`, dan `ExtractContext(carrier)` untuk meneruskan trace context lewat payload job, pesan outbox, dan operasi sync (field `traceparent` opsional di `OutboxOperation`, FR-11). Komponen-komponen itu dibangun di PRD masing-masing dan **wajib** memakai helper ini.
 
-**17.5. Frontend tracing** (`web/src/platform/observability`)
+**17.5. Frontend tracing** (`packages/platform-web`, modul observability)
 - OTel Web SDK: instrumentasi `fetch` (menyuntikkan `traceparent` ke `/api/*` agar trace browser → Go menyambung) dan `document-load`. Navigasi TanStack Router dicatat sebagai span.
 - **Dimuat lazy setelah app shell interaktif**, agar tidak masuk anggaran bundle NFR-04.
 - Ekspor ke endpoint same-origin `POST /api/platform/telemetry/v1/{traces,metrics}` (route `Public` milik `platform.core`, masuk allowlist). Go meneruskannya ke OTLP endpoint dengan batas ukuran payload dan rate limit. Collector tidak diekspos langsung ke browser.
@@ -823,7 +818,7 @@ Tujuannya agar pekerjaan rutin, seperti membuat modul, migrasi, dan lapisan Clea
 
 | Grup | Command | Fungsi |
 | ---- | ------- | ------ |
-| **make** | `make:module <name> [--frontend] [--depends <key,...>]` | Membuat Go module baru di `modules/<name>` (go.mod, manifest, `module.go`, `contract/`, `internal/` lengkap, README, test), mendaftarkannya ke `go.work`, root `go.mod`, `internal/app/modules.go`, dan (dengan `--frontend`) ke `web/src/modules/<name>` + `web/src/app/router` |
+| **make** | `make:module <name> [--frontend] [--depends <key,...>]` | Membuat Go module baru di `modules/<name>` (go.mod, manifest, `module.go`, `contract/`, `internal/` lengkap, README, test), mendaftarkannya ke `go.work`, root `go.mod`, `internal/app/modules.go`, dan (dengan `--frontend`) membuat package `modules/<name>/web` (`@erp/module-<name>`) lalu mendaftarkannya di `web/package.json` + `web/src/app/modules.ts` |
 | | `make:migration <module> <name>` | File migrasi goose bernomor urut berikutnya di `modules/<module>/migrations/` (atau `migrations/control|tenant` dengan `--platform control|tenant`) |
 | | `make:entity <module> <Name>` | Entity + test di `internal/domain` |
 | | `make:usecase <module> <Name> [--query]` | Command/query handler + DTO + test di `internal/application` |
@@ -836,7 +831,7 @@ Tujuannya agar pekerjaan rutin, seperti membuat modul, migrasi, dan lapisan Clea
 | | `db:seed [module]` | Menjalankan `DevSeeder` modul dalam urutan topologis |
 | **module** | `module:check [name]` | Validasi manifest (schema), `require` go.mod == `dependencies`, prefix capability, versi Go/toolchain seragam |
 | **inspect** | `route:list`, `permission:list` | Alias ke `erp inspect ...` agar familier bagi pengguna Artisan (alias ini juga ada di flavor release karena read-only) |
-| **contracts** | `contracts:generate [module]` | Kontrak platform → `packages/platform-contracts`; kontrak setiap modul → `web/src/modules/<slug>/api/contract.gen.ts`; `module.schema.json` → `packages/module-sdk`; serta spec gabungan untuk dokumentasi (FR-23) |
+| **contracts** | `contracts:generate [module]` | Kontrak platform → `packages/platform-contracts`; kontrak setiap modul → `modules/<name>/web/api/contract.gen.ts`; `module.schema.json` → `packages/module-sdk`; serta spec gabungan untuk dokumentasi (FR-23) |
 | | `contracts:lint [module]` | Menjalankan linter Spectral (FR-23) pada kontrak platform dan/atau modul |
 | **lainnya** | `doctor` | Memeriksa versi Go, Bun, Task, Docker, koneksi PostgreSQL, dan file `.env` |
 | | `list` | Semua command beserta deskripsinya |
@@ -921,7 +916,7 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 **23.4. Generate & publikasi**
 - `erp contracts:generate` (FR-22):
   - kontrak platform → `packages/platform-contracts`;
-  - kontrak setiap modul → `web/src/modules/<slug>/api/contract.gen.ts` (tipe + client fetch bertipe), sehingga frontend modul hanya memakai kontrak modulnya sendiri dan kontrak dependency-nya;
+  - kontrak setiap modul → `modules/<name>/web/api/contract.gen.ts` (tipe + client fetch bertipe), sehingga frontend modul hanya memakai kontrak modulnya sendiri dan kontrak dependency-nya;
   - **spec gabungan** (`common` + `platform` + semua modul) → artifact build `contracts/dist/openapi.json` untuk dokumentasi integrator.
 - File hasil generate di-commit dan diberi header "jangan diedit". CI memastikan hasil generate selalu sinkron (`contracts:generate` lalu `git diff --exit-code`).
 - `erp make:module` membuat kerangka `openapi.yaml`, dan `erp make:handler` menambahkan operasi ke kontrak modul bersamaan dengan pendaftaran route (FR-22).
@@ -936,6 +931,33 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 - Menghapus field dari kontrak `example` yang sudah di-tag (fixture tag di test) menggagalkan pemeriksaan `oasdiff`; menambah field opsional lolos.
 
 ---
+
+### FR-24 — Primitif keamanan platform
+
+Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap primitif keamanan sudah tersedia sebelum konsumen pertamanya ditulis**, sehingga modul tidak pernah membuat versinya sendiri yang kelak harus di-refactor.
+
+**24.1. M1 — rantai pasok & pelaporan**
+- `gosec` aktif di `golangci-lint` (sudah termasuk FR-14).
+- **SBOM** CycloneDX dibuat di CI untuk setiap Go module (`cyclonedx-gomod`) dan untuk dependensi frontend, diunggah sebagai artifact build.
+- `SECURITY.md` di root: cara melaporkan kerentanan secara privat dan target waktu perbaikan (security-guidelines §5).
+
+**24.2. M2 — primitif untuk modul**
+- **`sdk/egress`**: satu-satunya HTTP client keluar untuk modul dan platform (OIDC di PRD-001 memakainya). Aturan anti-SSRF sesuai security-guidelines §3.3 (allowlist skema, blokir alamat internal/metadata setelah resolve DNS, dial ke IP tervalidasi, validasi setiap redirect, timeout, batas ukuran). Arch test: `modules/**` dilarang memakai `http.DefaultClient`, `http.Get/Post/Head/PostForm`, atau membuat `http.Client` sendiri.
+- **Klasifikasi data**: field group di manifest memiliki `classification` (`public | internal | confidential | highly_confidential`); kontrak OpenAPI memakai `x-erp-classification` per properti. Linter kontrak (FR-23) menolak properti `highly_confidential` di respons, di parameter URL, dan tanpa klasifikasi untuk field sensitif yang dikenali (mis. nama `password`, `secret`, `token`, `nik`, `npwp`).
+- **Helper decode request** (`sdk/httpx.DecodeJSON`): batas ukuran body (default 1 MB, dapat ditimpa per route), batas kedalaman, `DisallowUnknownFields`, decode hanya ke DTO. Arch test: decode JSON ke tipe dari `internal/infrastructure` ditolak.
+- **Middleware `Cache-Control: no-store`** untuk respons route yang mengembalikan data `confidential`/`highly_confidential` (berdasarkan klasifikasi di kontrak).
+- **Helper ekspor** (`sdk/export`): CSV/XLSX dengan proteksi formula injection, menghormati `authz.MaskFields`, dan mencatat ekspor ke audit (audit aktif setelah PRD-001).
+
+**24.3. M3 — frontend**
+- Komponen `SafeHtml` di `@erp/ui` (DOMPurify, konfigurasi ketat); lint rule melarang `dangerouslySetInnerHTML` di luar komponen ini.
+- **OWASP ZAP baseline** di CI terhadap `erp serve` lokal (binary release + DB container), dengan daftar pengecualian yang di-review.
+
+**24.4. Di luar PRD-000** — pipeline upload file (security-guidelines §3.7) dibangun di **PRD Files**, sebelum fitur upload pertama.
+
+**AC:**
+- 24.1: artifact SBOM tersedia di setiap build CI; `SECURITY.md` ada dan dirujuk README.
+- 24.2: test tabel egress menolak `http://127.0.0.1`, `http://169.254.169.254`, `http://[::1]`, `http://10.0.0.1`, hostname yang resolve ke alamat privat, dan redirect ke alamat privat; arch test menolak fixture modul yang memakai `http.Get`; linter kontrak menolak fixture dengan `password` di respons atau token di query; `DecodeJSON` menolak body > batas, field tak dikenal, dan kedalaman berlebih; ekspor CSV mengawali `=1+1` dengan `'`.
+- 24.3: lint menolak `dangerouslySetInnerHTML` di luar `SafeHtml`; ZAP baseline tanpa temuan High di CI.
 
 ## 6. Kebutuhan non-fungsional
 
@@ -996,11 +1018,14 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 | Q18 | Konfigurasi runtime dasar?                     | ✅ `ERP_HTTP_ADDR` (default `127.0.0.1:8080`), `ERP_LOG_FORMAT`, default `ERP_ENV=production`, flag `--env-file` (FR-03) |
 | Q19 | Pedoman & penegakan kontrak API?               | ✅ `docs/architecture/api-guidelines.md` wajib diikuti; **setiap modul punya kontrak OpenAPI sendiri** (`modules/<x>/openapi.yaml`), platform hanya memiliki komponen bersama & endpoint platform; linter Spectral di CI (FR-04, FR-23) |
 | Q20 | Konvensi API dasar?                            | ✅ JSON camelCase; tanpa nomor versi di URL dan **tanpa breaking change** (expand → migrate → contract, ditegakkan `oasdiff`); pagination halaman untuk UI + cursor untuk sync/integrasi (api-guidelines §4, §6, §14) |
+| Q21 | Lokasi frontend modul?                         | ✅ **Co-location**: frontend setiap modul di `modules/<name>/web` (package `@erp/module-<name>`); komponen generik di `packages/ui`, layanan frontend platform di `packages/platform-web`; `web/` hanya app shell perakit. Batas ditegakkan lewat `package.json` (F1–F3) |
+| Q22 | Penjadwalan primitif keamanan? | ✅ Primitif tersedia sebelum konsumen pertama: M1 SBOM + `SECURITY.md` + gosec; M2 `sdk/egress`, klasifikasi data, `DecodeJSON`, `no-store`, `sdk/export`; M3 `SafeHtml` + ZAP; upload di PRD Files (FR-24) |
+| Q23 | Temuan review akhir M1 yang butuh keputusan | ✅ (M4) kode `tenant_unresolved`, `method_not_allowed`, `not_ready` masuk katalog api-guidelines §8; (M10) workflow validasi tag rilis ditunda ke **M2**, gate `bun test` ke **M3**; (M11) FR-07 guardrail 5 diperjelas dan ditunda ke **M2**; (NV1) server memakai `otelhttp.WithPublicEndpoint()` — `traceparent`/`baggage` dari klien tidak dipercaya |
 | Q15 | Struktur Go module (`go.mod`) untuk SDK & modul? | ✅ **Multi-module + `go.work`**: root (platform), `sdk`, dan setiap `modules/<name>` adalah Go module sendiri dengan tag versi independen (§4, D5/D8/D9). Dicatat di ADR-006 |
 
 ## 10. Definition of Done
 
-- [ ] Semua AC FR-01 s.d. FR-23 terpenuhi.
+- [ ] Semua AC FR-01 s.d. FR-24 terpenuhi.
 - [ ] CI hijau di branch utama. PR uji pelanggaran batas modul (D2, D8, F2) terbukti gagal.
 - [ ] Seluruh skenario Blueprint §12.1 yang relevan untuk modul bawaan lulus di integration/E2E test (FR-19 AC).
 - [ ] `bin/erp` hasil CI dapat dijalankan di Linux dan Windows, menyajikan SPA yang installable sebagai PWA, dan dapat mengelola modul lewat CLI.
@@ -1012,9 +1037,9 @@ PRD ini dikerjakan dalam empat milestone. Setiap milestone harus lolos exit gate
 
 | Milestone | Cakupan | Exit gate |
 | --------- | ------- | --------- |
-| **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21 | `bin/erp` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
-| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-16 (ADR-006/007) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
-| **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3 | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
+| **M1 — Skeleton** | FR-01–FR-04, FR-07, FR-12–FR-14, FR-16 (ADR-001..003), FR-17.1–17.2, FR-21, FR-24.1 | `bin/erp` hasil CI berjalan di Linux & Windows; `/healthz`, `/readyz` hijau; arch test D1–D11 dan build `GOWORK=off` per modul aktif dan PR pelanggaran terbukti gagal; migrasi platform berjalan & idempoten |
+| **M2 — Module Registry** | FR-05, FR-06, FR-15, FR-18, FR-19, FR-20.1–20.2, FR-22, FR-23, FR-24.2, FR-16 (ADR-006/007), FR-07 guardrail 5, FR-14 workflow validasi tag rilis (Q23) | Semua AC FR-18/FR-19 lulus di integration test (skenario Blueprint §12.1 yang relevan); kedua modul referensi dapat dikelola penuh lewat CLI; `erp make:module` menghasilkan modul yang lolos semua gate; binary release terbukti tanpa developer tools |
+| **M3 — Frontend & PWA** | FR-08–FR-11, FR-20.3, FR-24.3, FR-14 gate `bun test` (Q23) | E2E enable/disable dari UI lulus; PWA installable; bundle dalam anggaran NFR-04 |
 | **M4 — Observability lengkap** | FR-17.3–17.8 | Trace end-to-end browser → Go → DB terbukti; lifecycle modul ter-trace; `promtool` lolos |
 
 ## 12. Urutan pengerjaan yang disarankan

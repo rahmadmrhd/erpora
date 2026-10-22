@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "key": "acme.example",
+  "slug": "example",
+  "version": "0.1.0",
+  "trust": "builtin",
+  "dependencies": [
+    { "module": "platform.core", "version": "^0.1", "optional": false }
+  ]
+}
