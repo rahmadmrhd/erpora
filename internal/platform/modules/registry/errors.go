@@ -50,4 +50,15 @@ func sortProblems(ps []Problem) {
 const (
 	CodeRegisterFailed = "register_failed"
 	CodeDuplicateKey   = "duplicate_key"
+
+	CodeDuplicateSlug        = "duplicate_slug"
+	CodeReservedSlug         = "reserved_slug"
+	CodeDuplicateCapability  = "duplicate_capability"
+	CodeCapabilityPrefix     = "capability_prefix"
+	CodePermissionMissing    = "permission_missing"
+	CodePermissionUndeclared = "permission_undeclared"
+	CodeInvalidRoute         = "invalid_route"
+	CodeRouteConflict        = "route_conflict"
+	CodeInvalidCommand       = "invalid_command"
+	CodeCommandConflict      = "command_conflict"
 )

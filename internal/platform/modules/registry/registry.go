@@ -83,6 +83,8 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		unique = append(unique, e)
 	}
 
+	problems = append(problems, checkIdentity(unique)...)
+
 	nodes := []resolver.Node{{Key: PlatformKey, Version: platform.Version}}
 	for _, e := range unique {
 		nodes = append(nodes, nodeOf(e.Manifest))
@@ -118,13 +120,15 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		if e.Module == nil {
 			continue
 		}
-		r := &recorder{key: key, slug: e.Manifest.Slug}
+		r := &recorder{key: key, slug: e.Manifest.Slug, caps: capSet(e.Manifest)}
 		if err := e.Module.Register(r); err != nil {
 			problems = append(problems, Problem{Module: key, Code: CodeRegisterFailed, Message: fmt.Sprintf("Register gagal: %v", err)})
 		}
 		col.add(r)
 	}
 
+	problems = append(problems, col.problems...)
+	problems = append(problems, checkRouteConflicts(col.routes)...)
 	if len(problems) > 0 {
 		sortProblems(problems)
 		return nil, &Error{Problems: problems}
@@ -161,11 +165,13 @@ func sortedKeys(m map[string]Entry) []string {
 
 // collector menggabungkan rekaman semua recorder.
 type collector struct {
-	routes []RouteInfo
-	cmds   []CommandInfo
+	routes   []RouteInfo
+	cmds     []CommandInfo
+	problems []Problem
 }
 
 func (c *collector) add(r *recorder) {
+	c.problems = append(c.problems, r.problems...)
 	c.routes = append(c.routes, r.routes...)
 	c.cmds = append(c.cmds, r.cmds...)
 }
@@ -190,3 +196,91 @@ func (r *Registry) Graph() *resolver.Graph { return r.graph }
 
 // Capabilities mengembalikan semua capability, terurut.
 func (r *Registry) Capabilities() []string { return slices.Clone(r.caps) }
+
+func capSet(m module.Manifest) map[string]bool {
+	s := make(map[string]bool, len(m.Capabilities))
+	for _, c := range m.Capabilities {
+		s[c] = true
+	}
+	return s
+}
+
+// checkIdentity memeriksa keunikan slug, slug tercadang, serta keunikan dan
+// prefix capability. Modul diproses sesuai urutan input.
+func checkIdentity(mods []Entry) []Problem {
+	var out []Problem
+	slugOwner := map[string]string{PlatformSlug: PlatformKey}
+	capOwner := map[string]string{}
+	for _, e := range mods {
+		m := e.Manifest
+		if reservedSlugs[m.Slug] {
+			out = append(out, Problem{Module: m.Key, Field: "/slug", Code: CodeReservedSlug,
+				Message: fmt.Sprintf("slug %q dicadangkan untuk platform", m.Slug)})
+		}
+		if other, dup := slugOwner[m.Slug]; dup {
+			out = append(out, Problem{Module: m.Key, Field: "/slug", Code: CodeDuplicateSlug,
+				Message: fmt.Sprintf("slug %q dipakai oleh %s dan %s", m.Slug, other, m.Key)})
+		} else {
+			slugOwner[m.Slug] = m.Key
+		}
+		for _, c := range m.Capabilities {
+			if !strings.HasPrefix(c, m.Slug+".") {
+				out = append(out, Problem{Module: m.Key, Field: "/capabilities", Code: CodeCapabilityPrefix,
+					Message: fmt.Sprintf("capability %q harus berawalan %q", c, m.Slug+".")})
+			}
+			if other, dup := capOwner[c]; dup {
+				out = append(out, Problem{Module: m.Key, Field: "/capabilities", Code: CodeDuplicateCapability,
+					Message: fmt.Sprintf("capability %q didefinisikan oleh %s dan %s", c, other, m.Key)})
+			} else {
+				capOwner[c] = m.Key
+			}
+		}
+	}
+	return out
+}
+
+// checkRouteConflicts mendaftarkan semua pola ke ServeMux sementara; panic
+// karena konflik atau pola rusak diubah menjadi Problem.
+func checkRouteConflicts(routes []RouteInfo) []Problem {
+	var out []Problem
+	mux := http.NewServeMux()
+	var seen []RouteInfo
+	for _, rt := range routes {
+		switch msg := tryRegister(mux, rt); {
+		case msg == "":
+			seen = append(seen, rt)
+		case strings.Contains(msg, "conflicts with"):
+			other := findConflict(seen, rt)
+			out = append(out, Problem{Module: rt.Module, Code: CodeRouteConflict,
+				Message: fmt.Sprintf("route %s %s (%s) bentrok dengan %s (%s)", rt.Method, rt.Pattern, rt.Module, other.Pattern, other.Module)})
+		default:
+			out = append(out, Problem{Module: rt.Module, Code: CodeInvalidRoute,
+				Message: fmt.Sprintf("pola route %s %s ditolak: %s", rt.Method, rt.Pattern, msg)})
+		}
+	}
+	return out
+}
+
+var noopHandler = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+
+// tryRegister mengembalikan pesan panic ServeMux (kosong bila sukses).
+func tryRegister(mux *http.ServeMux, rt RouteInfo) (msg string) {
+	defer func() {
+		if p := recover(); p != nil {
+			msg = fmt.Sprint(p)
+		}
+	}()
+	mux.Handle(rt.Method+" "+rt.Pattern, noopHandler)
+	return ""
+}
+
+// findConflict mencari pendaftaran terdahulu yang bentrok dengan rt.
+func findConflict(seen []RouteInfo, rt RouteInfo) RouteInfo {
+	for _, prev := range seen {
+		m := http.NewServeMux()
+		if tryRegister(m, prev) == "" && tryRegister(m, rt) != "" {
+			return prev
+		}
+	}
+	return RouteInfo{}
+}
