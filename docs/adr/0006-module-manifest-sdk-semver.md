@@ -67,9 +67,7 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
 6. **Dependensi hanya dari `dependencies`.** Resolver (`internal/platform/modules/resolver`) membangun graf dari `dependencies` (field `optional` membedakan wajib dan opsional), mendeteksi siklus, dan menghasilkan urutan topologis deterministik. Dependensi wajib yang hilang atau tidak cocok menghasilkan `missing_dependency` atau `version_mismatch` dan menggagalkan `Build`. Ketidakcocokan platform atau SDK tidak menggagalkan `Build`, tetapi dicatat di `Graph().Incompatible()`.
    - Field `provides` sudah ada di schema dan `module.Manifest`, tetapi resolver belum memakainya. Dependensi berbasis `provides` berada di luar cakupan FR-18 (lihat Pemicu evaluasi ulang).
 
-7. **Slug tercadang ditolak registry.** Slug tercadang ditolak dengan `reserved_slug`. Slug `platform` ditolak dengan `duplicate_slug` karena dipakai pseudo-modul `platform.core`.
-   - **Catatan status:** kode saat ini hanya mencadangkan `settings`, `db`, dan `assets` (`internal/platform/modules/registry/reserved.go`, diuji di `rules_test.go`).
-   - Daftar yang lebih panjang pada keputusan rencana 4 (`api`, `bootstrap`, `healthz`, `readyz`, `sw`, `make`, `module`, `modules`, `contracts`, `route`, `permission`, `migrate`, `serve`, `inspect`, `version`, `list`, `doctor`, `completion`, `help`, dan lainnya) **belum diterapkan**. Perluasan daftar menunggu konfirmasi (lihat Konsekuensi).
+7. **Slug tercadang ditolak registry.** Slug tercadang ditolak dengan `reserved_slug`. Daftar lengkap 23 slug (`platform`, `api`, `assets`, `settings`, `bootstrap`, `healthz`, `readyz`, `sw`, `make`, `db`, `module`, `modules`, `contracts`, `route`, `permission`, `migrate`, `serve`, `inspect`, `version`, `list`, `doctor`, `completion`, `help`) ada di `internal/platform/modules/registry/reserved.go` dan diuji per slug di `rules_test.go`. Slug `platform` juga dilaporkan `duplicate_slug` karena dipakai pseudo-modul `platform.core`.
 
 8. **Trust hanya `builtin` di fase ini.** Schema menerima `builtin | verified | untrusted` agar format tidak berubah di fase 06. Validasi menolak selain `builtin` dengan kode `trust_not_supported`. Alasannya, jalur kepercayaan (verifikasi, signature, sandboxing) belum ada.
 
@@ -85,12 +83,10 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
 - **Negatif dan biaya:**
   - Constraint `^0.1` harus dinaikkan menjadi `^1.0` saat platform mencapai 1.0. Itu perubahan manifest semua modul referensi.
   - Module path bare `erpora/...` harus diganti ke vanity domain sebelum SDK dipublikasikan (ADR-001, Q24). Penggantian itu mengubah import, `go.mod`, dan `replace`.
-  - Daftar slug tercadang di kode belum sesuai keputusan rencana 4. Celah ini tercatat sebagai pekerjaan lanjutan.
 - **Pekerjaan lanjutan wajib:**
   - M2b: pemanggilan hook lifecycle dan status modul per tenant (FR-19).
   - M2d: pemeriksaan tag rilis terhadap `version` manifest dan `PlatformVersion`.
   - Membuat `docs/module-sdk/versioning.md` yang disebut PRD-000 FR-05/Q15. Dokumen ini belum ada, dan aturan versinya sementara dirujuk ke ADR ini.
-  - Konfirmasi daftar slug tercadang (keputusan 4) dan implementasinya di `reserved.go`.
 
 ## Pemicu evaluasi ulang
 

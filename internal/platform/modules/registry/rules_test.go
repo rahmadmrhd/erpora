@@ -140,9 +140,20 @@ func TestBuild_ReportsAllProblemsAtOnce(t *testing.T) {
 }
 
 func TestRules_ReservedSlug(t *testing.T) {
-	for _, slug := range []string{"settings", "db", "assets"} {
-		_, err := Build(testOpts(), newFake(spec("acme.x", slug), nil))
-		expect(t, problemsOf(t, err), "reserved_slug", "acme.x")
+	// Daftar lengkap keputusan rencana 4 / ADR-006 keputusan 7.
+	slugs := []string{
+		"platform", "api", "assets", "settings", "bootstrap", "healthz", "readyz", "sw", "make", "db",
+		"module", "modules", "contracts", "route", "permission", "migrate", "serve", "inspect",
+		"version", "list", "doctor", "completion", "help",
+	}
+	if len(slugs) != 23 {
+		t.Fatalf("daftar uji harus 23 slug, ada %d", len(slugs))
+	}
+	for _, slug := range slugs {
+		t.Run(slug, func(t *testing.T) {
+			_, err := Build(testOpts(), newFake(spec("acme.x", slug), nil))
+			expect(t, problemsOf(t, err), "reserved_slug", "acme.x")
+		})
 	}
 }
 
