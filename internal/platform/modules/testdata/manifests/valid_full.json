@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "key": "acme.example",
+  "slug": "example",
+  "name": "Acme Example",
+  "version": "1.2.3-beta.1+build.5",
+  "publisher": { "id": "acme", "name": "Acme Inc" },
+  "trust": "builtin",
+  "required": true,
+  "compatibility": { "platform": "^0.1", "sdk": ">=0.1.0 <1.0.0" },
+  "dependencies": [
+    { "module": "platform.core", "version": "^0.1", "optional": false },
+    { "module": "acme.other", "version": "~1.2", "optional": true }
+  ],
+  "capabilities": ["example.read", "example.write_all"],
+  "provides": ["example.service"],
+  "migrations": { "strategy": "versioned" },
+  "offline": { "mode": "offline-read" },
+  "artifact": "https://example.test/acme.example-1.2.3.zip",
+  "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "signature": "c2lnbmF0dXJl",
+  "requested_permissions": ["network.outbound"],
+  "license": "MIT",
+  "resources": [{ "name": "orders", "actions": ["read", "create"] }],
+  "scope_dimensions": [{ "key": "branch" }],
+  "default_roles": [{ "key": "example.manager", "permissions": ["orders.read"] }],
+  "settings": { "example.limit": { "type": "integer", "default": 10 } }
+}

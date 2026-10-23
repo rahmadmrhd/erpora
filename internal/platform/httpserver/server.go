@@ -33,15 +33,20 @@ type Deps struct {
 	Readiness  ReadinessChecker
 	Assets     fs.FS
 	AppVersion string
+	// Authenticate membungkus route non-Public; nil = pass-through (autentikasi nyata datang dari PRD-001).
+	Authenticate func(http.Handler) http.Handler
 }
 
-type routeConfig struct{ noTenant bool }
+type routeConfig struct{ noTenant, public bool }
 
 // RouteOption mengubah perilaku rantai middleware sebuah route.
 type RouteOption func(*routeConfig)
 
 // WithoutTenant melewati tenantContext (untuk /healthz dan /readyz).
 func WithoutTenant() RouteOption { return func(c *routeConfig) { c.noTenant = true } }
+
+// Public melewati Authenticate (endpoint tanpa autentikasi). Tidak memengaruhi tenantContext.
+func Public() RouteOption { return func(c *routeConfig) { c.public = true } }
 
 // Router adalah http.Handler berbasis ServeMux dengan rantai middleware per route.
 type Router struct {
@@ -63,7 +68,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.ServeHTTP(w, req)
 }
 
-// Handle mendaftarkan pattern dengan rantai: otelhttp -> recover -> requestScope -> tenantContext -> h.
+// Handle mendaftarkan pattern dengan rantai:
+// otelhttp -> recover -> requestScope -> Authenticate (kecuali Public) -> tenantContext -> h.
 // recover berada di dalam span otelhttp agar panic tercatat pada span aktif (lihat recoverMW).
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	var cfg routeConfig
@@ -72,6 +78,9 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	}
 	if !cfg.noTenant {
 		h = tenantContext(r.deps.Resolver, r.deps.Connector, h)
+	}
+	if !cfg.public && r.deps.Authenticate != nil {
+		h = r.deps.Authenticate(h)
 	}
 	h = requestScope(r.deps.Logger, pattern, h)
 	h = recoverMW(r.deps.Logger, h)

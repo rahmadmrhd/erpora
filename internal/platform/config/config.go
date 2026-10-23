@@ -30,6 +30,8 @@ type Config struct {
 	TenancyMode     string
 	DefaultTenantID *uuid.UUID
 	DBSlowQuery     time.Duration
+	// AuthzStub adalah mode stub otorisasi sampai PRD-001: "allow" atau "deny".
+	AuthzStub string
 }
 
 // ValidationError menyebut variabel environment yang tidak valid.
@@ -45,6 +47,7 @@ type raw struct {
 	TenancyMode     string `env:"ERP_TENANCY_MODE" envDefault:"single"`
 	DefaultTenantID string `env:"ERP_DEFAULT_TENANT_ID"`
 	DBSlowQueryMS   string `env:"ERP_DB_SLOW_QUERY_MS" envDefault:"200"`
+	AuthzStub       string `env:"ERP_AUTHZ_STUB"`
 }
 
 // Load membaca konfigurasi. envFile "" = tanpa file; environment proses menang atas isi file.
@@ -113,6 +116,19 @@ func Load(envFile string) (Config, error) {
 			return Config{}, ValidationError{"ERP_DEFAULT_TENANT_ID", "bukan UUID valid"}
 		}
 		c.DefaultTenantID = &id
+	}
+	c.AuthzStub = r.AuthzStub
+	if c.AuthzStub == "" {
+		c.AuthzStub = "deny"
+		if c.Env == EnvDevelopment {
+			c.AuthzStub = "allow"
+		}
+	}
+	if c.AuthzStub != "allow" && c.AuthzStub != "deny" {
+		return Config{}, ValidationError{"ERP_AUTHZ_STUB", "harus allow atau deny"}
+	}
+	if c.AuthzStub == "allow" && c.Env == EnvProduction {
+		return Config{}, ValidationError{"ERP_AUTHZ_STUB", "stub allow dilarang saat ERP_ENV=production: autentikasi dan otorisasi nyata baru tersedia lewat PRD-001, jadi gunakan deny (atau development untuk lokal)"}
 	}
 	var ms int
 	if _, err := fmt.Sscanf(r.DBSlowQueryMS, "%d", &ms); err != nil || ms < 0 || fmt.Sprint(ms) != strings.TrimSpace(r.DBSlowQueryMS) {

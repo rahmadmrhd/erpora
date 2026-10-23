@@ -61,6 +61,8 @@ func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Hand
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
+		meta := &requestMeta{}
+		r = r.WithContext(context.WithValue(r.Context(), requestMetaKey{}, meta))
 		completed := false // tetap false bila handler panic (recoverMW menulis 500 sesudahnya)
 		defer func() {
 			status := sw.status
@@ -70,13 +72,31 @@ func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Hand
 			case status == 0:
 				status = http.StatusOK
 			}
-			log.InfoContext(r.Context(), "http request",
+			attrs := []any{
 				"method", r.Method, "route", pattern, "path", r.URL.Path,
-				"status", status, "duration_ms", time.Since(start).Milliseconds())
+				"status", status, "duration_ms", time.Since(start).Milliseconds(),
+			}
+			if meta.module != "" {
+				attrs = append(attrs, "module", meta.module)
+			}
+			log.InfoContext(r.Context(), "http request", attrs...)
 		}()
 		next.ServeHTTP(sw, r)
 		completed = true
 	})
+}
+
+// requestMeta menampung atribut yang diisi handler di dalam rantai dan dibaca access log.
+type requestMeta struct{ module string }
+
+type requestMetaKey struct{}
+
+// SetModule menandai key modul pemilik request agar access log memuat atribut module.
+// Tanpa requestScope di context, pemanggilan ini tidak berpengaruh.
+func SetModule(ctx context.Context, key string) {
+	if m, ok := ctx.Value(requestMetaKey{}).(*requestMeta); ok {
+		m.module = key
+	}
 }
 
 // tenantContext menentukan tenant lewat Resolver dan memasang tenant + data.Provider ke context.

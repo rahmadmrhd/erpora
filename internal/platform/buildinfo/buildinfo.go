@@ -22,3 +22,6 @@ func Flavor() string {
 
 // SetFlavor dipanggil dari cmd/erpora/devtools_on.go.
 func SetFlavor(f string) { flavor.Store(f) }
+
+// PlatformVersion adalah versi platform yang dicocokkan dengan compatibility.platform manifest modul.
+const PlatformVersion = "0.1.0"
