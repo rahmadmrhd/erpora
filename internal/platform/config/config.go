@@ -127,6 +127,9 @@ func Load(envFile string) (Config, error) {
 	if c.AuthzStub != "allow" && c.AuthzStub != "deny" {
 		return Config{}, ValidationError{"ERP_AUTHZ_STUB", "harus allow atau deny"}
 	}
+	if c.AuthzStub == "allow" && c.Env == EnvProduction {
+		return Config{}, ValidationError{"ERP_AUTHZ_STUB", "stub allow dilarang saat ERP_ENV=production: autentikasi dan otorisasi nyata baru tersedia lewat PRD-001, jadi gunakan deny (atau development untuk lokal)"}
+	}
 	var ms int
 	if _, err := fmt.Sscanf(r.DBSlowQueryMS, "%d", &ms); err != nil || ms < 0 || fmt.Sprint(ms) != strings.TrimSpace(r.DBSlowQueryMS) {
 		return Config{}, ValidationError{"ERP_DB_SLOW_QUERY_MS", "harus bilangan bulat >= 0 (milidetik)"}
