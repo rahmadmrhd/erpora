@@ -10,6 +10,7 @@ import (
 
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/modules/registry"
+	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 )
 
@@ -29,6 +30,9 @@ type Mounter interface {
 // Rantai penuh: otel -> recover -> requestScope -> Authenticate (kecuali Public)
 // -> tenantContext -> guard -> permission -> handler.
 func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, log *slog.Logger) {
+	if log == nil {
+		log = slog.Default()
+	}
 	for _, rt := range reg.Routes() {
 		h := rt.Handler
 		if !rt.Public {
@@ -47,6 +51,7 @@ func guardMW(snap *Snapshot, key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("erp.module.id", key))
 		httpserver.SetModule(r.Context(), key)
+		r = r.WithContext(observability.WithModule(r.Context(), key))
 		tid, _ := tenancy.FromContext(r.Context())
 		switch st := snap.Status(tid, key); st {
 		case StatusEnabled:

@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
+	"erpora/internal/platform/authorization"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/modules/registry"
@@ -70,6 +71,11 @@ type fixture struct {
 }
 
 func newFixture(t *testing.T, authz Authorizer, order *[]string) fixture {
+	t.Helper()
+	return newFixtureLog(t, authz, order, false)
+}
+
+func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bool) fixture {
 	t.Helper()
 	hits := 0
 	reg, err := registry.Build(registry.Options{
@@ -132,7 +138,11 @@ func newFixture(t *testing.T, authz Authorizer, order *[]string) fixture {
 		},
 	})
 	snap := NewSnapshot()
-	Mount(router, reg, snap, authz, log)
+	mountLog := log
+	if nilLogger {
+		mountLog = nil
+	}
+	Mount(router, reg, snap, authz, mountLog)
 	return fixture{router: router, snap: snap, rec: sr, hits: &hits, logs: logs}
 }
 
@@ -287,5 +297,29 @@ func TestSnapshot(t *testing.T) {
 	s.Set(tenantA, map[string]Status{"x.y": StatusDisabled}, 7)
 	if s.Status(tenantA, "x.y") != StatusDisabled || s.Revision(tenantA) != 7 {
 		t.Error("Set tidak tercermin")
+	}
+}
+
+// Minor 1: logger nil pada Mount jatuh ke slog.Default, bukan nil-pointer panic.
+func TestMount_NilLoggerDefaultsToSlogDefault(t *testing.T) {
+	f := newFixtureLog(t, nil, nil, true)
+	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	rec := f.do("GET", "/api/notes/items")
+	if rec.Code != 403 || errCode(t, rec) != "permission_denied" {
+		t.Fatalf("status = %d %s (bukan 500)", rec.Code, rec.Body.String())
+	}
+}
+
+// Minor 4: log penolakan stub memuat atribut module.
+func TestMount_StubDenyLogHasModule(t *testing.T) {
+	var logs bytes.Buffer
+	stub := authorization.Stub{Mode: "deny", Log: slog.New(slog.NewTextHandler(&logs, nil))}
+	f := newFixture(t, stub, nil)
+	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	if rec := f.do("GET", "/api/notes/items"); rec.Code != 403 {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if !strings.Contains(logs.String(), "module=acme.notes") || !strings.Contains(logs.String(), "level=WARN") {
+		t.Errorf("log deny tanpa module: %q", logs.String())
 	}
 }

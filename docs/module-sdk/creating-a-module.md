@@ -85,6 +85,8 @@ func (m *Module) Manifest() module.Manifest { return m.manifest }
 
 `MustParseManifest` menyimpan byte asli di `Manifest.Raw`. Registry memakai byte asli ini untuk validasi schema.
 
+Manifest wajib dibangun lewat `module.ParseManifest`/`MustParseManifest` dari `module.json` yang di-embed. Registry membandingkan struct dengan hasil decode `Raw`; struct yang disusun atau diubah manual dilaporkan sebagai `manifest_mismatch`.
+
 ## 4. `Register`: route dan command
 
 Modul tidak menerima router. Modul memanggil `Registrar` dan platform yang memasang route:

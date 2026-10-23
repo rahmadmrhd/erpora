@@ -110,3 +110,21 @@ func TestRouteConflict_IndependentOfPanicText(t *testing.T) {
 		t.Errorf("Message harus menyebut kedua pendaftaran: %q", p.Message)
 	}
 }
+
+// Minor 2: capability platform tunduk pada aturan prefix dan keunikan lintas modul.
+func TestBuild_PlatformCapabilityRules(t *testing.T) {
+	opts := testOpts()
+	opts.PlatformCapabilities = []string{"example.x.read"}
+	_, err := Build(opts)
+	expect(t, problemsOf(t, err), "capability_prefix", PlatformKey)
+
+	_, err = Build(opts, newFake(spec("acme.example", "example", "example.x.read"), nil))
+	ps := problemsOf(t, err)
+	expect(t, ps, "capability_prefix", PlatformKey)
+	expect(t, ps, "duplicate_capability", "acme.example")
+
+	opts.PlatformCapabilities = []string{"platform.modules.read"}
+	if _, err := Build(opts); err != nil {
+		t.Fatalf("capability platform valid ditolak: %v", err)
+	}
+}

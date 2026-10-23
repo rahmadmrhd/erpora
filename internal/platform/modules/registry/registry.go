@@ -93,7 +93,7 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		unique = append(unique, e)
 	}
 
-	problems = append(problems, checkIdentity(unique)...)
+	problems = append(problems, checkIdentity(unique, platform)...)
 
 	nodes := []resolver.Node{{Key: PlatformKey, Version: platform.Version}}
 	for _, e := range unique {
@@ -243,10 +243,18 @@ func capSet(m module.Manifest) map[string]bool {
 
 // checkIdentity memeriksa keunikan slug, slug tercadang, serta keunikan dan
 // prefix capability. Modul diproses sesuai urutan input.
-func checkIdentity(mods []Entry) []Problem {
+func checkIdentity(mods []Entry, platform module.Manifest) []Problem {
 	var out []Problem
 	slugOwner := map[string]string{PlatformSlug: PlatformKey}
 	capOwner := map[string]string{}
+	// Capability platform.core: prefix "platform." dan keunikan lintas modul.
+	for _, c := range platform.Capabilities {
+		if !strings.HasPrefix(c, platform.Slug+".") {
+			out = append(out, Problem{Module: platform.Key, Field: "/capabilities", Code: CodeCapabilityPrefix,
+				Message: fmt.Sprintf("capability %q harus berawalan %q", c, platform.Slug+".")})
+		}
+		capOwner[c] = platform.Key
+	}
 	for _, e := range mods {
 		m := e.Manifest
 		if !dependsOnPlatform(m) {

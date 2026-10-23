@@ -3,6 +3,8 @@ package authorization
 import (
 	"context"
 	"log/slog"
+
+	"erpora/internal/platform/observability"
 )
 
 // StubMode adalah mode stub otorisasi: "allow" atau "deny".
@@ -27,6 +29,10 @@ func (s Stub) Allow(ctx context.Context, permission string) bool {
 	if allowed {
 		level = slog.LevelDebug
 	}
-	log.Log(ctx, level, "otorisasi stub", "permission", permission, "mode", string(s.Mode), "allowed", allowed)
+	attrs := []any{"permission", permission, "mode", string(s.Mode), "allowed", allowed}
+	if m := observability.ModuleFromContext(ctx); m != "" {
+		attrs = append(attrs, "module", m)
+	}
+	log.Log(ctx, level, "otorisasi stub", attrs...)
 	return allowed
 }

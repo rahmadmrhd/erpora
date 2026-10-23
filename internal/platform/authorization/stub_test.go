@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"erpora/internal/platform/observability"
 )
 
 func TestStub_AllowAndDenyLogPermission(t *testing.T) {
@@ -31,5 +33,14 @@ func TestStub_AllowAndDenyLogPermission(t *testing.T) {
 func TestStub_NilLoggerAndUnknownModeDenies(t *testing.T) {
 	if (Stub{Mode: "bogus"}).Allow(context.Background(), "x") {
 		t.Error("mode tidak dikenal harus menolak")
+	}
+}
+
+func TestStub_LogsModuleFromContext(t *testing.T) {
+	var buf bytes.Buffer
+	s := Stub{Mode: "deny", Log: slog.New(slog.NewTextHandler(&buf, nil))}
+	s.Allow(observability.WithModule(context.Background(), "acme.notes"), "notes.items.read")
+	if !strings.Contains(buf.String(), "module=acme.notes") {
+		t.Errorf("log tanpa module: %q", buf.String())
 	}
 }
