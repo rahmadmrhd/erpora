@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
-	"net/http"
 	"strings"
 	"testing"
 
 	"erpora/sdk/module"
+	"erpora/sdk/module/moduletest"
 )
 
 var (
@@ -21,14 +21,6 @@ type fakeNotes struct{}
 
 func (fakeNotes) Count(context.Context) (int64, error) { return 0, nil }
 
-type recRegistrar struct{ routes map[string]string }
-
-func (r *recRegistrar) Handle(method, path, permission string, _ http.Handler) {
-	r.routes[method+" "+path] = permission
-}
-func (r *recRegistrar) Public(string, string, http.Handler) {}
-func (r *recRegistrar) Command(module.Command)              {}
-
 func TestManifest(t *testing.T) {
 	m := New(fakeNotes{}).Manifest()
 	if m.Key != "acme.example-addon" || m.Slug != "example-addon" || len(m.Raw) == 0 || len(m.Dependencies) != 2 {
@@ -37,12 +29,12 @@ func TestManifest(t *testing.T) {
 }
 
 func TestRegister_SummaryRoute(t *testing.T) {
-	r := &recRegistrar{routes: map[string]string{}}
+	r := moduletest.NewRecorder()
 	if err := New(fakeNotes{}).Register(r); err != nil {
 		t.Fatal(err)
 	}
-	if r.routes["GET /summary"] != "example-addon.summary.read" {
-		t.Errorf("routes = %v", r.routes)
+	if r.Permission("GET", "/summary") != "example-addon.summary.read" {
+		t.Errorf("routes = %+v", r.Routes)
 	}
 }
 
