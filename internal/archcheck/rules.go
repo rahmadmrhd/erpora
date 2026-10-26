@@ -9,9 +9,27 @@ import (
 	"strings"
 )
 
+// Versi go/toolchain wajib seluruh repo (CLAUDE.md): semua go.mod dan go.work.
+const (
+	requiredGo        = "1.27"
+	requiredToolchain = "go1.27.3"
+)
+
 var routerPrefixes = []string{
 	"github.com/go-chi/", "github.com/gorilla/mux", "github.com/gin-gonic/",
 	"github.com/labstack/echo", "github.com/gofiber/", "github.com/julienschmidt/httprouter",
+	"github.com/uptrace/bunrouter", "github.com/dimfeld/httptreemux", "goji.io",
+	"github.com/go-zoo/bone", "github.com/bmizerany/pat", "github.com/beego/beego",
+	"github.com/go-martini/martini",
+}
+
+// isDBOpenImport: impor yang membuka koneksi database; hanya internal/platform/database (FR-21).
+func isDBOpenImport(imp string) bool {
+	switch imp {
+	case "github.com/jackc/pgx/v5", "github.com/jackc/pgx/v5/stdlib", "github.com/jackc/pgx/v5/pgxpool":
+		return true
+	}
+	return strings.HasPrefix(imp, "gorm.io/driver/")
 }
 
 func isInfraOrPresentation(imp string) bool {
@@ -69,10 +87,22 @@ func Check(r Repo) []Violation {
 			underPath(rp, "sdk/data")
 		dbOK := isArch || underPath(rp, "internal/platform/database")
 
-		for _, imp := range p.Imports {
+		// D2, D7, D8 juga berlaku untuk impor file test (Q26 butir 1); aturan lain hanya non-test.
+		for _, imp := range unionStrings(append([]string{}, p.Imports...), p.TestImports) {
 			if isPlatform && strings.HasPrefix(imp, modulesBase) {
 				add("D2", p.ImportPath, "internal/platform tidak boleh mengimpor modul: "+imp)
 			}
+			if inRepo && strings.HasPrefix(imp, modulesBase) && !isPlatform && !isModulePkg && !isApp {
+				add("D7", p.ImportPath, "hanya internal/app yang boleh mengimpor modul: "+imp)
+			}
+			if isModulePkg {
+				if y := owningModule(imp); y != "" && p.Module != "" && y != p.Module && !allowedByManifest(p.Module, y) {
+					add("D8", p.ImportPath, "impor modul "+y+" yang tidak ada di dependencies manifest: "+imp)
+				}
+			}
+		}
+
+		for _, imp := range p.Imports {
 			_, impInRepo := rel(imp)
 			if isDomain {
 				if imp == "net/http" || strings.HasPrefix(imp, "net/http/") ||
@@ -88,12 +118,17 @@ func Check(r Repo) []Violation {
 			if isApplication && impInRepo && isInfraOrPresentation(imp) {
 				add("D4", p.ImportPath, "application tidak boleh mengimpor "+imp)
 			}
-			if inRepo && strings.HasPrefix(imp, modulesBase) && !isPlatform && !isModulePkg && !isApp {
-				add("D7", p.ImportPath, "hanya internal/app yang boleh mengimpor modul: "+imp)
-			}
 			if isModulePkg {
-				if y := owningModule(imp); y != "" && p.Module != "" && y != p.Module && !allowedByManifest(p.Module, y) {
-					add("D8", p.ImportPath, "impor modul "+y+" yang tidak ada di dependencies manifest: "+imp)
+				// D1: antarmodul hanya lewat contract/.
+				if y := owningModule(imp); y != "" && p.Module != "" && y != p.Module && !underPath(imp, y+"/contract") {
+					add("D1", p.ImportPath, "modul hanya boleh mengimpor "+y+"/contract, bukan "+imp)
+				}
+				// D3b (Q26 butir 2): sdk/data hanya dari internal/infrastructure.
+				if underPath(imp, sdkModule+"/data") && !hasSeg(rp, "internal/infrastructure") {
+					add("D3b", p.ImportPath, "erpora/sdk/data hanya boleh diimpor dari internal/infrastructure modul: "+imp)
+				}
+				if imp == "database/sql" {
+					add("DB-OPEN", p.ImportPath, "modul tidak boleh mengimpor database/sql (akses DB lewat sdk/data): "+imp)
 				}
 			}
 			if isModulePkg || isSDK {
@@ -104,7 +139,7 @@ func Check(r Repo) []Violation {
 					}
 				}
 			}
-			if (strings.HasPrefix(imp, "gorm.io/driver/postgres") || imp == "github.com/jackc/pgx/v5/pgxpool") && !dbOK {
+			if isDBOpenImport(imp) && !dbOK {
 				add("DB-OPEN", p.ImportPath, "hanya internal/platform/database yang boleh membuka koneksi: "+imp)
 			}
 		}
@@ -119,10 +154,9 @@ func Check(r Repo) []Violation {
 			}
 			found := false
 			ast.Inspect(file, func(n ast.Node) bool {
-				if c, ok := n.(*ast.CallExpr); ok {
-					if s, ok := c.Fun.(*ast.SelectorExpr); ok && s.Sel.Name == "AutoMigrate" {
-						found = true
-					}
+				// Setiap rujukan selector (termasuk method value m := db.AutoMigrate), bukan hanya call.
+				if s, ok := n.(*ast.SelectorExpr); ok && s.Sel.Name == "AutoMigrate" {
+					found = true
 				}
 				return !found
 			})
@@ -147,13 +181,28 @@ func Check(r Repo) []Violation {
 				if q == rootModule {
 					add("D9", m.Path, "modul tidak boleh me-require root module")
 				}
-				if strings.HasPrefix(q, modulesBase) && q != m.Path && !allowedByManifest(m.Path, q) {
+				// Q26 butir 8: require indirect diabaikan; require langsung wajib ada di manifest.
+				if strings.HasPrefix(q, modulesBase) && q != m.Path && !m.Indirect[q] && !allowedByManifest(m.Path, q) {
 					add("D8", m.Path, "go.mod me-require modul "+q+" yang tidak ada di dependencies manifest")
 				}
 			}
+			// Arah sebaliknya: dependency manifest ke modul repo harus ada di require go.mod.
+			for _, dep := range r.Manifests[m.Path].Dependencies {
+				if strings.HasPrefix(dep, "platform.") {
+					continue
+				}
+				for y, my := range r.Manifests {
+					if my.Key == dep && y != m.Path && !contains(m.Requires, y) {
+						add("D8", m.Path, "manifest bergantung pada "+dep+" ("+y+") tetapi go.mod tidak me-require-nya")
+					}
+				}
+			}
 		}
-		if m.GoVersion == "" || m.Toolchain == "" {
-			add("GOVERSION", m.Path, "go.mod harus punya direktif go dan toolchain")
+		if m.GoVersion != requiredGo {
+			add("GOVERSION", m.Path, "direktif go harus '"+requiredGo+"', ditemukan '"+m.GoVersion+"'")
+		}
+		if m.Toolchain != requiredToolchain {
+			add("GOVERSION", m.Path, "direktif toolchain harus '"+requiredToolchain+"', ditemukan '"+m.Toolchain+"'")
 		}
 		vers[m.GoVersion] = append(vers[m.GoVersion], m.Path)
 		tcs[m.Toolchain] = append(tcs[m.Toolchain], m.Path)
@@ -163,6 +212,54 @@ func Check(r Repo) []Violation {
 	}
 	if len(tcs) > 1 {
 		add("GOVERSION", "", "toolchain tidak seragam: "+describe(tcs))
+	}
+
+	// go.work: versi + kelengkapan use.
+	if w := r.Work; w != nil {
+		if !w.Enabled {
+			add("GOWORK", "", "mode workspace tidak aktif (GOWORK=off atau go.work tidak ditemukan): aturan arsitektur hanya bermakna pada workspace penuh")
+		} else {
+			if w.GoVersion != requiredGo {
+				add("GOVERSION", "go.work", "direktif go harus '"+requiredGo+"', ditemukan '"+w.GoVersion+"'")
+			}
+			if w.Toolchain != requiredToolchain {
+				add("GOVERSION", "go.work", "direktif toolchain harus '"+requiredToolchain+"', ditemukan '"+w.Toolchain+"'")
+			}
+			for _, d := range w.ModDirs {
+				if !contains(w.Use, d) {
+					add("GOWORK", d, "go.mod tidak tercantum di use go.work")
+				}
+			}
+		}
+	}
+
+	// F2: dependencies package.json frontend modul == dependencies manifest (key -> @erpora/module-<nama dir>).
+	for y, wp := range r.Web {
+		want := map[string]bool{}
+		for _, dep := range r.Manifests[y].Dependencies {
+			if strings.HasPrefix(dep, "platform.") {
+				continue
+			}
+			for my, m := range r.Manifests {
+				if m.Key == dep {
+					want[webPackageName(my)] = true
+				}
+			}
+		}
+		have := map[string]bool{}
+		for _, d := range wp.ModuleDeps {
+			have[d] = true
+		}
+		for d := range have {
+			if !want[d] && d != webPackageName(y) {
+				add("F2", y, "web/package.json bergantung pada "+d+" yang tidak ada di dependencies manifest")
+			}
+		}
+		for d := range want {
+			if !have[d] {
+				add("F2", y, "manifest bergantung pada modul tetapi web/package.json tidak memuat "+d)
+			}
+		}
 	}
 
 	// D11: siklus pada graf Requires antar modul repo.
@@ -188,6 +285,20 @@ func Check(r Repo) []Violation {
 		return v[i].Detail < v[j].Detail
 	})
 	return v
+}
+
+// webPackageName memetakan path Go module modul repo ke nama package frontend (@erpora/module-<nama dir>).
+func webPackageName(modPath string) string {
+	return "@erpora/module-" + modPath[strings.LastIndex(modPath, "/")+1:]
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func describe(m map[string][]string) string {

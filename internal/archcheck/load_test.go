@@ -68,3 +68,41 @@ func TestLoad_ModuleDirWithSpaces(t *testing.T) {
 		t.Fatalf("packages = %+v", repo.Packages)
 	}
 }
+
+// B7: tanpa workspace (GOWORK=off) Load menandai Work.Enabled=false dan Check gagal dengan pesan jelas,
+// bukan diam-diam memeriksa root saja.
+func TestLoad_WorkspaceDisabledIsReported(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	repo, err := Load("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.Work == nil || repo.Work.Enabled {
+		t.Fatalf("Work = %+v, want Enabled=false", repo.Work)
+	}
+	var found bool
+	for _, v := range Check(repo) {
+		if v.Rule == "GOWORK" && strings.Contains(v.Detail, "workspace tidak aktif") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Check tidak melaporkan workspace nonaktif")
+	}
+}
+
+// B7: pada repo nyata, setiap go.mod hasil glob tercantum di use go.work.
+func TestLoad_RealWorkspaceListsAllModules(t *testing.T) {
+	repo, err := Load("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.Work == nil || !repo.Work.Enabled || len(repo.Work.ModDirs) == 0 {
+		t.Fatalf("Work = %+v", repo.Work)
+	}
+	for _, d := range repo.Work.ModDirs {
+		if !contains(repo.Work.Use, d) {
+			t.Errorf("%s tidak ada di use: %v", d, repo.Work.Use)
+		}
+	}
+}
