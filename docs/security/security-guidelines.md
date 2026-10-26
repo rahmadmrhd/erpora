@@ -201,6 +201,7 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | --- | --- |
 | Arch test D1–D11, header keamanan, request ID, DSN redaction, secret scan | **M1** (sedang dibangun) |
 | Route permission allowlist, kontrak ↔ route, linter kontrak | **M2** (PRD-000) |
+| Timeout query database per request (`statement_timeout`) | **M2c** (PRD-000 Q26) |
 | Authz helper, test IDOR, analyzer authz, MFA, audit | **PRD-001** |
 | SBOM, `SECURITY.md`, gosec | **M1** (PRD-000 FR-24.1) |
 | `sdk/egress`, klasifikasi data + `x-erp-classification`, `DecodeJSON`, `no-store`, `sdk/export` | **M2** (PRD-000 FR-24.2) |
