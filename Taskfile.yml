@@ -79,12 +79,15 @@ tasks:
       - go test ./internal/archcheck/... ./tests/architecture/... -run 'GoVersion|RepositoryArchitecture'
 
   check:gowork-off:
-    desc: Pastikan setiap Go module ter-build dengan GOWORK=off
+    desc: Pastikan setiap Go module ter-build dan test-nya ter-compile dengan GOWORK=off
     env:
       GOWORK: "off"
     cmds:
       - for: { var: GO_MODULES }
         cmd: go -C "{{.ITEM}}" build ./...
+      # Kompilasi test tanpa menjalankannya (-run ^$): impor file _test.go ikut diverifikasi (Q26 butir 1).
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" test -run "^$" ./...
 
   db:up:
     desc: Jalankan PostgreSQL lokal via Docker Compose
