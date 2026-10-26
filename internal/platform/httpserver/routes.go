@@ -46,7 +46,7 @@ func NewRouter(d Deps) *Router {
 	if assets == nil {
 		assets = emptyFS{}
 	}
-	r.Handle("/", NewSPA(assets), Public())
+	r.Handle("/", NewSPA(assets, d.Dev), Public())
 	return r
 }
 

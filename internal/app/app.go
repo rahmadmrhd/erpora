@@ -96,6 +96,7 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		Readiness:  dbReadiness{db: db},
 		Assets:     web.Dist(),
 		AppVersion: buildinfo.Version,
+		Dev:        cfg.Env == config.EnvDevelopment,
 		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
 		Authenticate: func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

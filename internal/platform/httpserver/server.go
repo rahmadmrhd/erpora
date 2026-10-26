@@ -33,6 +33,8 @@ type Deps struct {
 	Readiness  ReadinessChecker
 	Assets     fs.FS
 	AppVersion string
+	// Dev true = mode development: SPA menampilkan halaman "frontend belum di-build" bila aset belum ada (FR-12).
+	Dev bool
 	// Authenticate membungkus route non-Public; nil = pass-through (autentikasi nyata datang dari PRD-001).
 	Authenticate func(http.Handler) http.Handler
 }
@@ -117,9 +119,13 @@ func (r *Router) allowedMethods(req *http.Request) []string {
 	return out
 }
 
-// New membuat http.Server dengan ReadHeaderTimeout 10 detik dan IdleTimeout 120 detik.
+// New membuat http.Server dengan ReadHeaderTimeout 10 detik, IdleTimeout 120 detik, dan ErrorLog ke slog (WARN).
 func New(addr string, r *Router) *http.Server {
-	return &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
+	return &http.Server{
+		Addr: addr, Handler: r, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second,
+		// Log internal net/http (mis. error TLS/handshake) lewat slog proses, bukan stderr mentah.
+		ErrorLog: slog.NewLogLogger(r.deps.Logger.Handler(), slog.LevelWarn),
+	}
 }
 
 func withDefaults(d Deps) Deps {

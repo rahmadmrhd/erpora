@@ -45,8 +45,9 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 			// Hanya tipe panic yang dicatat di span (nilai panic bisa memuat data).
 			span.RecordError(fmt.Errorf("panic dalam handler: %T", rec))
 			span.SetStatus(codes.Error, "panic")
+			// Nilai panic tidak dicatat (bisa memuat rahasia): hanya tipe + stack, sama seperti span.
 			log.ErrorContext(r.Context(), "panic dalam handler",
-				"panic", rec, "stack", string(debug.Stack()))
+				"panic_type", fmt.Sprintf("%T", rec), "stack", string(debug.Stack()))
 			if sw.wrote {
 				panic(http.ErrAbortHandler)
 			}
