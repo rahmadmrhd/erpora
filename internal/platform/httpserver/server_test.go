@@ -536,10 +536,21 @@ func TestPanic_ValueNotLogged(t *testing.T) {
 }
 
 func TestServer_ErrorLogRoutedToSlog(t *testing.T) {
-	r, _ := newTestRouter(t, nil)
+	var buf bytes.Buffer
+	r := NewRouter(Deps{
+		Logger:    observability.NewLogger(&buf, "text", slog.LevelDebug),
+		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:    fstest.MapFS{"index.html": {Data: []byte("x")}},
+	})
 	s := New("127.0.0.1:0", r)
 	if s.ErrorLog == nil {
 		t.Fatal("ErrorLog harus diset ke slog")
+	}
+	s.ErrorLog.Print("x-error-internal")
+	out := buf.String()
+	if !strings.Contains(out, "x-error-internal") || !strings.Contains(out, "level=WARN") {
+		t.Fatalf("ErrorLog harus menulis WARN ke slog: %q", out)
 	}
 }
 
