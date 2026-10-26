@@ -22,7 +22,6 @@ var ErrInvalidPaging = errors.New("page harus >= 1 dan pageSize 1 sampai 200")
 type Repository interface {
 	List(ctx context.Context, offset, limit int) ([]domain.Note, error)
 	Count(ctx context.Context) (int64, error)
-	Add(ctx context.Context, n domain.Note) error
 	// AddMany menyimpan semua note dalam satu transaksi (semua atau tidak sama sekali).
 	AddMany(ctx context.Context, notes []domain.Note) error
 	Ping(ctx context.Context) error

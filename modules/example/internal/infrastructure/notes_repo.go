@@ -67,22 +67,6 @@ func (NotesRepo) Count(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
-// Add menyimpan note baru dengan ID UUIDv7.
-func (NotesRepo) Add(ctx context.Context, n domain.Note) error {
-	db, err := data.DB(ctx)
-	if err != nil {
-		return err
-	}
-	id, err := uuid.NewV7()
-	if err != nil {
-		return fmt.Errorf("buat id: %w", err)
-	}
-	if err := db.WithContext(ctx).Create(&noteRow{ID: id, Title: n.Title}).Error; err != nil {
-		return fmt.Errorf("simpan note: %w", err)
-	}
-	return nil
-}
-
 // AddMany menyimpan semua note dalam satu transaksi.
 func (NotesRepo) AddMany(ctx context.Context, notes []domain.Note) error {
 	db, err := data.DB(ctx)
