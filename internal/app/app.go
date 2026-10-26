@@ -40,6 +40,8 @@ func (e *ExitError) Unwrap() error { return e.Err }
 // Run menjalankan server sampai ctx dibatalkan. serve tidak pernah menulis platform_state.
 func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 	log := observability.NewLogger(stdout, cfg.LogFormat, slog.LevelInfo)
+	// slog.Default() = logger platform (dengan trace bridge) agar log handler modul (slog.ErrorContext) seragam.
+	slog.SetDefault(log)
 
 	// Katalog modul divalidasi sebelum DB dibuka; katalog rusak adalah bug build (exit 2).
 	reg, err := BuildRegistry()

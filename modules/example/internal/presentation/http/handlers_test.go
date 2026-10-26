@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,5 +100,20 @@ func TestPing(t *testing.T) {
 	rec := serve(New(&fakeLister{}).Ping, "/ping")
 	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"data":{"pong":true}}` {
 		t.Fatalf("%d %q", rec.Code, rec.Body.String())
+	}
+}
+
+// api-guidelines §8: detail 5xx ada di log (bukan di respons).
+func TestNotes_InternalErrorIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(prev)
+	rec := serve(New(&fakeLister{err: errors.New("SELECT rahasia")}).ListNotes, "/notes")
+	if rec.Code != 500 || strings.Contains(rec.Body.String(), "rahasia") {
+		t.Fatalf("respons harus generik: %d %s", rec.Code, rec.Body.String())
+	}
+	if out := buf.String(); !strings.Contains(out, "level=ERROR") || !strings.Contains(out, "SELECT rahasia") {
+		t.Fatalf("error tidak tercatat di log: %q", out)
 	}
 }

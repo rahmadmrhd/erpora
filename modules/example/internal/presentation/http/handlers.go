@@ -5,6 +5,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -56,6 +57,8 @@ func (h *Handlers) ListNotes(w http.ResponseWriter, r *http.Request) {
 	}
 	items, total, err := h.notes.ListNotes(r.Context(), page, size)
 	if err != nil {
+		// Detail 5xx hanya di log (api-guidelines §8); respons tetap generik.
+		slog.ErrorContext(r.Context(), "gagal membaca daftar notes", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "terjadi kesalahan pada server")
 		return
 	}
