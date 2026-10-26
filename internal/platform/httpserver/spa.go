@@ -43,7 +43,7 @@ func NewSPA(assets fs.FS, dev bool) http.Handler {
 			notFound(w, r)
 			return
 		}
-		isAsset := strings.HasPrefix(clean, "/assets/")
+		isAsset := clean == "/assets" || strings.HasPrefix(clean, "/assets/")
 
 		if b, ok := readFile(assets, name); ok {
 			serve(w, r, name, b, isAsset)

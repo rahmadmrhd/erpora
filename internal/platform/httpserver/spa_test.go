@@ -118,3 +118,13 @@ func TestSPA_MethodNotAllowedHasAllowHeader(t *testing.T) {
 		t.Fatalf("%d Allow=%q", rec.Code, rec.Header().Get("Allow"))
 	}
 }
+
+// "/assets" (tanpa slash) diperlakukan sama dengan /assets/*: tidak ada -> 404, bukan fallback index.html.
+func TestSPA_AssetsRootIs404(t *testing.T) {
+	for _, accept := range []string{"text/html", "*/*", ""} {
+		rec := spaGet(NewSPA(spaFS(), false), "/assets", accept)
+		if rec.Code != 404 || strings.Contains(rec.Body.String(), "INDEX") {
+			t.Errorf("Accept=%q: %d %s", accept, rec.Code, rec.Body)
+		}
+	}
+}
