@@ -38,7 +38,8 @@ type WebPackage struct {
 // Manifest adalah ringkasan module.json.
 type Manifest struct {
 	Key, Slug    string
-	Dependencies []string // key modul dari dependencies[].module
+	Dependencies []string        // key modul dari dependencies[].module
+	Optional     map[string]bool // key modul yang dependencies[].optional = true
 }
 
 // Repo adalah seluruh data yang diperiksa.

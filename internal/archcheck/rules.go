@@ -193,8 +193,9 @@ func Check(r Repo) []Violation {
 				}
 			}
 			// Arah sebaliknya: dependency manifest ke modul repo harus ada di require go.mod.
+			// Dependensi optional dikecualikan (Q28): go mod tidy membuangnya bila kodenya tidak diimpor.
 			for _, dep := range r.Manifests[m.Path].Dependencies {
-				if strings.HasPrefix(dep, "platform.") {
+				if strings.HasPrefix(dep, "platform.") || r.Manifests[m.Path].Optional[dep] {
 					continue
 				}
 				for y, my := range r.Manifests {

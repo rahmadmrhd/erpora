@@ -2,6 +2,7 @@ package archcheck
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -147,6 +148,36 @@ func TestD8_ManifestDependencyMissingFromGoModRequire(t *testing.T) {
 	assertViolation(t, Check(r), "D8") // addon tidak me-require example
 	r.Mods[3].Requires = []string{sdk, example}
 	assertNone(t, Check(r), "D8")
+}
+
+func TestD8_OptionalManifestDependencyNeedNotBeRequired(t *testing.T) {
+	r := repoWith()
+	m := r.Manifests[addon]
+	m.Dependencies = append(m.Dependencies, "acme.example")
+	m.Optional = map[string]bool{"acme.example": true}
+	r.Manifests[addon] = m
+	// Q28: dependensi optional boleh tidak di-require (go mod tidy membuangnya bila kodenya tidak diimpor).
+	assertNone(t, Check(r), "D8")
+	// Bila di-require, tetap sah.
+	r.Mods[3].Requires = []string{sdk, example}
+	assertNone(t, Check(r), "D8")
+}
+
+func TestLoadManifest_ReadsOptionalDependencies(t *testing.T) {
+	dir := t.TempDir()
+	const body = `{"key":"acme.x","slug":"x","dependencies":[` +
+		`{"module":"platform.core","version":"^0.1","optional":false},` +
+		`{"module":"acme.y","version":"^1.0","optional":true}]}`
+	if err := os.WriteFile(filepath.Join(dir, "module.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, ok, err := loadManifest(dir)
+	if err != nil || !ok {
+		t.Fatal(err, ok)
+	}
+	if !m.Optional["acme.y"] || m.Optional["platform.core"] || len(m.Dependencies) != 2 {
+		t.Fatalf("manifest = %+v", m)
+	}
 }
 
 func TestD8_IndirectRequireIgnored(t *testing.T) {

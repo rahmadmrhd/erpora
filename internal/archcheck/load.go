@@ -209,7 +209,8 @@ func loadManifest(dir string) (Manifest, bool, error) {
 		Key          string `json:"key"`
 		Slug         string `json:"slug"`
 		Dependencies []struct {
-			Module string `json:"module"`
+			Module   string `json:"module"`
+			Optional bool   `json:"optional"`
 		} `json:"dependencies"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -218,6 +219,12 @@ func loadManifest(dir string) (Manifest, bool, error) {
 	m := Manifest{Key: raw.Key, Slug: raw.Slug}
 	for _, d := range raw.Dependencies {
 		m.Dependencies = append(m.Dependencies, d.Module)
+		if d.Optional {
+			if m.Optional == nil {
+				m.Optional = map[string]bool{}
+			}
+			m.Optional[d.Module] = true
+		}
 	}
 	return m, true, nil
 }
