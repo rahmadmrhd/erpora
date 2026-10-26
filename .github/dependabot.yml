@@ -1,0 +1,51 @@
+# Dependabot: pembaruan mingguan. Minor/patch dikelompokkan per ekosistem untuk menekan jumlah PR.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      gomod:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gomod"
+    directory: "/sdk"
+    schedule:
+      interval: "weekly"
+    groups:
+      gomod-sdk:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gomod"
+    directory: "/modules/example"
+    schedule:
+      interval: "weekly"
+    groups:
+      gomod-module-example:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gomod"
+    directory: "/modules/exampleaddon"
+    schedule:
+      interval: "weekly"
+    groups:
+      gomod-module-exampleaddon:
+        update-types: ["minor", "patch"]
+
+  # Bun workspace: bun.lock hanya ada di root; web/ adalah anggota workspace yang ikut terkunci di sana.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      bun:
+        update-types: ["minor", "patch"]
