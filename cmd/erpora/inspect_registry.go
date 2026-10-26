@@ -41,10 +41,7 @@ type permissionView struct {
 
 func newInspectRoutesCmd(use string, grouped bool) *cobra.Command {
 	return inspectCmd(use, "Daftar route modul terdaftar", grouped, func(w io.Writer, reg *registry.Registry, asJSON bool) error {
-		var views []routeView
-		for _, r := range reg.Routes() {
-			views = append(views, routeView{Module: r.Module, Method: r.Method, Pattern: r.Pattern, Permission: r.Permission, Public: r.Public})
-		}
+		views := routeViews(reg)
 		if asJSON {
 			return writeJSON(w, views)
 		}
@@ -58,19 +55,7 @@ func newInspectRoutesCmd(use string, grouped bool) *cobra.Command {
 
 func newInspectModulesCmd() *cobra.Command {
 	return inspectCmd("modules", "Daftar modul terkompilasi (urutan topologis)", false, func(w io.Writer, reg *registry.Registry, asJSON bool) error {
-		incompatible := reg.Graph().Incompatible()
-		var views []moduleView
-		for _, e := range reg.Entries() {
-			v := moduleView{Key: e.Manifest.Key, Slug: e.Manifest.Slug, Version: e.Manifest.Version, Dependencies: []string{}, Compatible: true}
-			for _, d := range e.Manifest.Dependencies {
-				v.Dependencies = append(v.Dependencies, d.Module+" "+d.Version)
-			}
-			for _, is := range incompatible[e.Manifest.Key] {
-				v.Compatible = false
-				v.Problems = append(v.Problems, is.Code)
-			}
-			views = append(views, v)
-		}
+		views := moduleViews(reg)
 		if asJSON {
 			return writeJSON(w, views)
 		}
@@ -90,16 +75,47 @@ func newInspectModulesCmd() *cobra.Command {
 	})
 }
 
+// View selalu non-nil agar --json mencetak [] (bukan null) untuk daftar kosong.
+func routeViews(reg *registry.Registry) []routeView {
+	views := []routeView{}
+	for _, r := range reg.Routes() {
+		views = append(views, routeView{Module: r.Module, Method: r.Method, Pattern: r.Pattern, Permission: r.Permission, Public: r.Public})
+	}
+	return views
+}
+
+func moduleViews(reg *registry.Registry) []moduleView {
+	incompatible := reg.Graph().Incompatible()
+	views := []moduleView{}
+	for _, e := range reg.Entries() {
+		v := moduleView{Key: e.Manifest.Key, Slug: e.Manifest.Slug, Version: e.Manifest.Version, Dependencies: []string{}, Compatible: true}
+		for _, d := range e.Manifest.Dependencies {
+			v.Dependencies = append(v.Dependencies, d.Module+" "+d.Version)
+		}
+		for _, is := range incompatible[e.Manifest.Key] {
+			v.Compatible = false
+			v.Problems = append(v.Problems, is.Code)
+		}
+		views = append(views, v)
+	}
+	return views
+}
+
+func permissionViews(reg *registry.Registry) []permissionView {
+	views := []permissionView{}
+	for _, e := range reg.Entries() {
+		caps := slices.Clone(e.Manifest.Capabilities)
+		slices.Sort(caps)
+		for _, c := range caps {
+			views = append(views, permissionView{Module: e.Manifest.Key, Permission: c})
+		}
+	}
+	return views
+}
+
 func newInspectPermissionsCmd(use string, grouped bool) *cobra.Command {
 	return inspectCmd(use, "Daftar permission (capability) per modul", grouped, func(w io.Writer, reg *registry.Registry, asJSON bool) error {
-		var views []permissionView
-		for _, e := range reg.Entries() {
-			caps := slices.Clone(e.Manifest.Capabilities)
-			slices.Sort(caps)
-			for _, c := range caps {
-				views = append(views, permissionView{Module: e.Manifest.Key, Permission: c})
-			}
-		}
+		views := permissionViews(reg)
 		if asJSON {
 			return writeJSON(w, views)
 		}
