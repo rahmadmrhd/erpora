@@ -23,6 +23,8 @@ type Authorizer interface {
 // Mounter dipenuhi *httpserver.Router.
 type Mounter interface {
 	Handle(pattern string, h http.Handler, opts ...httpserver.RouteOption)
+	// SetAPIGate memasang gate permukaan HTTP modul tidak aktif (FR-19.7); wajib agar tidak terlewat.
+	SetAPIGate(g func(*http.Request) bool)
 }
 
 // Mount mendaftarkan semua route modul dari registry ke router. Tiap handler
@@ -34,11 +36,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 	if log == nil {
 		log = slog.Default()
 	}
-	if g, ok := m.(interface {
-		SetAPIGate(func(*http.Request) bool)
-	}); ok {
-		g.SetAPIGate(apiGate(reg, snap))
-	}
+	m.SetAPIGate(apiGate(reg, snap))
 	for _, rt := range reg.Routes() {
 		h := rt.Handler
 		if !rt.Public {
