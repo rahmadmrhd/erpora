@@ -57,7 +57,7 @@ func TestHooks_LogModule(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if strings.Count(out, "module=acme.example-addon") != 2 || !strings.Contains(out, "level=INFO") {
+	if strings.Count(out, "erp.module.key=acme.example-addon") != 2 || !strings.Contains(out, "level=INFO") {
 		t.Errorf("log = %q", out)
 	}
 }

@@ -78,7 +78,7 @@ func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Hand
 				"status", status, "duration_ms", time.Since(start).Milliseconds(),
 			}
 			if meta.module != "" {
-				attrs = append(attrs, "module", meta.module)
+				attrs = append(attrs, "erp.module.key", meta.module)
 			}
 			log.InfoContext(r.Context(), "http request", attrs...)
 		}()

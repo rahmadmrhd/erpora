@@ -227,13 +227,13 @@ func TestMount_MiddlewareOrder(t *testing.T) {
 	found := false
 	for _, s := range f.rec.Ended() {
 		for _, a := range s.Attributes() {
-			if string(a.Key) == "erp.module.id" && a.Value.AsString() == "acme.notes" {
+			if string(a.Key) == "erp.module.key" && a.Value.AsString() == "acme.notes" {
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Error("atribut span erp.module.id tidak ditemukan")
+		t.Error("atribut span erp.module.key tidak ditemukan")
 	}
 	// M1: access log route modul memuat atribut module.
 	var access string
@@ -242,8 +242,8 @@ func TestMount_MiddlewareOrder(t *testing.T) {
 			access = l
 		}
 	}
-	if !strings.Contains(access, "module=acme.notes") {
-		t.Errorf("access log tanpa module=acme.notes: %q", access)
+	if !strings.Contains(access, "erp.module.key=acme.notes") {
+		t.Errorf("access log tanpa erp.module.key=acme.notes: %q", access)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestMount_StubDenyLogHasModule(t *testing.T) {
 	if rec := f.do("GET", "/api/notes/items"); rec.Code != 403 {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	if !strings.Contains(logs.String(), "module=acme.notes") || !strings.Contains(logs.String(), "level=WARN") {
+	if !strings.Contains(logs.String(), "erp.module.key=acme.notes") || !strings.Contains(logs.String(), "level=WARN") {
 		t.Errorf("log deny tanpa module: %q", logs.String())
 	}
 }

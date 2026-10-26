@@ -49,7 +49,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 
 func guardMW(snap *Snapshot, key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("erp.module.id", key))
+		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("erp.module.key", key))
 		httpserver.SetModule(r.Context(), key)
 		r = r.WithContext(observability.WithModule(r.Context(), key))
 		tid, _ := tenancy.FromContext(r.Context())
@@ -73,7 +73,7 @@ func permissionMW(authz Authorizer, permission, module string, log *slog.Logger,
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if authz == nil {
 			// Tanpa Authorizer: tolak (fail closed). Penolakan oleh Authorizer dicatat Authorizer itu sendiri.
-			log.WarnContext(r.Context(), "permission ditolak: authorizer tidak dikonfigurasi", "module", module, "permission", permission)
+			log.WarnContext(r.Context(), "permission ditolak: authorizer tidak dikonfigurasi", "erp.module.key", module, "permission", permission)
 		}
 		if authz == nil || !authz.Allow(r.Context(), permission) {
 			httpserver.WriteError(w, r, http.StatusForbidden, "permission_denied", "tidak memiliki izin", nil)

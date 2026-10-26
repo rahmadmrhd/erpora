@@ -45,7 +45,7 @@ func (s Stub) Allow(ctx context.Context, permission string) bool {
 	}
 	attrs := []any{"permission", permission, "mode", string(s.Mode), "allowed", allowed}
 	if m := observability.ModuleFromContext(ctx); m != "" {
-		attrs = append(attrs, "module", m)
+		attrs = append(attrs, "erp.module.key", m)
 	}
 	log.Log(ctx, level, "otorisasi stub", attrs...)
 	return allowed
