@@ -49,12 +49,15 @@ func Load(root string) (Repo, error) {
 		if ok {
 			repo.Manifests[gm.Path] = mf
 		}
-		wp, ok, err := loadWebPackage(dir)
-		if err != nil {
-			return repo, err
-		}
-		if ok {
-			repo.Web[gm.Path] = wp
+		// Hanya modul bisnis (modules/*) yang punya modules/<x>/web; web/ di root adalah app shell (F3).
+		if strings.HasPrefix(gm.Path, modulesBase) {
+			wp, ok, err := loadWebPackage(dir)
+			if err != nil {
+				return repo, err
+			}
+			if ok {
+				repo.Web[gm.Path] = wp
+			}
 		}
 		pkgs, err := listPackages(dir, gm.Path)
 		if err != nil {

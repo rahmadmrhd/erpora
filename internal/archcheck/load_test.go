@@ -106,3 +106,16 @@ func TestLoad_RealWorkspaceListsAllModules(t *testing.T) {
 		}
 	}
 }
+
+// web/package.json di root adalah app shell (bukan frontend modul): tidak boleh diperiksa sebagai F2.
+func TestLoad_WebPackagesOnlyForModules(t *testing.T) {
+	repo, err := Load("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path := range repo.Web {
+		if !strings.HasPrefix(path, modulesBase) {
+			t.Errorf("Web memuat %s yang bukan modul", path)
+		}
+	}
+}
