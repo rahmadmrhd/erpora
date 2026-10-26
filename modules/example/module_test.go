@@ -27,7 +27,7 @@ func TestManifest_Parses(t *testing.T) {
 
 func TestMigrations_Embedded(t *testing.T) {
 	names, err := fs.Glob(New().Migrations(), "*.sql")
-	if err != nil || len(names) != 1 || names[0] != "0001_create_example_notes.sql" {
+	if err != nil || len(names) != 2 || names[0] != "0001_create_example_notes.sql" || names[1] != "0002_add_example_notes_version.sql" {
 		t.Fatalf("names = %v err = %v", names, err)
 	}
 }

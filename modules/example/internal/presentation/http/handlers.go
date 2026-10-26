@@ -28,7 +28,9 @@ func New(notes NoteLister) *Handlers { return &Handlers{notes: notes} }
 type noteDTO struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
+	Version   int64  `json:"version"`
 	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 type pageDTO struct {
@@ -64,7 +66,10 @@ func (h *Handlers) ListNotes(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]noteDTO, len(items))
 	for i, n := range items {
-		out[i] = noteDTO{ID: n.ID, Title: n.Title, CreatedAt: n.CreatedAt.UTC().Format(time.RFC3339)}
+		out[i] = noteDTO{
+			ID: n.ID, Title: n.Title, Version: n.Version,
+			CreatedAt: n.CreatedAt.UTC().Format(time.RFC3339), UpdatedAt: n.UpdatedAt.UTC().Format(time.RFC3339),
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": out,

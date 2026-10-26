@@ -17,13 +17,18 @@ import (
 type noteRow struct {
 	ID        uuid.UUID `gorm:"column:id;primaryKey"`
 	Title     string    `gorm:"column:title"`
+	Version   int64     `gorm:"column:version"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (noteRow) TableName() string { return "example_notes" }
 
 func (r noteRow) toDomain() domain.Note {
-	return domain.Note{ID: r.ID.String(), Title: r.Title, CreatedAt: r.CreatedAt.UTC()}
+	return domain.Note{
+		ID: r.ID.String(), Title: r.Title, Version: r.Version,
+		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
+	}
 }
 
 // NotesRepo adalah repository notes; koneksi diambil per panggilan dari context (tenant aktif).
@@ -90,7 +95,7 @@ func (NotesRepo) AddMany(ctx context.Context, notes []domain.Note) error {
 		if err != nil {
 			return fmt.Errorf("buat id: %w", err)
 		}
-		rows[i] = noteRow{ID: id, Title: n.Title}
+		rows[i] = noteRow{ID: id, Title: n.Title, Version: 1}
 	}
 	if len(rows) == 0 {
 		return nil

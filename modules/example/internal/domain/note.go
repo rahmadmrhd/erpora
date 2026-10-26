@@ -14,11 +14,13 @@ const MaxTitleLength = 200
 // ErrInvalidTitle dikembalikan bila judul kosong atau terlalu panjang.
 var ErrInvalidTitle = errors.New("judul harus 1 sampai 200 karakter")
 
-// Note adalah catatan sederhana. ID dan CreatedAt diisi saat disimpan.
+// Note adalah catatan sederhana. ID, Version, CreatedAt, dan UpdatedAt diisi saat disimpan.
 type Note struct {
 	ID        string
 	Title     string
+	Version   int64 // naik setiap perubahan; mulai dari 1 (api-guidelines §4.3)
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NewNote membuat Note baru dengan judul yang tervalidasi.
