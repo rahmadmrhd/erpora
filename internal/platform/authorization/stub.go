@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-
-	"erpora/internal/platform/observability"
 )
 
 // StubMode adalah mode stub otorisasi: "allow" atau "deny".
@@ -45,9 +43,7 @@ func (s Stub) Allow(ctx context.Context, permission string) bool {
 		level = slog.LevelInfo
 	}
 	attrs := []any{"permission", permission, "mode", string(s.Mode), "allowed", allowed}
-	if m := observability.ModuleFromContext(ctx); m != "" {
-		attrs = append(attrs, "erp.module.key", m)
-	}
+	// erp.module.key ditambahkan oleh TraceHandler dari context (sumber tunggal).
 	log.Log(ctx, level, "otorisasi stub", attrs...)
 	return allowed
 }

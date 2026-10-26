@@ -38,7 +38,7 @@ func TestStub_NilLoggerAndUnknownModeDenies(t *testing.T) {
 
 func TestStub_LogsModuleFromContext(t *testing.T) {
 	var buf bytes.Buffer
-	s := Stub{Mode: "deny", Log: slog.New(slog.NewTextHandler(&buf, nil))}
+	s := NewStub("deny", observability.NewLogger(&buf, "text", slog.LevelDebug)) // TraceHandler menambah erp.module.key
 	s.Allow(observability.WithModule(context.Background(), "acme.notes"), "notes.items.read")
 	if !strings.Contains(buf.String(), "erp.module.key=acme.notes") {
 		t.Errorf("log tanpa module: %q", buf.String())

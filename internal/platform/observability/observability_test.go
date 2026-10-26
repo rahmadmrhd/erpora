@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -154,5 +155,29 @@ func TestLogger_AddsRequestID(t *testing.T) {
 	}
 	if rec["request_id"] != "req-123" {
 		t.Fatalf("rec = %v", rec)
+	}
+}
+
+// Q26 butir 3: TraceHandler menjadi sumber tunggal erp.module.key dari context, tanpa menggandakan
+// atribut yang sudah disertakan pemanggil.
+func TestTraceHandler_ModuleKeyFromContextNoDuplicate(t *testing.T) {
+	var buf bytes.Buffer
+	log := NewLogger(&buf, "text", slog.LevelDebug)
+	ctx := WithModule(context.Background(), "acme.notes")
+	log.InfoContext(ctx, "dari context")
+	log.InfoContext(ctx, "eksplisit", "erp.module.key", "acme.notes")
+	log.InfoContext(context.Background(), "tanpa modul")
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("lines = %q", lines)
+	}
+	if strings.Count(lines[0], "erp.module.key=acme.notes") != 1 {
+		t.Errorf("dari context: %s", lines[0])
+	}
+	if strings.Count(lines[1], "erp.module.key=") != 1 {
+		t.Errorf("tidak boleh ganda: %s", lines[1])
+	}
+	if strings.Contains(lines[2], "erp.module.key") {
+		t.Errorf("tanpa modul: %s", lines[2])
 	}
 }

@@ -121,7 +121,7 @@ func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bo
 		}
 	}
 	logs := &bytes.Buffer{}
-	log := slog.New(slog.NewTextHandler(logs, nil))
+	log := observability.NewLogger(logs, "text", slog.LevelDebug)
 	router := httpserver.NewRouter(httpserver.Deps{
 		Logger: log,
 		Tracer: tp,
@@ -313,7 +313,7 @@ func TestMount_NilLoggerDefaultsToSlogDefault(t *testing.T) {
 // Minor 4: log penolakan stub memuat atribut module.
 func TestMount_StubDenyLogHasModule(t *testing.T) {
 	var logs bytes.Buffer
-	stub := authorization.Stub{Mode: "deny", Log: slog.New(slog.NewTextHandler(&logs, nil))}
+	stub := authorization.NewStub("deny", observability.NewLogger(&logs, "text", slog.LevelDebug))
 	f := newFixture(t, stub, nil)
 	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	if rec := f.do("GET", "/api/notes/items"); rec.Code != 403 {

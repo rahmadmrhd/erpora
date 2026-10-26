@@ -40,7 +40,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 	for _, rt := range reg.Routes() {
 		h := rt.Handler
 		if !rt.Public {
-			h = permissionMW(authz, rt.Permission, rt.Module, log, h)
+			h = permissionMW(authz, rt.Permission, log, h)
 		}
 		h = guardMW(snap, rt.Module, h)
 		var opts []httpserver.RouteOption
@@ -95,11 +95,11 @@ func guardMW(snap *Snapshot, key string, next http.Handler) http.Handler {
 	})
 }
 
-func permissionMW(authz Authorizer, permission, module string, log *slog.Logger, next http.Handler) http.Handler {
+func permissionMW(authz Authorizer, permission string, log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if authz == nil {
 			// Tanpa Authorizer: tolak (fail closed). Penolakan oleh Authorizer dicatat Authorizer itu sendiri.
-			log.WarnContext(r.Context(), "permission ditolak: authorizer tidak dikonfigurasi", "erp.module.key", module, "permission", permission)
+			log.WarnContext(r.Context(), "permission ditolak: authorizer tidak dikonfigurasi", "permission", permission)
 		}
 		if authz == nil || !authz.Allow(r.Context(), permission) {
 			httpserver.WriteError(w, r, http.StatusForbidden, "permission_denied", "tidak memiliki izin", nil)
