@@ -55,7 +55,7 @@ func TestInspectConfig_RedactsPassword(t *testing.T) {
 	if strings.Contains(out, "secret") {
 		t.Errorf("password leaked:\n%s", out)
 	}
-	for _, k := range []string{"ERP_ENV=", "ERP_HTTP_ADDR=", "ERP_LOG_FORMAT=", "ERP_TENANCY_MODE=", "ERP_DEFAULT_TENANT_ID=", "ERP_DB_SLOW_QUERY_MS=", "flavor="} {
+	for _, k := range []string{"ERP_ENV=", "ERP_HTTP_ADDR=", "ERP_LOG_FORMAT=", "ERP_TENANCY_MODE=", "ERP_DEFAULT_TENANT_ID=", "ERP_DB_SLOW_QUERY_MS=", "ERP_AUTHZ_STUB=", "flavor="} {
 		if !strings.Contains(out, k) {
 			t.Errorf("missing %q:\n%s", k, out)
 		}
@@ -65,6 +65,36 @@ func TestInspectConfig_RedactsPassword(t *testing.T) {
 func TestInspectConfig_MissingDatabaseURL_ExitCode2(t *testing.T) {
 	clearEnv(t)
 	_, err := run(t, "inspect", "config")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if exitCode(err) != 2 {
+		t.Errorf("exitCode = %d", exitCode(err))
+	}
+	if !strings.Contains(err.Error(), "ERP_DATABASE_URL") {
+		t.Errorf("message: %v", err)
+	}
+}
+
+func TestInspectConfig_ShowsEffectiveAuthzStub(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_AUTHZ_STUB", "")
+	os.Unsetenv("ERP_AUTHZ_STUB")
+	t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@h/db")
+	out, err := run(t, "inspect", "config")
+	if err != nil || !strings.Contains(out, "ERP_AUTHZ_STUB=deny\n") {
+		t.Fatalf("production default: %v\n%s", err, out)
+	}
+	t.Setenv("ERP_ENV", "development")
+	out, err = run(t, "inspect", "config")
+	if err != nil || !strings.Contains(out, "ERP_AUTHZ_STUB=allow\n") {
+		t.Fatalf("development default: %v\n%s", err, out)
+	}
+}
+
+func TestServe_MissingDatabaseURL_ExitCode2(t *testing.T) {
+	clearEnv(t)
+	_, err := run(t, "serve")
 	if err == nil {
 		t.Fatal("expected error")
 	}
