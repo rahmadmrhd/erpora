@@ -316,11 +316,20 @@ func TestF2_WebDependenciesMustMatchManifest(t *testing.T) {
 	assertNone(t, Check(r), "F2")
 
 	// dependency package.json yang tidak ada di manifest
-	r.Web = map[string]WebPackage{addon: {ModuleDeps: []string{"@erpora/module-example", "@erpora/module-lain"}}}
+	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: []string{"@erpora/module-example", "@erpora/module-lain"}}}
 	assertViolation(t, Check(r), "F2")
 	// dependency manifest yang tidak ada di package.json
-	r.Web = map[string]WebPackage{addon: {ModuleDeps: nil}}
+	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: nil}}
 	assertViolation(t, Check(r), "F2")
+	// nama package tidak sesuai nama direktori modul (kosong atau salah)
+	for _, name := range []string{"", "@erpora/module-example-addon", "@erpora/other", "@erpora/module-example"} {
+		r.Web = map[string]WebPackage{addon: {Name: name, ModuleDeps: []string{"@erpora/module-example"}}}
+		vs := Check(r)
+		assertViolation(t, vs, "F2")
+		if !strings.Contains(vs[0].Detail, "nama package") {
+			t.Errorf("name=%q: pesan = %+v", name, vs)
+		}
+	}
 }
 
 func TestParseWebPackage_Fixture(t *testing.T) {

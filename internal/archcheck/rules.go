@@ -241,6 +241,10 @@ func Check(r Repo) []Violation {
 
 	// F2: dependencies package.json frontend modul == dependencies manifest (key -> @erpora/module-<nama dir>).
 	for y, wp := range r.Web {
+		// Nama package wajib @erpora/module-<nama dir modul> (CLAUDE.md, Q21).
+		if wp.Name != webPackageName(y) {
+			add("F2", y, "nama package web harus '"+webPackageName(y)+"', ditemukan '"+wp.Name+"'")
+		}
 		want := map[string]bool{}
 		for _, dep := range r.Manifests[y].Dependencies {
 			if strings.HasPrefix(dep, "platform.") {
