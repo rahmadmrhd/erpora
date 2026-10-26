@@ -27,10 +27,11 @@ var allowedMethods = map[string]bool{"GET": true, "POST": true, "PUT": true, "PA
 var commandNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // validRoutePath memeriksa path relatif modul: diawali "/", sudah bersih
-// (path.Clean), tanpa "//", host, query, fragmen, atau spasi.
+// (path.Clean), tanpa trailing slash, tanpa "//", host, query, fragmen, atau spasi.
 func validRoutePath(p string) bool {
 	if !strings.HasPrefix(p, "/") || strings.Contains(p, "//") || strings.ContainsAny(p, "?# \t\r\n") {
 		return false
 	}
-	return p == "/" || path.Clean(p) == p
+	// Tanpa trailing slash (api-guidelines §2): "/" menjadi subtree ServeMux "/api/{slug}/".
+	return !strings.HasSuffix(p, "/") && path.Clean(p) == p
 }
