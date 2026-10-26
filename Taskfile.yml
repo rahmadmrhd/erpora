@@ -45,8 +45,11 @@ tasks:
         msg: "golangci-lint tidak ditemukan di PATH. Jalankan `task setup` (memasang versi terpin {{.GOLANGCI_LINT_VERSION}} ke $GOPATH/bin) dan pastikan $GOPATH/bin ada di PATH."
     cmds:
       # golangci-lint dipasang oleh `task setup` (go install versi terpin) ke $GOPATH/bin.
+      # Dua putaran per modul: flavor rilis (tanpa tag) dan semua file ber-tag (integration, devtools).
       - for: { var: GO_MODULES }
         cmd: cd "{{.ITEM}}" && golangci-lint run ./...
+      - for: { var: GO_MODULES }
+        cmd: cd "{{.ITEM}}" && golangci-lint run --build-tags=integration,devtools ./...
 
   test:
     desc: Jalankan unit test di setiap Go module
