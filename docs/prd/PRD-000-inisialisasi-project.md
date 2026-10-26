@@ -393,7 +393,7 @@ type DevSeeder      interface { SeedDev(ctx context.Context, env Env) error }
 - Saat registrasi, platform membungkus setiap handler dengan rantai middleware yang urutannya tetap:
   `otel (FR-17) → recover → request-id/log → authN → tenant context (FR-21) → module status guard (FR-19) → permission check → handler` (lihat Q26).
   Di fase ini authN dan permission check masih stub yang dapat dikonfigurasi (allow-all di dev, terlihat di log). Implementasinya menyusul di PRD masing-masing **tanpa mengubah modul**.
-- Route `Public` melewati authN dan permission, tetapi tetap melewati recover, otel, log, tenant context, dan module status guard.
+- Route `Public` melewati authN dan permission, tetapi tetap melewati otel, recover, log, tenant context, dan module status guard.
 - `platform.core` adalah pseudo-modul milik platform (slug `platform`, versi = versi platform, selalu `enabled`). Semua modul bergantung padanya, dan route manajemen modul (FR-20) berada di namespace-nya.
 
 Registry (`internal/platform/modules/registry`) memvalidasi saat startup:
