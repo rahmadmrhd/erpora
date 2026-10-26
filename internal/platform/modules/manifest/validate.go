@@ -22,13 +22,14 @@ import (
 
 // Kode problem hasil validasi manifest.
 const (
-	CodeSchemaInvalid      = "schema_invalid"
-	CodeTrustNotSupported  = "trust_not_supported"
-	CodeInvalidVersion     = "invalid_version"
-	CodeInvalidConstraint  = "invalid_constraint"
-	CodeRawMissing         = "raw_missing"
-	CodeManifestMismatch   = "manifest_mismatch"
-	moduleSchemaResourceID = "https://erpora.dev/contracts/module.schema.json"
+	CodeSchemaInvalid       = "schema_invalid"
+	CodeTrustNotSupported   = "trust_not_supported"
+	CodeInvalidVersion      = "invalid_version"
+	CodeInvalidConstraint   = "invalid_constraint"
+	CodeDuplicateDependency = "duplicate_dependency"
+	CodeRawMissing          = "raw_missing"
+	CodeManifestMismatch    = "manifest_mismatch"
+	moduleSchemaResourceID  = "https://erpora.dev/contracts/module.schema.json"
 )
 
 // Problem adalah satu temuan validasi manifest. Field berupa JSON pointer ke
@@ -83,8 +84,16 @@ func Validate(m module.Manifest) []Problem {
 	}
 	problems = appendConstraint(problems, m.Key, "/compatibility/platform", m.Compatibility.Platform, schemaFields)
 	problems = appendConstraint(problems, m.Key, "/compatibility/sdk", m.Compatibility.SDK, schemaFields)
+	seenDeps := map[string]bool{}
 	for i, d := range m.Dependencies {
 		problems = appendConstraint(problems, m.Key, "/dependencies/"+strconv.Itoa(i)+"/version", d.Version, schemaFields)
+		if seenDeps[d.Module] {
+			problems = append(problems, Problem{
+				Module: m.Key, Field: "/dependencies/" + strconv.Itoa(i) + "/module", Code: CodeDuplicateDependency,
+				Message: fmt.Sprintf("dependensi %q dideklarasikan lebih dari sekali", d.Module),
+			})
+		}
+		seenDeps[d.Module] = true
 	}
 	return problems
 }

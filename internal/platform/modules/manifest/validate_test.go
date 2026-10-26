@@ -21,6 +21,8 @@ func TestValidate_Fixtures(t *testing.T) {
 		{"bad_constraint.json", []wantProblem{{"invalid_constraint", "/dependencies/0/version"}}},
 		{"trust_untrusted.json", []wantProblem{{"trust_not_supported", "/trust"}}},
 		{"missing_slug.json", []wantProblem{{"schema_invalid", "/slug"}}},
+		{"bad_dependency_module.json", []wantProblem{{"schema_invalid", "/dependencies/0/module"}}},
+		{"duplicate_dependency.json", []wantProblem{{"duplicate_dependency", "/dependencies/1/module"}}},
 		{"unknown_field.json", []wantProblem{{"schema_invalid", "/routes"}}},
 	}
 	for _, tc := range cases {
