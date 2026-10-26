@@ -2,14 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"erpora/internal/platform/buildinfo"
-	"erpora/internal/platform/modules/registry"
-	"erpora/sdk/module"
 	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"erpora/internal/platform/buildinfo"
+	"erpora/internal/platform/modules/registry"
+	"erpora/sdk/module"
 )
 
 var update = flag.Bool("update", false, "perbarui berkas golden")
