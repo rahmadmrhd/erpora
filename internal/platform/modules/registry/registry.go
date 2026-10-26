@@ -311,7 +311,13 @@ func checkRouteConflicts(routes []RouteInfo) []Problem {
 			seen = append(seen, rt)
 			continue
 		}
-		// Panic apa pun: cari dulu pendaftaran lain yang bentrok (tanpa membaca teks panic).
+		// Pola yang sendirian saja ditolak ServeMux = pola rusak, bukan konflik.
+		if alone := muxRegister(http.NewServeMux(), rt); alone != "" {
+			out = append(out, Problem{Module: rt.Module, Code: CodeInvalidRoute,
+				Message: fmt.Sprintf("pola route %s %s ditolak: %s", rt.Method, rt.Pattern, alone)})
+			continue
+		}
+		// Pola valid tetapi gagal didaftarkan: cari pendaftaran lain yang bentrok (tanpa membaca teks panic).
 		if other := findConflict(seen, rt); other.Pattern != "" {
 			out = append(out, Problem{Module: rt.Module, Code: CodeRouteConflict,
 				Message: fmt.Sprintf("route %s %s (%s) bentrok dengan %s %s (%s)", rt.Method, rt.Pattern, rt.Module, other.Method, other.Pattern, other.Module)})
