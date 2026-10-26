@@ -81,6 +81,7 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		for _, p := range manifest.Validate(mf) {
 			problems = append(problems, Problem{Module: p.Module, Field: p.Field, Code: p.Code, Message: p.Message})
 		}
+		problems = append(problems, checkMigrationsStrategy(mf, m)...)
 		if _, dup := byKey[mf.Key]; dup {
 			problems = append(problems, Problem{
 				Module: mf.Key, Code: CodeDuplicateKey,
@@ -154,6 +155,21 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 	}
 	slices.Sort(reg.caps)
 	return reg, nil
+}
+
+// checkMigrationsStrategy memastikan migrations.strategy manifest konsisten dengan kode modul:
+// "versioned" wajib mengimplementasikan module.MigrationSource, "none" tidak boleh (Q26 butir 12).
+func checkMigrationsStrategy(mf module.Manifest, m module.Module) []Problem {
+	_, hasSource := m.(module.MigrationSource)
+	switch {
+	case mf.Migrations.Strategy == "versioned" && !hasSource:
+		return []Problem{{Module: mf.Key, Field: "/migrations/strategy", Code: CodeMigrationsMismatch,
+			Message: "strategy \"versioned\" tetapi modul tidak mengimplementasikan MigrationSource (Migrations())"}}
+	case mf.Migrations.Strategy == "none" && hasSource:
+		return []Problem{{Module: mf.Key, Field: "/migrations/strategy", Code: CodeMigrationsMismatch,
+			Message: "strategy \"none\" tetapi modul mengimplementasikan MigrationSource; set strategy \"versioned\" atau hapus Migrations()"}}
+	}
+	return nil
 }
 
 // safeManifest memanggil m.Manifest() dengan recover; modul nil atau panic dilaporkan sebagai pesan.
