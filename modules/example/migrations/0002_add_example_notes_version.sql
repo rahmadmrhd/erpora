@@ -5,6 +5,9 @@ ALTER TABLE example_notes
     ADD COLUMN version    bigint      NOT NULL DEFAULT 1 CHECK (version >= 1),
     ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
 
+-- Catatan: backfill satu UPDATE ini hanya pantas untuk tabel kecil (mengunci dan menulis ulang semua
+-- baris dalam satu transaksi). Untuk tabel besar, backfill secara bertahap (per batch) dan pakai
+-- "-- +goose NO TRANSACTION" agar tidak menahan kunci lama.
 UPDATE example_notes SET updated_at = created_at;
 
 -- +goose Down
