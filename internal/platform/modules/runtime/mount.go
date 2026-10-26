@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -33,6 +34,11 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 	if log == nil {
 		log = slog.Default()
 	}
+	if g, ok := m.(interface {
+		SetAPIGate(func(*http.Request) bool)
+	}); ok {
+		g.SetAPIGate(apiGate(reg, snap))
+	}
 	for _, rt := range reg.Routes() {
 		h := rt.Handler
 		if !rt.Public {
@@ -44,6 +50,28 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 			opts = append(opts, httpserver.Public())
 		}
 		m.Handle(rt.Method+" "+rt.Pattern, h, opts...)
+	}
+}
+
+// apiGate menyembunyikan path /api/{slug}/... milik modul terdaftar yang statusnya bukan enabled,
+// agar method lain dan sub-path tak dikenal tidak membocorkan route (FR-19.7).
+func apiGate(reg *registry.Registry, snap *Snapshot) func(*http.Request) bool {
+	keyBySlug := map[string]string{}
+	for _, e := range reg.Entries() {
+		keyBySlug[e.Manifest.Slug] = e.Manifest.Key
+	}
+	return func(r *http.Request) bool {
+		rest, ok := strings.CutPrefix(r.URL.Path, "/api/")
+		if !ok {
+			return false
+		}
+		slug, _, _ := strings.Cut(rest, "/")
+		key, ok := keyBySlug[slug]
+		if !ok {
+			return false
+		}
+		tid, _ := tenancy.FromContext(r.Context())
+		return snap.Status(tid, key) != StatusEnabled
 	}
 }
 

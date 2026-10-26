@@ -323,3 +323,47 @@ func TestMount_StubDenyLogHasModule(t *testing.T) {
 		t.Errorf("log deny tanpa module: %q", logs.String())
 	}
 }
+
+// FR-19.7: modul yang tidak enabled tidak punya permukaan HTTP. Method lain dan sub-path tak dikenal di bawah
+// /api/{slug} dijawab seragam 404 module_not_found tanpa Allow (tidak membocorkan route); modul enabled tetap
+// mendapat 405+Allow dan 404 not_found.
+func TestMount_NonEnabledModuleHasNoHTTPSurface(t *testing.T) {
+	for _, st := range []Status{StatusAvailable, StatusInstalled, StatusDisabled, StatusUninstalled, StatusMissing, StatusFailed, StatusIncompatible, StatusUpgradePending} {
+		for _, tc := range []struct{ method, target string }{
+			{"POST", "/api/notes/items"},   // method lain pada route GET
+			{"GET", "/api/notes/unknown"},  // sub-path tidak dikenal
+			{"DELETE", "/api/notes/items"}, // method lain
+		} {
+			t.Run(string(st)+" "+tc.method+tc.target, func(t *testing.T) {
+				f := newFixture(t, allowAll, nil)
+				f.snap.Set(tenantA, map[string]Status{"acme.notes": st}, 1)
+				rec := f.do(tc.method, tc.target)
+				if rec.Code != 404 || errCode(t, rec) != "module_not_found" {
+					t.Fatalf("%d %s", rec.Code, rec.Body.String())
+				}
+				if a := rec.Header().Get("Allow"); a != "" {
+					t.Errorf("Allow bocor: %q", a)
+				}
+			})
+		}
+	}
+	t.Run("enabled: 405 + Allow dan 404 not_found", func(t *testing.T) {
+		f := newFixture(t, allowAll, nil)
+		f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+		rec := f.do("POST", "/api/notes/items")
+		if rec.Code != 405 || rec.Header().Get("Allow") == "" || errCode(t, rec) != "method_not_allowed" {
+			t.Fatalf("%d allow=%q %s", rec.Code, rec.Header().Get("Allow"), rec.Body.String())
+		}
+		rec = f.do("GET", "/api/notes/unknown")
+		if rec.Code != 404 || errCode(t, rec) != "not_found" {
+			t.Fatalf("%d %s", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("slug tak dikenal tetap not_found", func(t *testing.T) {
+		f := newFixture(t, allowAll, nil)
+		rec := f.do("GET", "/api/zzz/x")
+		if rec.Code != 404 || errCode(t, rec) != "not_found" {
+			t.Fatalf("%d %s", rec.Code, rec.Body.String())
+		}
+	})
+}

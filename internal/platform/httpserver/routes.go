@@ -33,6 +33,10 @@ func NewRouter(d Deps) *Router {
 	r.Handle("GET /api/bootstrap", bootstrapHandler(d.AppVersion), Public())
 
 	r.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if r.apiGate != nil && r.apiGate(req) {
+			WriteError(w, req, http.StatusNotFound, "module_not_found", "modul tidak ditemukan", nil)
+			return
+		}
 		// Path dikenal dengan method lain -> 405 + Allow; path tidak dikenal -> 404.
 		if allowed := r.allowedMethods(req); len(allowed) > 0 {
 			w.Header().Set("Allow", strings.Join(allowed, ", "))

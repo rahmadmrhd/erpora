@@ -57,7 +57,15 @@ type Router struct {
 	// probe memuat semua pattern ber-method yang terdaftar (handler kosong) untuk menentukan
 	// method apa yang diizinkan pada sebuah path (405 + Allow), termasuk route modul di masa depan.
 	probe *http.ServeMux
+	// apiGate (opsional) menentukan path /api/... yang permukaan HTTP-nya disembunyikan (modul tidak enabled).
+	// Diset sekali saat perakitan (SetAPIGate), sebelum server melayani request.
+	apiGate func(*http.Request) bool
 }
+
+// SetAPIGate memasang gate untuk catch-all /api/: bila gate mengembalikan true, path dijawab seragam
+// 404 module_not_found tanpa header Allow (FR-19.7: modul tidak aktif tidak punya permukaan HTTP).
+// Gate berjalan di dalam tenantContext, jadi tenant tersedia di context request.
+func (r *Router) SetAPIGate(g func(*http.Request) bool) { r.apiGate = g }
 
 // ServeHTTP mengimplementasikan http.Handler.
 // ServeHTTP menetapkan request id + header keamanan SEBELUM ServeMux, sehingga respons buatan mux
