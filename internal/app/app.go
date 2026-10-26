@@ -112,7 +112,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		},
 	})
 	// Snapshot kosong: semua modul berstatus available (404 module_not_found) sampai M2b mengisinya.
-	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.Stub{Mode: authorization.StubMode(cfg.AuthzStub), Log: log}, log)
+	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log)
 	registerTestRoutes(router)
 	srv := httpserver.New(cfg.HTTPAddr, router)
 

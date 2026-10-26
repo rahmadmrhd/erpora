@@ -48,7 +48,7 @@ func TestStub_LogsModuleFromContext(t *testing.T) {
 // FR-05: allow-all terlihat di log pada level INFO, sekali per permission (tanpa banjir log).
 func TestStub_AllowLoggedAtInfoOncePerPermission(t *testing.T) {
 	var buf bytes.Buffer
-	s := Stub{Mode: "allow", Log: slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+	s := NewStub("allow", slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	for i := 0; i < 3; i++ {
 		if !s.Allow(context.Background(), "notes.items.read") {
 			t.Fatal("allow expected")
@@ -63,6 +63,12 @@ func TestStub_AllowLoggedAtInfoOncePerPermission(t *testing.T) {
 	s.Allow(context.Background(), "notes.items.write")
 	if !strings.Contains(buf.String(), "permission=notes.items.write") {
 		t.Fatalf("permission berbeda harus dicatat: %q", buf.String())
+	}
+	// State dedup per instance: Stub baru mencatat lagi permission yang sama.
+	var buf2 bytes.Buffer
+	NewStub("allow", slog.New(slog.NewTextHandler(&buf2, nil))).Allow(context.Background(), "notes.items.read")
+	if !strings.Contains(buf2.String(), "permission=notes.items.read") {
+		t.Fatalf("instance lain harus punya state dedup sendiri: %q", buf2.String())
 	}
 	// deny tetap dicatat setiap kali.
 	var dbuf bytes.Buffer
