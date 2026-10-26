@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -179,5 +181,48 @@ func TestTraceHandler_ModuleKeyFromContextNoDuplicate(t *testing.T) {
 	}
 	if strings.Contains(lines[2], "erp.module.key") {
 		t.Errorf("tanpa modul: %s", lines[2])
+	}
+}
+
+type fakeSpanExporter struct{ shutdown int }
+
+func (f *fakeSpanExporter) ExportSpans(context.Context, []sdktrace.ReadOnlySpan) error { return nil }
+func (f *fakeSpanExporter) Shutdown(context.Context) error                             { f.shutdown++; return nil }
+
+// Exporter metrik gagal dibuat -> exporter span yang sudah dibuat harus di-Shutdown (tanpa kebocoran).
+func TestSetup_MetricExporterFailureShutsDownSpanExporter(t *testing.T) {
+	clearOtelEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	span := &fakeSpanExporter{}
+	wantErr := errors.New("metrik gagal")
+	orig := newExporters
+	newExporters = func(bool) exporterFactory {
+		return exporterFactory{
+			span:   func(context.Context) (sdktrace.SpanExporter, error) { return span, nil },
+			metric: func(context.Context) (sdkmetric.Exporter, error) { return nil, wantErr },
+		}
+	}
+	defer func() { newExporters = orig }()
+
+	_, _, err := Setup(context.Background(), Options{})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+	if span.shutdown != 1 {
+		t.Fatalf("Shutdown exporter span dipanggil %d kali, want 1", span.shutdown)
+	}
+}
+
+func TestSetup_SpanExporterFailureReturnsError(t *testing.T) {
+	clearOtelEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	wantErr := errors.New("span gagal")
+	orig := newExporters
+	newExporters = func(bool) exporterFactory {
+		return exporterFactory{span: func(context.Context) (sdktrace.SpanExporter, error) { return nil, wantErr }}
+	}
+	defer func() { newExporters = orig }()
+	if _, _, err := Setup(context.Background(), Options{}); !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v", err)
 	}
 }

@@ -33,6 +33,26 @@ type Providers struct {
 	Resource *resource.Resource
 }
 
+// exporterFactory membuat exporter span dan metrik; dapat diganti pada test (newExporters).
+type exporterFactory struct {
+	span   func(context.Context) (sdktrace.SpanExporter, error)
+	metric func(context.Context) (sdkmetric.Exporter, error)
+}
+
+// newExporters memilih exporter OTLP gRPC atau HTTP. Variabel agar test dapat menyuntikkan kegagalan.
+var newExporters = func(grpc bool) exporterFactory {
+	if grpc {
+		return exporterFactory{
+			span:   func(ctx context.Context) (sdktrace.SpanExporter, error) { return otlptracegrpc.New(ctx) },
+			metric: func(ctx context.Context) (sdkmetric.Exporter, error) { return otlpmetricgrpc.New(ctx) },
+		}
+	}
+	return exporterFactory{
+		span:   func(ctx context.Context) (sdktrace.SpanExporter, error) { return otlptracehttp.New(ctx) },
+		metric: func(ctx context.Context) (sdkmetric.Exporter, error) { return otlpmetrichttp.New(ctx) },
+	}
+}
+
 // Setup menyiapkan OTel. Tanpa OTEL_EXPORTER_OTLP_ENDPOINT: TracerProvider SDK tanpa exporter (span
 // tetap punya trace_id/span_id valid untuk log dan envelope error, FR-17.1) dan MeterProvider noop;
 // tidak ada koneksi keluar. Propagator TraceContext+Baggage selalu dipasang global.
@@ -58,30 +78,15 @@ func Setup(ctx context.Context, o Options) (Providers, func(context.Context) err
 		return Providers{}, nil, err
 	}
 
-	var (
-		spanExp sdktrace.SpanExporter
-		metExp  sdkmetric.Exporter
-	)
-	if os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL") == "grpc" {
-		te, terr := otlptracegrpc.New(ctx)
-		if terr != nil {
-			return Providers{}, nil, terr
-		}
-		spanExp = te
-		if metExp, err = otlpmetricgrpc.New(ctx); err != nil {
-			_ = spanExp.Shutdown(ctx) // exporter metrik gagal: jangan biarkan exporter span bocor
-			return Providers{}, nil, err
-		}
-	} else {
-		te, terr := otlptracehttp.New(ctx)
-		if terr != nil {
-			return Providers{}, nil, terr
-		}
-		spanExp = te
-		if metExp, err = otlpmetrichttp.New(ctx); err != nil {
-			_ = spanExp.Shutdown(ctx)
-			return Providers{}, nil, err
-		}
+	f := newExporters(os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL") == "grpc")
+	spanExp, err := f.span(ctx)
+	if err != nil {
+		return Providers{}, nil, err
+	}
+	metExp, err := f.metric(ctx)
+	if err != nil {
+		_ = spanExp.Shutdown(ctx) // exporter metrik gagal: jangan biarkan exporter span bocor
+		return Providers{}, nil, err
 	}
 
 	tp := sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithBatcher(spanExp))
