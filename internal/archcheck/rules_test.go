@@ -215,13 +215,22 @@ func TestDBOpen_ExtendedImports(t *testing.T) {
 	for _, imp := range []string{
 		"github.com/jackc/pgx/v5", "github.com/jackc/pgx/v5/stdlib", "github.com/jackc/pgx/v5/pgxpool",
 		"gorm.io/driver/mysql", "gorm.io/driver/sqlite",
+		"github.com/jackc/pgx/v5/pgconn", "github.com/jackc/pgx/v5/pgtype", "github.com/jackc/pgx/v4", "github.com/lib/pq",
 	} {
 		assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/settings", imp))), "DB-OPEN")
 		assertNone(t, Check(repoWith(pkg(root+"/internal/platform/database", imp))), "DB-OPEN")
 	}
-	// database/sql dilarang hanya di modules/** (platform, mis. migrate/goose, memakainya tanpa membuka koneksi).
-	assertViolation(t, Check(repoWith(pkg(example+"/internal/infrastructure", "database/sql"))), "DB-OPEN")
-	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/migrate", "database/sql"))), "DB-OPEN")
+	// database/sql: allowlist eksplisit internal/platform/database dan internal/platform/migrate (FR-21).
+	for _, p := range []string{
+		example + "/internal/infrastructure", root + "/internal/platform/settings", root + "/internal/platform/modules/store",
+		sdk + "/data", root + "/internal/app",
+	} {
+		assertViolation(t, Check(repoWith(pkg(p, "database/sql"))), "DB-OPEN")
+	}
+	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/settings", "database/sql/driver"))), "DB-OPEN")
+	for _, p := range []string{root + "/internal/platform/migrate", root + "/internal/platform/database"} {
+		assertNone(t, Check(repoWith(pkg(p, "database/sql"))), "DB-OPEN")
+	}
 	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/database", "github.com/jackc/pgx/v5/pgconn"))), "DB-OPEN")
 }
 

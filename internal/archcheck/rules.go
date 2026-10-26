@@ -23,13 +23,16 @@ var routerPrefixes = []string{
 	"github.com/go-martini/martini",
 }
 
-// isDBOpenImport: impor yang membuka koneksi database; hanya internal/platform/database (FR-21).
+// isDBOpenImport: impor driver/pool database (seluruh pgx termasuk pgconn, lib/pq, driver GORM);
+// hanya internal/platform/database yang boleh membuka koneksi (FR-21).
 func isDBOpenImport(imp string) bool {
-	switch imp {
-	case "github.com/jackc/pgx/v5", "github.com/jackc/pgx/v5/stdlib", "github.com/jackc/pgx/v5/pgxpool":
-		return true
-	}
-	return strings.HasPrefix(imp, "gorm.io/driver/")
+	return strings.HasPrefix(imp, "github.com/jackc/pgx/") || strings.HasPrefix(imp, "github.com/lib/pq") ||
+		strings.HasPrefix(imp, "gorm.io/driver/")
+}
+
+// isSQLImport: database/sql (dan subpaketnya) memungkinkan sql.Open; allowlist eksplisit di bawah.
+func isSQLImport(imp string) bool {
+	return imp == "database/sql" || strings.HasPrefix(imp, "database/sql/")
 }
 
 func isInfraOrPresentation(imp string) bool {
@@ -86,6 +89,7 @@ func Check(r Repo) []Violation {
 			underPath(rp, "internal/platform/modules/store") ||
 			underPath(rp, "sdk/data")
 		dbOK := isArch || underPath(rp, "internal/platform/database")
+		sqlOK := dbOK || underPath(rp, "internal/platform/migrate")
 
 		// D2, D7, D8 juga berlaku untuk impor file test (Q26 butir 1); aturan lain hanya non-test.
 		for _, imp := range unionStrings(append([]string{}, p.Imports...), p.TestImports) {
@@ -127,9 +131,6 @@ func Check(r Repo) []Violation {
 				if underPath(imp, sdkModule+"/data") && !hasSeg(rp, "internal/infrastructure") {
 					add("D3b", p.ImportPath, "erpora/sdk/data hanya boleh diimpor dari internal/infrastructure modul: "+imp)
 				}
-				if imp == "database/sql" {
-					add("DB-OPEN", p.ImportPath, "modul tidak boleh mengimpor database/sql (akses DB lewat sdk/data): "+imp)
-				}
 			}
 			if isModulePkg || isSDK {
 				for _, rp2 := range routerPrefixes {
@@ -138,6 +139,11 @@ func Check(r Repo) []Violation {
 						break
 					}
 				}
+			}
+			// database/sql hanya di internal/platform/database dan internal/platform/migrate (menerima *sql.DB
+			// untuk goose tanpa membuka koneksi); modul mengakses DB lewat sdk/data.
+			if isSQLImport(imp) && !sqlOK {
+				add("DB-OPEN", p.ImportPath, "database/sql hanya boleh di internal/platform/database dan internal/platform/migrate: "+imp)
 			}
 			if isDBOpenImport(imp) && !dbOK {
 				add("DB-OPEN", p.ImportPath, "hanya internal/platform/database yang boleh membuka koneksi: "+imp)
