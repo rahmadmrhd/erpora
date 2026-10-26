@@ -185,3 +185,30 @@ func TestLoad_OTelVarsFromEnvFileReachProcessEnv(t *testing.T) {
 		t.Errorf("service name = %q (proses harus menang)", got)
 	}
 }
+
+// security-guidelines §5: error parse env-file tidak boleh memuat isi file (mis. password DSN).
+func TestLoad_EnvFileParseErrorDoesNotLeakSecrets(t *testing.T) {
+	cases := map[string]string{
+		"karakter tak valid pada nama variabel": "ERP_DATABASE_URL=postgres://u:rahasia123@h/db\nBAD KEY$=x rahasia123\n",
+		"nilai berkutip tidak ditutup":          "ERP_DATABASE_URL=postgres://u:rahasia123@h/db\nERP_X=\"rahasia123 tanpa penutup\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			clearEnv(t)
+			p := filepath.Join(t.TempDir(), ".env")
+			if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(p)
+			if err == nil {
+				t.Fatal("expected parse error")
+			}
+			if strings.Contains(err.Error(), "rahasia123") {
+				t.Fatalf("error membocorkan isi file: %v", err)
+			}
+			if !strings.Contains(err.Error(), "parse env-file") {
+				t.Fatalf("error tidak menyebut file: %v", err)
+			}
+		})
+	}
+}

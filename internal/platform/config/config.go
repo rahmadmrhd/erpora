@@ -62,7 +62,8 @@ func Load(envFile string) (Config, error) {
 		data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
 		parsed, err := godotenv.Unmarshal(string(data))
 		if err != nil {
-			return Config{}, fmt.Errorf("parse env-file %q: %w", envFile, err)
+			// Teks error godotenv menyertakan potongan isi file (bisa memuat rahasia), jadi tidak diteruskan.
+			return Config{}, fmt.Errorf("parse env-file %q: sintaks tidak valid (isi file tidak ditampilkan)", envFile)
 		}
 		for k, v := range parsed {
 			vars[k] = v
