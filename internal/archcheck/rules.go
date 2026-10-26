@@ -239,7 +239,9 @@ func Check(r Repo) []Violation {
 		}
 	}
 
-	// F2: dependencies package.json frontend modul == dependencies manifest (key -> @erpora/module-<nama dir>).
+	// F2: dependencies package.json frontend modul ⊆ dependencies manifest (key -> @erpora/module-<nama dir>).
+	// Subset, bukan kesamaan (Q27): dependensi manifest yang tidak dipakai frontend, mis. modul backend-only
+	// tanpa web/, tidak wajib tercantum di package.json.
 	for y, wp := range r.Web {
 		// Nama package wajib @erpora/module-<nama dir modul> (CLAUDE.md, Q21).
 		if wp.Name != webPackageName(y) {
@@ -256,18 +258,9 @@ func Check(r Repo) []Violation {
 				}
 			}
 		}
-		have := map[string]bool{}
 		for _, d := range wp.ModuleDeps {
-			have[d] = true
-		}
-		for d := range have {
 			if !want[d] && d != webPackageName(y) {
 				add("F2", y, "web/package.json bergantung pada "+d+" yang tidak ada di dependencies manifest")
-			}
-		}
-		for d := range want {
-			if !have[d] {
-				add("F2", y, "manifest bergantung pada modul tetapi web/package.json tidak memuat "+d)
 			}
 		}
 	}

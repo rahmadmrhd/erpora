@@ -305,7 +305,7 @@ func TestGoWork_CompletenessAndEnabled(t *testing.T) {
 	}
 }
 
-func TestF2_WebDependenciesMustMatchManifest(t *testing.T) {
+func TestF2_WebDependenciesMustBeSubsetOfManifest(t *testing.T) {
 	r := repoWith()
 	m := r.Manifests[addon]
 	m.Dependencies = append(m.Dependencies, "acme.example")
@@ -318,9 +318,9 @@ func TestF2_WebDependenciesMustMatchManifest(t *testing.T) {
 	// dependency package.json yang tidak ada di manifest
 	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: []string{"@erpora/module-example", "@erpora/module-lain"}}}
 	assertViolation(t, Check(r), "F2")
-	// dependency manifest yang tidak ada di package.json
+	// dependency manifest yang tidak dipakai frontend (mis. modul backend-only) boleh absen dari package.json (Q27)
 	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: nil}}
-	assertViolation(t, Check(r), "F2")
+	assertNone(t, Check(r), "F2")
 	// nama package tidak sesuai nama direktori modul (kosong atau salah)
 	for _, name := range []string{"", "@erpora/module-example-addon", "@erpora/other", "@erpora/module-example"} {
 		r.Web = map[string]WebPackage{addon: {Name: name, ModuleDeps: []string{"@erpora/module-example"}}}
