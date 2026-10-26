@@ -37,11 +37,15 @@ type ExitError struct {
 func (e *ExitError) Error() string { return e.Err.Error() }
 func (e *ExitError) Unwrap() error { return e.Err }
 
+// NewLogger membuat logger proses (trace-aware) sesuai konfigurasi. Perintah serve memakainya,
+// memasangnya sebagai slog.Default() (agar log handler modul seragam), lalu meneruskannya ke Run.
+func NewLogger(cfg config.Config, w io.Writer) *slog.Logger {
+	return observability.NewLogger(w, cfg.LogFormat, slog.LevelInfo)
+}
+
 // Run menjalankan server sampai ctx dibatalkan. serve tidak pernah menulis platform_state.
-func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
-	log := observability.NewLogger(stdout, cfg.LogFormat, slog.LevelInfo)
-	// slog.Default() = logger platform (dengan trace bridge) agar log handler modul (slog.ErrorContext) seragam.
-	slog.SetDefault(log)
+// Run tidak mengubah slog.Default(); pemanggil (perintah serve) yang memasangnya.
+func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	// Katalog modul divalidasi sebelum DB dibuka; katalog rusak adalah bug build (exit 2).
 	reg, err := BuildRegistry()

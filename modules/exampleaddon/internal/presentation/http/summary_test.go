@@ -53,7 +53,7 @@ func TestSummary_ContractErrorIsLogged(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
-	defer slog.SetDefault(prev)
+	t.Cleanup(func() { slog.SetDefault(prev) })
 	rec := httptest.NewRecorder()
 	New(fakeNotes{err: errors.New("SELECT rahasia")}).Summary(rec, httptest.NewRequest(http.MethodGet, "/summary", nil))
 	if rec.Code != 500 || strings.Contains(rec.Body.String(), "rahasia") {

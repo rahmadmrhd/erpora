@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,7 +31,9 @@ func newServeCmd(opts *rootOpts) *cobra.Command {
 				<-ctx.Done()
 				stop()
 			}()
-			return app.Run(ctx, cfg, cmd.OutOrStdout())
+			log := app.NewLogger(cfg, cmd.OutOrStdout())
+			slog.SetDefault(log) // slog.Default() = logger platform agar log handler modul (slog.ErrorContext) seragam
+			return app.Run(ctx, cfg, log)
 		},
 	}
 }

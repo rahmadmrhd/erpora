@@ -109,7 +109,7 @@ func TestNotes_InternalErrorIsLogged(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
-	defer slog.SetDefault(prev)
+	t.Cleanup(func() { slog.SetDefault(prev) })
 	rec := serve(New(&fakeLister{err: errors.New("SELECT rahasia")}).ListNotes, "/notes")
 	if rec.Code != 500 || strings.Contains(rec.Body.String(), "rahasia") {
 		t.Fatalf("respons harus generik: %d %s", rec.Code, rec.Body.String())
