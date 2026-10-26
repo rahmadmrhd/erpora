@@ -20,7 +20,8 @@ func clearOtelEnv(t *testing.T) {
 	}
 }
 
-func TestSetup_NoEndpointIsNoop(t *testing.T) {
+// K5: tanpa endpoint, provider SDK tanpa exporter: tidak ada koneksi keluar, tetapi span punya ID valid.
+func TestSetup_NoEndpointHasValidSpanIDsWithoutExporter(t *testing.T) {
 	clearOtelEnv(t)
 	p, shutdown, err := Setup(context.Background(), Options{ServiceVersion: "1", Environment: "test"})
 	if err != nil {
@@ -29,9 +30,18 @@ func TestSetup_NoEndpointIsNoop(t *testing.T) {
 	if p.Enabled {
 		t.Fatal("Enabled must be false")
 	}
-	if _, ok := p.Tracer.(noop.TracerProvider); !ok {
-		t.Fatalf("tracer provider is %T, want noop", p.Tracer)
+	if _, ok := p.Tracer.(noop.TracerProvider); ok {
+		t.Fatal("tracer provider tidak boleh noop: ID span harus valid")
 	}
+	if _, ok := p.Tracer.(*sdktrace.TracerProvider); !ok {
+		t.Fatalf("tracer provider is %T, want *sdktrace.TracerProvider", p.Tracer)
+	}
+	// Provider dibuat tanpa exporter/span processor (lihat Setup), jadi tidak ada ekspor atau koneksi keluar.
+	_, span := p.Tracer.Tracer("t").Start(context.Background(), "op")
+	if !span.SpanContext().TraceID().IsValid() || !span.SpanContext().SpanID().IsValid() {
+		t.Fatalf("span context tidak valid: %v", span.SpanContext())
+	}
+	span.End()
 	if err := shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}
