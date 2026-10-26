@@ -539,7 +539,7 @@ Dua modul minimal yang membuktikan seluruh kontrak sekaligus menjadi template:
 | -------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
 | Dependency     | `platform.core ^1.0`                                    | `platform.core ^1.0`, `acme.example ^1.0`                    |
 | Endpoint       | `GET /api/example/ping` (`example.ping.read`); `GET /api/example/notes` (`example.notes.read`) | `GET /api/example-addon/summary` (`example-addon.summary.read`) yang memanggil `example/contract` |
-| Migrasi        | `0001_create_example_notes.sql` (+ seed via `Installer`) | tanpa migrasi (`strategy: none`)                             |
+| Migrasi        | `0001_create_example_notes.sql`, `0002_add_example_notes_version.sql` (Q26) (+ seed via `Installer`) | tanpa migrasi (`strategy: none`)                             |
 | Hook lifecycle | `Installer`, `HealthChecker`, `DevSeeder`               | `EnableHook`, `DisableHook` (mencatat log)                   |
 | Command CLI    | `erpora example:recount` (menghitung ulang jumlah notes)   | —                                                            |
 | Frontend       | `module.ts`, route lazy, satu item navigasi              | `module.ts`, route lazy, satu item navigasi                  |
