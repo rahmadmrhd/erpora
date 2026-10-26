@@ -1,8 +1,8 @@
 # Taskfile.yml - satu-satunya entry point perintah proyek ERPora (go-task v3).
 #
 # Instalasi & pemanggilan per OS/terminal (PRD-000 FR-01):
-#   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@latest
-#   - Tanpa install global (sudah ada Bun):  bunx @go-task/cli <task>
+#   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@v3.54.0
+#   - Tanpa install global (sudah ada Bun):  bunx @go-task/cli@3.54.0 <task>
 #   - Windows:  winget install Task.Task   atau   scoop install task
 #               Pemanggilannya sama di PowerShell, cmd, dan Git Bash: task <nama>
 #   - macOS:    brew install go-task
