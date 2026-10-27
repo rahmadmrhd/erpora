@@ -57,12 +57,12 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 }
 
 // requestScope menetapkan X-Request-Id, security headers, dan access log.
-func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Handler {
+func requestScope(log *slog.Logger, pattern string, nPlusOne int, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
 		meta := &requestMeta{}
-		r = r.WithContext(context.WithValue(r.Context(), requestMetaKey{}, meta))
+		r = r.WithContext(database.WithQueryCounter(context.WithValue(r.Context(), requestMetaKey{}, meta), nPlusOne))
 		completed := false // tetap false bila handler panic (recoverMW menulis 500 sesudahnya)
 		defer func() {
 			status := sw.status

@@ -35,6 +35,8 @@ type Config struct {
 	// ModulesAdminAPI (ERP_MODULES_ADMIN_API) mengaktifkan endpoint mutasi /api/platform/modules di luar
 	// development, sampai PRD-001 menyediakan autentikasi. Default false.
 	ModulesAdminAPI bool
+	// DBNPlusOneThreshold (ERP_DB_NPLUSONE_THRESHOLD, default 10, 0 = mati): ambang peringatan N+1 di development.
+	DBNPlusOneThreshold int
 }
 
 // ModulesAdminAPIEnabled: endpoint mutasi modul aktif bila ERP_ENV=development atau ERP_MODULES_ADMIN_API=true.
@@ -55,6 +57,7 @@ type raw struct {
 	DBSlowQueryMS   string `env:"ERP_DB_SLOW_QUERY_MS" envDefault:"200"`
 	AuthzStub       string `env:"ERP_AUTHZ_STUB"`
 	ModulesAdminAPI string `env:"ERP_MODULES_ADMIN_API"`
+	NPlusOne        string `env:"ERP_DB_NPLUSONE_THRESHOLD" envDefault:"10"`
 }
 
 // Load membaca konfigurasi. envFile "" = tanpa file; environment proses menang atas isi file.
@@ -150,5 +153,10 @@ func Load(envFile string) (Config, error) {
 		return Config{}, ValidationError{"ERP_DB_SLOW_QUERY_MS", "harus bilangan bulat >= 0 (milidetik)"}
 	}
 	c.DBSlowQuery = time.Duration(ms) * time.Millisecond
+	var np int
+	if _, err := fmt.Sscanf(r.NPlusOne, "%d", &np); err != nil || np < 0 || fmt.Sprint(np) != strings.TrimSpace(r.NPlusOne) {
+		return Config{}, ValidationError{"ERP_DB_NPLUSONE_THRESHOLD", "harus bilangan bulat >= 0 (0 = mati)"}
+	}
+	c.DBNPlusOneThreshold = np
 	return c, nil
 }

@@ -99,7 +99,9 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		Assets:     web.Dist(),
 		AppVersion: buildinfo.Version,
 		Dev:        cfg.Env == config.EnvDevelopment,
-		Bootstrap:  bootstrapFrom(reg, snap),
+		// Deteksi N+1 hanya di development (ERP_DB_NPLUSONE_THRESHOLD, 0 = mati).
+		NPlusOneThreshold: cfg.DBNPlusOneThreshold,
+		Bootstrap:         bootstrapFrom(reg, snap),
 		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
 		Authenticate: func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

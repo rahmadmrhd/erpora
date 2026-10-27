@@ -31,16 +31,17 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				tenant = c.DefaultTenantID.String()
 			}
 			kv := map[string]string{
-				"ERP_DATABASE_URL":      config.RedactDSN(c.DatabaseURL),
-				"ERP_ENV":               string(c.Env),
-				"ERP_HTTP_ADDR":         c.HTTPAddr,
-				"ERP_LOG_FORMAT":        c.LogFormat,
-				"ERP_TENANCY_MODE":      c.TenancyMode,
-				"ERP_DEFAULT_TENANT_ID": tenant,
-				"ERP_AUTHZ_STUB":        c.AuthzStub,
-				"ERP_MODULES_ADMIN_API": strconv.FormatBool(c.ModulesAdminAPI),
-				"ERP_DB_SLOW_QUERY_MS":  strconv.FormatInt(c.DBSlowQuery.Milliseconds(), 10),
-				"flavor":                buildinfo.Flavor(),
+				"ERP_DATABASE_URL":          config.RedactDSN(c.DatabaseURL),
+				"ERP_ENV":                   string(c.Env),
+				"ERP_HTTP_ADDR":             c.HTTPAddr,
+				"ERP_LOG_FORMAT":            c.LogFormat,
+				"ERP_TENANCY_MODE":          c.TenancyMode,
+				"ERP_DEFAULT_TENANT_ID":     tenant,
+				"ERP_AUTHZ_STUB":            c.AuthzStub,
+				"ERP_MODULES_ADMIN_API":     strconv.FormatBool(c.ModulesAdminAPI),
+				"ERP_DB_NPLUSONE_THRESHOLD": strconv.Itoa(c.DBNPlusOneThreshold),
+				"ERP_DB_SLOW_QUERY_MS":      strconv.FormatInt(c.DBSlowQuery.Milliseconds(), 10),
+				"flavor":                    buildinfo.Flavor(),
 			}
 			keys := make([]string, 0, len(kv))
 			for k := range kv {

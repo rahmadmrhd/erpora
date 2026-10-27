@@ -31,7 +31,9 @@ func Open(ctx context.Context, cfg config.Config, tp trace.TracerProvider, log *
 		// Ping otomatis GORM memakai context.Background() tanpa timeout; koneksi pertama dilakukan
 		// oleh PingContext(ctx) di bawah agar menghormati ctx dan batas 5 detik.
 		DisableAutomaticPing: true,
-		Logger:               newSlogLogger(log, cfg.DBSlowQuery),
+		// FR-07 guardrail 5: prepared statement cache di semua mode.
+		PrepareStmt: true,
+		Logger:      newSlogLogger(log, cfg.DBSlowQuery),
 	})
 	if err != nil {
 		return nil, connError(cfg.DatabaseURL, err)
@@ -88,6 +90,12 @@ func newSlogLogger(log *slog.Logger, slow time.Duration) gormlogger.Interface {
 	return &slogLogger{log: log, slow: slow}
 }
 
+// NewGormLogger membuat logger GORM berbasis slog (query lambat, error aman, deteksi N+1); dipakai Open
+// dan test.
+func NewGormLogger(log *slog.Logger, slow time.Duration) gormlogger.Interface {
+	return newSlogLogger(log, slow)
+}
+
 func (l *slogLogger) LogMode(gormlogger.LogLevel) gormlogger.Interface { return l }
 
 func (l *slogLogger) Info(ctx context.Context, msg string, args ...any) {
@@ -104,6 +112,14 @@ func (l *slogLogger) Error(ctx context.Context, msg string, args ...any) {
 
 func (l *slogLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
+	if _, ok := ctx.Value(counterKey{}).(*queryCounter); ok {
+		sql, _ := fc()
+		if count, threshold, warn := observe(ctx, sql); warn {
+			// sql adalah bentuk berparameter (ParamsFilter membuang nilai), aman dicatat.
+			l.log.WarnContext(ctx, "indikasi N+1: bentuk query yang sama berulang dalam satu request",
+				"sql", sql, "count", count, "threshold", threshold)
+		}
+	}
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
 		sql, rows := fc()
