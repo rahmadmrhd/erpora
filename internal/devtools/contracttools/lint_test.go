@@ -227,6 +227,11 @@ func TestLint_Fixtures(t *testing.T) {
 			want:  []string{"erp-path-module-prefix"}, msg: "FR-23.1",
 		},
 		{
+			name:  "public_with_query_needs_4xx",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + publicWithQueryBlock + "components:\n"}}},
+			want:  []string{"erp-error-codes-documented"}, msg: "api-guidelines §13",
+		},
+		{
 			name:  "patch_without_if_match",
 			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + patchBlock + "components:\n"}}},
 			want:  []string{"erp-if-match"}, msg: "api-guidelines §7.1",
@@ -311,6 +316,27 @@ func TestLint_HighlyConfidentialExceptionAllowedAndRecorded(t *testing.T) {
 	}
 	if LintFailed(res) {
 		t.Error("INFO tidak boleh menggagalkan lint")
+	}
+}
+
+// K-7 (Q32): operasi publik tanpa parameter non-header dan tanpa requestBody tidak wajib mendokumentasikan 4xx/403.
+func TestLint_PublicOperationWithoutInputMayOmit4xx(t *testing.T) {
+	bun := requireBun(t)
+	root := t.TempDir()
+	copyRepoSubset(t, root, "example", "exampleaddon")
+	editFile(t, root, "modules/example/openapi.yaml",
+		[2]string{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + publicNoInputBlock + "components:\n"})
+	repo, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.ToolsRoot = realRoot
+	res, err := Lint(context.Background(), repo, "example", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res {
+		t.Errorf("tidak boleh ada temuan: %s %s", r.Rule, r.Message)
 	}
 }
 

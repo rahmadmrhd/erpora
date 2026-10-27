@@ -53,7 +53,7 @@ Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, 
 | `erp-no-put` | `PUT` hanya dengan `x-erp-allow-put` | §3 |
 | `erp-ref-dependency` | `erp:<slug>` hanya ke dependensi manifest | FR-23.1 |
 | `erp-examples` | Respons 2xx dan `requestBody` JSON punya contoh | §13 |
-| `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien) | §13 |
+| `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tanpa parameter non-header dan tanpa `requestBody` tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); publik dengan masukan tetap wajib minimal satu 4xx | §13 |
 | `erp-classification-valid` | `x-erp-classification` salah satu dari empat kelas | security-guidelines §2 |
 | `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential` | FR-24.2; security-guidelines §2, §3.4 |
 | `erp-no-sensitive-in-url` | Data sensitif (mis. `token`, `password`) tidak lewat path atau query | FR-24.2 |

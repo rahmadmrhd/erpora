@@ -315,7 +315,7 @@ draft ──submit──▶ submitted ──cancel──▶ cancelled ──amen
 - Route yang didaftarkan lewat `Registrar.Handle` dan operasi di kontrak harus cocok satu-satu (method, path, permission); ketidakcocokan menggagalkan CI.
 - Test kontrak memastikan respons nyata sesuai skema OpenAPI-nya.
 - Ekstensi yang dikenal (semua berawalan `x-erp-`): `permission`, `public`, `classification` (`public|internal|confidential|highly_confidential`; tanpa anotasi = `internal`; klasifikasi route harus sama dengan klasifikasi tertinggi respons 2xx, dihitung rekursif), `singleton` (§2), `allow-put` (§3), `filterable`, `sortable`, `field-group`, dan `extensible-enum`. Daftar rule linter beserta pasalnya ada di [`docs/module-sdk/contracts.md`](../module-sdk/contracts.md).
-- Operasi publik (`x-erp-public`) tanpa masukan tidak diwajibkan mendokumentasikan 4xx/403; operasi non-publik wajib (rule `erp-error-codes-documented`).
+- Operasi publik (`x-erp-public`) **tanpa parameter non-header dan tanpa `requestBody`** (mis. `GET /api/bootstrap`) tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); operasi publik dengan parameter path/query atau body tetap wajib mendokumentasikan minimal satu 4xx (tanpa 403, karena tidak ada permission); operasi non-publik wajib 4xx dan 403 (rule `erp-error-codes-documented`, Q32).
 - Tipe TS kontrak dibangkitkan (`erpora contracts:generate`) dan di-commit; CI menggagalkan hasil generate yang basi (`contracts:generate --check`).
 
 ## 14. Evolusi & versioning

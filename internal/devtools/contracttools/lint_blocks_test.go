@@ -46,6 +46,44 @@ const otherPrefixBlock = `  /api/other/things:
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
 `
 
+// publicWithQueryBlock: operasi publik DENGAN parameter query dan tanpa respons 4xx (K-7: tidak dikecualikan).
+const publicWithQueryBlock = `  /api/example/feed:
+    x-erp-singleton: true
+    get:
+      operationId: getExampleFeed
+      summary: Pengumuman publik
+      description: Publik tetapi menerima parameter query, sehingga wajib mendokumentasikan 4xx.
+      x-erp-public: true
+      parameters:
+        - { name: category, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { type: string } } } }
+              example: { data: [] }
+`
+
+// publicNoInputBlock: operasi publik tanpa parameter non-header dan tanpa requestBody: boleh tanpa 4xx (K-7).
+const publicNoInputBlock = `  /api/example/announcement:
+    x-erp-singleton: true
+    get:
+      operationId: getExampleAnnouncement
+      summary: Pengumuman tunggal publik
+      description: Tanpa masukan; tidak punya jalur error klien.
+      x-erp-public: true
+      parameters:
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: string } } }
+              example: { data: halo }
+`
+
 const patchBlock = `  /api/example/notes/{id}:
     patch:
       operationId: patchExampleNote

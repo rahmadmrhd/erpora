@@ -151,16 +151,21 @@ export function examples(root: unknown): Result[] {
 }
 
 export function errorCodesDocumented(root: unknown): Result[] {
+  const docRoot = root;
   const out: Result[] = [];
   for (const op of operations(currentDoc(root))) {
     const codes = Object.keys(asObj(op.node.responses) ?? {});
     const where = `${op.method.toUpperCase()} ${op.path}`;
     const need: string[] = [];
-    // Operasi publik tanpa masukan (mis. GET /api/bootstrap) tidak punya jalur error klien; 4xx dan 403 hanya
-    // diwajibkan untuk operasi non-publik.
-    const isPublic = op.node["x-erp-public"] === true;
-    if (!isPublic && !codes.some((c) => c.startsWith("4"))) need.push("minimal satu respons 4xx");
-    if (!isPublic && !codes.includes("403")) need.push("403");
+    // Pengecualian (Q32 K-7): operasi publik TANPA parameter non-header dan TANPA requestBody (mis. GET /api/bootstrap)
+    // tidak punya jalur error klien, jadi 4xx dan 403 tidak diwajibkan. Publik dengan masukan tetap wajib 4xx.
+    const hasInput =
+      op.node.requestBody !== undefined ||
+      parametersOf(docRoot, op).some((p) => asStr(p.in) !== "header");
+    const isPublicOp = op.node["x-erp-public"] === true;
+    if (!(isPublicOp && !hasInput) && !codes.some((c) => c.startsWith("4")))
+      need.push("minimal satu respons 4xx");
+    if (!isPublicOp && !codes.includes("403")) need.push("403"); // operasi publik tidak punya permission yang dapat ditolak
     if (op.path.includes("{") && !codes.includes("404")) need.push("404");
     if (op.node.requestBody !== undefined) {
       if (!codes.includes("400")) need.push("400");
