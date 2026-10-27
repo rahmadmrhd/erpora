@@ -34,6 +34,22 @@ func TestStubFieldMasker_AllowCopiesAndLogsOnce(t *testing.T) {
 	}
 }
 
+// M-6: mode deny mencatat WARN sekali per resource (bukan per pemanggilan/baris ekspor), seperti mode allow.
+func TestStubFieldMasker_DenyLogsOncePerResource(t *testing.T) {
+	log, buf := bufLogger()
+	m := NewStubFieldMasker("deny", log)
+	for range 5 {
+		m.MaskFields(context.Background(), "x.note", map[string]any{"a": 1})
+	}
+	if n := strings.Count(buf.String(), `"level":"WARN"`); n != 1 {
+		t.Errorf("WARN resource yang sama = %d, want 1: %s", n, buf.String())
+	}
+	m.MaskFields(context.Background(), "x.other", map[string]any{"a": 1})
+	if n := strings.Count(buf.String(), `"level":"WARN"`); n != 2 {
+		t.Errorf("WARN setelah resource kedua = %d, want 2", n)
+	}
+}
+
 func TestStubFieldMasker_DenyAndUnknownFailClosed(t *testing.T) {
 	for _, mode := range []StubMode{"deny", "bogus"} {
 		log, buf := bufLogger()
