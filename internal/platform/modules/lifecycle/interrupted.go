@@ -45,6 +45,7 @@ func (s *Service) markInterrupted(ctx context.Context, t tenancy.TenantID) ([]uu
 			}
 		}
 		c := store.Commit{
+			BumpRevision: true, // lastOperation berubah: ETag (= revision) harus berubah (Q32 B-4)
 			Finish: &store.Finish{OperationID: op.ID, Status: "failed", Error: &store.OpError{
 				Code: CodeInterrupted, Message: "operasi terputus sebelum selesai", Step: last,
 			}},

@@ -468,6 +468,9 @@ func (r *opRun) finish(ctx context.Context, fail *stepFailure) (Result, error) {
 		res.Status, res.Error, res.To = "failed", opErr, r.from
 		fd := map[string]any{"operation": string(r.op), "step": fail.step, "code": fail.code, "message": opErr.Message}
 		c.Events = append(c.Events, ev("operation_failed", fd))
+		// Revision naik pada SETIAP commit operasi, termasuk kegagalan yang tidak mengubah status: ETag (= revision)
+		// harus berubah ketika lastOperation berubah, agar klien tidak menerima 304 basi (Q32 B-4).
+		c.BumpRevision = true
 		if dataChanging(fail.step) {
 			in.Status = string(runtime.StatusFailed)
 			if r.op == OpInstall {

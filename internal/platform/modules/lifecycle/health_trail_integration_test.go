@@ -61,7 +61,11 @@ func TestService_HealthFailureOnEnableNeverActivatesRoutes(t *testing.T) {
 		t.Fatalf("install = %+v", r)
 	}
 	seen = append(seen, probe())
+	revBefore, _ := e.st.Revision(context.Background(), tenantA)
 	r := e.exec(t, OpEnable, "acme.fx-mod")
+	if revAfter, _ := e.st.Revision(context.Background(), tenantA); revAfter <= revBefore {
+		t.Errorf("revision (ETag) harus naik setelah enable gagal: %d -> %d (Q32 B-4)", revBefore, revAfter)
+	}
 	if r.Status != "failed" || r.Error == nil || r.Error.Code != codeHealthFailed {
 		t.Fatalf("enable = %+v, want failed/%s", r, codeHealthFailed)
 	}

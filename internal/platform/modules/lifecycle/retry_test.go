@@ -217,6 +217,33 @@ func TestExecute_UpgradeRestoringEnabledRequiresEnabledDependencies(t *testing.T
 	}
 }
 
+// B-4 (Q32): revision naik pada setiap commit operasi, termasuk operasi gagal yang tidak mengubah status, sehingga
+// ETag (= revision) berubah ketika lastOperation berubah dan klien tidak menerima 304 basi.
+func TestRevisionBumpsOnFailedOperationWithoutStatusChange(t *testing.T) {
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a"})
+	e := newEnv(t, rec, a)
+	if res, err := e.exec(OpInstall, "acme.a"); err != nil || res[0].Status != "succeeded" {
+		t.Fatalf("install = %+v, %v", res, err)
+	}
+	a.on("Health", func(context.Context, module.Env) error { return errors.New("tidak sehat") })
+	before, _ := e.st.Revision(context.Background(), tenantA)
+	res, err := e.exec(OpEnable, "acme.a")
+	if err != nil || res[0].Status != "failed" {
+		t.Fatalf("enable = %+v, %v", res, err)
+	}
+	after, _ := e.st.Revision(context.Background(), tenantA)
+	if after <= before {
+		t.Errorf("revision tidak naik setelah operasi gagal: %d -> %d", before, after)
+	}
+	if res[0].Revision != after {
+		t.Errorf("Result.Revision = %d, want %d", res[0].Revision, after)
+	}
+	if got := e.st.row("acme.a").Status; got != "installed" {
+		t.Errorf("status tidak boleh berubah: %s", got)
+	}
+}
+
 // B-7: pencatatan module_migrations gagal setelah goose commit (tidak atomik). Retry harus menyelaraskan jejak dengan
 // goose_module_<slug>: file yang sudah diterapkan tetapi belum punya baris tercatat sebagai succeeded.
 func TestRetry_ReconcilesMigrationTrailWithGoose(t *testing.T) {
