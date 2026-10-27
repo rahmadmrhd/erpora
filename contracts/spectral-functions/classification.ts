@@ -42,17 +42,34 @@ const SENSITIVE_TOKENS = new Set([
   "npwp",
   "salary",
 ]);
-const SENSITIVE_PAIRS = new Set(["api key", "private key", "bank account"]);
+const SENSITIVE_PAIRS = new Set([
+  "api key",
+  "private key",
+  "bank account",
+  "access token",
+  "refresh token",
+]);
 // K-4 (Q32): data pribadi/keuangan sensitif (nik, npwp, bankAccount*, salary) wajib highly_confidential; di respons hanya
 // diizinkan dengan pengecualian eksplisit x-erp-allow-highly-confidential (alasan string tidak kosong).
 const HIGHLY_TOKENS = new Set(["password", "passwd", "secret", "token", "nik", "npwp", "salary"]);
-const HIGHLY_PAIRS = new Set(["api key", "private key", "bank account"]);
+const HIGHLY_PAIRS = new Set([
+  "api key",
+  "private key",
+  "bank account",
+  "access token",
+  "refresh token",
+]);
 
 function matchesTerms(name: string, singles: Set<string>, pairs: Set<string>): boolean {
   const t = nameTokens(name);
+  // Istilah multi-kata yang ditulis menyambung atau huruf besar semua (apikey, APIKEY, bankaccount, accesstoken) menjadi
+  // satu token; cocokkan juga bentuk gabungannya sebagai substring token tunggal (R-2).
+  const joined = [...pairs].map((p) => p.replace(" ", ""));
   for (let i = 0; i < t.length; i++) {
-    if (singles.has(t[i] ?? "")) return true;
-    if (i + 1 < t.length && pairs.has(`${t[i]} ${t[i + 1]}`)) return true;
+    const tok = t[i] ?? "";
+    if (singles.has(tok)) return true;
+    if (i + 1 < t.length && pairs.has(`${tok} ${t[i + 1]}`)) return true;
+    if (joined.some((j) => tok.includes(j))) return true;
   }
   return false;
 }

@@ -143,6 +143,23 @@ func TestLint_Fixtures(t *testing.T) {
 			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string }\n        apiToken: { type: string }\n        passwordHash: { type: string }\n        bankAccountNumber: { type: string }\n"}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
 		},
+		// R-2: istilah multi-kata yang ditulis menyambung atau huruf besar semua tetap tertangkap.
+		{
+			name:  "joined_lowercase_sensitive_names_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        apikey: { type: string }\n        privatekey: { type: string }\n        bankaccount: { type: string }\n        accesstoken: { type: string }\n        refreshtoken: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name:  "uppercase_sensitive_names_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        APIKEY: { type: string }\n        PRIVATEKEY: { type: string }\n        BANKACCOUNT: { type: string }\n"}}},
+			want:  []string{"erp-property-camel-case", "erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name: "joined_sensitive_names_in_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: apikey, in: query, schema: { type: string } }\n        - { name: accesstoken, in: query, schema: { type: string } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url", "erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
 		{
 			name: "reset_token_query",
 			edits: map[string][][2]string{ex: {{pageSizeParam,
