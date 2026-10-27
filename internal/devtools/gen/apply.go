@@ -3,6 +3,7 @@ package gen
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -20,6 +21,9 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 	out := o.Out
 	if out == nil {
 		out = io.Discard
+	}
+	if p.NoForce && o.Force {
+		return errors.New("--force tidak berlaku untuk perintah ini: make:module, make:handler, dan make:command menolak tanpa syarat bila targetnya sudah ada; hapus atau ganti nama target secara manual bila memang ingin membuat ulang")
 	}
 	type step struct {
 		op       FileOp

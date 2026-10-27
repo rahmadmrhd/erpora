@@ -123,6 +123,7 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 	}
 	plan.Ops = append(plan.Ops, mods...)
 	plan.Post = modulePost(name, o.Frontend)
+	plan.NoForce = true
 	return plan, nil
 }
 

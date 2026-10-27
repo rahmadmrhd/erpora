@@ -222,6 +222,7 @@ func MakeHandler(root string, o HandlerOptions) (Plan, error) {
 		// Tipe TS kontrak modul di-commit; operasi baru membuatnya basi.
 		plan.Post = append(plan.Post, generatePost(ref.Dir))
 	}
+	plan.NoForce = true
 	return plan, nil
 }
 

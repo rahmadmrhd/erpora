@@ -106,6 +106,27 @@ func TestCommands_ArgumentRulesAndExitCodes(t *testing.T) {
 	}
 }
 
+// G-5 (Q32): --force ditolak (exit 2, pesan jelas) untuk make:module, make:handler, dan make:command; tidak ada yang ditulis.
+// Dijalankan di repo asli: rencana dibangun tetapi ditolak sebelum Apply.
+func TestCommands_ForceRejectedForModuleHandlerCommand(t *testing.T) {
+	cases := [][]string{
+		{"make:module", "zzforcedemo", "--force"},
+		{"make:handler", "example", "ZzForce", "--route", "GET /zz-forces/{id}", "--permission", "example.zz.read", "--force"},
+		{"make:command", "example", "zz-force", "--force"},
+	}
+	for _, args := range cases {
+		root := newTestRoot(t)
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&out)
+		root.SetArgs(args)
+		err := root.Execute()
+		if exitCodeOf(err) != 2 || !strings.Contains(err.Error(), "--force tidak berlaku") {
+			t.Errorf("%v: err = %v (exit %d), want exit 2 dengan pesan --force tidak berlaku", args, err, exitCodeOf(err))
+		}
+	}
+}
+
 // --dry-run dan --force terdaftar di setiap make:* (flag bersama) dan flag spesifik ada di tempatnya.
 func TestCommands_FlagsRegistered(t *testing.T) {
 	root := newTestRoot(t)

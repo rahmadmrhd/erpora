@@ -35,6 +35,8 @@ type PostStep struct {
 type Plan struct {
 	Ops  []FileOp
 	Post []PostStep
+	// NoForce: --force tidak berlaku (make:module, make:handler, make:command menolak tanpa syarat bila target sudah ada; Q32 G-5).
+	NoForce bool
 }
 
 // Options mengatur Apply.

@@ -10,7 +10,7 @@ import (
 type makeFlags struct{ force, dryRun bool }
 
 func (f *makeFlags) bind(c *cobra.Command) {
-	c.Flags().BoolVar(&f.force, "force", false, "timpa file yang sudah ada (hanya file yang dibuat; file yang diubah tidak terpengaruh)")
+	c.Flags().BoolVar(&f.force, "force", false, "timpa file yang sudah ada (hanya file yang dibuat; file yang diubah tidak terpengaruh). TIDAK berlaku untuk make:module, make:handler, dan make:command: ketiganya menolak tanpa syarat bila target sudah ada")
 	c.Flags().BoolVar(&f.dryRun, "dry-run", false, "tampilkan file dan diff tanpa menulis apa pun")
 }
 
@@ -23,6 +23,9 @@ func (f *makeFlags) apply(c *cobra.Command, build func(root string) (gen.Plan, e
 	plan, err := build(root)
 	if err != nil {
 		return err
+	}
+	if plan.NoForce && f.force {
+		return usageErr("--force tidak berlaku untuk perintah ini: make:module, make:handler, dan make:command menolak tanpa syarat bila targetnya sudah ada; hapus atau ganti nama target secara manual bila memang ingin membuat ulang")
 	}
 	return gen.Apply(c.Context(), plan, gen.Options{Root: root, Force: f.force, DryRun: f.dryRun, Out: c.OutOrStdout()})
 }

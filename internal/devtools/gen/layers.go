@@ -161,6 +161,7 @@ func MakeCommand(root, module, name string) (Plan, error) {
 		return Plan{}, err
 	}
 	plan.Ops = append(plan.Ops, FileOp{Path: modPath, Kind: OpModify, Content: out})
+	plan.NoForce = true
 	return plan, nil
 }
 

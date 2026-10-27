@@ -190,6 +190,56 @@ func TestApply_WriteFailureRollsBackEarlierWrites(t *testing.T) {
 	}
 }
 
+// G-5 (Q32): make:module, make:handler, dan make:command menolak tanpa syarat bila targetnya sudah ada; --force tidak
+// berlaku. Plan.NoForce membuat Apply menolak Force dengan pesan jelas sebelum menulis apa pun.
+func TestApply_NoForcePlanRejectsForce(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "a.txt", "lama")
+	plan := Plan{NoForce: true, Ops: []FileOp{
+		{Path: "baru.txt", Kind: OpCreate, Content: []byte("x")},
+		{Path: "a.txt", Kind: OpCreate, Content: []byte("baru")},
+	}}
+	err := Apply(context.Background(), plan, Options{Root: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "--force tidak berlaku") {
+		t.Fatalf("err = %v, want penolakan --force", err)
+	}
+	if exists(root, "baru.txt") {
+		t.Error("tidak boleh ada file ditulis")
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(b) != "lama" {
+		t.Errorf("a.txt berubah: %q", b)
+	}
+	// Tanpa Force, target yang sudah ada tetap ditolak (ErrExists).
+	if err := Apply(context.Background(), plan, Options{Root: root}); !errors.Is(err, ErrExists) {
+		t.Errorf("err = %v, want ErrExists", err)
+	}
+}
+
+func TestMakeModuleHandlerCommandPlansAreNoForce(t *testing.T) {
+	root := inventoryRepo(t)
+	h, err := MakeHandler(root, HandlerOptions{Module: "inventory", Name: "Approve", Route: "POST /items/{id}/approve", Permission: "inventory.items.approve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := MakeCommand(root, "inventory", "sync-items")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := MakeModule(root, ModuleOptions{Name: "billing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range map[string]Plan{"make:handler": h, "make:command": c, "make:module": m} {
+		if !p.NoForce {
+			t.Errorf("%s: Plan.NoForce harus true", name)
+		}
+	}
+	e, err := MakeEntity(root, "inventory", "Widget")
+	if err != nil || e.NoForce {
+		t.Errorf("make:entity tetap mendukung --force: NoForce=%v err=%v", e.NoForce, err)
+	}
+}
+
 func TestApply_WritesFilesAndRunsPostInOrder(t *testing.T) {
 	root := t.TempDir()
 	var order []string
