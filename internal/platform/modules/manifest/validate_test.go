@@ -24,6 +24,8 @@ func TestValidate_Fixtures(t *testing.T) {
 		{"bad_dependency_module.json", []wantProblem{{"schema_invalid", "/dependencies/0/module"}}},
 		{"duplicate_dependency.json", []wantProblem{{"duplicate_dependency", "/dependencies/1/module"}}},
 		{"unknown_field.json", []wantProblem{{"schema_invalid", "/routes"}}},
+		// B-8 (Q32): goose_module_<slug> (13 + slug) harus muat di batas identifier PostgreSQL 63 byte -> slug maksimal 50.
+		{"slug_too_long.json", []wantProblem{{"schema_invalid", "/slug"}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
