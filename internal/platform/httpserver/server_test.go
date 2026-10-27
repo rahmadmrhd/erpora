@@ -24,6 +24,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"erpora/internal/platform/bootstrap"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
@@ -125,6 +126,39 @@ func TestBootstrap_NotModified(t *testing.T) {
 	rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"0"`})
 	if rec.Code != 304 || rec.Body.Len() != 0 {
 		t.Fatalf("%d %q", rec.Code, rec.Body)
+	}
+}
+
+func newBootstrapRouter(t *testing.T) *Router {
+	t.Helper()
+	return NewRouter(Deps{
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Bootstrap: func(_ context.Context, tn tenancy.TenantID) bootstrap.Manifest {
+			return bootstrap.Build("9.9.9", tn, []bootstrap.ModuleInput{
+				{Key: "acme.example", Slug: "example", Version: "1.0.0", Status: "enabled", OfflineMode: "online-only"},
+			}, 5)
+		},
+	})
+}
+
+func TestBootstrap_FromDepsHook(t *testing.T) {
+	r := newBootstrapRouter(t)
+	rec := do(r, "GET", "/api/bootstrap", nil)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"5"` {
+		t.Fatalf("%d etag=%q", rec.Code, rec.Header().Get("ETag"))
+	}
+	d := decode(t, rec)["data"].(map[string]any)
+	mods := d["modules"].([]any)
+	if len(mods) != 1 || mods[0].(map[string]any)["status"] != "enabled" || d["revision"] != float64(5) {
+		t.Fatalf("data %v", d)
+	}
+	if rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"5"`}); rec.Code != 304 {
+		t.Fatalf("If-None-Match: %d", rec.Code)
+	}
+	if rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"4"`}); rec.Code != 200 {
+		t.Fatalf("etag lama: %d", rec.Code)
 	}
 }
 

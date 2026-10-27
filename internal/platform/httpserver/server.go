@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"erpora/internal/platform/bootstrap"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
@@ -33,6 +34,8 @@ type Deps struct {
 	Readiness  ReadinessChecker
 	Assets     fs.FS
 	AppVersion string
+	// Bootstrap membentuk isi GET /api/bootstrap dari runtime snapshot; nil = bootstrap.Build(AppVersion, t, nil, 0).
+	Bootstrap func(ctx context.Context, t tenancy.TenantID) bootstrap.Manifest
 	// Dev true = mode development: SPA menampilkan halaman "frontend belum di-build" bila aset belum ada (FR-12).
 	Dev bool
 	// Authenticate membungkus route non-Public; nil = pass-through (autentikasi nyata datang dari PRD-001).

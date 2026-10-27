@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"erpora/internal/app"
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
@@ -61,6 +62,10 @@ func newMigrateCmd(opts *rootOpts) *cobra.Command {
 				}
 				defer cleanup()
 				if err := migrate.UpWithTenant(c.Context(), db, cfg.Env, cfg.DefaultTenantID); err != nil {
+					return err
+				}
+				log := observability.NewLogger(c.ErrOrStderr(), cfg.LogFormat, slog.LevelInfo)
+				if err := app.EnsureRequiredModules(c.Context(), cfg, log); err != nil {
 					return err
 				}
 				st, err := migrate.Status(c.Context(), db)

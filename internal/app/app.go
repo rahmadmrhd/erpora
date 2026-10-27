@@ -11,16 +11,12 @@ import (
 	"net/http"
 	"time"
 
-	"erpora/internal/platform/authorization"
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/migrate"
-	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/observability"
-	"erpora/internal/platform/tenancy"
-	"erpora/web"
 )
 
 const (
@@ -85,36 +81,11 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return errors.New("migrasi platform belum diterapkan: jalankan erpora migrate up")
 	}
 
-	tenantID, err := migrate.DefaultTenantID(ctx, db)
+	a, err := assemble(ctx, cfg, log, db, prov, reg)
 	if err != nil {
 		return err
 	}
-	if cfg.DefaultTenantID != nil && *cfg.DefaultTenantID != tenantID {
-		return fmt.Errorf("ERP_DEFAULT_TENANT_ID (%s) berbeda dengan tenant default di database (%s)", *cfg.DefaultTenantID, tenantID)
-	}
-	tid := tenancy.TenantID(tenantID)
-
-	router := httpserver.NewRouter(httpserver.Deps{
-		Logger:     log,
-		Tracer:     prov.Tracer,
-		Resolver:   tenancy.SingleTenantResolver{ID: tid},
-		Connector:  database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}},
-		Readiness:  dbReadiness{db: db},
-		Assets:     web.Dist(),
-		AppVersion: buildinfo.Version,
-		Dev:        cfg.Env == config.EnvDevelopment,
-		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
-		Authenticate: func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				log.DebugContext(r.Context(), "authN stub")
-				next.ServeHTTP(w, r)
-			})
-		},
-	})
-	// Snapshot kosong: semua modul berstatus available (404 module_not_found) sampai M2b mengisinya.
-	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log)
-	registerTestRoutes(router)
-	srv := httpserver.New(cfg.HTTPAddr, router)
+	srv := httpserver.New(cfg.HTTPAddr, a.Router)
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
