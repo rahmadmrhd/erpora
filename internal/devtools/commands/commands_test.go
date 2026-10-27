@@ -81,7 +81,8 @@ func TestCommands_ArgumentRulesAndExitCodes(t *testing.T) {
 		// module:check, release:verify-tag, contracts
 		{"module:check modul tidak dikenal", []string{"module:check", "tidakada"}, 2, "tidak dikenal"},
 		{"release:verify-tag tanpa argumen", []string{"release:verify-tag"}, -1, "arg"},
-		{"release:verify-tag format salah", []string{"release:verify-tag", "v1.0.0"}, 1, "format"},
+		{"release:verify-tag format salah", []string{"release:verify-tag", "v1"}, 1, "format"},
+		{"release:verify-tag platform tanpa buildinfo", []string{"release:verify-tag", "v1.0.0"}, 1, "buildinfo"},
 		{"release:verify-tag modul tidak ada", []string{"release:verify-tag", "modules/tidakada/v1.0.0"}, 1, "tidakada"},
 		{"contracts:breaking target tidak dikenal", []string{"contracts:breaking", "tidakada"}, -2, ""},
 	}
