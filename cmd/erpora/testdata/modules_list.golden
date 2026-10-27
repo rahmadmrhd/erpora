@@ -1,0 +1,3 @@
+KEY                 BINARY  INSTALLED  STATUS     DEPENDENCIES  COMPATIBLE
+acme.example        1.0.0   1.0.0      enabled    -             yes
+acme.example-addon  1.0.0   -          available  acme.example  yes

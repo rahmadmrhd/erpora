@@ -1,0 +1,45 @@
+[
+  {
+    "key": "acme.example",
+    "slug": "example",
+    "name": "Example",
+    "binaryVersion": "1.0.0",
+    "installedVersion": "1.0.0",
+    "status": "enabled",
+    "required": false,
+    "compatible": true,
+    "dependencies": [
+      {
+        "module": "platform.core",
+        "version": "^0.1",
+        "optional": false
+      }
+    ],
+    "dependents": [
+      "acme.example-addon"
+    ]
+  },
+  {
+    "key": "acme.example-addon",
+    "slug": "example-addon",
+    "name": "Example Addon",
+    "binaryVersion": "1.0.0",
+    "installedVersion": null,
+    "status": "available",
+    "required": false,
+    "compatible": true,
+    "dependencies": [
+      {
+        "module": "platform.core",
+        "version": "^0.1",
+        "optional": false
+      },
+      {
+        "module": "acme.example",
+        "version": "^1.0",
+        "optional": false
+      }
+    ],
+    "dependents": []
+  }
+]

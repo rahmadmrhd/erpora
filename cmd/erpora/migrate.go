@@ -14,7 +14,10 @@ import (
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/migrate"
+	"erpora/internal/platform/modules/store"
 	"erpora/internal/platform/observability"
+	"erpora/internal/platform/tenancy"
+	"erpora/sdk/module"
 )
 
 // openDB memuat config, menyiapkan observability, dan membuka database. cleanup wajib dipanggil.
@@ -68,7 +71,7 @@ func newMigrateCmd(opts *rootOpts) *cobra.Command {
 				if err := app.EnsureRequiredModules(c.Context(), cfg, log); err != nil {
 					return err
 				}
-				st, err := migrate.Status(c.Context(), db)
+				st, err := collectStatus(c.Context(), db)
 				if err != nil {
 					return err
 				}
@@ -86,7 +89,7 @@ func newMigrateCmd(opts *rootOpts) *cobra.Command {
 					return err
 				}
 				defer cleanup()
-				st, err := migrate.Status(c.Context(), db)
+				st, err := collectStatus(c.Context(), db)
 				if err != nil {
 					return err
 				}
@@ -96,6 +99,50 @@ func newMigrateCmd(opts *rootOpts) *cobra.Command {
 		},
 	)
 	return cmd
+}
+
+// collectStatus menggabungkan status control dan tenant dengan satu baris `module:<key>` untuk setiap
+// modul yang punya baris installation (bukan available) dan membawa migrasi (FR-07). Read-only; baris modul
+// dilewati bila migrasi platform belum diterapkan (tabel lifecycle belum ada).
+func collectStatus(ctx context.Context, db *database.DB) ([]migrate.TargetStatus, error) {
+	st, err := migrate.Status(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range st {
+		if s.Pending > 0 {
+			return st, nil
+		}
+	}
+	reg, err := app.BuildRegistry()
+	if err != nil {
+		return nil, &app.ExitError{Code: 2, Err: fmt.Errorf("katalog modul tidak valid: %w", err)}
+	}
+	tid, err := migrate.DefaultTenantID(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := store.New(database.ControlDB{DB: db}, nil).Installations(ctx, tenancy.TenantID(tid))
+	if err != nil {
+		return nil, err
+	}
+	have := map[string]bool{}
+	for _, r := range rows {
+		have[r.ModuleKey] = true
+	}
+	for _, e := range reg.Entries() {
+		src, ok := e.Module.(module.MigrationSource)
+		if !ok || !have[e.Manifest.Key] {
+			continue
+		}
+		ms, err := migrate.ModuleStatus(ctx, db, e.Manifest.Slug, src.Migrations())
+		if err != nil {
+			return nil, err
+		}
+		ms.Target = migrate.Target("module:" + e.Manifest.Key)
+		st = append(st, ms)
+	}
+	return st, nil
 }
 
 // printStatus mencetak tabel TARGET CURRENT LATEST PENDING.

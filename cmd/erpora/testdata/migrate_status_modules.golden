@@ -1,0 +1,5 @@
+TARGET                     CURRENT  LATEST  PENDING
+control                    2        2       0
+tenant                     2        2       0
+module:acme.example        2        2       0
+module:acme.example-addon  0        1       1

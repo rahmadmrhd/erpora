@@ -1,0 +1,15 @@
+key: acme.example
+name: Example
+binary: 1.0.0
+installed: 1.0.0
+status: enabled
+stored: enabled
+required: no
+compatible: yes
+dependencies: -
+dependents: acme.example-addon
+last operation: 0190a1b2-0000-7000-8000-000000000001 enable succeeded actor=cli:tester started=2026-10-27T08:00:00Z
+STEP          STATUS     DURATION  ERROR
+dependencies  succeeded  2ms       -
+hook:enable   succeeded  15ms      -
+health        failed     30ms      tabel hilang
