@@ -22,6 +22,12 @@ func (s *Service) Watch(ctx context.Context, t tenancy.TenantID, interval time.D
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	s.watch(ctx, t, ticker.C)
+}
+
+// watch adalah inti Watch dengan sumber tick yang dapat diinjeksi (test deterministik: kirim tick lewat
+// channel tak-berbuffer; pengiriman tick berikutnya baru diterima setelah poll sebelumnya selesai).
+func (s *Service) watch(ctx context.Context, t tenancy.TenantID, ticks <-chan time.Time) {
 	var last int64
 	waited := 0
 	for {
@@ -29,7 +35,7 @@ func (s *Service) Watch(ctx context.Context, t tenancy.TenantID, interval time.D
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticks:
 		}
 	}
 }

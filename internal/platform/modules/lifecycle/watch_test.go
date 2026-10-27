@@ -2,7 +2,6 @@ package lifecycle
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -10,53 +9,73 @@ import (
 	"erpora/internal/platform/tenancy"
 )
 
+// tickBarrier mengirim dua tick: tick kedua baru diterima setelah poll akibat tick pertama selesai.
+func tickBarrier(ticks chan time.Time) {
+	ticks <- time.Time{}
+	ticks <- time.Time{}
+}
+
 func TestWatch_PublishesNewerRevisionOnce(t *testing.T) {
 	rec := &fxRec{}
 	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
 	e.st.revision[tenantA] = 3
 	e.snap.Apply(tenantA, map[string]runtime.Status{}, 3)
 
-	var mu sync.Mutex
-	var got []int64
+	var got []int64 // hanya ditulis dari goroutine watch (Publish sinkron); dibaca setelah barrier
 	e.notifier.Subscribe(func(ctx context.Context, tn tenancy.TenantID, rev int64) {
-		mu.Lock()
 		got = append(got, rev)
-		mu.Unlock()
 		_, _ = e.svc.Refresh(ctx, tn) // subscriber produksi memanggil Refresh
 	})
 	ctx, cancel := context.WithCancel(context.Background())
+	ticks := make(chan time.Time)
 	done := make(chan struct{})
-	go func() { e.svc.Watch(ctx, tenantA, 5*time.Millisecond); close(done) }()
+	go func() { e.svc.watch(ctx, tenantA, ticks); close(done) }()
 
-	time.Sleep(50 * time.Millisecond) // revision tetap: tidak ada publish
-	mu.Lock()
+	tickBarrier(ticks) // revision tetap (3 == snapshot): tidak ada publish
 	if len(got) != 0 {
 		t.Fatalf("publish tanpa perubahan: %v", got)
 	}
-	mu.Unlock()
 
 	e.st.mu.Lock()
 	e.st.revision[tenantA] = 4
 	e.st.mu.Unlock()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		n := len(got)
-		mu.Unlock()
-		if n > 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	tickBarrier(ticks)
+	if len(got) != 1 || got[0] != 4 || e.snap.Revision(tenantA) != 4 {
+		t.Fatalf("publish = %v, snapshot revision = %d; want [4], 4", got, e.snap.Revision(tenantA))
 	}
-	time.Sleep(50 * time.Millisecond) // beberapa tick lagi: tidak boleh publish ulang
+	tickBarrier(ticks) // tidak ada perubahan lagi
+	tickBarrier(ticks)
+	if len(got) != 1 {
+		t.Fatalf("publish ulang: %v", got)
+	}
 	cancel()
 	<-done
-	mu.Lock()
-	defer mu.Unlock()
-	if len(got) != 1 || got[0] != 4 {
-		t.Fatalf("publish = %v, want [4]", got)
+}
+
+// Bila snapshot tetap tertinggal (Refresh subscriber gagal), revision yang sama dipublikasikan ulang
+// setelah republishAfter tick.
+func TestWatch_RepublishesWhenSnapshotStaysBehind(t *testing.T) {
+	rec := &fxRec{}
+	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
+	e.snap.Apply(tenantA, map[string]runtime.Status{}, 1)
+	e.st.revision[tenantA] = 2
+	n := 0
+	e.notifier.Subscribe(func(context.Context, tenancy.TenantID, int64) { n++ }) // tidak me-Refresh
+	ctx, cancel := context.WithCancel(context.Background())
+	ticks := make(chan time.Time)
+	done := make(chan struct{})
+	go func() { e.svc.watch(ctx, tenantA, ticks); close(done) }()
+	tickBarrier(ticks)
+	if n != 1 {
+		t.Fatalf("publish pertama = %d", n)
 	}
-	if e.snap.Revision(tenantA) != 4 {
-		t.Error("snapshot belum diperbarui oleh subscriber")
+	for range republishAfter {
+		ticks <- time.Time{}
 	}
+	ticks <- time.Time{} // barrier
+	if n != 2 {
+		t.Fatalf("publish ulang = %d, want 2", n)
+	}
+	cancel()
+	<-done
 }
