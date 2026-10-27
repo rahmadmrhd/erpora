@@ -222,4 +222,5 @@ tasks:
       - task: test:generator
       - task: vuln
       - task: web:check
+      - task: contracts:check
       - task: build
