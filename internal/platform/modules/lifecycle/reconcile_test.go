@@ -54,6 +54,45 @@ func TestReconcile_UpgradePendingThenIdempotent(t *testing.T) {
 	}
 }
 
+// B-3 (Q32): binary kembali ke versi ter-install saat status upgrade_pending (rollback binary): status dikembalikan ke
+// previous_status dengan event reconciled (version_restored); upgrade_pending tidak boleh tertinggal tanpa alasan.
+func TestReconcile_UpgradePendingRestoredWhenBinaryVersionMatchesInstalled(t *testing.T) {
+	rec := &fxRec{}
+	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a", version: "1.0.0"}))
+	e.st.seed(tenantA, "acme.a", runtime.StatusUpgradePending, "1.0.0")
+	e.st.mu.Lock()
+	r := e.st.rows[rowKey{tenantA, "acme.a"}]
+	r.PreviousStatus = "enabled"
+	e.st.rows[rowKey{tenantA, "acme.a"}] = r
+	e.st.mu.Unlock()
+
+	rep, err := e.svc.Reconcile(context.Background(), tenantA)
+	if err != nil || !slices.Equal(rep.Restored, []string{"acme.a"}) {
+		t.Fatalf("Reconcile = %+v, %v", rep, err)
+	}
+	row := e.st.row("acme.a")
+	if row.Status != "enabled" || row.PreviousStatus != "" || row.InstalledVersion != "1.0.0" {
+		t.Errorf("row = %+v", row)
+	}
+	var found bool
+	for _, ev := range e.st.events {
+		if ev.ModuleKey == "acme.a" && ev.Event == "reconciled" && ev.Details["reason"] == "version_restored" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("event reconciled/version_restored tidak ada: %v", e.st.eventNames("acme.a"))
+	}
+	if e.snap.Status(tenantA, "acme.a") != runtime.StatusEnabled {
+		t.Error("snapshot harus enabled kembali")
+	}
+	// Idempoten.
+	before := len(e.st.commits)
+	if rep, err = e.svc.Reconcile(context.Background(), tenantA); err != nil || len(rep.Restored) != 0 || len(e.st.commits) != before {
+		t.Errorf("reconcile kedua: %+v commits %d -> %d (%v)", rep, before, len(e.st.commits), err)
+	}
+}
+
 func TestReconcile_DowngradeThenRestore(t *testing.T) {
 	rec := &fxRec{}
 	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a", version: "1.0.0"}))

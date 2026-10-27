@@ -144,6 +144,20 @@ func (s *Service) reconcileRow(ctx context.Context, t tenancy.TenantID, row stor
 		s.log.WarnContext(ctx, "downgrade modul ditolak", "erp.module.key", row.ModuleKey, "message", msg)
 		return true, rev, nil
 
+	case cmp == 0 && status == runtime.StatusUpgradePending && row.PreviousStatus != "":
+		// Binary kembali ke versi ter-install (mis. rollback binary): upgrade_pending tidak lagi berlaku (Q32 B-3).
+		in.Status, in.PreviousStatus = row.PreviousStatus, ""
+		rev, err := s.d.Store.Commit(ctx, t, store.Commit{
+			Installation: &in, BumpRevision: true,
+			Events: []store.Event{{ModuleKey: row.ModuleKey, Event: "reconciled", Actor: ReconcileActor,
+				Details: map[string]any{"reason": "version_restored", "status": row.PreviousStatus, "from": string(runtime.StatusUpgradePending)}}},
+		})
+		if err != nil {
+			return false, 0, fmt.Errorf("reconcile %s: %w", row.ModuleKey, err)
+		}
+		rep.Restored = append(rep.Restored, row.ModuleKey)
+		return true, rev, nil
+
 	case cmp == 0 && status == runtime.StatusFailed && row.LastOperationID != uuid.Nil && row.PreviousStatus != "":
 		op, err := s.d.Store.Operation(ctx, t, row.LastOperationID)
 		if errors.Is(err, store.ErrNotFound) {
