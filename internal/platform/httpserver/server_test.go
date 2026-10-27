@@ -579,7 +579,7 @@ func TestTenantContext_ResolverErrorIs400(t *testing.T) {
 }
 
 func TestConnectorProvider_NonDefaultTenantErrors(t *testing.T) {
-	p := connectorProvider{conn: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}}}
+	p := database.DataProvider(database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}})
 	other := tenancy.TenantID(uuid.New())
 	if _, err := p.DB(tenancy.WithTenant(context.Background(), other)); !errors.Is(err, database.ErrUnknownTenant) {
 		t.Fatalf("err = %v, want ErrUnknownTenant", err)

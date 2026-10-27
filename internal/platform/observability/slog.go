@@ -9,14 +9,18 @@ import (
 )
 
 // TraceHandler membungkus slog.Handler dan menambah trace_id & span_id dari span aktif di ctx.
-type TraceHandler struct{ inner slog.Handler }
+type TraceHandler struct {
+	inner slog.Handler
+	// moduleBound true bila erp.module.key sudah di-bind lewat Logger.With (tidak ditambahkan lagi dari context).
+	moduleBound bool
+}
 
 func (h TraceHandler) Enabled(ctx context.Context, l slog.Level) bool { return h.inner.Enabled(ctx, l) }
 
 func (h TraceHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Sumber tunggal atribut modul (Q26 butir 3): erp.module.key dari context, kecuali pemanggil
 	// sudah menyertakannya sendiri (mis. access log yang membacanya dari meta request).
-	if m := ModuleFromContext(ctx); m != "" && !hasAttr(r, moduleKeyAttr) {
+	if m := ModuleFromContext(ctx); m != "" && !h.moduleBound && !hasAttr(r, moduleKeyAttr) {
 		r.AddAttrs(slog.String(moduleKeyAttr, m))
 	}
 	if id, ok := RequestIDFromContext(ctx); ok {
@@ -42,9 +46,17 @@ func hasAttr(r slog.Record, key string) bool {
 }
 
 func (h TraceHandler) WithAttrs(a []slog.Attr) slog.Handler {
-	return TraceHandler{h.inner.WithAttrs(a)}
+	bound := h.moduleBound
+	for _, at := range a {
+		if at.Key == moduleKeyAttr {
+			bound = true
+		}
+	}
+	return TraceHandler{inner: h.inner.WithAttrs(a), moduleBound: bound}
 }
-func (h TraceHandler) WithGroup(n string) slog.Handler { return TraceHandler{h.inner.WithGroup(n)} }
+func (h TraceHandler) WithGroup(n string) slog.Handler {
+	return TraceHandler{inner: h.inner.WithGroup(n), moduleBound: h.moduleBound}
+}
 
 // NewLogger membuat logger slog ("json" atau selain itu text) yang dibungkus TraceHandler.
 func NewLogger(w io.Writer, format string, level slog.Level) *slog.Logger {
@@ -55,5 +67,5 @@ func NewLogger(w io.Writer, format string, level slog.Level) *slog.Logger {
 	} else {
 		h = slog.NewTextHandler(w, opts)
 	}
-	return slog.New(TraceHandler{h})
+	return slog.New(TraceHandler{inner: h})
 }

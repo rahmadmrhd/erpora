@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -109,28 +108,9 @@ func tenantContext(res tenancy.Resolver, conn database.TenantConnector, next htt
 			return
 		}
 		ctx := tenancy.WithTenant(r.Context(), id)
-		ctx = data.WithProvider(ctx, connectorProvider{conn: conn})
+		ctx = data.WithProvider(ctx, database.DataProvider(conn))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// connectorProvider mengadaptasi TenantConnector menjadi data.Provider berdasarkan tenant di ctx.
-type connectorProvider struct{ conn database.TenantConnector }
-
-func (p connectorProvider) DB(ctx context.Context) (*database.DB, error) {
-	id, ok := tenancy.FromContext(ctx)
-	if !ok {
-		return nil, data.ErrNoTenantContext
-	}
-	tdb, err := p.conn.For(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if tdb.DB == nil {
-		return nil, errors.New("database tenant belum tersedia")
-	}
-	// Session terikat context request: query ikut dibatalkan dan span DB menjadi anak span HTTP.
-	return tdb.WithContext(ctx), nil
 }
 
 // statusWriter mencatat status dan apakah header sudah ditulis.
