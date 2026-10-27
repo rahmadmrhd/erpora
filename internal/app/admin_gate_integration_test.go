@@ -4,11 +4,30 @@ package app
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/modules/lifecycle"
 )
+
+// B-9 (Q32): mutasi tanpa Content-Type application/json dijawab 415 unsupported_media_type (body kosong atau {} boleh).
+func TestAssemble_ModulesMutationRequiresJSONContentType(t *testing.T) {
+	_, a, _, _ := setupAssembly(t)
+	const install = "/api/platform/modules/acme.example/install"
+	req := httptest.NewRequest(http.MethodPost, install, strings.NewReader(""))
+	rec := httptest.NewRecorder()
+	a.Router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnsupportedMediaType || errCodeOf(t, rec) != "unsupported_media_type" {
+		t.Fatalf("tanpa Content-Type: %d %s", rec.Code, rec.Body)
+	}
+	for _, body := range []string{"", "{}"} {
+		if rec := call(a.Router, http.MethodPost, install, body); rec.Code != http.StatusOK {
+			t.Fatalf("body %q dengan application/json: %d %s", body, rec.Code, rec.Body)
+		}
+	}
+}
 
 // B-13: wiring gate mutasi (assemble.go) end-to-end. Di luar development tanpa ERP_MODULES_ADMIN_API=true route aksi
 // mutasi menjawab 404 (sebelum permission); route baca tetap tunduk pada permission. Dengan flag aktif, mutasi dilayani

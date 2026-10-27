@@ -648,6 +648,15 @@ export interface operations {
         };
       };
       412: components["responses"]["common.PreconditionFailed"];
+      /** @description unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8); body kosong atau {} diperbolehkan. Ini mencegah request lintas-origin tanpa preflight CORS. */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
       /** @description validation_failed dengan error.details[].code unknown_field atau invalid_type (body aksi), atau business_rule_violated dengan error.details[].code salah satu: module_required, dependency_not_ready, dependents_active, module_incompatible (satu detail per masalah), downgrade_not_supported. */
       422: {
         headers: {

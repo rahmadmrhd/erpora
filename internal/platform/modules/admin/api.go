@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -224,6 +225,15 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 	op, ok := validOps[r.PathValue("operation")]
 	if !ok {
 		httpserver.WriteError(w, r, http.StatusNotFound, "not_found", "endpoint tidak ditemukan", nil)
+		return
+	}
+	// Mutasi WAJIB ber Content-Type application/json (body kosong atau {} boleh): request lintas-origin tanpa Content-Type
+	// JSON tidak lolos sebagai "simple request" CORS dan memaksa preflight (Q32 B-9). Tanpa itu: 415.
+	if mt, params, perr := mime.ParseMediaType(r.Header.Get("Content-Type")); perr != nil || mt != "application/json" ||
+		(params["charset"] != "" && !strings.EqualFold(params["charset"], "utf-8")) {
+		httpserver.WriteError(w, r, http.StatusUnsupportedMediaType, "unsupported_media_type",
+			"Content-Type harus application/json (charset utf-8); body kosong atau {} diperbolehkan.",
+			[]map[string]string{{"code": "unsupported_media_type", "message": "Content-Type harus application/json (charset utf-8)."}})
 		return
 	}
 	body, err := httpx.DecodeJSON[actionBody](w, r, httpx.AllowEmptyBody())

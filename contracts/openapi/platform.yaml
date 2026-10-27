@@ -279,6 +279,11 @@ paths:
             invalid_state (detail invalid_transition) atau request_in_progress (detail operation_in_progress).
           content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
         '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '415':
+          description: >
+            unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8); body kosong atau {} diperbolehkan.
+            Ini mencegah request lintas-origin tanpa preflight CORS.
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
         '422':
           description: >
             validation_failed dengan error.details[].code unknown_field atau invalid_type (body aksi), atau

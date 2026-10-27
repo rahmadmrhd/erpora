@@ -161,8 +161,8 @@ func (f fixtureAPI) do(method, target, body string, hdr map[string]string) *http
 		rd = strings.NewReader(body)
 	}
 	req := httptest.NewRequest(method, target, rd)
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
+	if method == "POST" {
+		req.Header.Set("Content-Type", "application/json") // mutasi wajib application/json (Q32 B-9); hdr dapat menimpanya
 	}
 	for k, v := range hdr {
 		req.Header.Set(k, v)
@@ -538,7 +538,9 @@ func TestAction_BodyStrict(t *testing.T) {
 	}{
 		{"field tak dikenal", `{"withDeps":true,"x":1}`, nil, 422, "validation_failed", "unknown_field", "x"},
 		{"terlalu besar", `{"withDeps":false,"x":"` + strings.Repeat("a", 5<<10) + `"}`, nil, 400, "bad_request", "body_too_large", ""},
-		{"content type salah", `{}`, map[string]string{"Content-Type": "text/plain"}, 400, "bad_request", "unsupported_media_type", ""},
+		{"content type salah", `{}`, map[string]string{"Content-Type": "text/plain"}, 415, "unsupported_media_type", "unsupported_media_type", ""},
+		{"content type hilang, body kosong", "", map[string]string{"Content-Type": ""}, 415, "unsupported_media_type", "unsupported_media_type", ""},
+		{"content type hilang, body ada", `{}`, map[string]string{"Content-Type": ""}, 415, "unsupported_media_type", "unsupported_media_type", ""},
 		{"dua objek", `{"enable":true}{"enable":false}`, nil, 400, "bad_request", "trailing_data", ""},
 		{"bukan objek", `[1]`, nil, 400, "bad_request", "expected_object", ""},
 		{"tipe salah", `{"enable":"ya"}`, nil, 422, "validation_failed", "invalid_type", "enable"},
@@ -556,7 +558,7 @@ func TestAction_BodyStrict(t *testing.T) {
 			}
 		})
 	}
-	// Body kosong tanpa Content-Type diteruskan ke backend.
+	// Body kosong dengan Content-Type application/json (dan {} ) diteruskan ke backend.
 	if rec := f.do("POST", install, "", nil); rec.Code != 200 {
 		t.Errorf("body kosong: %d %s", rec.Code, rec.Body)
 	}
