@@ -446,6 +446,46 @@ func TestAction_SlowOperationReturns202(t *testing.T) {
 	}
 }
 
+// B-6 (Q32): rangkaian beberapa operasi (mis. install --with-deps) melaporkan SEMUA ID operasi lewat field aditif
+// operationIds, baik pada 202 (yang sudah dimulai) maupun 200 (seluruhnya); Location tetap ke operasi pertama.
+func TestAction_MultiOperationIDs(t *testing.T) {
+	op2 := uuid.MustParse("0190a1b2-0000-7000-8000-0000000000bb")
+	t.Run("202 memuat semua ID yang sudah dimulai", func(t *testing.T) {
+		f := setup(t, allow{})
+		f.api.syncWait = 30 * time.Millisecond
+		release := make(chan struct{})
+		t.Cleanup(func() { close(release) })
+		f.be.execFn = func(_ context.Context, req lifecycle.Request) ([]lifecycle.Result, error) {
+			req.OnStarted(opID)
+			req.OnStarted(op2)
+			<-release
+			return nil, nil
+		}
+		rec := f.do("POST", "/api/platform/modules/acme.example/install", `{"withDeps":true}`, nil)
+		if rec.Code != 202 || rec.Header().Get("Location") != "/api/platform/modules/operations/"+opID.String() {
+			t.Fatalf("%d loc=%q %s", rec.Code, rec.Header().Get("Location"), rec.Body)
+		}
+		if !strings.Contains(rec.Body.String(), `"operationIds":["`+opID.String()+`","`+op2.String()+`"]`) {
+			t.Errorf("body = %s", rec.Body)
+		}
+	})
+	t.Run("200 memuat semua ID operasi", func(t *testing.T) {
+		f := setup(t, allow{})
+		f.be.ops[opID] = store.Operation{ID: opID, TenantID: testTenant, ModuleKey: "acme.example", Operation: "install", Status: "succeeded"}
+		f.be.ops[op2] = store.Operation{ID: op2, TenantID: testTenant, ModuleKey: "acme.example", Operation: "enable", Status: "succeeded"}
+		f.be.execFn = func(context.Context, lifecycle.Request) ([]lifecycle.Result, error) {
+			return []lifecycle.Result{
+				{Module: "acme.example", Op: lifecycle.OpInstall, Status: "succeeded", OperationID: opID},
+				{Module: "acme.example", Op: lifecycle.OpEnable, Status: "succeeded", OperationID: op2},
+			}, nil
+		}
+		rec := f.do("POST", "/api/platform/modules/acme.example/install", `{"withDeps":true,"enable":true}`, nil)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"operationIds":["`+opID.String()+`","`+op2.String()+`"]`) {
+			t.Fatalf("%d %s", rec.Code, rec.Body)
+		}
+	})
+}
+
 // Keputusan 7 berlaku untuk semua mutasi, termasuk retry: lewat SyncWait -> 202 + Location ke operasi retry.
 func TestAction_SlowRetryReturns202(t *testing.T) {
 	f := setup(t, allow{})

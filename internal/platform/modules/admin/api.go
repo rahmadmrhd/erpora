@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -239,6 +240,8 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 	// Idempotency-Key diterima tetapi tidak disimpan: setiap operasi idempoten lewat aturan no-op (keputusan 19).
 
 	started := make(chan uuid.UUID, 1)
+	var idsMu sync.Mutex
+	var startedIDs []uuid.UUID // semua operasi yang sudah dimulai (rangkaian beberapa operasi), urut
 	done := make(chan outcome, 1)
 	// Operasi berjalan lepas dari pembatalan request (klien putus tidak menghentikannya) tetapi tetap membawa nilai context.
 	ctx := context.WithoutCancel(r.Context())
@@ -252,6 +255,9 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 			done <- o
 		}()
 		onStarted := func(id uuid.UUID) {
+			idsMu.Lock()
+			startedIDs = append(startedIDs, id)
+			idsMu.Unlock()
 			select {
 			case started <- id:
 			default:
@@ -280,7 +286,14 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 	select {
 	case id := <-started:
 		w.Header().Set("Location", "/api/platform/modules/operations/"+id.String())
-		httpserver.WriteData(w, http.StatusAccepted, map[string]string{"operationId": id.String(), "status": "running"})
+		idsMu.Lock()
+		all := make([]string, 0, len(startedIDs))
+		for _, sid := range startedIDs {
+			all = append(all, sid.String())
+		}
+		idsMu.Unlock()
+		// operationId (dan Location) = operasi pertama; operationIds = semua yang sudah dimulai (aditif, Q32 B-6).
+		httpserver.WriteData(w, http.StatusAccepted, map[string]any{"operationId": id.String(), "operationIds": all, "status": "running"})
 	case o := <-done:
 		a.respond(w, r, be, t, key, o)
 	}
@@ -292,6 +305,7 @@ func (a *API) respond(w http.ResponseWriter, r *http.Request, be Backend, t tena
 		return
 	}
 	ops := make([]OperationView, 0, len(o.results))
+	ids := make([]string, 0, len(o.results))
 	for _, res := range o.results {
 		if res.Status == "noop" || res.OperationID == uuid.Nil {
 			continue
@@ -302,11 +316,12 @@ func (a *API) respond(w http.ResponseWriter, r *http.Request, be Backend, t tena
 			return
 		}
 		ops = append(ops, toOperationView(op))
+		ids = append(ids, res.OperationID.String())
 	}
 	m, _, err := be.Module(r.Context(), t, key)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
 	}
-	httpserver.WriteData(w, http.StatusOK, map[string]any{"module": toModuleView(m), "operations": ops})
+	httpserver.WriteData(w, http.StatusOK, map[string]any{"module": toModuleView(m), "operations": ops, "operationIds": ids})
 }

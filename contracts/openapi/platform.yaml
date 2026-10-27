@@ -231,6 +231,7 @@ paths:
                     properties:
                       module: { $ref: '#/components/schemas/Module' }
                       operations: { type: array, items: { $ref: '#/components/schemas/Operation' } }
+                      operationIds: { type: array, description: 'ID semua operasi pada rangkaian (aditif; urut eksekusi, tanpa noop).', items: { $ref: 'erp:common#/components/schemas/Uuid' } }
               example:
                 data:
                   module:
@@ -247,6 +248,7 @@ paths:
                     dependents: []
                     lastOperationId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c
                   operations: []
+                  operationIds: []
         '202':
           description: Belum selesai dalam 30 detik; pantau lewat Location.
           headers: { Location: { $ref: 'erp:common#/components/headers/Location' } }
@@ -258,11 +260,12 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [operationId, status]
+                    required: [operationId, operationIds, status]
                     properties:
                       operationId: { $ref: 'erp:common#/components/schemas/Uuid' }
+                      operationIds: { type: array, description: 'ID semua operasi rangkaian yang sudah dimulai saat respons dikirim (aditif); operationId dan Location menunjuk yang pertama.', items: { $ref: 'erp:common#/components/schemas/Uuid' } }
                       status: { type: string, enum: [running] }
-              example: { data: { operationId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c, status: running } }
+              example: { data: { operationId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c, operationIds: [0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c], status: running } }
         '400':
           description: >
             bad_request dengan error.details[].code salah satu: unsupported_media_type, body_too_large, malformed_json,

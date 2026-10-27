@@ -583,6 +583,7 @@ export interface operations {
            *           "slug": "example",
            *           "status": "enabled"
            *         },
+           *         "operationIds": [],
            *         "operations": []
            *       }
            *     }
@@ -590,6 +591,8 @@ export interface operations {
           "application/json": {
             data: {
               module: components["schemas"]["Module"];
+              /** @description ID semua operasi pada rangkaian (aditif; urut eksekusi, tanpa noop). */
+              operationIds?: components["schemas"]["common.Uuid"][];
               operations: components["schemas"]["Operation"][];
             };
           };
@@ -606,6 +609,9 @@ export interface operations {
            * @example {
            *       "data": {
            *         "operationId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c",
+           *         "operationIds": [
+           *           "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
+           *         ],
            *         "status": "running"
            *       }
            *     }
@@ -613,6 +619,8 @@ export interface operations {
           "application/json": {
             data: {
               operationId: components["schemas"]["common.Uuid"];
+              /** @description ID semua operasi rangkaian yang sudah dimulai saat respons dikirim (aditif); operationId dan Location menunjuk yang pertama. */
+              operationIds: components["schemas"]["common.Uuid"][];
               /** @enum {string} */
               status: "running";
             };
