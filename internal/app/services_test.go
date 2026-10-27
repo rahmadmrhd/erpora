@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"testing"
 
 	"erpora/internal/platform/config"
@@ -18,7 +20,7 @@ func TestPlatformServices_AlwaysInstallMaskerAndAuditor(t *testing.T) {
 		{Env: config.EnvProduction},
 		{},
 	} {
-		svc := platformServices(tc, testLog())
+		svc := platformServices(tc, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if svc.Masker == nil || svc.Auditor == nil {
 			t.Fatalf("cfg %+v: Masker=%v Auditor=%v, keduanya wajib terpasang", tc, svc.Masker, svc.Auditor)
 		}
