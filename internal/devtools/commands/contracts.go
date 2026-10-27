@@ -26,7 +26,9 @@ func newContractsBreaking() *cobra.Command {
 		Short: "Deteksi breaking change kontrak terhadap tag rilis terakhir (oasdiff)",
 		Long: "Membandingkan kontrak terbundel HEAD dengan kontrak pada tag rilis terakhir (platform: vX.Y.Z; modul: modules/<dir>/vX.Y.Z) memakai oasdiff.\n" +
 			"Perubahan berlevel WARN atau lebih menggagalkan (api-guidelines section 14.2). Target tanpa tag dilewati. Perubahan breaking hanya diizinkan\n" +
-			"bila ERP_API_BREAKING_APPROVED=true (label PR api-breaking-approved) dan major version manifest lebih besar daripada major tag baseline.",
+			"bila ERP_API_BREAKING_APPROVED=true (label PR api-breaking-approved; di CI juga event push) dan major version manifest lebih besar daripada\n" +
+			"major tag baseline. ERP_API_BREAKING_BASE_REF (mis. origin/main pada PR) menyetujui perubahan breaking yang sudah ada di cabang dasar\n" +
+			"(sudah di-merge dengan label), selama MAJOR naik, sehingga PR berikutnya tidak gagal sampai tag baru dibuat.",
 		GroupID: GroupContracts,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
@@ -46,7 +48,7 @@ func newContractsBreaking() *cobra.Command {
 				}
 			}
 			rs, err := contracttools.CheckBreaking(c.Context(), repo, contracttools.ExecGit(root), contracttools.BreakingOptions{
-				Only: only, Approved: os.Getenv("ERP_API_BREAKING_APPROVED") == "true",
+				Only: only, Approved: os.Getenv("ERP_API_BREAKING_APPROVED") == "true", BaseRef: os.Getenv("ERP_API_BREAKING_BASE_REF"),
 			})
 			if err != nil {
 				return err

@@ -152,6 +152,47 @@ func TestCheckBreaking_ApprovedMajor(t *testing.T) {
 	}
 }
 
+// K-1: breaking yang disetujui (label + MAJOR naik) sudah di-merge ke cabang dasar, tetapi tag rilis baru belum ada.
+// Push ke main dan PR berikutnya TANPA label tidak boleh gagal selama PR itu sendiri tidak menambah perubahan breaking
+// baru terhadap cabang dasar (BaseRef); perubahan breaking baru tanpa label tetap gagal.
+func TestCheckBreaking_AlreadyMergedBreakingDoesNotBlockLaterPRs(t *testing.T) {
+	root := releasedRepo(t)
+	editFile(t, root, "modules/example/openapi.yaml",
+		[2]string{noteTitle, ""},
+		[2]string{"required: [id, title, version, createdAt, updatedAt]", "required: [id, version, createdAt, updatedAt]"})
+	editFile(t, root, "modules/example/module.json", [2]string{`"version": "1.0.0"`, `"version": "2.0.0"`})
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "breaking disetujui di-merge (label + major 2.0.0)")
+
+	// PR berikutnya tanpa label dan tanpa perubahan kontrak baru: baseline tag masih v1.0.0, cabang dasar = main.
+	rs := breaking(t, root, BreakingOptions{BaseRef: "main"})
+	if r := resultOf(t, rs, "example"); !r.Approved || len(r.Changes) == 0 || Failed(rs) {
+		t.Fatalf("breaking yang sudah di-merge tidak boleh memblokir PR berikutnya: %+v", r)
+	}
+	// Tanpa BaseRef (perilaku lama) tetap gagal: tidak ada jalur persetujuan.
+	if !Failed(breaking(t, root, BreakingOptions{})) {
+		t.Error("tanpa label dan tanpa BaseRef harus gagal")
+	}
+
+	// PR yang menambah breaking baru (menghapus field lain) tanpa label tetap gagal.
+	editFile(t, root, "modules/example/openapi.yaml", [2]string{"required: [id, version, createdAt, updatedAt]", "required: [id, version, createdAt]"})
+	rs = breaking(t, root, BreakingOptions{BaseRef: "main"})
+	if !Failed(rs) {
+		t.Errorf("breaking baru terhadap cabang dasar tanpa label harus gagal: %+v", resultOf(t, rs, "example"))
+	}
+
+	// MAJOR tidak naik: BaseRef tidak memberi pengecualian.
+	root2 := releasedRepo(t)
+	editFile(t, root2, "modules/example/openapi.yaml",
+		[2]string{noteTitle, ""},
+		[2]string{"required: [id, title, version, createdAt, updatedAt]", "required: [id, version, createdAt, updatedAt]"})
+	git(t, root2, "add", "-A")
+	git(t, root2, "commit", "-q", "-m", "breaking tanpa major")
+	if !Failed(breaking(t, root2, BreakingOptions{BaseRef: "main"})) {
+		t.Error("tanpa kenaikan MAJOR harus gagal walau sudah ada di cabang dasar")
+	}
+}
+
 // recordingGit mencatat setiap Show agar test bisa memastikan baseline dibaca dari tag, bukan dari HEAD.
 type recordingGit struct {
 	GitReader

@@ -33,7 +33,11 @@ type BreakingResult struct {
 // BreakingOptions mengatur CheckBreaking.
 type BreakingOptions struct {
 	Only     string // "" = semua; "platform" atau satu modul (Dir, slug, atau key)
-	Approved bool   // dari env ERP_API_BREAKING_APPROVED=true (label PR api-breaking-approved)
+	Approved bool   // dari env ERP_API_BREAKING_APPROVED=true (label PR api-breaking-approved; di CI juga event push)
+	// BaseRef (env ERP_API_BREAKING_BASE_REF, mis. origin/main pada PR) adalah revisi cabang dasar. Perubahan breaking terhadap
+	// tag rilis yang SUDAH ada di BaseRef dianggap disetujui saat di-merge, asalkan MAJOR versi naik: PR berikutnya tanpa label
+	// tidak gagal sampai tag baru dibuat. Perubahan breaking baru terhadap BaseRef tetap butuh label.
+	BaseRef string
 }
 
 const skippedUnreleased = "belum pernah dirilis"
@@ -142,10 +146,45 @@ func checkTarget(ctx context.Context, repo *Repo, git GitReader, t breakTarget, 
 	if err != nil {
 		return res, err
 	}
-	if opts.Approved && len(res.Changes) > 0 {
-		res.Approved = major(t.version) > major(strings.TrimPrefix(res.BaseTag, t.prefix))
+	if len(res.Changes) == 0 {
+		return res, nil
+	}
+	majorBumped := major(t.version) > major(strings.TrimPrefix(res.BaseTag, t.prefix))
+	if opts.Approved {
+		res.Approved = majorBumped
+	}
+	if !res.Approved && majorBumped && opts.BaseRef != "" {
+		// Persetujuan yang sudah di-merge: bila terhadap cabang dasar tidak ada perubahan breaking baru, semua perubahan
+		// breaking terhadap tag rilis sudah melewati review berlabel saat di-merge (K-1).
+		fresh, err := breakingSince(ctx, repo, git, opts.BaseRef, t)
+		if err != nil {
+			return res, err
+		}
+		res.Approved = len(fresh) == 0
 	}
 	return res, nil
+}
+
+// breakingSince mendiff kontrak target pada revisi ref (cabang dasar) terhadap HEAD. Kontrak yang belum ada pada ref
+// berarti tidak ada dasar pembanding: dianggap tidak ada perubahan baru yang dapat dikecualikan (mengembalikan
+// satu perubahan semu agar persetujuan tidak diberikan).
+func breakingSince(ctx context.Context, repo *Repo, git GitReader, ref string, t breakTarget) ([]Change, error) {
+	baseSet, err := loadBaseline(ctx, repo, git, ref, t.doc)
+	if errors.Is(err, fs.ErrNotExist) {
+		return []Change{{ID: "base-ref-missing", Level: "ERR", Text: "kontrak belum ada pada " + ref}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	baseSpec, err := baseSet.Bundle(t.doc)
+	if err != nil {
+		return nil, fmt.Errorf("bundel %s: %w", ref, err)
+	}
+	headSpec, err := repo.Set.Bundle(t.doc)
+	if err != nil {
+		return nil, fmt.Errorf("bundel HEAD: %w", err)
+	}
+	return diffSpecs(baseSpec, headSpec, t.name)
 }
 
 // major mengembalikan angka MAJOR dari "X.Y.Z" atau "vX.Y.Z" (-1 bila tidak valid).

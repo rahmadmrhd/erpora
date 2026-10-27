@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+    # labeled/unlabeled: menambah atau mencabut label api-breaking-approved memicu ulang gate kontrak (K-2).
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -92,7 +94,11 @@ jobs:
     env:
       ERP_REQUIRE_BUN: "1"
       # Perubahan breaking hanya lolos bila PR berlabel api-breaking-approved (dan major version manifest naik).
-      ERP_API_BREAKING_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'api-breaking-approved') }}
+      # Pada push ke main, breaking yang sudah melewati review PR berlabel diterima (selama MAJOR manifest naik); baseline tag
+      # baru ada saat rilis. Pada PR tanpa label, breaking yang sudah ada di cabang dasar (ERP_API_BREAKING_BASE_REF) tidak
+      # menggagalkan; breaking baru tetap butuh label (K-1).
+      ERP_API_BREAKING_APPROVED: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'api-breaking-approved') }}
+      ERP_API_BREAKING_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
