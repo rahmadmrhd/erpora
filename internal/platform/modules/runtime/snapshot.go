@@ -26,11 +26,24 @@ func NewSnapshot() *Snapshot {
 	return &Snapshot{tenants: map[tenancy.TenantID]tenantState{}}
 }
 
-// Set mengganti seluruh status modul tenant beserta revision-nya.
-func (s *Snapshot) Set(t tenancy.TenantID, statuses map[string]Status, revision int64) {
+// Apply mengganti status tenant hanya bila revision > revision saat ini, atau tenant belum punya state
+// (compare-and-set monoton). Mengembalikan false untuk pembaruan basi.
+func (s *Snapshot) Apply(t tenancy.TenantID, statuses map[string]Status, revision int64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if cur, ok := s.tenants[t]; ok && revision <= cur.revision {
+		return false
+	}
 	s.tenants[t] = tenantState{statuses: maps.Clone(statuses), revision: revision}
+	return true
+}
+
+// Statuses mengembalikan salinan status modul tenant beserta revision-nya.
+func (s *Snapshot) Statuses(t tenancy.TenantID) (map[string]Status, int64) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cur := s.tenants[t]
+	return maps.Clone(cur.statuses), cur.revision
 }
 
 // Status mengembalikan status modul; platform.core selalu enabled dan modul
