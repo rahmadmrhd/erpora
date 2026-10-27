@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"erpora/internal/app"
 	"erpora/internal/platform/modules/lifecycle"
 	"erpora/internal/platform/modules/resolver"
 	"erpora/internal/platform/modules/runtime"
@@ -37,6 +38,13 @@ type fakeBackend struct {
 	op          store.Operation
 	opErr       error
 	events      []store.Event
+	guardErr    error
+	guardCalls  int
+}
+
+func (f *fakeBackend) GuardWrite(context.Context) error {
+	f.guardCalls++
+	return f.guardErr
 }
 
 var (
@@ -123,6 +131,29 @@ func runModules(t *testing.T, f *fakeBackend, stdin string, args ...string) (std
 	err = root.Execute()
 	_ = opened
 	return out.String(), errOut.String(), err
+}
+
+// FR-22.5: guard penanda lingkungan dipanggil sebelum mutasi; penolakannya menghentikan Execute/Retry,
+// sedangkan command read-only tidak memeriksa penanda.
+func TestModules_GuardBlocksMutationsOnly(t *testing.T) {
+	guard := &app.ExitError{Code: 3, Err: app.ErrProductionDatabase}
+	for _, args := range [][]string{{"install", "acme.example"}, {"enable", "acme.example"}, {"retry", exampleOp.String()}} {
+		f := &fakeBackend{guardErr: guard, mods: canonicalModules()}
+		_, _, err := runModules(t, f, "", args...)
+		if exitCode(err) != 3 {
+			t.Errorf("%v: exit = %d (err %v), want 3", args, exitCode(err), err)
+		}
+		if len(f.execReqs) != 0 || f.retryID != uuid.Nil {
+			t.Errorf("%v: mutasi dijalankan walau guard menolak", args)
+		}
+	}
+	f := &fakeBackend{guardErr: guard, mods: canonicalModules()}
+	if _, _, err := runModules(t, f, "", "list"); err != nil {
+		t.Errorf("list: %v", err)
+	}
+	if f.guardCalls != 0 {
+		t.Errorf("list memanggil guard %d kali", f.guardCalls)
+	}
 }
 
 func TestModules_ListGolden(t *testing.T) {

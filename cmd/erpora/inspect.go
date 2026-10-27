@@ -1,15 +1,52 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
+	tnoop "go.opentelemetry.io/otel/trace/noop"
 
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
+	"erpora/internal/platform/database"
+	"erpora/internal/platform/migrate"
 )
+
+// databaseEnvTimeout membatasi pembacaan penanda lingkungan oleh `inspect config` (command ini tetap cepat dan exit 0).
+const databaseEnvTimeout = 3 * time.Second
+
+// databaseEnvironment membaca platform_state.environment (read-only). Hasil "unknown (<alasan>)" bila DSN kosong,
+// DB tidak terjangkau, atau penanda belum ada; alasan tidak pernah memuat DSN.
+func databaseEnvironment(ctx context.Context, c config.Config) string {
+	if c.DatabaseURL == "" {
+		return "unknown (ERP_DATABASE_URL kosong)"
+	}
+	ctx, cancel := context.WithTimeout(ctx, databaseEnvTimeout)
+	defer cancel()
+	db, err := database.Open(ctx, c, tnoop.NewTracerProvider(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		return "unknown (database tidak terjangkau)"
+	}
+	defer func() {
+		if s, err := db.DB(); err == nil {
+			_ = s.Close()
+		}
+	}()
+	env, ok, err := migrate.Environment(ctx, db)
+	switch {
+	case err != nil:
+		return "unknown (penanda tidak terbaca)"
+	case !ok:
+		return "unknown (penanda belum ada; jalankan `erpora migrate up`)"
+	}
+	return string(env)
+}
 
 func newInspectCmd(opts *rootOpts) *cobra.Command {
 	inspect := &cobra.Command{
@@ -42,6 +79,7 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				"ERP_DB_NPLUSONE_THRESHOLD": strconv.Itoa(c.DBNPlusOneThreshold),
 				"ERP_DB_SLOW_QUERY_MS":      strconv.FormatInt(c.DBSlowQuery.Milliseconds(), 10),
 				"flavor":                    buildinfo.Flavor(),
+				"database.environment":      databaseEnvironment(cmd.Context(), c),
 			}
 			keys := make([]string, 0, len(kv))
 			for k := range kv {

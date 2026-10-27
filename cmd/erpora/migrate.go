@@ -64,6 +64,10 @@ func newMigrateCmd(opts *rootOpts) *cobra.Command {
 					return err
 				}
 				defer cleanup()
+				// Binary dev menolak menulis ke DB berpenanda production, atau DB tanpa penanda dengan ERP_ENV=production.
+				if err := app.GuardDevWrite(c.Context(), db, cfg); err != nil {
+					return err
+				}
 				if err := migrate.UpWithTenant(c.Context(), db, cfg.Env, cfg.DefaultTenantID); err != nil {
 					return err
 				}
