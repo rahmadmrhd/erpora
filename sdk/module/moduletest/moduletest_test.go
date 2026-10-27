@@ -32,3 +32,19 @@ func TestRecorder_RecordsRoutesAndCommands(t *testing.T) {
 		t.Errorf("Permission route tak terdaftar = %q", got)
 	}
 }
+
+func TestRecorder_RecordsRouteOptions(t *testing.T) {
+	r := NewRecorder()
+	h := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	r.Handle("POST", "/notes", "x.notes.create", h, module.MaxBodyBytes(2048), module.Classify(module.ClassConfidential))
+	r.Public("GET", "/status", h)
+
+	rt, _ := r.Route("POST", "/notes")
+	if rt.Options != (module.RouteConfig{MaxBodyBytes: 2048, Classification: "confidential"}) {
+		t.Errorf("Options = %+v", rt.Options)
+	}
+	st, _ := r.Route("GET", "/status")
+	if st.Options != (module.RouteConfig{}) {
+		t.Errorf("Options publik = %+v", st.Options)
+	}
+}

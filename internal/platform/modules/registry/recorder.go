@@ -45,8 +45,10 @@ func (r *recorder) validHandler(method, path string, h http.Handler) bool {
 	return true
 }
 
-func (r *recorder) Handle(method, path, permission string, h http.Handler) {
+func (r *recorder) Handle(method, path, permission string, h http.Handler, opts ...module.RouteOption) {
 	valid := r.validRoute(method, path) && r.validHandler(method, path, h)
+	cfg, optsOK := r.resolveOptions(method, path, opts)
+	valid = valid && optsOK
 	switch {
 	case permission == "":
 		r.problem(CodePermissionMissing, "route %s %s tidak punya permission; gunakan Public bila memang publik", method, path)
@@ -60,17 +62,19 @@ func (r *recorder) Handle(method, path, permission string, h http.Handler) {
 	}
 	r.routes = append(r.routes, RouteInfo{
 		Module: r.key, Method: method, Pattern: "/api/" + r.slug + path,
-		Permission: permission, Handler: h,
+		Permission: permission, Handler: h, MaxBodyBytes: cfg.MaxBodyBytes, Classification: cfg.Classification,
 	})
 }
 
-func (r *recorder) Public(method, path string, h http.Handler) {
-	if !r.validRoute(method, path) || !r.validHandler(method, path, h) {
+func (r *recorder) Public(method, path string, h http.Handler, opts ...module.RouteOption) {
+	valid := r.validRoute(method, path) && r.validHandler(method, path, h)
+	cfg, optsOK := r.resolveOptions(method, path, opts)
+	if !valid || !optsOK {
 		return
 	}
 	r.routes = append(r.routes, RouteInfo{
 		Module: r.key, Method: method, Pattern: "/api/" + r.slug + path,
-		Public: true, Handler: h,
+		Public: true, Handler: h, MaxBodyBytes: cfg.MaxBodyBytes, Classification: cfg.Classification,
 	})
 }
 
@@ -96,4 +100,23 @@ func (r *recorder) Command(c module.Command) {
 	}
 	r.cmdNames[c.Name] = true
 	r.cmds = append(r.cmds, CommandInfo{Module: r.key, Name: r.slug + ":" + c.Name, Command: c})
+}
+
+// resolveOptions menerapkan opsi route, memvalidasinya, dan mengisi default batas body.
+// Semua pelanggaran dicatat sebelum return (FR-05 aturan 7).
+func (r *recorder) resolveOptions(method, path string, opts []module.RouteOption) (module.RouteConfig, bool) {
+	cfg := module.ResolveRouteOptions(opts...)
+	ok := true
+	if cfg.MaxBodyBytes < 0 || cfg.MaxBodyBytes > module.MaxRouteBodyBytes {
+		r.problem(CodeInvalidRouteOption, "route %s %s: MaxBodyBytes %d di luar rentang 1..%d", method, path, cfg.MaxBodyBytes, module.MaxRouteBodyBytes)
+		ok = false
+	}
+	if cfg.Classification != "" && !cfg.Classification.Valid() {
+		r.problem(CodeInvalidRouteOption, "route %s %s: klasifikasi %q tidak dikenal", method, path, cfg.Classification)
+		ok = false
+	}
+	if cfg.MaxBodyBytes == 0 {
+		cfg.MaxBodyBytes = module.DefaultMaxBodyBytes
+	}
+	return cfg, ok
 }

@@ -36,6 +36,9 @@ type RouteInfo struct {
 	Module, Method, Pattern, Permission string
 	Public                              bool
 	Handler                             http.Handler `json:"-"`
+	// MaxBodyBytes sudah diberi default (module.DefaultMaxBodyBytes); Classification kosong = tidak dinyatakan.
+	MaxBodyBytes   int64
+	Classification module.Classification
 }
 
 // CommandInfo adalah satu command terdaftar; Name berbentuk "<slug>:<name>".
