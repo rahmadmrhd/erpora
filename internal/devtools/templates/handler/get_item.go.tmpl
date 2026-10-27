@@ -1,0 +1,55 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/google/uuid"
+
+	"[[.Mod.GoPath]]/internal/domain"
+	"erpora/sdk/httpx"
+)
+
+// [[.Name]]Data adalah DTO respons [[.Method]] [[.Path]] (api-guidelines §4: camelCase, waktu ISO 8601 UTC).
+type [[.Name]]Data struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Version   int64  `json:"version"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+var err[[.Name]]NotImplemented = errors.New("[[.Name]] belum disambungkan ke use case")
+
+// [[.Camel]]Func adalah titik sambung use case. Ganti dengan pemanggilan use case di application/ (mis. lewat Handlers).
+// Use case WAJIB membatasi pencarian ke scope pemanggil dan mengembalikan domain.ErrNotFound untuk record yang tidak ada
+// ATAU di luar scope (404, bukan 403; PRD-001 FR-119). Setelah sdk/authz tersedia (PRD-001), muat record lewat
+// authz.Check/authz.Filter.
+var [[.Camel]]Func = func(_ context.Context, _ string) ([[.Name]]Data, error) {
+	return [[.Name]]Data{}, err[[.Name]]NotImplemented
+}
+
+// [[.Name]] melayani [[.Method]] [[.Path]]: memuat satu record menurut ID.
+func [[.Name]]() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if _, err := uuid.Parse(id); err != nil { // ID rusak = tidak ada; jangan bedakan dari record di luar scope
+			httpx.WriteError(w, r, http.StatusNotFound, "not_found", "Data tidak ditemukan.", nil)
+			return
+		}
+		out, err := [[.Camel]]Func(r.Context(), id)
+		switch {
+		case err == nil:
+			httpx.WriteData(w, http.StatusOK, out)
+		case errors.Is(err, domain.ErrNotFound):
+			httpx.WriteError(w, r, http.StatusNotFound, "not_found", "Data tidak ditemukan.", nil)
+		case errors.Is(err, err[[.Name]]NotImplemented):
+			httpx.WriteError(w, r, http.StatusNotImplemented, "not_implemented", "Endpoint belum diimplementasi.", nil)
+		default:
+			// Detail 5xx hanya di log (api-guidelines §8); respons tetap generik.
+			httpx.RespondError(w, r, fmt.Errorf("[[.Name]]: %w", err))
+		}
+	})
+}

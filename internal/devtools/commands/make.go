@@ -28,7 +28,7 @@ func (f *makeFlags) apply(c *cobra.Command, build func(root string) (gen.Plan, e
 }
 
 func registerMake(root *cobra.Command) {
-	root.AddCommand(newMakeMigration(), newMakeModule(),
+	root.AddCommand(newMakeMigration(), newMakeModule(), newMakeHandler(),
 		newMakeLayer("make:entity", "<module> <Name>", "Buat entity domain (internal/domain) beserta test-nya",
 			func(root string, a []string, _ bool) (gen.Plan, error) { return gen.MakeEntity(root, a[0], a[1]) }, false),
 		newMakeLayer("make:usecase", "<module> <Name> [--query]", "Buat use case (internal/application): command atau query",
@@ -40,6 +40,32 @@ func registerMake(root *cobra.Command) {
 		newMakeLayer("make:repository", "<module> <Name>", "Buat repository (port, model GORM, repo, mapping) untuk entity yang sudah ada",
 			func(root string, a []string, _ bool) (gen.Plan, error) { return gen.MakeRepository(root, a[0], a[1]) }, false),
 	)
+}
+
+func newMakeHandler() *cobra.Command {
+	var f makeFlags
+	var route, permission string
+	cmd := &cobra.Command{
+		Use:   "make:handler <module> <Name> --route \"METHOD /path\" --permission <slug.resource.action>",
+		Short: "Buat endpoint: handler + test IDOR, route, capability, dan operasi OpenAPI sekaligus",
+		Long: "Membuat handler (internal/presentation/http/<name>.go) beserta test (endpoint ber-ID selalu disertai kerangka test IDOR),\n" +
+			"mendaftarkan route di module.go (Classify + MaxBodyBytes), menambah capability di module.json, dan operasi serta skema di openapi.yaml.\n" +
+			"Bentuk route: GET|POST /<koleksi>, GET|PATCH|DELETE /<koleksi>/{id}, POST /<koleksi>/{id}/<aksi>. PUT ditolak (api-guidelines section 3).",
+		GroupID: GroupMake,
+		Args:    cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, a []string) error {
+			if route == "" || permission == "" {
+				return usageErr("--route dan --permission wajib diisi")
+			}
+			return f.apply(c, func(root string) (gen.Plan, error) {
+				return gen.MakeHandler(root, gen.HandlerOptions{Module: a[0], Name: a[1], Route: route, Permission: permission})
+			})
+		},
+	}
+	cmd.Flags().StringVar(&route, "route", "", "\"METHOD /path\" relatif modul, mis. \"GET /items/{id}\"")
+	cmd.Flags().StringVar(&permission, "permission", "", "permission <slug>.<resource>.<action> (ditambahkan ke capabilities)")
+	f.bind(cmd)
+	return cmd
 }
 
 // newMakeLayer membuat command make:* dengan argumen <module> <name> dan flag --force/--dry-run (dan --query bila hasQuery).

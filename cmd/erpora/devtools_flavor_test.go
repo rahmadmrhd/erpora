@@ -16,7 +16,7 @@ func stripBanner(s string) string { return strings.ReplaceAll(s, devtools.Banner
 // wantDevCommands: judul grup -> command dev yang harus terdaftar. Setiap task yang menambah command
 // developer tools menambah barisnya di sini.
 var wantDevCommands = map[string][]string{
-	"Make":    {"make:migration", "make:module", "make:entity", "make:usecase", "make:contract", "make:command", "make:repository"},
+	"Make":    {"make:migration", "make:module", "make:handler", "make:entity", "make:usecase", "make:contract", "make:command", "make:repository"},
 	"Kontrak": {"contracts:lint", "contracts:generate", "contracts:breaking"},
 }
 

@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.inventory
+  version: 0.1.0
+  description: >
+    Kontrak API modul Inventory (PRD-000 FR-23.1). Dokumen ini adalah sumber kebenaran route modul: test kesesuaian
+    mencocokkan method, path, permission, x-erp-public, dan klasifikasi respons dengan route yang didaftarkan di module.go.
+    `erpora make:handler` menambah operasi baru di sini bersama route dan capability-nya.
+servers:
+  - url: /
+paths:
+  /api/inventory/items:
+    get:
+      operationId: listInventoryItems
+      summary: Daftar items
+      description: Pagination halaman (api-guidelines section 6). page atau pageSize di luar rentang menghasilkan 400 bad_request.
+      x-erp-permission: inventory.items.read
+      parameters:
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { $ref: 'erp:common#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Items tenant ini.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Item' }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+              example:
+                data:
+                  - id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+                    title: Item pertama
+                    version: 1
+                    createdAt: '2026-10-21T07:15:00Z'
+                    updatedAt: '2026-10-21T07:15:00Z'
+                page: { page: 1, pageSize: 25, total: 1, hasMore: false }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '500': { $ref: 'erp:common#/components/responses/InternalError' }
+  /api/inventory/items/{id}/approve:
+    post:
+      operationId: approveItemInventory
+      summary: ApproveItem
+      description: >
+        Kerangka operasi ApproveItem dibuat `erpora make:handler`; lengkapi deskripsi, skema, dan contoh sesuai perilaku sebenarnya.
+      x-erp-permission: inventory.items.approve
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
+        - { $ref: 'erp:common#/components/parameters/IdempotencyKey' }
+        - { $ref: 'erp:common#/components/parameters/IfMatch' }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApproveItemRequest' }
+            example: { reason: Contoh }
+      responses:
+        '200':
+          description: Berhasil.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ApproveItemData' }
+              example:
+                data:
+                  id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+                  title: Contoh
+                  version: 1
+                  createdAt: '2026-10-21T07:15:00Z'
+                  updatedAt: '2026-10-21T07:15:00Z'
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+        '409': { $ref: 'erp:common#/components/responses/Conflict' }
+        '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
+        '500': { $ref: 'erp:common#/components/responses/InternalError' }
+components:
+  schemas:
+    Item:
+      type: object
+      required: [id, title, version, createdAt, updatedAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        title:
+          type: string
+          x-erp-classification: internal
+        version: { type: integer, format: int64 }
+        createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+        updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+    ApproveItemData:
+      type: object
+      required: [id, title, version, createdAt, updatedAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        title:
+          type: string
+          x-erp-classification: internal
+        version: { type: integer, format: int64 }
+        createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+        updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+    ApproveItemRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          x-erp-classification: internal

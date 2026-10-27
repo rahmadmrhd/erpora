@@ -1,0 +1,175 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	[[if .HasID]]"[[.Mod.GoPath]]/internal/domain"
+	[[end]]
+)
+
+// [[.Camel]]PrincipalKey membawa "principal" uji lewat context; menggantikan sdk/authz sampai PRD-001 tersedia.
+type [[.Camel]]PrincipalKey struct{}
+
+const [[.Camel]]SampleID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+
+// [[.Camel]]Do mengirim request ke handler lewat ServeMux (agar r.PathValue terisi) sebagai principal tertentu.
+func [[.Camel]]Do(principal, id, body string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	mux.Handle("[[.Method]] [[.Path]]", [[.Name]]())
+	target := strings.ReplaceAll("[[.Path]]", "{id}", id)
+	req := httptest.NewRequest("[[.Method]]", target, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if principal != "" {
+		req = req.WithContext(context.WithValue(req.Context(), [[.Camel]]PrincipalKey{}, principal))
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+[[if .HasBody]]const [[.Camel]]Body = `[[.SampleBody]]`
+
+[[end]]// [[.Camel]]Restore mengembalikan titik sambung use case setelah test.
+func [[.Camel]]Restore(t *testing.T) {
+	t.Helper()
+	orig := [[.Camel]]Func
+	t.Cleanup(func() { [[.Camel]]Func = orig })
+}
+
+// Kerangka belum disambungkan ke use case: harus menjawab 501, bukan panik atau 200 palsu.
+func Test[[.Name]]_NotImplementedByDefault(t *testing.T) {
+	rec := [[.Camel]]Do("owner", [[.Camel]]SampleID, [[if .HasBody]][[.Camel]]Body[[else]]""[[end]])
+	if rec.Code != http.StatusNotImplemented || errCode(t, rec) != "not_implemented" {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+[[if .HasID]]// ID yang bukan UUID dijawab 404 (tidak dibedakan dari record di luar scope).
+func Test[[.Name]]_InvalidIDIs404(t *testing.T) {
+	rec := [[.Camel]]Do("owner", "bukan-uuid", [[if .HasBody]][[.Camel]]Body[[else]]""[[end]])
+	if rec.Code != http.StatusNotFound || errCode(t, rec) != "not_found" {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Test IDOR (CLAUDE.md, PRD-001 FR-119): principal lain tidak boleh melihat atau mengubah record milik pemilik; jawabannya
+// 404 not_found (bukan 403) tanpa membocorkan isi record. Kerangka ini memakai "principal" palsu di context; setelah
+// sdk/authz.Check/authz.Filter tersedia, ganti dengan dua principal sungguhan (user A vs user B) dan pertahankan asersinya.
+func Test[[.Name]]_IDOR_OtherPrincipalGets404(t *testing.T) {
+	[[.Camel]]Restore(t)
+	[[if eq .Kind "get_item"]][[.Camel]]Func = func(ctx context.Context, id string) ([[.Name]]Data, error) {
+		if ctx.Value([[.Camel]]PrincipalKey{}) != "owner" {
+			return [[.Name]]Data{}, domain.ErrNotFound
+		}
+		return [[.Name]]Data{ID: id, Title: "rahasia-pemilik", Version: 1}, nil
+	}[[end]][[if eq .Kind "post_action"]][[.Camel]]Func = func(ctx context.Context, id, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
+		if ctx.Value([[.Camel]]PrincipalKey{}) != "owner" {
+			return [[.Name]]Data{}, domain.ErrNotFound
+		}
+		return [[.Name]]Data{ID: id, Title: "rahasia-pemilik", Version: 2}, nil
+	}[[end]][[if eq .Kind "patch"]][[.Camel]]Func = func(ctx context.Context, id, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
+		if ctx.Value([[.Camel]]PrincipalKey{}) != "owner" {
+			return [[.Name]]Data{}, domain.ErrNotFound
+		}
+		return [[.Name]]Data{ID: id, Title: "rahasia-pemilik", Version: 2}, nil
+	}[[end]][[if eq .Kind "delete"]][[.Camel]]Func = func(ctx context.Context, _, _ string) error {
+		if ctx.Value([[.Camel]]PrincipalKey{}) != "owner" {
+			return domain.ErrNotFound
+		}
+		return nil
+	}[[end]]
+
+	intruder := [[.Camel]]Do("intruder", [[.Camel]]SampleID, [[if .HasBody]][[.Camel]]Body[[else]]""[[end]])
+	if intruder.Code != http.StatusNotFound || errCode(t, intruder) != "not_found" {
+		t.Fatalf("principal lain: %d %s, want 404 not_found", intruder.Code, intruder.Body.String())
+	}
+	if strings.Contains(intruder.Body.String(), "rahasia-pemilik") {
+		t.Errorf("isi record bocor ke principal lain: %s", intruder.Body.String())
+	}
+	owner := [[.Camel]]Do("owner", [[.Camel]]SampleID, [[if .HasBody]][[.Camel]]Body[[else]]""[[end]])
+	if owner.Code != [[.SuccessCode]] {
+		t.Fatalf("pemilik: %d %s, want [[.SuccessCode]]", owner.Code, owner.Body.String())
+	}
+}
+
+[[end]][[if eq .Kind "get_collection"]]func Test[[.Name]]_ListsAndPaginates(t *testing.T) {
+	[[.Camel]]Restore(t)
+	var gotPage, gotSize int
+	[[.Camel]]Func = func(_ context.Context, page, size int) ([][[.Name]]Data, int64, error) {
+		gotPage, gotSize = page, size
+		return [][[.Name]]Data{{ID: [[.Camel]]SampleID, Title: "a", Version: 1}}, 60, nil
+	}
+	rec := [[.Camel]]Do("owner", "", "")
+	if rec.Code != http.StatusOK || gotPage != 1 || gotSize != 25 {
+		t.Fatalf("%d page=%d size=%d %s", rec.Code, gotPage, gotSize, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"hasMore":true`) {
+		t.Errorf("page = %s", rec.Body.String())
+	}
+}
+
+func Test[[.Name]]_InvalidParams(t *testing.T) {
+	for _, q := range []string{"page=0", "pageSize=201", "pageSize=abc"} {
+		mux := http.NewServeMux()
+		mux.Handle("[[.Method]] [[.Path]]", [[.Name]]())
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("[[.Method]]", "[[.Path]]?"+q, nil))
+		if rec.Code != http.StatusBadRequest || errCode(t, rec) != "bad_request" {
+			t.Errorf("%s: %d %s", q, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func Test[[.Name]]_EmptyListIsArray(t *testing.T) {
+	[[.Camel]]Restore(t)
+	[[.Camel]]Func = func(context.Context, int, int) ([][[.Name]]Data, int64, error) { return nil, 0, nil }
+	rec := [[.Camel]]Do("owner", "", "")
+	if !strings.Contains(rec.Body.String(), `"data":[]`) {
+		t.Errorf("data harus array kosong: %s", rec.Body.String())
+	}
+}
+
+[[end]][[if eq .Kind "post_create"]]func Test[[.Name]]_CreatesWithLocation(t *testing.T) {
+	[[.Camel]]Restore(t)
+	[[.Camel]]Func = func(_ context.Context, req [[.Name]]Request) ([[.Name]]Data, error) {
+		return [[.Name]]Data{ID: [[.Camel]]SampleID, Title: req.Title, Version: 1}, nil
+	}
+	rec := [[.Camel]]Do("owner", "", [[.Camel]]Body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "[[.BasePath]][[.Path]]/"+[[.Camel]]SampleID {
+		t.Errorf("Location = %q", got)
+	}
+}
+
+[[end]][[if .HasBody]]func Test[[.Name]]_UnknownFieldIs422(t *testing.T) {
+	rec := [[.Camel]]Do("owner", [[.Camel]]SampleID, `{"tidakAda":1}`)
+	if rec.Code != http.StatusUnprocessableEntity || errCode(t, rec) != "validation_failed" {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+[[end]][[if and .HasBody (ne .Kind "post_action")]]func Test[[.Name]]_EmptyBodyIs400(t *testing.T) {
+	rec := [[.Camel]]Do("owner", [[.Camel]]SampleID, "")
+	if rec.Code != http.StatusBadRequest || errCode(t, rec) != "bad_request" || !strings.Contains(rec.Body.String(), "body_required") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+[[end]]// api-guidelines §8: detail 5xx tidak boleh bocor ke respons.
+func Test[[.Name]]_InternalErrorHidesDetail(t *testing.T) {
+	[[.Camel]]Restore(t)
+	[[.Camel]]Func = [[.FailFunc]]
+	rec := [[.Camel]]Do("owner", [[.Camel]]SampleID, [[if .HasBody]][[.Camel]]Body[[else]]""[[end]])
+	if rec.Code != http.StatusInternalServerError || errCode(t, rec) != "internal_error" || strings.Contains(rec.Body.String(), "rahasia") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}

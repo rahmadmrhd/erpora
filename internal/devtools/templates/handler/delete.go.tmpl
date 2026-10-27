@@ -1,0 +1,44 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/google/uuid"
+
+	"[[.Mod.GoPath]]/internal/domain"
+	"erpora/sdk/httpx"
+)
+
+var err[[.Name]]NotImplemented = errors.New("[[.Name]] belum disambungkan ke use case")
+
+// [[.Camel]]Func adalah titik sambung use case; ifMatch adalah nilai header If-Match (kosong = tidak dikirim). Ganti dengan
+// pemanggilan use case di application/. Use case WAJIB membatasi record ke scope pemanggil (domain.ErrNotFound bila di
+// luar scope) dan memeriksa ifMatch terhadap Version (412 version_mismatch lewat *httpx.Error).
+var [[.Camel]]Func = func(_ context.Context, _, _ string) error {
+	return err[[.Name]]NotImplemented
+}
+
+// [[.Name]] melayani [[.Method]] [[.Path]]: menghapus satu record dengan optimistic concurrency (If-Match); 204 tanpa body.
+func [[.Name]]() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if _, err := uuid.Parse(id); err != nil { // ID rusak = tidak ada; jangan bedakan dari record di luar scope
+			httpx.WriteError(w, r, http.StatusNotFound, "not_found", "Data tidak ditemukan.", nil)
+			return
+		}
+		err := [[.Camel]]Func(r.Context(), id, r.Header.Get("If-Match"))
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusNoContent)
+		case errors.Is(err, domain.ErrNotFound):
+			httpx.WriteError(w, r, http.StatusNotFound, "not_found", "Data tidak ditemukan.", nil)
+		case errors.Is(err, err[[.Name]]NotImplemented):
+			httpx.WriteError(w, r, http.StatusNotImplemented, "not_implemented", "Endpoint belum diimplementasi.", nil)
+		default:
+			httpx.RespondError(w, r, fmt.Errorf("[[.Name]]: %w", err))
+		}
+	})
+}

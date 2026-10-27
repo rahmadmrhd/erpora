@@ -1,0 +1,89 @@
+operationId: [[.OperationID]]
+summary: [[.Name]]
+description: >
+  Kerangka operasi [[.Name]] dibuat `erpora make:handler`; lengkapi deskripsi, skema, dan contoh sesuai perilaku sebenarnya.
+x-erp-permission: [[.Permission]]
+parameters:
+[[- if .HasID]]
+  - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
+[[- end]]
+[[- if eq .Kind "get_collection"]]
+  - { $ref: 'erp:common#/components/parameters/Page' }
+  - { $ref: 'erp:common#/components/parameters/PageSize' }
+[[- end]]
+[[- if or (eq .Kind "post_create") (eq .Kind "post_action")]]
+  - { $ref: 'erp:common#/components/parameters/IdempotencyKey' }
+[[- end]]
+[[- if or (eq .Kind "post_action") (eq .Kind "patch") (eq .Kind "delete")]]
+  - { $ref: 'erp:common#/components/parameters/IfMatch' }
+[[- end]]
+[[- if .HasBody]]
+requestBody:
+  required: [[.BodyRequired]]
+  content:
+    application/json:
+      schema: { $ref: '#/components/schemas/[[.Name]]Request' }
+      example: [[.RequestExample]]
+[[- end]]
+responses:
+[[- if eq .Kind "get_collection"]]
+  '200':
+    description: Daftar tenant ini.
+    content:
+      application/json:
+        schema:
+          type: object
+          required: [data, page]
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/[[.Name]]Data' }
+            page: { $ref: 'erp:common#/components/schemas/Page' }
+        example:
+          data:
+            - id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+              title: Contoh
+              version: 1
+              createdAt: '2026-10-21T07:15:00Z'
+              updatedAt: '2026-10-21T07:15:00Z'
+          page: { page: 1, pageSize: 25, total: 1, hasMore: false }
+[[- else if eq .Kind "delete"]]
+  '204': { description: 'Dihapus; tanpa body.' }
+[[- else]]
+  '[[.SuccessCode]]':
+    description: Berhasil.
+[[- if eq .Kind "post_create"]]
+    headers: { Location: { $ref: 'erp:common#/components/headers/Location' } }
+[[- end]]
+    content:
+      application/json:
+        schema:
+          type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/[[.Name]]Data' }
+        example:
+          data:
+            id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+            title: Contoh
+            version: 1
+            createdAt: '2026-10-21T07:15:00Z'
+            updatedAt: '2026-10-21T07:15:00Z'
+[[- end]]
+[[- if or (eq .Kind "get_collection") (eq .Kind "post_create") (eq .Kind "post_action") (eq .Kind "patch")]]
+  '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+[[- end]]
+  '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+[[- if .HasID]]
+  '404': { $ref: 'erp:common#/components/responses/NotFound' }
+[[- end]]
+[[- if eq .Kind "post_action"]]
+  '409': { $ref: 'erp:common#/components/responses/Conflict' }
+[[- end]]
+[[- if or (eq .Kind "post_action") (eq .Kind "patch") (eq .Kind "delete")]]
+  '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+[[- end]]
+[[- if .HasBody]]
+  '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
+[[- end]]
+  '500': { $ref: 'erp:common#/components/responses/InternalError' }
