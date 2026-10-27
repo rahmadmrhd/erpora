@@ -81,7 +81,8 @@ diubah sehingga penandanya hilang. Kembalikan baris penanda di tempat yang tepat
 
 - Generator **tidak pernah menimpa** file yang sudah ada: pesan "file sudah ada" menyebut path dan `--force`. `--force` hanya berlaku untuk file yang *dibuat*; file yang *diubah* (go.work, module.go, openapi.yaml, dst.) tidak terpengaruh.
 - `--dry-run` mencetak `create|modify|overwrite <path>` beserta diff, **tanpa menulis apa pun** dan tanpa menjalankan langkah lanjutan. Seluruh validasi tetap berjalan.
-- Seluruh rencana divalidasi sebelum file pertama ditulis; penulisan memakai berkas sementara + rename.
+- Seluruh rencana divalidasi sebelum file pertama ditulis; penulisan memakai berkas sementara + rename. Target atau direktori induknya yang berupa symlink (atau junction Windows) ditolak, sehingga generator tidak bisa menulis keluar dari root repo.
+- **Kegagalan di tengah:** bila penulisan satu file gagal, file yang sudah ditulis pada perintah itu dikembalikan (file baru dihapus, isi lama dipulihkan) dan pesan error menyebut jumlahnya. **Kegagalan langkah lanjutan** (`go mod tidy`, `contracts:generate`, `bun install`, Biome) **tidak di-rollback**: file hasil generate tetap ada. Pemulihan: perbaiki penyebabnya (mis. jaringan atau Bun) lalu jalankan langkah yang gagal secara manual (`go mod tidy` di `modules/<dir>`, `task erpora -- contracts:generate <dir>`, `bun install`), atau batalkan semuanya dengan `git checkout -- .` dan `git clean -fd modules/<dir>` pada path yang dicetak generator (hanya bila belum ada pekerjaan lain yang belum di-commit di path itu).
 
 ## 6. `db:fresh`, `db:seed`, dan tiga lapis pengaman
 

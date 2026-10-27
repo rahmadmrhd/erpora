@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -38,6 +39,9 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 		}
 		seen[clean] = true
 		abs := filepath.Join(o.Root, filepath.FromSlash(clean))
+		if err := rejectSymlinks(o.Root, clean); err != nil {
+			return err
+		}
 		existing, err := os.ReadFile(abs) //nolint:gosec // path sudah divalidasi berada di bawah root
 		exists := err == nil
 		if err != nil && !os.IsNotExist(err) {
@@ -70,13 +74,29 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 		return nil
 	}
 
+	var written []step
 	for _, s := range steps {
 		if s.exists && bytes.Equal(s.existing, s.op.Content) {
 			continue
 		}
-		if err := writeAtomic(s.abs, s.op.Content); err != nil {
-			return fmt.Errorf("tulis %s: %w", s.op.Path, err)
+		if err := writeFileFn(s.abs, s.op.Content); err != nil {
+			// Kembalikan file yang sudah ditulis (terbalik): dihapus bila baru, isi lama dipulihkan bila sudah ada.
+			restored := 0
+			for i := len(written) - 1; i >= 0; i-- {
+				w := written[i]
+				var rerr error
+				if w.exists {
+					rerr = writeFileFn(w.abs, w.existing)
+				} else {
+					rerr = os.Remove(w.abs)
+				}
+				if rerr == nil {
+					restored++
+				}
+			}
+			return fmt.Errorf("tulis %s: %w (%d dari %d file yang sudah ditulis dikembalikan)", s.op.Path, err, restored, len(written))
 		}
+		written = append(written, s)
 	}
 	for _, s := range steps {
 		verb := "create"
@@ -96,6 +116,45 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 	fmt.Fprintf(out, "selesai: %d file\n", len(steps))
 	return nil
 }
+
+// rejectSymlinks menolak target yang itu sendiri atau salah satu direktori induknya (di bawah root) adalah symlink
+// (atau titik mount/junction), agar penulisan tidak bisa diarahkan keluar dari root repo. Komponen yang belum ada
+// dilewati (akan dibuat sebagai direktori biasa). Sebagai lapis kedua, ancestor terdalam yang ada harus tetap berada di
+// bawah EvalSymlinks(root).
+func rejectSymlinks(root, clean string) error {
+	cur := root
+	deepest := root
+	for _, seg := range strings.Split(clean, "/") {
+		cur = filepath.Join(cur, seg)
+		fi, err := os.Lstat(cur)
+		if os.IsNotExist(err) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
+			return fmt.Errorf("%s: komponen path adalah symlink atau junction; generator menolak menulis lewat symlink (hapus atau ganti dengan direktori biasa)", clean)
+		}
+		deepest = cur
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return err
+	}
+	realDeepest, err := filepath.EvalSymlinks(deepest)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(realRoot, realDeepest)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%s: path berada di luar root repo setelah symlink diselesaikan", clean)
+	}
+	return nil
+}
+
+// writeFileFn menulis satu file; variabel agar test dapat menyuntikkan kegagalan.
+var writeFileFn = writeAtomic
 
 // writeAtomic menulis lewat file sementara di direktori yang sama lalu rename.
 func writeAtomic(abs string, content []byte) error {

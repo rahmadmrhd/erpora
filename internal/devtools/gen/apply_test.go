@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -100,6 +102,91 @@ func TestApply_PathEscapeRejected(t *testing.T) {
 		if err == nil {
 			t.Errorf("path %q harus ditolak", p)
 		}
+	}
+}
+
+// G-6: symlink pada target atau direktori induknya ditolak sebelum menulis apa pun, sehingga generator tidak bisa
+// diarahkan keluar dari root repo lewat symlink.
+func TestApply_SymlinkTargetOrParentRejected(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	write(t, outside, "secret.txt", "asli")
+	// Direktori: symlink, atau junction (mklink /J, tanpa hak khusus) di Windows.
+	if err := os.Symlink(outside, filepath.Join(root, "linkdir")); err != nil {
+		if runtime.GOOS != "windows" {
+			t.Skipf("symlink tidak didukung: %v", err)
+		}
+		if out, jerr := exec.Command("cmd", "/c", "mklink", "/J", filepath.Join(root, "linkdir"), outside).CombinedOutput(); jerr != nil {
+			t.Skipf("junction tidak dapat dibuat: %v\n%s", jerr, out)
+		}
+	}
+	write(t, root, "ok/file.txt", "x")
+	cases := []struct {
+		name string
+		op   FileOp
+	}{
+		{"induk symlink (create)", FileOp{Path: "linkdir/baru.txt", Kind: OpCreate, Content: []byte("jahat")}},
+		{"induk symlink bersarang", FileOp{Path: "linkdir/a/b/baru.txt", Kind: OpCreate, Content: []byte("jahat")}},
+	}
+	// File symlink hanya dapat dibuat bila lingkungan mengizinkan (Linux/macOS, atau Windows dengan hak symlink).
+	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(root, "linkfile.txt")); err == nil {
+		cases = append(cases,
+			struct {
+				name string
+				op   FileOp
+			}{"target symlink (modify)", FileOp{Path: "linkfile.txt", Kind: OpModify, Content: []byte("jahat")}},
+			struct {
+				name string
+				op   FileOp
+			}{"target symlink (create --force)", FileOp{Path: "linkfile.txt", Kind: OpCreate, Content: []byte("jahat")}},
+		)
+	}
+	for _, c := range cases {
+		err := Apply(context.Background(), Plan{Ops: []FileOp{{Path: "ok/baru.txt", Kind: OpCreate, Content: []byte("x")}, c.op}},
+			Options{Root: root, Force: true})
+		if err == nil || !strings.Contains(err.Error(), "symlink") {
+			t.Errorf("%s: err = %v, want penolakan symlink", c.name, err)
+		}
+		if exists(root, "ok/baru.txt") {
+			t.Errorf("%s: tidak boleh ada file ditulis ketika rencana ditolak", c.name)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(outside, "secret.txt")); string(b) != "asli" {
+		t.Errorf("file di luar root berubah: %q", b)
+	}
+	if exists(outside, "baru.txt") || exists(outside, "a/b/baru.txt") {
+		t.Error("file baru muncul di luar root")
+	}
+}
+
+// G-7: kegagalan menulis di tengah Apply mengembalikan file yang sudah ditulis (dihapus bila baru, isi lama dipulihkan
+// bila sudah ada). Kegagalan langkah lanjutan (Post) tidak di-rollback; itu didokumentasikan di generators.md.
+func TestApply_WriteFailureRollsBackEarlierWrites(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "b.txt", "lama")
+	orig := writeFileFn
+	t.Cleanup(func() { writeFileFn = orig })
+	writeFileFn = func(abs string, content []byte) error {
+		if strings.HasSuffix(filepath.ToSlash(abs), "/c.txt") {
+			return errors.New("disk penuh")
+		}
+		return orig(abs, content)
+	}
+	err := Apply(context.Background(), Plan{Ops: []FileOp{
+		{Path: "a.txt", Kind: OpCreate, Content: []byte("baru")},
+		{Path: "b.txt", Kind: OpModify, Content: []byte("diubah")},
+		{Path: "c.txt", Kind: OpCreate, Content: []byte("gagal")},
+	}}, Options{Root: root})
+	if err == nil || !strings.Contains(err.Error(), "disk penuh") || !strings.Contains(err.Error(), "dikembalikan") {
+		t.Fatalf("err = %v, want kegagalan tulis dengan catatan rollback", err)
+	}
+	if exists(root, "a.txt") {
+		t.Error("a.txt (baru) harus dihapus oleh rollback")
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "b.txt")); string(b) != "lama" {
+		t.Errorf("b.txt = %q, want isi lama dipulihkan", b)
+	}
+	if exists(root, "c.txt") {
+		t.Error("c.txt tidak boleh ada")
 	}
 }
 
