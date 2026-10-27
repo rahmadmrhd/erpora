@@ -85,6 +85,27 @@ func TestMakeHandler_RegeneratesTypesForWebModules(t *testing.T) {
 	}
 }
 
+// G-2 (Q32): kerangka handler menjawab 501 not_implemented sampai disambungkan, jadi operasi OpenAPI hasil generate
+// wajib mendokumentasikan 501 (katalog error api-guidelines section 8).
+func TestMakeHandler_OperationDocuments501(t *testing.T) {
+	for _, o := range allKinds() {
+		root := moduleRepo(t, "inventory")
+		plan, err := MakeHandler(root, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec string
+		for _, op := range plan.Ops {
+			if op.Path == "modules/inventory/openapi.yaml" {
+				spec = string(op.Content)
+			}
+		}
+		if !strings.Contains(spec, "'501': { $ref: 'erp:common#/components/responses/NotImplemented' }") {
+			t.Errorf("%s: operasi tidak mendokumentasikan 501", o.Name)
+		}
+	}
+}
+
 // Review Focus 2: operasi yang sudah ada di kontrak ditolak sebelum Plan; direktori tidak berubah.
 func TestMakeHandler_ExistingOperationRejected(t *testing.T) {
 	root := moduleRepo(t, "stock-opname")

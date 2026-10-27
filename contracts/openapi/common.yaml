@@ -144,6 +144,9 @@ components:
     InternalError:
       description: internal_error; tanpa detail internal.
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotImplemented:
+      description: not_implemented; endpoint terdaftar tetapi belum disambungkan ke use case (kerangka make:handler).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     NotReady:
       description: not_ready; layanan belum siap.
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

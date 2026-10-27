@@ -103,6 +103,15 @@ export type components = {
         "application/json": components["schemas"]["Error"];
       };
     };
+    /** @description not_implemented; endpoint terdaftar tetapi belum disambungkan ke use case (kerangka make:handler). */
+    NotImplemented: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["Error"];
+      };
+    };
     /** @description not_ready; layanan belum siap. */
     NotReady: {
       headers: {

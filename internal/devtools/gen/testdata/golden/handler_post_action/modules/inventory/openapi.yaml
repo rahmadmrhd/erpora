@@ -83,6 +83,7 @@ paths:
         '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
         '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
         '500': { $ref: 'erp:common#/components/responses/InternalError' }
+        '501': { $ref: 'erp:common#/components/responses/NotImplemented' }
 components:
   schemas:
     Item:

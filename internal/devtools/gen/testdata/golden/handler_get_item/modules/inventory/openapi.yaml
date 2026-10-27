@@ -71,6 +71,7 @@ paths:
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
         '500': { $ref: 'erp:common#/components/responses/InternalError' }
+        '501': { $ref: 'erp:common#/components/responses/NotImplemented' }
 components:
   schemas:
     Item:
