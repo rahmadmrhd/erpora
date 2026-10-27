@@ -10,7 +10,7 @@ export type paths = {
     };
     /**
      * Manifest bootstrap untuk frontend
-     * @description Daftar modul terkompilasi (tanpa platform.core) dengan status efektif dari runtime snapshot. ETag = revision.
+     * @description Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini. ETag = revision.
      */
     get: operations["getBootstrap"];
     put?: never;
