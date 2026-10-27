@@ -43,6 +43,12 @@ func (s *Service) retry(ctx context.Context, t tenancy.TenantID, actor, key stri
 		if _, err := s.markInterrupted(ctx, t, actor); err != nil {
 			return err
 		}
+		// Keberadaan modul diperiksa lebih dulu agar kunci tak dikenal menghasilkan 404, bukan 412.
+		if key != "" {
+			if _, err := s.knownKey(ctx, t, key); err != nil {
+				return err
+			}
+		}
 		if err := s.checkIfMatch(ctx, t, ifMatch); err != nil {
 			return err
 		}

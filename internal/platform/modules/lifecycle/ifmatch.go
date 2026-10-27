@@ -9,38 +9,45 @@ import (
 )
 
 // MatchIfMatch mengevaluasi nilai header If-Match terhadap revision tenant sebagai ETag (RFC 9110 section 13.1.1):
-// "*" cocok dengan representasi yang ada; daftar entity-tag dipisah koma; perbandingan kuat, sehingga tag lemah
-// (W/"...") tidak pernah cocok. Nilai kosong atau tidak terurai tidak cocok.
+// If-Match = "*" / #entity-tag. "*" sah hanya bila seluruh header persis "*" (tidak boleh dicampur dengan tag);
+// selain itu daftar entity-tag dipisah koma, tiap tag harus diikuti pemisah atau akhir nilai. Perbandingan kuat,
+// sehingga tag lemah (W/"...") tidak pernah cocok. Nilai kosong atau tidak terurai tidak cocok.
 func MatchIfMatch(header string, rev int64) bool {
 	want := `"` + strconv.FormatInt(rev, 10) + `"`
-	s := strings.TrimSpace(header)
+	s := strings.Trim(header, " \t")
+	if s == "*" {
+		return true
+	}
+	matched := false
 	for s != "" {
 		s = strings.TrimLeft(s, " \t,")
-		switch {
-		case s == "":
-			return false
-		case s[0] == '*':
-			return true
-		case strings.HasPrefix(s, `W/"`):
-			end := strings.IndexByte(s[3:], '"')
-			if end < 0 {
-				return false
-			}
-			s = s[3+end+1:]
-		case s[0] == '"':
-			end := strings.IndexByte(s[1:], '"')
-			if end < 0 {
-				return false
-			}
-			if s[:end+2] == want {
-				return true
-			}
-			s = s[end+2:]
-		default:
+		if s == "" {
+			break
+		}
+		weak := strings.HasPrefix(s, `W/"`)
+		start := 0
+		if weak {
+			start = 2
+		}
+		if s[start] != '"' {
 			return false
 		}
+		end := strings.IndexByte(s[start+1:], '"')
+		if end < 0 {
+			return false
+		}
+		tag := s[start : start+end+2]
+		s = s[start+end+2:]
+		// Setelah entity-tag wajib ada pemisah (OWS lalu koma) atau akhir nilai.
+		rest := strings.TrimLeft(s, " \t")
+		if rest != "" && rest[0] != ',' {
+			return false
+		}
+		if !weak && tag == want {
+			matched = true
+		}
 	}
-	return false
+	return matched
 }
 
 // checkIfMatch memeriksa prasyarat If-Match terhadap revision tenant. Dipanggil di dalam advisory lock.

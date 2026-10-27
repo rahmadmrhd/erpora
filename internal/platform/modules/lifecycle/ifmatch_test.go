@@ -19,7 +19,14 @@ func TestMatchIfMatch_Table(t *testing.T) {
 		{` * `, 0, true},
 		{`"5", "7", "9"`, 7, true},
 		{`"5","9"`, 7, false},
-		{`"5", *`, 7, true},
+		{`"5", *`, 7, false}, // "*" hanya sah bila seluruh header (RFC 9110: If-Match = "*" / #entity-tag)
+		{`*, "7"`, 7, false},
+		{`**`, 7, false},
+		{`"7"x`, 7, false}, // tanpa pemisah setelah entity-tag
+		{`"7""7"`, 7, false},
+		{`"5"x, "7"`, 7, false},
+		{`"7",`, 7, true}, // elemen kosong diizinkan (RFC 9110 section 5.6.1)
+		{`, "7"`, 7, true},
 		{`W/"7"`, 7, false},
 		{`W/"5", "7"`, 7, true},
 		{`7`, 7, false}, // tanpa kutip bukan entity-tag
@@ -62,6 +69,27 @@ func TestRetryModule_IfMatchMismatch(t *testing.T) {
 	var le *Error
 	if !errors.As(err, &le) || le.Code != CodeVersionMismatch {
 		t.Fatalf("err = %v, want version_mismatch", err)
+	}
+}
+
+// R-6: kunci modul tidak dikenal harus 404 (module_not_found), bukan 412, walau If-Match tidak cocok.
+func TestExecute_UnknownKeyBeforeIfMatch(t *testing.T) {
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a"})
+	e := newEnv(t, rec, a)
+	_, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpInstall, Key: "acme.nope", Actor: "cli:t", IfMatch: `"999"`})
+	var le *Error
+	if !errors.As(err, &le) || le.Code != CodeModuleNotFound {
+		t.Fatalf("err = %v, want module_not_found", err)
+	}
+}
+
+func TestRetryModule_UnknownKeyBeforeIfMatch(t *testing.T) {
+	e, _, _ := failedInstall(t)
+	_, err := e.svc.RetryModule(context.Background(), tenantA, "acme.nope", "cli:t", nil, `"999"`)
+	var le *Error
+	if !errors.As(err, &le) || le.Code != CodeModuleNotFound {
+		t.Fatalf("err = %v, want module_not_found", err)
 	}
 }
 
