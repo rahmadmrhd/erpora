@@ -14,6 +14,8 @@
 
 ## Keputusan rencana (perlu disetujui pada review rencana)
 
+> **Status (27 Okt 2026): kelima butir ★ disetujui owner** sesuai rekomendasi masing-masing; dicatat di PRD-000 Q31 beserta keputusan saat eksekusi dan deviasi.
+
 Butir bertanda ★ **(perlu konfirmasi owner)** menyangkut ambiguitas atau kontradiksi spec, atau perilaku di luar teks spec. Butir lain adalah pilihan implementasi yang mengikat rencana ini.
 
 1. **★ Generator frontend di M2d dibuat minimal; `make:page` ditunda ke M3 (perlu konfirmasi owner).** FR-22 AC dan exit gate M2 memakai `make:module … --frontend`, padahal shell, registry TS, `defineModule`, dan TanStack Router baru dibangun di M3 (FR-08/FR-09, overview M2). M2d mengerjakan hal berikut:

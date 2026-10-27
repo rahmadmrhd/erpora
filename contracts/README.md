@@ -12,4 +12,7 @@ Setiap modul punya kontrak sendiri di `modules/<dir>/openapi.yaml`. Rujukan lint
 dan hanya ke `common` atau dependensi manifest (rule `erp-ref-dependency`). Test kesesuaian di `internal/app` mencocokkan
 route terdaftar dengan operasi kontrak (method, path, permission, `x-erp-public`, klasifikasi respons).
 
-Pembangkitan tipe TS, pemeriksaan drift, dan deteksi breaking change menyusul pada Task 7 dan 8 (PRD-000 FR-23.3, FR-23.4).
+`erpora contracts:generate` membangkitkan tipe TS (`packages/platform-contracts`, `modules/<dir>/web/api/contract.gen.ts`,
+`packages/module-sdk/src/manifest.gen.ts`) dan `contracts/dist/openapi.json` (spec gabungan; tidak di-commit); `--check` menjaga
+hasil generate tetap mutakhir. `erpora contracts:breaking` membandingkan dengan tag rilis terakhir (`oasdiff`). Semuanya digabung di
+`task contracts:check`. Panduan lengkap: [`docs/module-sdk/contracts.md`](../docs/module-sdk/contracts.md).

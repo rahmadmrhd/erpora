@@ -40,6 +40,7 @@ Aturan:
 - **JANGAN** memakai kata kerja untuk CRUD (`/items/create`, `/items/{id}/delete`).
 - **JANGAN** nesting lebih dari satu tingkat. `/orders/{id}/lines/{lineId}/taxes` → jadikan `/order-line-taxes?lineId=…` atau perlakukan sebagai bagian dari dokumen induk.
 - Trailing slash tidak dipakai; `/items/` → 404.
+- **Resource tunggal dan nama tetap** (aditif, PRD-000 Q31): resource yang memang hanya satu (`GET /api/example/ping`, `GET /api/bootstrap`) dan sub-koleksi bernama kata benda tak terhitung yang path-nya sudah ditetapkan spec (`/api/platform/modules/{key}/history`) tidak dijamakkan. Path item itu menyatakan `x-erp-singleton: true` di kontrak; linter (`erp-path-collection-plural`) mewajibkan segmen koleksi terakhir berakhiran `s` kecuali ada ekstensi ini atau segmennya aksi `POST`.
 
 ## 3. Metode HTTP, status, dan permission
 
@@ -311,6 +312,9 @@ draft ──submit──▶ submitted ──cancel──▶ cancelled ──amen
 - Skema bersama (amplop `data`, `error`, `page`, tipe desimal, UUID, timestamp) didefinisikan sekali di `contracts/openapi/common.yaml` dan dirujuk lewat `$ref: 'erp:common#/components/schemas/…'`.
 - Route yang didaftarkan lewat `Registrar.Handle` dan operasi di kontrak harus cocok satu-satu (method, path, permission); ketidakcocokan menggagalkan CI.
 - Test kontrak memastikan respons nyata sesuai skema OpenAPI-nya.
+- Ekstensi yang dikenal (semua berawalan `x-erp-`): `permission`, `public`, `classification` (`public|internal|confidential|highly_confidential`; tanpa anotasi = `internal`; klasifikasi route harus sama dengan klasifikasi tertinggi respons 2xx, dihitung rekursif), `singleton` (§2), `allow-put` (§3), `filterable`, `sortable`, `field-group`, dan `extensible-enum`. Daftar rule linter beserta pasalnya ada di [`docs/module-sdk/contracts.md`](../module-sdk/contracts.md).
+- Operasi publik (`x-erp-public`) tanpa masukan tidak diwajibkan mendokumentasikan 4xx/403; operasi non-publik wajib (rule `erp-error-codes-documented`).
+- Tipe TS kontrak dibangkitkan (`erpora contracts:generate`) dan di-commit; CI menggagalkan hasil generate yang basi (`contracts:generate --check`).
 
 ## 14. Evolusi & versioning
 
@@ -341,7 +345,8 @@ Endpoint yang perilakunya harus berubah secara mendasar dibuat sebagai **endpoin
 
 ### 14.4. Penegakan & kewajiban klien
 
-- CI membandingkan kontrak setiap modul dengan kontrak di **tag rilis terakhir** modul itu (alat diff OpenAPI, mis. `oasdiff`). Perubahan yang terdeteksi breaking **menggagalkan CI**, kecuali rilis MAJOR yang memenuhi syarat 14.3 langkah 3 dan disertai label persetujuan eksplisit di PR.
+- CI membandingkan kontrak setiap modul dengan kontrak di **tag rilis terakhir** modul itu (`erpora contracts:breaking`, memakai `oasdiff`; tag `modules/<dir>/vX.Y.Z`, platform `vX.Y.Z`). Perubahan berlevel **WARN ke atas** menggagalkan CI (bukan hanya ERR, karena §14.2 melarang menghapus field apa pun, termasuk field respons opsional), kecuali rilis MAJOR yang memenuhi syarat 14.3 langkah 3 dan disertai label persetujuan `api-breaking-approved` di PR (alat memeriksa label dan kenaikan major `version` manifest; bukti tidak dipakai 6 bulan diperiksa reviewer). Modul tanpa tag dikecualikan.
+- Metrik `erp.api.deprecated_usage` mencakup operasi dan parameter query `deprecated` (header `Deprecation: true`); properti body dan atribut klien menyusul (PRD-000 Q31).
 - Klien **WAJIB** mengabaikan field yang tidak dikenalnya (tolerant reader) dan **WAJIB** menangani nilai enum yang tidak dikenal pada field `x-erp-extensible-enum`.
 
 ## 15. Checklist endpoint baru

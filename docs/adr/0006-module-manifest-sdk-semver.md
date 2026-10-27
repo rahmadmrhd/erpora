@@ -56,13 +56,14 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
    - `buildinfo.PlatformVersion = "0.1.0"` (`internal/platform/buildinfo`) dicocokkan dengan `compatibility.platform`.
    - `module.SDKVersion = "0.1.0"` (`sdk/module/version.go`) dicocokkan dengan `compatibility.sdk`.
    - `buildinfo.Version` dari `-ldflags` hanya label rilis (bisa `dev`) dan tidak dipakai untuk pencocokan SemVer.
-   - Tag rilis root `vX.Y.Z` harus sama dengan `PlatformVersion`. Pemeriksaan ini adalah bagian workflow rilis M2d dan belum ada di M2a.
+   - Tag rilis root `vX.Y.Z` harus sama dengan `PlatformVersion`. Pemeriksaan ini belum ada: workflow rilis M2d (`.github/workflows/release.yml`) hanya memvalidasi tag modul dan SDK (lihat butir 5). Tag `vX.Y.Z` dipakai sebagai baseline `erpora contracts:breaking` untuk kontrak platform.
 
 4. **Constraint 0.x selama pre-1.0.** Modul referensi memakai `compatibility.platform: "^0.1"` dan `compatibility.sdk: "^0.1"`, bukan `^1.0` seperti tabel FR-15. Versi modul referensi tetap `1.0.0`. `acme.example-addon` bergantung pada `acme.example ^1.0` sesuai FR-15.
 
 5. **Aturan versi multi Go module.**
    - Setiap modul adalah Go module sendiri (`erpora/modules/<name>`, ADR-001). Tag rilis berbentuk `modules/<name>/vX.Y.Z`.
-   - `version` di `module.json` harus sama dengan `X.Y.Z` pada tag. Pemeriksaan ini adalah bagian CI rilis M2d.
+   - `version` di `module.json` harus sama dengan `X.Y.Z[-prerelease]` pada tag. Diperiksa oleh `erpora release:verify-tag <tag>` yang dijalankan workflow `.github/workflows/release.yml` pada tag `modules/*/v*` (M2d, PRD-000 Q31). Tag SDK `sdk/vX.Y.Z` dibandingkan dengan `SDKVersion` (`sdk/module/version.go`, dibaca lewat `go/parser`).
+   - Modul menyerahkan kontrak OpenAPI-nya lewat interface opsional SDK `module.ContractSource` (`OpenAPI() []byte`, `openapi.yaml` di-embed). Ini **aditif** (tidak ada perubahan pada `Module`), sehingga `SDKVersion` tetap `0.1.0`.
    - Modul dengan MAJOR ≥ 2 memakai path `.../v2` sesuai aturan Go modules. Aturan ini belum dibutuhkan di fase ini.
 
 6. **Dependensi hanya dari `dependencies`.** Resolver (`internal/platform/modules/resolver`) membangun graf dari `dependencies` (field `optional` membedakan wajib dan opsional), mendeteksi siklus, dan menghasilkan urutan topologis deterministik. Dependensi wajib yang hilang atau tidak cocok menghasilkan `missing_dependency` atau `version_mismatch` dan menggagalkan `Build`. Ketidakcocokan platform atau SDK tidak menggagalkan `Build`, tetapi dicatat di `Graph().Incompatible()`.
@@ -86,7 +87,7 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
   - Module path bare `erpora/...` harus diganti ke vanity domain sebelum SDK dipublikasikan (ADR-001, Q24). Penggantian itu mengubah import, `go.mod`, dan `replace`.
 - **Pekerjaan lanjutan wajib:**
   - M2b: pemanggilan hook lifecycle dan status modul per tenant (FR-19).
-  - M2d: pemeriksaan tag rilis terhadap `version` manifest dan `PlatformVersion`.
+  - M2d ✅: pemeriksaan tag rilis modul dan SDK terhadap `version` manifest dan `SDKVersion` (`release:verify-tag`). Pemeriksaan tag root terhadap `PlatformVersion` belum ada.
   - Membuat `docs/module-sdk/versioning.md` yang disebut PRD-000 FR-05/Q15. Dokumen ini belum ada, dan aturan versinya sementara dirujuk ke ADR ini.
 
 ## Pemicu evaluasi ulang

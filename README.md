@@ -33,6 +33,21 @@ Setelah `task dev` berjalan, API ada di `http://127.0.0.1:8080` (cek `/healthz` 
 
 Daftar perintah lengkap: `task --list`.
 
+### Perintah developer
+
+```sh
+task dev:setup                                   # migrate up + install semua modul (setelah task db:up)
+task erpora -- doctor                            # periksa go, bun, task, docker, PostgreSQL, .env
+task erpora -- make:module inventory --frontend  # modul baru yang langsung lolos semua gate
+task erpora -- make:handler inventory Approve --route "POST /items/{id}/approve" --permission inventory.items.approve
+task erpora -- db:fresh --seed                   # HAPUS data, bangun ulang (hanya development)
+task contracts:check                             # lint kontrak, hasil generate mutakhir, breaking change
+task test:generator                              # bukti make:module lolos semua gate (lama; butuh Docker)
+```
+
+Panduan: [`docs/module-sdk/generators.md`](docs/module-sdk/generators.md) dan [`docs/module-sdk/contracts.md`](docs/module-sdk/contracts.md).
+`erpora` flavor dev tidak boleh dipakai di production; binary release (`task build`) tidak memuat developer tools.
+
 ## Peta folder
 
 | Folder | Isi |

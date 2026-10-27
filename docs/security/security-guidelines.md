@@ -200,7 +200,7 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | Kontrol | Status |
 | --- | --- |
 | Arch test D1–D11, header keamanan, request ID, DSN redaction, secret scan | **M1** (sedang dibangun) |
-| Route permission allowlist, kontrak ↔ route, linter kontrak | **M2** (PRD-000) |
+| Route permission allowlist, kontrak ↔ route, linter kontrak | **M2d ✅** (PRD-000 FR-23) |
 | Timeout query database per request (`statement_timeout`) | **M2c ✅** (PRD-000 Q26, Q30) |
 | Authz helper, test IDOR, analyzer authz, MFA, audit | **PRD-001** |
 | SBOM, `SECURITY.md`, gosec | **M1** (PRD-000 FR-24.1) |
@@ -209,7 +209,8 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | `Cache-Control: no-store` berbasis klasifikasi route (`module.Classify`) | **M2c ✅** |
 | `sdk/export` (CSV/XLSX, masking, audit) | **M2c ✅** |
 | Klasifikasi field group di manifest | **M2c ✅** |
-| Linter kontrak `x-erp-classification`; kesesuaian klasifikasi route ↔ kontrak | **M2d** (PRD-000 FR-23) |
+| Linter kontrak `x-erp-classification`; kesesuaian klasifikasi route ↔ kontrak | **M2d ✅** (PRD-000 FR-23, FR-24.2; rule `erp-*-classification`, `erp-no-highly-confidential-in-response`, `erp-no-sensitive-in-url`; `TestContracts_ClassificationMatchesRoute`) |
+| Penanda lingkungan database + guard binary dev (`production` ditolak), `db:fresh` berlapis | **M2d ✅** (PRD-000 FR-22.5) |
 | `SafeHtml`, OWASP ZAP baseline | **M3** (PRD-000 FR-24.3) |
 | Pipeline upload file | **PRD Files** (sebelum fitur upload pertama) |
 

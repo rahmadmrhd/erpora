@@ -209,9 +209,23 @@ Penegak aturan ini adalah `internal/archcheck` dan `task arch`. Build `GOWORK=of
 
 Selain itu, setiap route yang menerima ID wajib memiliki test IDOR (user A terhadap user B), dan record di luar scope harus mengembalikan 404.
 
-## 8. Menyalin `example` menjadi modul baru
+## 8. Membuat modul baru
 
-Contoh berikut membuat modul `inventory` dengan key `acme.inventory`.
+### 8.1. Dengan `erpora make:module` (cara yang dianjurkan)
+
+```sh
+task erpora -- make:module inventory --frontend --depends acme.example
+task erpora -- module:check inventory
+```
+
+Perintah ini menurunkan modul dari `example` (migrasi, empat lapisan, `openapi.yaml`, command `recount`, `DevSeeder`, test), mendaftarkannya di `go.work`,
+`go.mod` root, dan `internal/app/modules.go`, dan hasilnya langsung lolos `task lint arch check:gowork-off test`. Tambahkan endpoint dengan
+`make:handler`, lapisan lain dengan `make:entity|usecase|repository|contract|command`. Aturan penamaan, penanda, `--dry-run`/`--force`, dan keputusan
+yang berlaku ada di [`generators.md`](generators.md); kontrak API di [`contracts.md`](contracts.md).
+
+### 8.2. Lampiran: menyalin `example` secara manual
+
+Hanya untuk memahami apa yang dilakukan generator. Contoh berikut membuat modul `inventory` dengan key `acme.inventory`.
 
 1. **Salin folder** `modules/example` ke `modules/inventory`. Hapus `migrations/0001_create_example_notes.sql` beserta isinya, lalu tulis migrasi milik modul baru dengan format goose (`-- +goose Up` / `-- +goose Down`).
 
