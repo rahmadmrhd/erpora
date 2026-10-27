@@ -110,7 +110,29 @@
     "license": { "type": "string", "description": "Marketplace: lisensi modul." },
     "resources": {
       "type": "array",
-      "description": "PRD-001 FR-110: resource dan aksi permission modul. Isi diperketat kemudian."
+      "description": "PRD-001 FR-110: resource dan aksi permission modul. Hanya field_groups[].classification yang divalidasi (security-guidelines §2); isi lain diperketat kemudian.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "field_groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["key"],
+              "properties": {
+                "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+                "fields": { "type": "array", "items": { "type": "string" } },
+                "classification": {
+                  "enum": ["public", "internal", "confidential", "highly_confidential"],
+                  "description": "Klasifikasi data field group (security-guidelines §2, PRD-001 FR-110)."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "scope_dimensions": {
       "type": "array",
