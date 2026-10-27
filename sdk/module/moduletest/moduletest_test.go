@@ -40,7 +40,7 @@ func TestRecorder_RecordsRouteOptions(t *testing.T) {
 	r.Public("GET", "/status", h)
 
 	rt, _ := r.Route("POST", "/notes")
-	if rt.Options != (module.RouteConfig{MaxBodyBytes: 2048, Classification: "confidential"}) {
+	if rt.Options != (module.RouteConfig{MaxBodyBytes: 2048, MaxBodyBytesSet: true, Classification: "confidential"}) {
 		t.Errorf("Options = %+v", rt.Options)
 	}
 	st, _ := r.Route("GET", "/status")

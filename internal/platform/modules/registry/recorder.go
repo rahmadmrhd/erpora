@@ -107,7 +107,7 @@ func (r *recorder) Command(c module.Command) {
 func (r *recorder) resolveOptions(method, path string, opts []module.RouteOption) (module.RouteConfig, bool) {
 	cfg := module.ResolveRouteOptions(opts...)
 	ok := true
-	if cfg.MaxBodyBytes < 0 || cfg.MaxBodyBytes > module.MaxRouteBodyBytes {
+	if (cfg.MaxBodyBytesSet && cfg.MaxBodyBytes < 1) || cfg.MaxBodyBytes < 0 || cfg.MaxBodyBytes > module.MaxRouteBodyBytes {
 		r.problem(CodeInvalidRouteOption, "route %s %s: MaxBodyBytes %d di luar rentang 1..%d", method, path, cfg.MaxBodyBytes, module.MaxRouteBodyBytes)
 		ok = false
 	}

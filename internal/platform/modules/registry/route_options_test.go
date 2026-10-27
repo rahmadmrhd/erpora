@@ -35,6 +35,8 @@ func TestRegister_InvalidRouteOptionsCollected(t *testing.T) {
 		r.Handle("GET", "/a", "notes.items.read", okHandler, module.MaxBodyBytes(-1))
 		r.Handle("GET", "/b", "notes.items.read", okHandler, module.MaxBodyBytes(10<<20+1))
 		r.Public("GET", "/c", okHandler, module.Classify("secret"))
+		// M-2: 0 yang diberikan eksplisit bukan "default"; ditolak.
+		r.Handle("GET", "/d", "notes.items.read", okHandler, module.MaxBodyBytes(0))
 		return nil
 	}))
 	var be *Error
@@ -52,7 +54,7 @@ func TestRegister_InvalidRouteOptionsCollected(t *testing.T) {
 			t.Errorf("problem = %+v", p)
 		}
 	}
-	if n != 3 {
-		t.Errorf("invalid_route_option = %d, want 3", n)
+	if n != 4 {
+		t.Errorf("invalid_route_option = %d, want 4", n)
 	}
 }
