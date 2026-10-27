@@ -13,6 +13,7 @@ type fakeModule struct{}
 
 func (fakeModule) Manifest() module.Manifest                                 { return module.Manifest{} }
 func (fakeModule) Register(module.Registrar) error                           { return nil }
+func (fakeModule) OpenAPI() []byte                                           { return nil }
 func (fakeModule) Migrations() fs.FS                                         { return nil }
 func (fakeModule) Install(context.Context, module.Env) error                 { return nil }
 func (fakeModule) Upgrade(context.Context, module.Env, string, string) error { return nil }
@@ -31,6 +32,7 @@ func (r *fakeRegistrar) Command(c module.Command)                               
 var (
 	_ module.Module          = fakeModule{}
 	_ module.MigrationSource = fakeModule{}
+	_ module.ContractSource  = fakeModule{}
 	_ module.Installer       = fakeModule{}
 	_ module.Upgrader        = fakeModule{}
 	_ module.EnableHook      = fakeModule{}

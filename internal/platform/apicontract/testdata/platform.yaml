@@ -1,0 +1,46 @@
+openapi: 3.1.0
+info: { title: platform, version: 0.0.1 }
+paths:
+  /api/bootstrap:
+    get:
+      operationId: getBootstrap
+      x-erp-public: true
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, properties: { revision: { type: integer } } }
+  /api/platform/modules/{key}/history:
+    get:
+      operationId: listModuleHistory
+      x-erp-permission: platform.modules.read
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: string } }
+  /api/platform/modules/operations/{id}:
+    get:
+      operationId: getModuleOperation
+      x-erp-permission: platform.modules.read
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, properties: { id: { $ref: 'erp:common#/components/schemas/Uuid' } } }

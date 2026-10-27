@@ -7,3 +7,13 @@ import _ "embed"
 //
 //go:embed module.schema.json
 var ModuleSchema []byte
+
+// CommonOpenAPI adalah komponen OpenAPI bersama (openapi/common.yaml); dirujuk kontrak lain lewat erp:common.
+//
+//go:embed openapi/common.yaml
+var CommonOpenAPI []byte
+
+// PlatformOpenAPI adalah kontrak OpenAPI platform.core (openapi/platform.yaml).
+//
+//go:embed openapi/platform.yaml
+var PlatformOpenAPI []byte

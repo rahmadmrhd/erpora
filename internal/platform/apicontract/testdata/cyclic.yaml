@@ -1,0 +1,23 @@
+openapi: 3.1.0
+info: { title: cyclic, version: 0.0.1 }
+paths:
+  /api/cyclic/nodes:
+    get:
+      operationId: listNodes
+      x-erp-permission: cyclic.nodes.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Node' }
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        value: { type: string }
+        next: { $ref: '#/components/schemas/Node' }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/Node' }

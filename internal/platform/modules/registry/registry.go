@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"erpora/internal/platform/apicontract"
 	"erpora/internal/platform/modules/manifest"
 	"erpora/internal/platform/modules/resolver"
 	"erpora/sdk/module"
@@ -29,6 +30,8 @@ type Options struct {
 	// PlatformCapabilities adalah capability yang dideklarasikan platform.core;
 	// route platform tunduk pada aturan permission_undeclared seperti modul lain.
 	PlatformCapabilities []string
+	// PlatformContract adalah kontrak OpenAPI platform.core (contracts.PlatformOpenAPI); nil = tanpa kontrak.
+	PlatformContract []byte
 }
 
 // RouteInfo adalah satu route terdaftar. Pattern adalah path penuh "/api/{slug}{path}".
@@ -51,6 +54,9 @@ type CommandInfo struct {
 type Entry struct {
 	Manifest module.Manifest
 	Module   module.Module
+	// Contract adalah isi openapi.yaml modul (module.ContractSource) atau Options.PlatformContract untuk
+	// platform.core; nil bila tidak ada.
+	Contract []byte
 }
 
 // Registry adalah katalog modul yang sudah tervalidasi.
@@ -73,7 +79,12 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		Key: PlatformKey, Slug: PlatformSlug, Version: opts.PlatformVersion, Trust: "builtin",
 		Capabilities: slices.Clone(opts.PlatformCapabilities),
 	}
-	byKey := map[string]Entry{PlatformKey: {Manifest: platform}}
+	byKey := map[string]Entry{PlatformKey: {Manifest: platform, Contract: opts.PlatformContract}}
+	if opts.PlatformContract != nil {
+		if _, err := apicontract.Parse(PlatformSlug, opts.PlatformContract); err != nil {
+			problems = append(problems, Problem{Module: PlatformKey, Field: "/contract", Code: CodeInvalidContract, Message: err.Error()})
+		}
+	}
 	var unique []Entry // modul non-platform dengan key unik, urutan input
 	for i, m := range mods {
 		mf, perr := safeManifest(m)
@@ -92,7 +103,9 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 			})
 			continue
 		}
-		e := Entry{Manifest: mf, Module: m}
+		contract, cproblems := contractOf(mf.Key, mf.Slug, m)
+		problems = append(problems, cproblems...)
+		e := Entry{Manifest: mf, Module: m, Contract: contract}
 		byKey[mf.Key] = e
 		unique = append(unique, e)
 	}
@@ -173,6 +186,26 @@ func checkMigrationsStrategy(mf module.Manifest, m module.Module) []Problem {
 			Message: "strategy \"none\" tetapi modul mengimplementasikan MigrationSource; set strategy \"versioned\" atau hapus Migrations()"}}
 	}
 	return nil
+}
+
+// contractOf mengambil kontrak modul (module.ContractSource) dengan recover dan memvalidasinya lewat
+// apicontract.Parse; kegagalan dilaporkan sebagai problem invalid_contract. Modul tanpa ContractSource: nil.
+func contractOf(key, slug string, m module.Module) (contract []byte, problems []Problem) {
+	cs, ok := m.(module.ContractSource)
+	if !ok {
+		return nil, nil
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			contract = nil
+			problems = []Problem{{Module: key, Field: "/contract", Code: CodeInvalidContract, Message: fmt.Sprintf("OpenAPI() panic: %v", p)}}
+		}
+	}()
+	data := cs.OpenAPI()
+	if _, err := apicontract.Parse(slug, data); err != nil {
+		return data, []Problem{{Module: key, Field: "/contract", Code: CodeInvalidContract, Message: err.Error()}}
+	}
+	return data, nil
 }
 
 // safeManifest memanggil m.Manifest() dengan recover; modul nil atau panic dilaporkan sebagai pesan.

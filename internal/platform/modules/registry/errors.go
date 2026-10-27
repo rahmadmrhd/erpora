@@ -63,4 +63,5 @@ const (
 	CodeInvalidCommand       = "invalid_command"
 	CodeCommandConflict      = "command_conflict"
 	CodeMigrationsMismatch   = "migrations_mismatch"
+	CodeInvalidContract      = "invalid_contract"
 )
