@@ -11,7 +11,8 @@ import (
 var status2xxRe = regexp.MustCompile(`^(2[0-9][0-9]|2XX)$`)
 
 // ResponseClassification menghitung klasifikasi tertinggi x-erp-classification atas skema respons 2xx operasi,
-// rekursif lewat properties, patternProperties, items, prefixItems, additionalProperties, allOf/oneOf/anyOf, dan
+// rekursif lewat properties, patternProperties, dependentSchemas, items, prefixItems, additionalProperties,
+// unevaluatedProperties/Items, contains, not, if/then/else, propertyNames, allOf/oneOf/anyOf, dan
 // $ref lokal maupun erp: (aman terhadap siklus). Anotasi berlaku untuk seluruh subpohonnya (yang lebih tinggi
 // menang). Daun skema tanpa anotasi dianggap internal, dan respons tanpa daun juga internal (keputusan 10).
 // Nilai x-erp-classification yang tidak valid adalah error.
@@ -96,24 +97,27 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 			inherited = cl.Rank()
 		}
 	}
+	descended := false
+	// OpenAPI 3.1: keyword lain boleh bersanding dengan $ref, jadi rujukan diikuti DAN sibling-nya tetap ditelusuri.
 	if ref, ok := m["$ref"].(string); ok {
+		descended = true
 		r, err := ParseRef(doc, ref)
 		if err != nil {
 			return err
 		}
 		key := fmt.Sprintf("%s#%s@%d", r.Doc, r.Pointer, inherited)
-		if c.seen[key] {
-			return nil
+		if !c.seen[key] {
+			c.seen[key] = true
+			doc2, target, err := c.set.Resolve(doc, ref)
+			if err != nil {
+				return err
+			}
+			if err := c.schema(doc2, target, inherited); err != nil {
+				return err
+			}
 		}
-		c.seen[key] = true
-		doc2, target, err := c.set.Resolve(doc, ref)
-		if err != nil {
-			return err
-		}
-		return c.schema(doc2, target, inherited)
 	}
 
-	descended := false
 	each := func(v any, f func(child any) error) error {
 		switch x := v.(type) {
 		case map[string]any:
@@ -135,10 +139,13 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 	if err := each(m["properties"], recur); err != nil {
 		return err
 	}
+	if err := each(m["dependentSchemas"], recur); err != nil {
+		return err
+	}
 	if err := each(m["patternProperties"], recur); err != nil {
 		return err
 	}
-	for _, kw := range []string{"items", "additionalProperties"} {
+	for _, kw := range []string{"items", "additionalProperties", "unevaluatedProperties", "unevaluatedItems", "contains", "not", "if", "then", "else", "propertyNames"} {
 		if child, ok := m[kw].(map[string]any); ok {
 			descended = true
 			if err := c.schema(doc, child, inherited); err != nil {
