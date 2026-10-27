@@ -27,12 +27,12 @@ func byRule(vs []Violation, rule string) []Violation {
 // AC FR-24.2: arch test menolak fixture modul yang memakai http.Get (dan klien HTTP mentah lain).
 func TestEgress_FixtureViolations(t *testing.T) {
 	got := byRule(CheckSecurity(loadFixture(t)), "EGRESS")
-	if len(got) != 10 {
-		t.Fatalf("EGRESS = %d, want 10:\n%+v", len(got), got)
+	if len(got) != 18 { // 10 di egress_bad.go + 8 di egress_zero_bad.go
+		t.Fatalf("EGRESS = %d, want 18:\n%+v", len(got), got)
 	}
 	for _, v := range got {
-		if !strings.HasPrefix(v.Detail, "egress_bad.go:") {
-			t.Errorf("detail tidak berawalan egress_bad.go: %+v", v)
+		if !strings.HasPrefix(v.Detail, "egress_bad.go:") && !strings.HasPrefix(v.Detail, "egress_zero_bad.go:") {
+			t.Errorf("detail bukan dari fixture egress: %+v", v)
 		}
 	}
 }
