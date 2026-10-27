@@ -1,0 +1,35 @@
+name: Release tag
+
+# Tag rilis modul dan SDK (PRD-000 FR-14): versi pada tag harus sama dengan version di module.json
+# (modules/<dir>/vX.Y.Z) atau SDKVersion (sdk/vX.Y.Z). Tag platform (vX.Y.Z) tidak divalidasi di sini.
+on:
+  push:
+    tags:
+      - "modules/*/v*"
+      - "sdk/v*"
+
+permissions:
+  contents: read
+
+env:
+  TASK_VERSION: "3.54.0"
+
+jobs:
+  verify-tag:
+    name: verify-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+        with:
+          version: ${{ env.TASK_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validasi tag terhadap versi di sumber
+        env:
+          TAG: ${{ github.ref_name }}
+        run: task release:verify-tag -- "${TAG}"
