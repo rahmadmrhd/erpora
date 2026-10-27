@@ -35,6 +35,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.AddGroup(
 		&cobra.Group{ID: groupRuntime, Title: "Runtime"},
 		&cobra.Group{ID: groupInspect, Title: "Inspect"},
+		&cobra.Group{ID: groupModule, Title: "Modul"},
 	)
 
 	// --- daftar command ---
@@ -48,6 +49,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newServeCmd(opts),
 		newModulesCmd(opts, defaultBackend),
 	)
+	addModuleCommands(root, opts)
 	registerDevtools(root)
 	return root
 }
