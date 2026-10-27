@@ -261,6 +261,10 @@ func (r *opRun) step(ctx context.Context, sp stepSpec) *stepFailure {
 		st.Status = "failed"
 		st.Error = truncate(err.Error(), 500)
 		fail = r.classify(sp, err)
+		// Teks error langkah ikut diringkas untuk migration_failed/internal_error (Q32 B-10): steps[].error terekspos lewat API.
+		if fail.code == codeMigrationFailed || fail.code == codeInternal {
+			st.Error = summarizeFailure(fail, r.opID, traceIDOf(ctx))
+		}
 	}
 	if err := r.s.d.Store.SaveSteps(ctx, r.t, r.opID, r.steps); err != nil {
 		r.s.log.WarnContext(ctx, "simpan langkah operasi gagal", "step", sp.name, "error", err)
@@ -439,6 +443,14 @@ var successEvent = map[Op]string{
 
 // finish menyusun satu Commit atomik (installation + operasi + event + revision), lalu refresh snapshot
 // dan publikasi notifikasi. Installation selalu turunan dari r.cur (read-modify-write).
+// traceIDOf mengembalikan trace_id span aktif di ctx ("" bila tidak ada).
+func traceIDOf(ctx context.Context) string {
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		return sc.TraceID().String()
+	}
+	return ""
+}
+
 // summarizeFailure meringkas kegagalan migration_failed/internal_error tanpa teks mentah; menyebut berkas migrasi
 // (bukan SQL) dan operation_id/trace_id untuk mencari detailnya di log server.
 func summarizeFailure(f *stepFailure, opID uuid.UUID, traceID string) string {
@@ -481,10 +493,7 @@ func (r *opRun) finish(ctx context.Context, fail *stepFailure) (Result, error) {
 	} else {
 		// Detail penuh (teks SQL/hook mentah) hanya ke log bersama trace_id; message di API, CLI, operasi tersimpan, dan
 		// event untuk migration_failed dan internal_error diringkas (Q32 B-10). code dan step tetap ada.
-		traceID := ""
-		if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
-			traceID = sc.TraceID().String()
-		}
+		traceID := traceIDOf(ctx)
 		r.s.log.ErrorContext(ctx, "operasi lifecycle gagal", "operation", string(r.op), "erp.module.key", r.key,
 			"operation_id", r.opID.String(), "step", fail.step, "code", fail.code, "error", fail.err.Error(), "trace_id", traceID)
 		msg := truncate(fail.err.Error(), 500)

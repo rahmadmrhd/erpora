@@ -30,9 +30,28 @@ func TestService_FailingMigrationThenRetry(t *testing.T) {
 	r := e.exec(t, OpInstall, "acme.fx-mod")
 	if r.Status != "failed" || r.Error == nil || r.Error.Code != "migration_failed" || r.Error.Step != "migrate" {
 		t.Fatalf("install = %+v (%+v)", r, r.Error)
-		// B-10 (Q32): teks SQL/SQLSTATE dari PostgreSQL tidak boleh ada di message; hanya di log.
-		if strings.Contains(r.Error.Message, "SQLSTATE") || strings.Contains(strings.ToLower(r.Error.Message), "syntax") {
-			t.Errorf("message membocorkan teks SQL: %q", r.Error.Message)
+	}
+	// B-10 (Q32): teks SQL/SQLSTATE dari PostgreSQL tidak boleh ada di message maupun steps[].error; hanya di log.
+	leaks := func(s string) bool {
+		return strings.Contains(s, "SQLSTATE") || strings.Contains(strings.ToLower(s), "syntax")
+	}
+	if leaks(r.Error.Message) {
+		t.Errorf("message membocorkan teks SQL: %q", r.Error.Message)
+	}
+	op, err := e.st.Operation(ctx, tenantA, r.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leaks(op.Error.Message) {
+		t.Errorf("operasi tersimpan membocorkan teks SQL: %q", op.Error.Message)
+	}
+	migStep := stepByName(op.Steps, "migrate")
+	if migStep == nil || migStep.Status != "failed" || migStep.Error == "" || leaks(migStep.Error) {
+		t.Errorf("steps[migrate].error harus ada dan ringkas: %+v", migStep)
+	}
+	for _, s := range r.Steps {
+		if leaks(s.Error) {
+			t.Errorf("Result.Steps[%s].error membocorkan teks SQL: %q", s.Name, s.Error)
 		}
 	}
 	ins, _ := e.st.Installations(ctx, tenantA)

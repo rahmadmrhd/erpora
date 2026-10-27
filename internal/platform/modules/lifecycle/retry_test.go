@@ -247,6 +247,15 @@ func TestRevisionBumpsOnFailedOperationWithoutStatusChange(t *testing.T) {
 	}
 }
 
+func stepByName(steps []store.Step, name string) *store.Step {
+	for i := range steps {
+		if steps[i].Name == name {
+			return &steps[i]
+		}
+	}
+	return nil
+}
+
 // B-10 (Q32): message kegagalan migration_failed dan internal_error diringkas (tanpa teks SQL/hook mentah) pada hasil,
 // operasi tersimpan, dan event; code dan step tetap ada. Detail penuh masuk log (dengan trace_id).
 func TestFailureMessageSummarizedAndDetailLogged(t *testing.T) {
@@ -275,6 +284,19 @@ func TestFailureMessageSummarizedAndDetailLogged(t *testing.T) {
 		if m, _ := ev.Details["message"].(string); strings.Contains(m, raw) {
 			t.Errorf("event %s memuat teks mentah: %q", ev.Event, m)
 		}
+	}
+	for _, s := range op.Steps {
+		if strings.Contains(s.Error, raw) {
+			t.Errorf("steps[%s].error memuat teks mentah: %q", s.Name, s.Error)
+		}
+	}
+	for _, s := range res[0].Steps {
+		if strings.Contains(s.Error, raw) {
+			t.Errorf("Result.Steps[%s].error memuat teks mentah: %q", s.Name, s.Error)
+		}
+	}
+	if migStep := stepByName(op.Steps, "migrate"); migStep == nil || migStep.Status != "failed" || migStep.Error == "" {
+		t.Errorf("langkah migrate harus failed dengan error ringkas: %+v", migStep)
 	}
 	logs := logBuf.String()
 	if !strings.Contains(logs, raw) || !strings.Contains(logs, "trace_id") || !strings.Contains(logs, res[0].OperationID.String()) {
