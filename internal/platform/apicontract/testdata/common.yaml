@@ -29,6 +29,11 @@ components:
       in: query
       schema: { type: integer, minimum: 1 }
   responses:
+    BadRequest:
+      description: Parameter salah.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
     NotFound:
       description: Tidak ada.
       content:
