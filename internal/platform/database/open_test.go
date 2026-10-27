@@ -148,3 +148,16 @@ func TestSlogLogger_ErrorLogHasOnlySafeFields(t *testing.T) {
 		t.Fatalf("log error tidak tercatat: %s", buf.String())
 	}
 }
+
+// DSN yang tidak dapat di-parse tidak boleh membocorkan secret lewat jalur pgx.ParseConfig.
+func TestOpenWith_DSNErrorRedacted(t *testing.T) {
+	_, err := OpenWith(context.Background(), config.Config{DatabaseURL: "postgres://u:supersecret@[bad"},
+		noop.NewTracerProvider(), slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+		OpenOptions{StatementTimeout: time.Second})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "supersecret") {
+		t.Fatalf("secret bocor: %q", err.Error())
+	}
+}
