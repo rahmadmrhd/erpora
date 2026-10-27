@@ -1,0 +1,57 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.inventory
+  version: 0.1.0
+  description: >
+    Kontrak API modul Inventory (PRD-000 FR-23.1). Dokumen ini adalah sumber kebenaran route modul: test kesesuaian
+    mencocokkan method, path, permission, x-erp-public, dan klasifikasi respons dengan route yang didaftarkan di module.go.
+    `erpora make:handler` menambah operasi baru di sini bersama route dan capability-nya.
+servers:
+  - url: /
+paths:
+  /api/inventory/items:
+    get:
+      operationId: listInventoryItems
+      summary: Daftar items
+      description: Pagination halaman (api-guidelines section 6). page atau pageSize di luar rentang menghasilkan 400 bad_request.
+      x-erp-permission: inventory.items.read
+      parameters:
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { $ref: 'erp:common#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Items tenant ini.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Item' }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+              example:
+                data:
+                  - id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+                    title: Item pertama
+                    version: 1
+                    createdAt: '2026-10-21T07:15:00Z'
+                    updatedAt: '2026-10-21T07:15:00Z'
+                page: { page: 1, pageSize: 25, total: 1, hasMore: false }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '500': { $ref: 'erp:common#/components/responses/InternalError' }
+components:
+  schemas:
+    Item:
+      type: object
+      required: [id, title, version, createdAt, updatedAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        title:
+          type: string
+          x-erp-classification: internal
+        version: { type: integer, format: int64 }
+        createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+        updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }

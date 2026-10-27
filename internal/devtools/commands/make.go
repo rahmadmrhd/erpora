@@ -28,7 +28,33 @@ func (f *makeFlags) apply(c *cobra.Command, build func(root string) (gen.Plan, e
 }
 
 func registerMake(root *cobra.Command) {
-	root.AddCommand(newMakeMigration())
+	root.AddCommand(newMakeMigration(), newMakeModule())
+}
+
+func newMakeModule() *cobra.Command {
+	var f makeFlags
+	var frontend bool
+	var publisher string
+	var depends []string
+	cmd := &cobra.Command{
+		Use:   "make:module <name> [--frontend] [--depends k1,k2] [--publisher id]",
+		Short: "Buat modul baru turunan example yang langsung lolos gate",
+		Long: "Membuat modules/<dir> (Go module sendiri) lengkap dengan manifest, kontrak OpenAPI, empat lapisan, migrasi, dan test, lalu\n" +
+			"mendaftarkannya di go.work, go.mod, dan internal/app/modules.go. <name> adalah slug kebab-case (mis. stock-opname); direktori dan package\n" +
+			"memakai slug tanpa tanda hubung (stockopname). --frontend juga membuat modules/<dir>/web (@erpora/module-<dir>) dan mendaftarkannya di web/.",
+		GroupID: GroupMake,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return f.apply(c, func(root string) (gen.Plan, error) {
+				return gen.MakeModule(root, gen.ModuleOptions{Name: args[0], Publisher: publisher, Frontend: frontend, Depends: depends})
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&frontend, "frontend", false, "buat juga paket frontend modules/<dir>/web")
+	cmd.Flags().StringSliceVar(&depends, "depends", nil, "key modul dependensi, dipisah koma (mis. acme.example); platform.core selalu ditambahkan")
+	cmd.Flags().StringVar(&publisher, "publisher", "acme", "id publisher untuk key modul (<publisher>.<slug>)")
+	f.bind(cmd)
+	return cmd
 }
 
 func newMakeMigration() *cobra.Command {

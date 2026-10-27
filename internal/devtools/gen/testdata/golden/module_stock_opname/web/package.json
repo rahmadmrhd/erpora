@@ -1,0 +1,14 @@
+{
+  "name": "@erpora/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@erpora/module-stockopname": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

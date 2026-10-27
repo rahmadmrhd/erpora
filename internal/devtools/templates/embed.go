@@ -5,5 +5,5 @@ import "embed"
 
 // FS berisi seluruh template; nama file berakhiran .tmpl dan path-nya dipakai sebagai nama template.
 //
-//go:embed all:migration
+//go:embed all:migration all:module
 var FS embed.FS

@@ -1,0 +1,9 @@
+package [[.Dir]]
+
+// Blank import kontrak dependensi manifest. Menjaga aturan arsitektur D8 dan `go mod tidy` tetap stabil sampai
+// kontrak dependensi benar-benar dipakai; hapus baris yang sudah digantikan impor sungguhan.
+import (
+[[- range .Dependencies]]
+	_ "[[.GoPath]]/contract"
+[[- end]]
+)
