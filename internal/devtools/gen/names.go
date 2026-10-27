@@ -62,6 +62,9 @@ func ParseTypeName(arg string) (TypeName, error) {
 		return TypeName{}, fmt.Errorf("nama tipe %q tidak valid: PascalCase, huruf dan angka, diawali huruf besar", arg)
 	}
 	snake := toSnake(arg)
+	if err := CheckGoFileStem(snake); err != nil {
+		return TypeName{}, fmt.Errorf("nama tipe %q: %w", arg, err)
+	}
 	kebab := strings.ReplaceAll(snake, "_", "-")
 	return TypeName{
 		Pascal: arg, Camel: strings.ToLower(arg[:1]) + arg[1:], Snake: snake, Kebab: kebab,
@@ -102,4 +105,38 @@ func pluralize(s string) string {
 		return s + "es"
 	}
 	return s + "s"
+}
+
+// Daftar GOOS dan GOARCH yang dikenal go/build (go/build.knownOS/knownArch tidak diekspor). Nama berkas Go
+// berakhiran _<GOOS>, _<GOARCH>, atau _<GOOS>_<GOARCH> dikecualikan dari build di platform lain.
+var (
+	knownOS = map[string]bool{
+		"aix": true, "android": true, "darwin": true, "dragonfly": true, "freebsd": true, "hurd": true, "illumos": true,
+		"ios": true, "js": true, "linux": true, "nacl": true, "netbsd": true, "openbsd": true, "plan9": true,
+		"solaris": true, "wasip1": true, "windows": true, "zos": true,
+	}
+	knownArch = map[string]bool{
+		"386": true, "amd64": true, "amd64p32": true, "arm": true, "armbe": true, "arm64": true, "arm64be": true,
+		"loong64": true, "mips": true, "mipsle": true, "mips64": true, "mips64le": true, "mips64p32": true,
+		"mips64p32le": true, "ppc": true, "ppc64": true, "ppc64le": true, "riscv": true, "riscv64": true,
+		"s390": true, "s390x": true, "sparc": true, "sparc64": true, "wasm": true,
+	}
+)
+
+// CheckGoFileStem menolak stem nama berkas Go (tanpa .go) yang bermakna khusus bagi toolchain: akhiran _test
+// (berkas test), _<GOOS>, atau _<GOARCH> (build constraint implisit). Segmen pertama tidak dihitung, seperti go/build
+// (stem "linux" atau "test" tanpa garis bawah aman).
+func CheckGoFileStem(stem string) error {
+	parts := strings.Split(stem, "_")
+	if len(parts) < 2 {
+		return nil
+	}
+	last := parts[len(parts)-1]
+	switch {
+	case last == "test":
+		return fmt.Errorf("nama menghasilkan berkas %s.go yang dianggap berkas test oleh Go (akhiran _test); pilih nama lain", stem)
+	case knownOS[last] || knownArch[last]:
+		return fmt.Errorf("nama menghasilkan berkas %s.go dengan build constraint implisit (akhiran _%s); pilih nama lain", stem, last)
+	}
+	return nil
 }

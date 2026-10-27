@@ -98,6 +98,16 @@ func TestMakeCommand_Golden(t *testing.T) {
 	}
 }
 
+// G-3: nama command yang menghasilkan berkas _test.go atau _<GOOS>.go ditolak sebelum Plan.
+func TestMakeCommand_SpecialFileSuffixRejected(t *testing.T) {
+	root := inventoryRepo(t)
+	for _, name := range []string{"sync-test", "sync-linux", "sync-amd64"} {
+		if _, err := MakeCommand(root, "inventory", name); err == nil || !strings.Contains(err.Error(), "berkas") {
+			t.Errorf("%s: err = %v, want penolakan nama berkas", name, err)
+		}
+	}
+}
+
 func TestMakeCommand_DuplicateNameRejected(t *testing.T) {
 	root := inventoryRepo(t)
 	before := checksum(t, root)

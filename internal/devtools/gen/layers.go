@@ -138,6 +138,9 @@ func MakeCommand(root, module, name string) (Plan, error) {
 	}
 	data := layerData{Mod: mod, Name: name, Pascal: pascal}
 	file := strings.ReplaceAll(name, "-", "_")
+	if err := CheckGoFileStem(file); err != nil {
+		return Plan{}, fmt.Errorf("nama command %q: %w", name, err)
+	}
 	plan, err := renderOps([][2]string{
 		{"modules/" + ref.Dir + "/internal/presentation/cli/" + file + ".go", "command/command.go.tmpl"},
 		{"modules/" + ref.Dir + "/internal/presentation/cli/" + file + "_test.go", "command/command_test.go.tmpl"},

@@ -1,6 +1,9 @@
 package gen
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Review Focus 1: slug berstrip menghasilkan Dir tanpa strip dan turunan lain yang konsisten.
 func TestParseModuleName_Table(t *testing.T) {
@@ -63,6 +66,35 @@ func TestParseTypeName_Table(t *testing.T) {
 	for _, bad := range []string{"item", "_Item", "Item-X", "", "1Item", "Item Name"} {
 		if _, err := ParseTypeName(bad); err == nil {
 			t.Errorf("%q harus ditolak", bad)
+		}
+	}
+}
+
+// G-3: nama yang membuat nama berkas Go bermakna khusus (_test, _<GOOS>, _<GOARCH>) ditolak; berkas itu akan
+// dikecualikan dari build atau dianggap berkas test.
+func TestParseTypeName_RejectsSpecialFileSuffixes(t *testing.T) {
+	for _, bad := range []string{"ItemTest", "FooTest", "ItemLinux", "ItemWindows", "StockDarwin", "ItemAmd64", "ItemArm64", "ItemWasm", "ItemJs", "ItemLinuxAmd64"} {
+		if _, err := ParseTypeName(bad); err == nil || !strings.Contains(err.Error(), "berkas") {
+			t.Errorf("%q harus ditolak dengan alasan nama berkas: %v", bad, err)
+		}
+	}
+	// Segmen pertama tidak dianggap sufiks oleh go/build; kata biasa yang mirip tetap diterima.
+	for _, ok := range []string{"Linux", "Test", "Windows", "Testing", "Latest", "Armed", "LinuxItem", "Contest"} {
+		if _, err := ParseTypeName(ok); err != nil {
+			t.Errorf("%q harus diterima: %v", ok, err)
+		}
+	}
+}
+
+func TestCheckGoFileStem(t *testing.T) {
+	for _, bad := range []string{"x_test", "x_linux", "x_amd64", "x_linux_amd64", "stock_windows"} {
+		if err := CheckGoFileStem(bad); err == nil {
+			t.Errorf("%q harus ditolak", bad)
+		}
+	}
+	for _, ok := range []string{"x", "linux", "test", "reindex", "recount_items", "x_testing"} {
+		if err := CheckGoFileStem(ok); err != nil {
+			t.Errorf("%q harus diterima: %v", ok, err)
 		}
 	}
 }
