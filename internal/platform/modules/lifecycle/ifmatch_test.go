@@ -50,11 +50,9 @@ func TestExecute_IfMatchChecksRevisionInsideLock(t *testing.T) {
 	if len(rec.list()) != 0 || e.st.row("acme.a").Status != "" && e.st.row("acme.a").Status != "available" {
 		t.Fatalf("operasi tidak boleh berjalan: calls=%v row=%+v", rec.list(), e.st.row("acme.a"))
 	}
-	for _, h := range []string{`*`, `"` + itoa(rev) + `"`, `"1", "` + itoa(rev) + `"`} {
-		if _, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpInstall, Key: "acme.a", Actor: "cli:t", IfMatch: h}); err != nil {
-			t.Fatalf("If-Match %q harus lolos: %v", h, err)
-		}
-		break // satu eksekusi sukses cukup; operasi berikutnya no-op pada revision berbeda
+	// Daftar yang memuat revision saat ini lolos (satu eksekusi sukses cukup; operasi berikutnya no-op pada revision berbeda).
+	if _, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpInstall, Key: "acme.a", Actor: "cli:t", IfMatch: `"1", "` + itoa(rev) + `"`}); err != nil {
+		t.Fatalf("If-Match daftar yang memuat revision harus lolos: %v", err)
 	}
 }
 
