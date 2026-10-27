@@ -18,4 +18,6 @@ type Options struct {
 }
 
 // Register mendaftarkan semua command developer tools ke root. Task berikutnya menambah command di sini.
-func Register(_ *cobra.Command, _ Options) {}
+func Register(root *cobra.Command, _ Options) {
+	registerContracts(root)
+}

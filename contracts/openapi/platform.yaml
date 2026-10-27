@@ -39,6 +39,7 @@ paths:
     get:
       operationId: listModules
       summary: Daftar modul beserta status
+      description: Semua modul terkompilasi beserta status efektifnya untuk tenant ini, berpagination halaman.
       x-erp-permission: platform.modules.read
       parameters:
         - { $ref: 'erp:common#/components/parameters/Page' }
@@ -56,6 +57,21 @@ paths:
                 properties:
                   data: { type: array, items: { $ref: '#/components/schemas/Module' } }
                   page: { $ref: 'erp:common#/components/schemas/Page' }
+              example:
+                data:
+                  - key: acme.example
+                    slug: example
+                    name: Example
+                    binaryVersion: 1.0.0
+                    installedVersion: 1.0.0
+                    status: enabled
+                    required: false
+                    compatible: true
+                    incompatibleCodes: []
+                    dependencies: [{ module: platform.core, version: '^0.1', optional: false }]
+                    dependents: []
+                    lastOperationId: null
+                page: { page: 1, pageSize: 25, total: 1, hasMore: false }
         '304': { description: Tidak berubah. }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
@@ -64,6 +80,7 @@ paths:
     get:
       operationId: getModule
       summary: Detail satu modul
+      description: Status satu modul untuk tenant ini; key tidak dikenal menghasilkan 404 not_found.
       x-erp-permission: platform.modules.read
       parameters:
         - { $ref: '#/components/parameters/Key' }
@@ -78,10 +95,25 @@ paths:
                 type: object
                 required: [data]
                 properties: { data: { $ref: '#/components/schemas/Module' } }
+              example:
+                data:
+                  key: acme.example
+                  slug: example
+                  name: Example
+                  binaryVersion: 1.0.0
+                  installedVersion: 1.0.0
+                  status: enabled
+                  required: false
+                  compatible: true
+                  incompatibleCodes: []
+                  dependencies: [{ module: platform.core, version: '^0.1', optional: false }]
+                  dependents: []
+                  lastOperationId: null
         '304': { description: Tidak berubah. }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
   /api/platform/modules/{key}/history:
+    x-erp-singleton: true
     get:
       operationId: listModuleHistory
       summary: Riwayat event lifecycle modul (terbaru dulu)
@@ -104,6 +136,16 @@ paths:
                 properties:
                   data: { type: array, items: { $ref: '#/components/schemas/Event' } }
                   page: { $ref: 'erp:common#/components/schemas/Page' }
+              example:
+                data:
+                  - id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+                    moduleKey: acme.example
+                    event: enabled
+                    actor: cli:admin
+                    operationId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c
+                    details: {}
+                    occurredAt: '2026-10-21T07:15:00Z'
+                page: { page: 1, pageSize: 25, total: 1, hasMore: false }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
@@ -126,6 +168,19 @@ paths:
                 type: object
                 required: [data]
                 properties: { data: { $ref: '#/components/schemas/Operation' } }
+              example:
+                data:
+                  id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c
+                  moduleKey: acme.example
+                  operation: enable
+                  fromVersion: 1.0.0
+                  toVersion: 1.0.0
+                  status: succeeded
+                  steps: [{ name: 'hook:enable', status: succeeded, startedAt: '2026-10-21T07:15:00Z', durationMs: 15, error: null }]
+                  failure: null
+                  actor: cli:admin
+                  startedAt: '2026-10-21T07:15:00Z'
+                  finishedAt: '2026-10-21T07:15:01Z'
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
@@ -147,8 +202,8 @@ paths:
           in: path
           required: true
           schema: { type: string, enum: [install, enable, disable, upgrade, uninstall, retry] }
-        - { $ref: 'erp:common#/components/requestHeaders/IfMatch' }
-        - { $ref: 'erp:common#/components/requestHeaders/IdempotencyKey' }
+        - { $ref: 'erp:common#/components/parameters/IfMatch' }
+        - { $ref: 'erp:common#/components/parameters/IdempotencyKey' }
       requestBody:
         required: false
         description: >
@@ -173,6 +228,22 @@ paths:
                     properties:
                       module: { $ref: '#/components/schemas/Module' }
                       operations: { type: array, items: { $ref: '#/components/schemas/Operation' } }
+              example:
+                data:
+                  module:
+                    key: acme.example
+                    slug: example
+                    name: Example
+                    binaryVersion: 1.0.0
+                    installedVersion: 1.0.0
+                    status: enabled
+                    required: false
+                    compatible: true
+                    incompatibleCodes: []
+                    dependencies: [{ module: platform.core, version: '^0.1', optional: false }]
+                    dependents: []
+                    lastOperationId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c
+                  operations: []
         '202':
           description: Belum selesai dalam 30 detik; pantau lewat Location.
           headers: { Location: { $ref: 'erp:common#/components/headers/Location' } }
@@ -188,6 +259,7 @@ paths:
                     properties:
                       operationId: { $ref: 'erp:common#/components/schemas/Uuid' }
                       status: { type: string, enum: [running] }
+              example: { data: { operationId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c, status: running } }
         '400':
           description: >
             bad_request dengan error.details[].code salah satu: unsupported_media_type, body_too_large, malformed_json,

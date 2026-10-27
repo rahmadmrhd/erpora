@@ -100,17 +100,6 @@ components:
       in: query
       description: Jumlah item per permintaan (maksimal 1000).
       schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
-  headers:
-    ETag:
-      description: Versi resource (di endpoint modul platform = revision status modul tenant), mis. "7".
-      schema: { type: string }
-    Location:
-      description: URL resource atau operasi yang dibuat/berjalan (201/202).
-      schema: { type: string }
-    XRequestId:
-      description: ID request; selalu ada pada respons.
-      schema: { type: string }
-  requestHeaders:
     IfMatch:
       name: If-Match
       in: header
@@ -123,6 +112,16 @@ components:
         UUID dari klien. Diterima, tetapi untuk endpoint platform modul TIDAK disimpan (setiap operasi
         idempoten lewat aturan no-op); penyimpanan 24 jam menunggu infrastruktur idempotency.
       schema: { type: string, format: uuid }
+  headers:
+    ETag:
+      description: Versi resource (di endpoint modul platform = revision status modul tenant), mis. "7".
+      schema: { type: string }
+    Location:
+      description: URL resource atau operasi yang dibuat/berjalan (201/202).
+      schema: { type: string }
+    XRequestId:
+      description: ID request; selalu ada pada respons.
+      schema: { type: string }
   responses:
     BadRequest:
       description: Parameter atau body salah (bad_request).
