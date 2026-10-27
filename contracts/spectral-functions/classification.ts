@@ -43,8 +43,10 @@ const SENSITIVE_TOKENS = new Set([
   "salary",
 ]);
 const SENSITIVE_PAIRS = new Set(["api key", "private key", "bank account"]);
-const HIGHLY_TOKENS = new Set(["password", "passwd", "secret", "token"]);
-const HIGHLY_PAIRS = new Set(["api key", "private key"]);
+// K-4 (Q32): data pribadi/keuangan sensitif (nik, npwp, bankAccount*, salary) wajib highly_confidential; di respons hanya
+// diizinkan dengan pengecualian eksplisit x-erp-allow-highly-confidential (alasan string tidak kosong).
+const HIGHLY_TOKENS = new Set(["password", "passwd", "secret", "token", "nik", "npwp", "salary"]);
+const HIGHLY_PAIRS = new Set(["api key", "private key", "bank account"]);
 
 function matchesTerms(name: string, singles: Set<string>, pairs: Set<string>): boolean {
   const t = nameTokens(name);
@@ -76,6 +78,49 @@ const SCHEMA_SINGLE = [
 const SCHEMA_LISTS = ["allOf", "oneOf", "anyOf", "prefixItems"];
 const SCHEMA_MAPS = ["properties", "patternProperties", "dependentSchemas"];
 
+/** Pengecualian eksplisit: x-erp-allow-highly-confidential berisi alasan string tidak kosong. */
+export const ALLOW_HIGHLY = "x-erp-allow-highly-confidential";
+function hasAllowReason(o: Obj): boolean {
+  const v = o[ALLOW_HIGHLY];
+  return typeof v === "string" && v.trim() !== "";
+}
+
+/** erp-allow-highly-confidential-valid: pengecualian harus berisi alasan string tidak kosong dan menyertai klasifikasi highly_confidential. */
+export function allowHighlyValid(root: unknown): Result[] {
+  const out: Result[] = [];
+  for (const [path, node] of walkDoc(root)) {
+    const o = asObj(node);
+    if (!o || !(ALLOW_HIGHLY in o)) continue;
+    if (!hasAllowReason(o)) {
+      out.push({
+        message: `${ALLOW_HIGHLY} wajib berisi alasan berupa string tidak kosong (FR-24.2, security-guidelines §2)`,
+        path: [...path, ALLOW_HIGHLY],
+      });
+    } else if (o["x-erp-classification"] !== "highly_confidential") {
+      out.push({
+        message: `${ALLOW_HIGHLY} hanya bermakna bersama x-erp-classification: highly_confidential pada elemen yang sama (FR-24.2, security-guidelines §2)`,
+        path: [...path, ALLOW_HIGHLY],
+      });
+    }
+  }
+  return out;
+}
+
+/** erp-highly-confidential-exception (INFO): daftar pengecualian untuk ditinjau reviewer. */
+export function highlyExceptions(root: unknown): Result[] {
+  const out: Result[] = [];
+  for (const [path, node] of walkDoc(root)) {
+    const o = asObj(node);
+    if (!o || !hasAllowReason(o) || o["x-erp-classification"] !== "highly_confidential") continue;
+    const owner = path.filter((s) => s !== "properties").slice(-1)[0];
+    out.push({
+      message: `Pengecualian highly_confidential pada "${String(owner ?? "(skema)")}": ${String(o[ALLOW_HIGHLY]).trim()} (tinjau di code review; security-guidelines §2)`,
+      path: [...path, ALLOW_HIGHLY],
+    });
+  }
+  return out;
+}
+
 export function classificationValid(root: unknown): Result[] {
   const out: Result[] = [];
   for (const [path, node] of walkDoc(root)) {
@@ -103,7 +148,8 @@ function findHighly(
   seen.add(o);
   // Anotasi dan keyword yang bersanding dengan $ref (OpenAPI 3.1) dihitung pada node itu sendiri; follow() hanya
   // mengembalikan node tujuan dan membuang sibling-nya.
-  if (o["x-erp-classification"] === "highly_confidential") return trail.join(".") || "(skema)";
+  if (o["x-erp-classification"] === "highly_confidential" && !hasAllowReason(o))
+    return trail.join(".") || "(skema)";
   for (const kw of SCHEMA_MAPS) {
     for (const [k, v] of Object.entries(asObj(o[kw]) ?? {})) {
       const f = findHighly(root, v, doc, seen, [...trail, k]);

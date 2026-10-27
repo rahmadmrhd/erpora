@@ -1,7 +1,9 @@
 // Fungsi kustom ruleset contracts/spectral.yaml. Setiap rule `erp-*` memakai `given: $` dan `resolved: false`;
 // fungsi menelusuri dokumen sendiri dan menyelesaikan $ref (termasuk erp:) lewat konteks yang diisi runner.
 import {
+  allowHighlyValid,
   classificationValid,
+  highlyExceptions,
   noHighlyConfidentialInResponse,
   noSensitiveInUrl,
   sensitiveNeedsClassification,
@@ -57,6 +59,8 @@ const rules: Record<string, RuleFn> = {
   erpNoHighlyConfidentialInResponse: noHighlyConfidentialInResponse,
   erpNoSensitiveInUrl: noSensitiveInUrl,
   erpSensitiveNeedsClassification: sensitiveNeedsClassification,
+  erpAllowHighlyValid: allowHighlyValid,
+  erpHighlyExceptions: highlyExceptions,
 };
 
 /** Fungsi Spectral kustom: nama -> (targetVal) => hasil. */

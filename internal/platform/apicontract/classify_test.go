@@ -94,6 +94,49 @@ components:
 	}
 }
 
+// K-4 (Q32): pengecualian x-erp-allow-highly-confidential tidak menurunkan klasifikasi (route tetap highly_confidential,
+// sehingga Cache-Control: no-store berlaku); nilainya harus string alasan tidak kosong, selain itu error.
+func TestResponseClassification_AllowHighlyConfidentialException(t *testing.T) {
+	mk := func(ext string) (*Set, Operation) {
+		src := `openapi: 3.1.0
+info: {title: p, version: '1'}
+paths:
+  /api/p/people:
+    get:
+      operationId: listPeople
+      x-erp-permission: p.people.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monthlySalary: { type: string, x-erp-classification: highly_confidential` + ext + ` }
+`
+		d, err := Parse("p", []byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := NewSet(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s, d.Operations()[0]
+	}
+	s, op := mk(", x-erp-allow-highly-confidential: 'Modul HR menampilkan gaji kepada HR berizin'")
+	if got, err := s.ResponseClassification(op); err != nil || got != module.ClassHighlyConfidential {
+		t.Errorf("dengan pengecualian: got %q err %v, want highly_confidential (no-store tetap berlaku)", got, err)
+	}
+	for _, bad := range []string{", x-erp-allow-highly-confidential: ''", ", x-erp-allow-highly-confidential: '   '", ", x-erp-allow-highly-confidential: true", ", x-erp-allow-highly-confidential: 5"} {
+		s, op := mk(bad)
+		if _, err := s.ResponseClassification(op); err == nil {
+			t.Errorf("%s harus error (alasan wajib string tidak kosong)", bad)
+		}
+	}
+}
+
 func TestResponseClassification_AllPublicStaysPublic(t *testing.T) {
 	src := `openapi: 3.1.0
 info: {title: p, version: '1'}

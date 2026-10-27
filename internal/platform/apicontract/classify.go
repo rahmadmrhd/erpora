@@ -4,9 +4,13 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 
 	"erpora/sdk/module"
 )
+
+// AllowHighlyConfidentialExt adalah ekstensi pengecualian properti respons highly_confidential (Q32 K-4).
+const AllowHighlyConfidentialExt = "x-erp-allow-highly-confidential"
 
 var status2xxRe = regexp.MustCompile(`^(2[0-9][0-9]|2XX)$`)
 
@@ -86,6 +90,13 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 	if !ok { // skema boolean
 		c.leaf(inherited)
 		return nil
+	}
+	// Pengecualian highly_confidential di respons (Q32 K-4) tidak menurunkan klasifikasi; hanya divalidasi: alasan
+	// wajib string tidak kosong (konsisten dengan rule Spectral erp-allow-highly-confidential-valid).
+	if raw, ok := m[AllowHighlyConfidentialExt]; ok {
+		if s, isStr := raw.(string); !isStr || strings.TrimSpace(s) == "" {
+			return fmt.Errorf("%s: alasan wajib berupa string tidak kosong", AllowHighlyConfidentialExt)
+		}
 	}
 	if raw, ok := m["x-erp-classification"]; ok {
 		str, _ := raw.(string)

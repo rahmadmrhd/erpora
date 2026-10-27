@@ -187,11 +187,18 @@ func newContractsLint() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			problems := 0
 			for _, r := range res {
-				fmt.Fprintf(c.OutOrStdout(), "%s:%d %s %s\n", r.File, r.Line, r.Rule, r.Message)
+				label := ""
+				if r.Severity == contracttools.SeverityInfo {
+					label = "INFO " // daftar untuk reviewer (mis. pengecualian highly_confidential); tidak menggagalkan
+				} else {
+					problems++
+				}
+				fmt.Fprintf(c.OutOrStdout(), "%s%s:%d %s %s\n", label, r.File, r.Line, r.Rule, r.Message)
 			}
-			if len(res) > 0 {
-				return &app.ExitError{Code: 1, Err: fmt.Errorf("%d temuan kontrak", len(res))}
+			if problems > 0 {
+				return &app.ExitError{Code: 1, Err: fmt.Errorf("%d temuan kontrak", problems)}
 			}
 			fmt.Fprintln(c.OutOrStdout(), "kontrak OK")
 			return nil

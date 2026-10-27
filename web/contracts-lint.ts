@@ -30,6 +30,7 @@ interface Catalog {
   docs: Record<string, string>;
 }
 interface Finding {
+  severity: "error" | "warn" | "info";
   target: string;
   file: string;
   rule: string;
@@ -112,9 +113,10 @@ for (const t of catalog.targets) {
   const text = readFileSync(abs(t.file), "utf8");
   const results = await spectral.run(new Document(text, Parsers.Yaml, t.file));
   for (const r of results) {
-    // 0 error, 1 warn; info dan hint tidak dilaporkan.
-    if (r.severity > 1) continue;
+    // 0 error, 1 warn, 2 info (daftar untuk reviewer, tidak menggagalkan); hint tidak dilaporkan.
+    if (r.severity > 2 || (r.severity === 2 && !String(r.code).startsWith("erp-"))) continue;
     findings.push({
+      severity: r.severity === 0 ? "error" : r.severity === 1 ? "warn" : "info",
       target: t.name,
       file: t.file,
       rule: String(r.code),

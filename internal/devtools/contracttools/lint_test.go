@@ -28,6 +28,9 @@ func TestLint_RepositoryContractsClean(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range res {
+		if r.Severity == SeverityInfo {
+			continue // INFO (mis. daftar pengecualian) bukan kegagalan
+		}
 		t.Errorf("%s:%d %s %s", r.File, r.Line, r.Rule, r.Message)
 	}
 }
@@ -152,6 +155,37 @@ func TestLint_Fixtures(t *testing.T) {
 				pageSizeParam + "        - { name: sessionRef, in: query, schema: { type: string, x-erp-classification: highly_confidential } }\n"}}},
 			want: []string{"erp-no-sensitive-in-url"}, msg: "FR-24.2",
 		},
+		// K-4 (Q32): nik, npwp, bankAccount*, dan salary (per token camelCase) wajib highly_confidential.
+		{
+			name:  "nik_needs_highly_confidential",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        nik: { type: string, x-erp-classification: confidential }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name:  "bank_account_number_needs_highly_confidential",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        bankAccountNumber: { type: string, x-erp-classification: confidential }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name:  "salary_highly_without_exception_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential }\n"}}},
+			want:  []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name:  "allow_highly_exception_empty_reason",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-no-highly-confidential-in-response"}, msg: "alasan",
+		},
+		{
+			name:  "allow_highly_exception_not_a_string",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: true }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-no-highly-confidential-in-response"}, msg: "alasan",
+		},
+		{
+			name:  "allow_highly_exception_without_highly_class",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        label: { type: string, x-erp-classification: internal, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "highly_confidential",
+		},
 		{
 			name:  "classification_invalid",
 			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        flag: { type: string, x-erp-classification: top_secret }\n"}}},
@@ -217,6 +251,9 @@ func TestLint_Fixtures(t *testing.T) {
 			got := map[string]bool{}
 			found := false
 			for _, r := range res {
+				if r.Severity == SeverityInfo {
+					continue
+				}
 				got[r.Rule] = true
 				if strings.Contains(r.Message, c.msg) {
 					found = true
@@ -236,6 +273,44 @@ func TestLint_Fixtures(t *testing.T) {
 				t.Errorf("tidak ada temuan yang pesannya memuat %q: %v", c.msg, res)
 			}
 		})
+	}
+}
+
+// K-4 (Q32): properti respons highly_confidential diizinkan HANYA dengan pengecualian eksplisit
+// x-erp-allow-highly-confidential (alasan string tidak kosong). Pengecualian lolos sebagai nol error tetapi tercatat
+// sebagai temuan INFO (rule erp-highly-confidential-exception) yang memuat alasan, untuk ditinjau reviewer.
+func TestLint_HighlyConfidentialExceptionAllowedAndRecorded(t *testing.T) {
+	bun := requireBun(t)
+	root := t.TempDir()
+	copyRepoSubset(t, root, "example", "exampleaddon")
+	const reason = "Modul HR menampilkan gaji kepada pengguna HR berizin"
+	editFile(t, root, "modules/example/openapi.yaml",
+		[2]string{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '" + reason + "' }\n"})
+	repo, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.ToolsRoot = realRoot
+	res, err := Lint(context.Background(), repo, "example", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var infos int
+	for _, r := range res {
+		if r.Severity != SeverityInfo {
+			t.Errorf("tidak boleh ada error/warn: %s %s", r.Rule, r.Message)
+			continue
+		}
+		if r.Rule != "erp-highly-confidential-exception" || !strings.Contains(r.Message, reason) || !strings.Contains(r.Message, "monthlySalary") {
+			t.Errorf("INFO tidak sesuai: %+v", r)
+		}
+		infos++
+	}
+	if infos != 1 {
+		t.Errorf("INFO pengecualian = %d, want 1 (daftar untuk reviewer): %+v", infos, res)
+	}
+	if LintFailed(res) {
+		t.Error("INFO tidak boleh menggagalkan lint")
 	}
 }
 

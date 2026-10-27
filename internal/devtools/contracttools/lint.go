@@ -9,14 +9,33 @@ import (
 	"sort"
 )
 
+// Severity temuan linter: error, warn, atau info. Hanya error dan warn menggagalkan lint; info adalah daftar untuk reviewer
+// (mis. pengecualian x-erp-allow-highly-confidential).
+const (
+	SeverityError = "error"
+	SeverityWarn  = "warn"
+	SeverityInfo  = "info"
+)
+
+// LintFailed melaporkan apakah ada temuan selain info.
+func LintFailed(rs []LintResult) bool {
+	for _, r := range rs {
+		if r.Severity != SeverityInfo {
+			return true
+		}
+	}
+	return false
+}
+
 // LintResult adalah satu temuan linter.
 type LintResult struct {
-	Target  string `json:"target"`
-	File    string `json:"file"`
-	Rule    string `json:"rule"`
-	Path    string `json:"path"`
-	Message string `json:"message"`
-	Line    int    `json:"line"`
+	Severity string `json:"severity"`
+	Target   string `json:"target"`
+	File     string `json:"file"`
+	Rule     string `json:"rule"`
+	Path     string `json:"path"`
+	Message  string `json:"message"`
+	Line     int    `json:"line"`
 }
 
 type lintTarget struct {

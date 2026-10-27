@@ -2,7 +2,7 @@
 #
 # Dijalankan oleh `erpora contracts:lint` lewat web/contracts-lint.ts (Spectral terpin di web/package.json).
 # Nama `function` dipetakan ke fungsi bawaan @stoplight/spectral-functions atau ke ekspor
-# contracts/spectral-functions/index.ts. Semua rule erp-* berseverity error dan pesannya menyebut sumbernya.
+# contracts/spectral-functions/index.ts. Semua rule erp-* berseverity error (kecuali erp-highly-confidential-exception: info) dan pesannya menyebut sumbernya.
 # Rule kustom bekerja pada dokumen mentah (`resolved: false`) dan menyelesaikan $ref (termasuk erp:) sendiri.
 extends:
   - [spectral:oas, recommended]
@@ -185,3 +185,19 @@ rules:
     given: $
     resolved: false
     then: { function: erpSensitiveNeedsClassification }
+  erp-allow-highly-confidential-valid:
+    description: x-erp-allow-highly-confidential berisi alasan string tidak kosong dan menyertai x-erp-classification highly_confidential (PRD-000 FR-24.2, security-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpAllowHighlyValid }
+  # Satu-satunya rule erp-* berseverity info (keputusan Q32 K-4): tidak menggagalkan lint, tetapi setiap pengecualian
+  # highly_confidential tercatat dan dicetak agar reviewer dapat meninjaunya.
+  erp-highly-confidential-exception:
+    description: Daftar pengecualian x-erp-allow-highly-confidential untuk ditinjau reviewer (PRD-000 FR-24.2, security-guidelines §2).
+    severity: info
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpHighlyExceptions }
