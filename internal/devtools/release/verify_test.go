@@ -52,6 +52,11 @@ func TestVerifyTag_Table(t *testing.T) {
 		{"modules/../sdk/v0.1.0", "format"},
 		{"modules/rc/v1.1.0-rc.1", ""},
 		{"modules/rc/v1.1.0", "1.1.0-rc.1"},
+		// K-11: metakarakter shell pada tag ditolak oleh regex format, tidak pernah sampai ke pencocokan versi.
+		{"modules/example/v1.0.0;id", "format"},
+		{"modules/example/v1.0.0$(id)", "format"},
+		{"modules/example/v1.0.0`id`", "format"},
+		{"modules/ex ample/v1.0.0", "format"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.tag, func(t *testing.T) {

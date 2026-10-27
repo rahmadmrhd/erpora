@@ -126,7 +126,7 @@ tasks:
   release:verify-tag:
     desc: "Periksa tag rilis terhadap versi di sumber (task release:verify-tag -- modules/example/v1.0.0)"
     cmds:
-      - go run -tags devtools ./cmd/erpora release:verify-tag {{.CLI_ARGS}}
+      - go run -tags devtools ./cmd/erpora release:verify-tag "{{.CLI_ARGS}}"
 
   build:
     desc: Build binary release bin/erpora
