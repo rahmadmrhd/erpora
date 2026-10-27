@@ -281,3 +281,56 @@ func TestUnifiedDiff_Basic(t *testing.T) {
 		t.Errorf("diff file baru:\n%s", created)
 	}
 }
+
+// R-7: untuk Plan.NoForce, ErrExists tidak boleh menyarankan --force (yang justru ditolak untuk perintah itu).
+func TestApply_NoForceExistsMessageDoesNotSuggestForce(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "a.txt", "lama")
+	plan := Plan{NoForce: true, Ops: []FileOp{{Path: "a.txt", Kind: OpCreate, Content: []byte("baru")}}}
+	err := Apply(context.Background(), plan, Options{Root: root})
+	if !errors.Is(err, ErrExists) || !strings.Contains(err.Error(), "a.txt") {
+		t.Fatalf("err = %v, want ErrExists menyebut a.txt", err)
+	}
+	if strings.Contains(err.Error(), "--force") {
+		t.Errorf("pesan tidak boleh menyarankan --force: %v", err)
+	}
+	// Plan biasa tetap menyarankan --force.
+	plain := Plan{Ops: plan.Ops}
+	if err := Apply(context.Background(), plain, Options{Root: root}); err == nil || !strings.Contains(err.Error(), "--force") {
+		t.Errorf("err = %v, want saran --force untuk plan biasa", err)
+	}
+}
+
+// R-8: rollback juga menghapus direktori kosong yang dibuat selama Apply (terbalik), tetapi tidak menyentuh direktori
+// yang sudah ada sebelumnya.
+func TestApply_WriteFailureRemovesCreatedDirectories(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "ada/keep.txt", "tetap")
+	orig := writeFileFn
+	t.Cleanup(func() { writeFileFn = orig })
+	writeFileFn = func(abs string, content []byte) error {
+		if strings.HasSuffix(filepath.ToSlash(abs), "/gagal/c.txt") {
+			if err := os.MkdirAll(filepath.Dir(abs), 0o750); err != nil {
+				return err
+			}
+			return errors.New("disk penuh")
+		}
+		return orig(abs, content)
+	}
+	err := Apply(context.Background(), Plan{Ops: []FileOp{
+		{Path: "ada/baru/dalam/a.txt", Kind: OpCreate, Content: []byte("a")},
+		{Path: "ada/b.txt", Kind: OpCreate, Content: []byte("b")},
+		{Path: "gagal/c.txt", Kind: OpCreate, Content: []byte("c")},
+	}}, Options{Root: root})
+	if err == nil || !strings.Contains(err.Error(), "disk penuh") {
+		t.Fatalf("err = %v", err)
+	}
+	for _, d := range []string{"ada/baru/dalam", "ada/baru", "gagal"} {
+		if exists(root, d) {
+			t.Errorf("direktori %s yang dibuat Apply harus dihapus oleh rollback", d)
+		}
+	}
+	if !exists(root, "ada/keep.txt") || exists(root, "ada/b.txt") {
+		t.Error("direktori lama ada/ harus utuh dan b.txt dihapus")
+	}
+}

@@ -54,6 +54,10 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 		switch op.Kind {
 		case OpCreate:
 			if exists && !o.Force {
+				if p.NoForce {
+					// --force ditolak untuk perintah ini; jangan menyarankannya.
+					return fmt.Errorf("%w: %s (hapus atau ganti nama target secara manual bila ingin membuat ulang)", ErrExists, clean)
+				}
 				return fmt.Errorf("%w: %s (gunakan --force untuk menimpa)", ErrExists, clean)
 			}
 		case OpModify:
@@ -78,6 +82,27 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 		return nil
 	}
 
+	// Direktori yang belum ada sekarang dibuat oleh Apply (lewat writeFileFn); dicatat dari akar ke daun agar rollback
+	// dapat menghapusnya terbalik. os.Remove hanya berhasil pada direktori kosong, jadi isi lain tidak pernah disentuh.
+	var newDirs []string
+	seenDir := map[string]bool{}
+	for _, s := range steps {
+		var chain []string
+		for d, root := filepath.Dir(s.abs), filepath.Clean(o.Root); d != root && len(d) > len(root); d = filepath.Dir(d) {
+			chain = append(chain, d)
+		}
+		for i := len(chain) - 1; i >= 0; i-- {
+			d := chain[i]
+			if seenDir[d] {
+				continue
+			}
+			seenDir[d] = true
+			if _, err := os.Stat(d); os.IsNotExist(err) {
+				newDirs = append(newDirs, d)
+			}
+		}
+	}
+
 	var written []step
 	for _, s := range steps {
 		if s.exists && bytes.Equal(s.existing, s.op.Content) {
@@ -97,6 +122,9 @@ func Apply(ctx context.Context, p Plan, o Options) error {
 				if rerr == nil {
 					restored++
 				}
+			}
+			for i := len(newDirs) - 1; i >= 0; i-- {
+				_ = os.Remove(newDirs[i]) // hanya berhasil bila kosong
 			}
 			return fmt.Errorf("tulis %s: %w (%d dari %d file yang sudah ditulis dikembalikan)", s.op.Path, err, restored, len(written))
 		}
