@@ -40,7 +40,7 @@ func (s *Service) retry(ctx context.Context, t tenancy.TenantID, actor, key stri
 	var res Result
 	err := s.d.Store.WithTenantLock(ctx, t, s.lockTimeout(), func(ctx context.Context) error {
 		// Operasi terputus menjadi failed lebih dulu agar dapat di-retry.
-		if _, err := s.markInterrupted(ctx, t); err != nil {
+		if _, err := s.markInterrupted(ctx, t, actor); err != nil {
 			return err
 		}
 		if err := s.checkIfMatch(ctx, t, ifMatch); err != nil {

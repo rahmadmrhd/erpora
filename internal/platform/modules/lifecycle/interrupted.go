@@ -14,8 +14,9 @@ import (
 
 // markInterrupted menandai setiap operasi running milik tenant sebagai failed/interrupted (keputusan 11).
 // Wajib dipanggil di dalam advisory lock tenant: selama lock dipegang tidak ada operasi lain yang hidup,
-// sehingga baris running pasti sisa proses yang mati. Modul ikut failed hanya untuk install/upgrade.
-func (s *Service) markInterrupted(ctx context.Context, t tenancy.TenantID) ([]uuid.UUID, error) {
+// sehingga baris running pasti sisa proses yang mati. Modul ikut failed hanya untuk install/upgrade. actor adalah pelaku
+// penandaan (system:reconcile atau actor operasi berikutnya); actor operasi asal disimpan di details.originalActor.
+func (s *Service) markInterrupted(ctx context.Context, t tenancy.TenantID, actor string) ([]uuid.UUID, error) {
 	ops, err := s.d.Store.RunningOperations(ctx, t)
 	if err != nil || len(ops) == 0 {
 		return nil, err
@@ -50,8 +51,8 @@ func (s *Service) markInterrupted(ctx context.Context, t tenancy.TenantID) ([]uu
 				Code: CodeInterrupted, Message: "operasi terputus sebelum selesai", Step: last,
 			}},
 			Events: []store.Event{{
-				ModuleKey: op.ModuleKey, Event: "interrupted", Actor: op.Actor, OperationID: op.ID,
-				Details: map[string]any{"operation": op.Operation, "step": last},
+				ModuleKey: op.ModuleKey, Event: "interrupted", Actor: actor, OperationID: op.ID,
+				Details: map[string]any{"operation": op.Operation, "step": last, "originalActor": op.Actor},
 			}},
 		}
 		if op.Operation == string(OpInstall) || op.Operation == string(OpUpgrade) {

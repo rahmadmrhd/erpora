@@ -302,7 +302,7 @@ func (s *Service) Execute(ctx context.Context, req Request) ([]Result, error) {
 	}
 	var results []Result
 	err = s.d.Store.WithTenantLock(ctx, req.Tenant, s.lockTimeout(), func(ctx context.Context) error {
-		if _, err := s.markInterrupted(ctx, req.Tenant); err != nil {
+		if _, err := s.markInterrupted(ctx, req.Tenant, req.Actor); err != nil {
 			return err
 		}
 		if err := s.checkIfMatch(ctx, req.Tenant, req.IfMatch); err != nil {

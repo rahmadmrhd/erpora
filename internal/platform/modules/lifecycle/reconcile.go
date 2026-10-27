@@ -46,7 +46,7 @@ func (s *Service) Reconcile(ctx context.Context, t tenancy.TenantID) (ReconcileR
 	var rev int64
 	bumped := false
 	err := s.d.Store.WithTenantLock(ctx, t, s.lockTimeout(), func(ctx context.Context) error {
-		ids, err := s.markInterrupted(ctx, t)
+		ids, err := s.markInterrupted(ctx, t, ReconcileActor)
 		if err != nil {
 			return err
 		}

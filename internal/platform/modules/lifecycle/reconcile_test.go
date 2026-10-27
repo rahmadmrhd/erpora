@@ -178,6 +178,52 @@ func TestReconcile_InterruptedOperationMarkedFailed(t *testing.T) {
 	}
 }
 
+// B-11 (Q32): event interrupted memakai actor pelaku penandaan (system:reconcile, atau actor operasi yang berikutnya
+// memperoleh lock); actor operasi asal disimpan di details.originalActor.
+func TestInterruptedEventActorIsMarkerWithOriginalActorInDetails(t *testing.T) {
+	interruptedEvent := func(e *env) store.Event {
+		for _, ev := range e.st.events {
+			if ev.Event == "interrupted" {
+				return ev
+			}
+		}
+		t.Fatal("event interrupted tidak ada")
+		return store.Event{}
+	}
+	seedRunning := func(e *env) {
+		id := uuid.New()
+		e.st.ops[id] = store.Operation{
+			ID: id, TenantID: tenantA, ModuleKey: "acme.a", Operation: "enable", Status: "running", Actor: "cli:pelaku-asal",
+			Steps: []store.Step{{Name: "hook:enable", Status: "running"}},
+		}
+		e.st.opOrder = append(e.st.opOrder, id)
+	}
+	t.Run("reconcile", func(t *testing.T) {
+		rec := &fxRec{}
+		e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
+		seedRunning(e)
+		if _, err := e.svc.Reconcile(context.Background(), tenantA); err != nil {
+			t.Fatal(err)
+		}
+		ev := interruptedEvent(e)
+		if ev.Actor != ReconcileActor || ev.Details["originalActor"] != "cli:pelaku-asal" {
+			t.Errorf("actor=%q details=%v", ev.Actor, ev.Details)
+		}
+	})
+	t.Run("operasi berikutnya", func(t *testing.T) {
+		rec := &fxRec{}
+		e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
+		seedRunning(e)
+		if _, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpInstall, Key: "acme.a", Actor: "cli:penerus"}); err != nil {
+			t.Fatal(err)
+		}
+		ev := interruptedEvent(e)
+		if ev.Actor != "cli:penerus" || ev.Details["originalActor"] != "cli:pelaku-asal" {
+			t.Errorf("actor=%q details=%v", ev.Actor, ev.Details)
+		}
+	})
+}
+
 func TestReconcile_InterruptedEnableKeepsModuleStatus(t *testing.T) {
 	rec := &fxRec{}
 	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
