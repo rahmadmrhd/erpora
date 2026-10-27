@@ -439,6 +439,22 @@ var successEvent = map[Op]string{
 
 // finish menyusun satu Commit atomik (installation + operasi + event + revision), lalu refresh snapshot
 // dan publikasi notifikasi. Installation selalu turunan dari r.cur (read-modify-write).
+// summarizeFailure meringkas kegagalan migration_failed/internal_error tanpa teks mentah; menyebut berkas migrasi
+// (bukan SQL) dan operation_id/trace_id untuk mencari detailnya di log server.
+func summarizeFailure(f *stepFailure, opID uuid.UUID, traceID string) string {
+	ref := "operation_id=" + opID.String()
+	if traceID != "" {
+		ref += ", trace_id=" + traceID
+	}
+	if f.code == codeMigrationFailed {
+		if name, ok := f.details["migration"].(string); ok && name != "" {
+			return fmt.Sprintf("migrasi modul gagal pada berkas %s; detail ada di log server (%s)", name, ref)
+		}
+		return "migrasi modul gagal; detail ada di log server (" + ref + ")"
+	}
+	return fmt.Sprintf("kesalahan internal pada langkah %s; detail ada di log server (%s)", f.step, ref)
+}
+
 func (r *opRun) finish(ctx context.Context, fail *stepFailure) (Result, error) {
 	c := store.Commit{Finish: &store.Finish{OperationID: r.opID, Status: "succeeded"}}
 	ev := func(name string, details map[string]any) store.Event {
@@ -463,7 +479,19 @@ func (r *opRun) finish(ctx context.Context, fail *stepFailure) (Result, error) {
 		c.BumpRevision = true
 		c.Events = append(c.Events, ev(successEvent[r.op], base))
 	} else {
-		opErr := &store.OpError{Code: fail.code, Message: truncate(fail.err.Error(), 500), Step: fail.step, Details: fail.details}
+		// Detail penuh (teks SQL/hook mentah) hanya ke log bersama trace_id; message di API, CLI, operasi tersimpan, dan
+		// event untuk migration_failed dan internal_error diringkas (Q32 B-10). code dan step tetap ada.
+		traceID := ""
+		if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+			traceID = sc.TraceID().String()
+		}
+		r.s.log.ErrorContext(ctx, "operasi lifecycle gagal", "operation", string(r.op), "erp.module.key", r.key,
+			"operation_id", r.opID.String(), "step", fail.step, "code", fail.code, "error", fail.err.Error(), "trace_id", traceID)
+		msg := truncate(fail.err.Error(), 500)
+		if fail.code == codeMigrationFailed || fail.code == codeInternal {
+			msg = summarizeFailure(fail, r.opID, traceID)
+		}
+		opErr := &store.OpError{Code: fail.code, Message: msg, Step: fail.step, Details: fail.details}
 		c.Finish.Status, c.Finish.Error = "failed", opErr
 		res.Status, res.Error, res.To = "failed", opErr, r.from
 		fd := map[string]any{"operation": string(r.op), "step": fail.step, "code": fail.code, "message": opErr.Message}

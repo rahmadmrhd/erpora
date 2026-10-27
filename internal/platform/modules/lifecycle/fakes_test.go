@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"log/slog"
 	"slices"
 	"sync"
 	"testing"
@@ -354,6 +355,7 @@ type env struct {
 type envOpts struct {
 	tracer trace.TracerProvider
 	meter  metric.MeterProvider
+	log    *slog.Logger
 }
 
 func newEnv(t *testing.T, rec *fxRec, mods ...*fxModule) *env {
@@ -371,7 +373,7 @@ func newEnvOpts(t *testing.T, rec *fxRec, o envOpts, mods ...*fxModule) *env {
 	e.svc = New(Deps{
 		Registry: e.reg, Store: e.st, Migrator: e.mig,
 		Tenants:  database.SingleTenantConnector{Default: tenantA},
-		Snapshot: e.snap, Notifier: e.notifier, Tracer: o.tracer, Meter: o.meter,
+		Snapshot: e.snap, Notifier: e.notifier, Tracer: o.tracer, Meter: o.meter, Log: o.log,
 	})
 	return e
 }

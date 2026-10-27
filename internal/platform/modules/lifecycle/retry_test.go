@@ -1,9 +1,12 @@
 package lifecycle
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -241,6 +244,41 @@ func TestRevisionBumpsOnFailedOperationWithoutStatusChange(t *testing.T) {
 	}
 	if got := e.st.row("acme.a").Status; got != "installed" {
 		t.Errorf("status tidak boleh berubah: %s", got)
+	}
+}
+
+// B-10 (Q32): message kegagalan migration_failed dan internal_error diringkas (tanpa teks SQL/hook mentah) pada hasil,
+// operasi tersimpan, dan event; code dan step tetap ada. Detail penuh masuk log (dengan trace_id).
+func TestFailureMessageSummarizedAndDetailLogged(t *testing.T) {
+	var logBuf bytes.Buffer
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a", migrations: fxMigFS()})
+	e := newEnvOpts(t, rec, envOpts{log: slog.New(slog.NewTextHandler(&logBuf, nil))}, a)
+	e.mig.failOn = "0002_two.sql"
+	res, err := e.exec(OpInstall, "acme.a")
+	if err != nil || res[0].Status != "failed" || res[0].Error == nil {
+		t.Fatalf("install = %+v, %v", res, err)
+	}
+	const raw = "boom" // teks mentah dari migrator (di produksi: SQLSTATE/teks SQL)
+	f := res[0].Error
+	if f.Code != "migration_failed" || f.Step != "migrate" {
+		t.Errorf("code/step = %s/%s", f.Code, f.Step)
+	}
+	if strings.Contains(f.Message, raw) || f.Message == "" {
+		t.Errorf("message harus diringkas tanpa teks mentah: %q", f.Message)
+	}
+	op, _ := e.st.Operation(context.Background(), tenantA, res[0].OperationID)
+	if op.Error == nil || strings.Contains(op.Error.Message, raw) {
+		t.Errorf("operasi tersimpan memuat teks mentah: %+v", op.Error)
+	}
+	for _, ev := range e.st.events {
+		if m, _ := ev.Details["message"].(string); strings.Contains(m, raw) {
+			t.Errorf("event %s memuat teks mentah: %q", ev.Event, m)
+		}
+	}
+	logs := logBuf.String()
+	if !strings.Contains(logs, raw) || !strings.Contains(logs, "trace_id") || !strings.Contains(logs, res[0].OperationID.String()) {
+		t.Errorf("log harus memuat detail penuh, trace_id, dan operation_id:\n%s", logs)
 	}
 }
 
