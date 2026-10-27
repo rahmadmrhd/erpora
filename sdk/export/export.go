@@ -144,28 +144,39 @@ type sink interface {
 // Write menulis header dan baris ke w. Setiap baris melewati authz.MaskFields(ctx, spec.Resource, row);
 // kolom yang di-mask tampil kosong. Auditor (bila terpasang) dipanggil sekali sesudah selesai, baik
 // sukses maupun gagal. Mengembalikan jumlah baris yang ditulis.
-func Write(ctx context.Context, w io.Writer, spec Spec, rows iter.Seq2[Row, error]) (int, error) {
+func Write(ctx context.Context, w io.Writer, spec Spec, rows iter.Seq2[Row, error]) (count int, err error) {
 	if err := Validate(ctx, spec); err != nil {
 		return 0, err
 	}
-	count, err := write(ctx, w, spec, rows)
-	if a, ok := ctx.Value(auditorKey{}).(Auditor); ok && a != nil {
-		keys := make([]string, len(spec.Columns))
-		for i, c := range spec.Columns {
-			keys[i] = c.Key
+	var progress int
+	// Audit lewat defer: semua jalur teraudit, termasuk panic pada iterator atau sink (dicatat lalu di-panic ulang)
+	// dengan jumlah baris yang sudah tertulis.
+	defer func() {
+		p := recover()
+		if p != nil {
+			count, err = progress, fmt.Errorf("export: panic: %v", p)
 		}
-		aerr := a.RecordExport(ctx, Event{
-			Resource: spec.Resource, Filename: spec.Filename, Format: spec.Format, Columns: keys,
-			Rows: count, Classification: highestClass(spec.Columns), Err: err,
-		})
-		if err == nil && aerr != nil {
-			err = fmt.Errorf("export: gagal mencatat audit: %w", aerr)
+		if a, ok := ctx.Value(auditorKey{}).(Auditor); ok && a != nil {
+			keys := make([]string, len(spec.Columns))
+			for i, c := range spec.Columns {
+				keys[i] = c.Key
+			}
+			aerr := a.RecordExport(ctx, Event{
+				Resource: spec.Resource, Filename: spec.Filename, Format: spec.Format, Columns: keys,
+				Rows: count, Classification: highestClass(spec.Columns), Err: err,
+			})
+			if p == nil && err == nil && aerr != nil {
+				err = fmt.Errorf("export: gagal mencatat audit: %w", aerr)
+			}
 		}
-	}
-	return count, err
+		if p != nil {
+			panic(p)
+		}
+	}()
+	return write(ctx, w, spec, rows, &progress)
 }
 
-func write(ctx context.Context, w io.Writer, spec Spec, rows iter.Seq2[Row, error]) (count int, err error) {
+func write(ctx context.Context, w io.Writer, spec Spec, rows iter.Seq2[Row, error], progress *int) (count int, err error) {
 	var s sink
 	switch spec.Format {
 	case CSV:
@@ -211,6 +222,7 @@ func write(ctx context.Context, w io.Writer, spec Spec, rows iter.Seq2[Row, erro
 			return count, err
 		}
 		count++
+		*progress = count
 	}
 	if err = s.close(); err != nil {
 		return count, err

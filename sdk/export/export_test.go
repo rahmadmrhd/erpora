@@ -211,6 +211,29 @@ func TestWrite_MaxRows(t *testing.T) {
 	}
 }
 
+// I-1/M-5: panic pada iterator tetap teraudit (defer + recover + re-panic) dengan jumlah baris yang sudah tertulis.
+func TestWrite_IteratorPanicStillAuditedAndRepanics(t *testing.T) {
+	aud := &recAuditor{}
+	rows := func(yield func(Row, error) bool) {
+		if !yield(Row{"id": "1"}, nil) {
+			return
+		}
+		panic("iterator meledak")
+	}
+	var buf bytes.Buffer
+	func() {
+		defer func() {
+			if p := recover(); p != "iterator meledak" {
+				t.Errorf("panic harus diteruskan apa adanya, got %v", p)
+			}
+		}()
+		_, _ = Write(testCtx(aud), &buf, Spec{Resource: "x.note", Format: CSV, Filename: "notes", Columns: internalCols()}, rows)
+	}()
+	if len(aud.events) != 1 || aud.events[0].Err == nil || aud.events[0].Rows != 1 {
+		t.Fatalf("panic harus teraudit dengan Rows=1 dan Err: %+v", aud.events)
+	}
+}
+
 func TestWrite_IteratorErrorRecorded(t *testing.T) {
 	aud := &recAuditor{}
 	boom := errors.New("boom")

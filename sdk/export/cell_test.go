@@ -51,6 +51,8 @@ func TestFormatCell(t *testing.T) {
 		{nil, ""}, {"a", "a"}, {true, "true"}, {42, "42"}, {int64(-7), "-7"}, {uint8(3), "3"},
 		{1.5, "1.5"}, {float32(2), "2"}, {json.Number("12.30"), "12.30"}, {ts, "2026-10-27T00:00:00Z"},
 		{dec{"1250.00"}, "1250.00"}, {status("open"), "open"}, {&n, "5"}, {(*int)(nil), ""},
+		// I-1/M-3: pointer nil menang atas Stringer (tanpa panic); *time.Time diformat seperti time.Time (RFC3339 UTC).
+		{(*time.Time)(nil), ""}, {&ts, "2026-10-27T00:00:00Z"}, {(*dec)(nil), ""},
 	}
 	for _, tc := range cases {
 		got, err := formatCell("k", tc.in)

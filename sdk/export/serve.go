@@ -16,11 +16,13 @@ type trackWriter struct {
 	wrote bool
 }
 
+// Write meneruskan ke writer dasar; wrote hanya true bila ada byte yang benar-benar diterima (byte pertama terkirim).
 func (t *trackWriter) Write(p []byte) (int, error) {
-	if len(p) > 0 {
+	n, err := t.w.Write(p)
+	if n > 0 {
 		t.wrote = true
 	}
-	return t.w.Write(p)
+	return n, err
 }
 
 // Serve memvalidasi spec, memasang header unduhan (Content-Type, Content-Disposition, dan
@@ -34,6 +36,14 @@ func Serve(w http.ResponseWriter, r *http.Request, spec Spec, rows iter.Seq2[Row
 		return err
 	}
 	h := w.Header()
+	// Nilai awal disimpan: bila gagal sebelum byte pertama, header dikembalikan ke keadaan semula (no-store yang sudah
+	// dipasang platform berdasarkan klasifikasi route tidak boleh ikut terhapus).
+	saved := map[string][]string{}
+	for _, k := range []string{"Content-Type", "Content-Disposition", "Cache-Control"} {
+		if v, ok := h[k]; ok {
+			saved[k] = append([]string(nil), v...)
+		}
+	}
 	ext, ctype := "csv", "text/csv; charset=utf-8"
 	if spec.Format == XLSX {
 		ext, ctype = "xlsx", xlsxContentType
@@ -51,9 +61,13 @@ func Serve(w http.ResponseWriter, r *http.Request, spec Spec, rows iter.Seq2[Row
 		return nil
 	}
 	if !tw.wrote {
-		h.Del("Content-Type")
-		h.Del("Content-Disposition")
-		h.Del("Cache-Control")
+		for _, k := range []string{"Content-Type", "Content-Disposition", "Cache-Control"} {
+			if v, ok := saved[k]; ok {
+				h[k] = v
+			} else {
+				h.Del(k)
+			}
+		}
 		return err
 	}
 	slog.ErrorContext(ctx, "ekspor terputus di tengah stream", "resource", spec.Resource, "error", err)
