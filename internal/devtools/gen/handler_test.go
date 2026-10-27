@@ -51,6 +51,40 @@ func TestMakeHandler_Golden(t *testing.T) {
 	}
 }
 
+// Modul ber-web/ menyimpan tipe TS hasil generate yang di-commit: make:handler menambah operasi, jadi tipe itu
+// harus dibangkitkan ulang (contracts:generate --check tidak boleh basi). Modul tanpa web/ tidak punya langkah itu.
+func TestMakeHandler_RegeneratesTypesForWebModules(t *testing.T) {
+	opts := func(m string) HandlerOptions {
+		return HandlerOptions{Module: m, Name: "ApproveItem", Route: "POST /items/{id}/approve", Permission: m + ".items.approve"}
+	}
+	root := fixtureRepo(t)
+	mp, err := MakeModule(root, ModuleOptions{Name: "inventory", Frontend: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyPlan(t, root, mp)
+	np, err := MakeModule(root, ModuleOptions{Name: "stock-opname"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyPlan(t, root, np)
+
+	withWeb, err := MakeHandler(root, opts("inventory"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withWeb.Post) != 1 || withWeb.Post[0].Name != "contracts:generate inventory" {
+		t.Errorf("Post modul ber-web = %+v, want satu langkah contracts:generate inventory", withWeb.Post)
+	}
+	noWeb, err := MakeHandler(root, opts("stock-opname"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(noWeb.Post) != 0 {
+		t.Errorf("modul tanpa web/ tidak boleh punya langkah Post: %+v", noWeb.Post)
+	}
+}
+
 // Review Focus 2: operasi yang sudah ada di kontrak ditolak sebelum Plan; direktori tidak berubah.
 func TestMakeHandler_ExistingOperationRejected(t *testing.T) {
 	root := moduleRepo(t, "stock-opname")

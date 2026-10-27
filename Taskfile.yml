@@ -64,6 +64,12 @@ tasks:
     cmds:
       - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
 
+  test:generator:
+    desc: Buktikan make:module lolos semua gate di salinan repo (lama; butuh Docker, Bun, dan jaringan Go module cache)
+    cmds:
+      # Tag integration dibutuhkan pgtest (testcontainers); tag generator memilih paket tests/generator.
+      - go test -tags generator,integration -timeout 45m -count=1 ./tests/generator/...
+
   arch:
     desc: Jalankan architecture checks (D1-D11)
     cmds:
@@ -200,6 +206,7 @@ tasks:
       - task: check:gowork-off
       - task: test
       - task: test:integration
+      - task: test:generator
       - task: vuln
       - task: web:check
       - task: build

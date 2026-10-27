@@ -218,6 +218,10 @@ func MakeHandler(root string, o HandlerOptions) (Plan, error) {
 		return Plan{}, err
 	}
 	plan.Ops = append(plan.Ops, FileOp{Path: specPath, Kind: OpModify, Content: spec})
+	if ref.HasWeb {
+		// Tipe TS kontrak modul di-commit; operasi baru membuatnya basi.
+		plan.Post = append(plan.Post, generatePost(ref.Dir))
+	}
 	return plan, nil
 }
 

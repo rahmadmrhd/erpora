@@ -231,21 +231,7 @@ func modulePost(n ModuleName, frontend bool) []PostStep {
 		return steps
 	}
 	return append(steps,
-		PostStep{Name: "contracts:generate " + n.Dir, Run: func(ctx context.Context, root string) error {
-			bun, err := contracttools.FindBun()
-			if err != nil {
-				return err
-			}
-			repo, err := contracttools.LoadRepo(root)
-			if err != nil {
-				return err
-			}
-			files, err := contracttools.Generate(ctx, repo, n.Dir, bun)
-			if err != nil {
-				return err
-			}
-			return contracttools.WriteGenerated(root, files)
-		}},
+		generatePost(n.Dir),
 		PostStep{Name: "bun install", Run: func(ctx context.Context, root string) error {
 			return runCmd(ctx, root, nil, "bun", "install")
 		}},
@@ -257,6 +243,25 @@ func modulePost(n ModuleName, frontend bool) []PostStep {
 			return runCmd(ctx, root, nil, "bun", biome, "check", "--write", path.Join("modules", n.Dir, "web"), "web/src/app/modules.ts")
 		}},
 	)
+}
+
+// generatePost membangkitkan ulang tipe TS kontrak untuk satu modul ber-web/ (sama dengan `contracts:generate <dir>`).
+func generatePost(dir string) PostStep {
+	return PostStep{Name: "contracts:generate " + dir, Run: func(ctx context.Context, root string) error {
+		bun, err := contracttools.FindBun()
+		if err != nil {
+			return err
+		}
+		repo, err := contracttools.LoadRepo(root)
+		if err != nil {
+			return err
+		}
+		files, err := contracttools.Generate(ctx, repo, dir, bun)
+		if err != nil {
+			return err
+		}
+		return contracttools.WriteGenerated(root, files)
+	}}
 }
 
 // runCmd menjalankan perintah dan menyertakan stderr/stdout pada error.

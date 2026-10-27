@@ -35,13 +35,30 @@ func golden(t *testing.T, name, got string) {
 	}
 }
 
+// referenceModules adalah modul yang menjadi dasar golden dan hitungan di test ini. Modul lain (mis. hasil
+// `make:module`) boleh ada di katalog tanpa memecahkan test: baris/entri modul lain diabaikan.
+var referenceModules = map[string]bool{"platform.core": true, "acme.example": true, "acme.example-addon": true}
+
+// onlyReferenceRows mempertahankan baris header (baris pertama) dan baris tabel yang kolom pertamanya modul referensi.
+func onlyReferenceRows(table string) string {
+	lines := strings.SplitAfter(table, "\n")
+	var b strings.Builder
+	for i, l := range lines {
+		f := strings.Fields(l)
+		if i == 0 || (len(f) > 0 && referenceModules[f[0]]) {
+			b.WriteString(l)
+		}
+	}
+	return b.String()
+}
+
 func TestInspectRoutes_Golden(t *testing.T) {
 	clearEnv(t) // tanpa ERP_DATABASE_URL: inspect tidak butuh DB/env
 	out, err := run(t, "inspect", "routes")
 	if err != nil {
 		t.Fatal(err)
 	}
-	golden(t, "inspect_routes.golden", out)
+	golden(t, "inspect_routes.golden", onlyReferenceRows(out))
 	alias, err := run(t, "route:list")
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +95,13 @@ func TestInspectModules_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &mods); err != nil {
 		t.Fatalf("bukan JSON valid: %v\n%s", err, out)
 	}
-	if len(mods) != 3 || mods[0]["key"] != "platform.core" {
+	have := map[string]bool{}
+	for _, m := range mods {
+		if k, ok := m["key"].(string); ok {
+			have[k] = true
+		}
+	}
+	if len(mods) < 3 || mods[0]["key"] != "platform.core" || !have["acme.example"] || !have["acme.example-addon"] {
 		t.Errorf("modules = %v", mods)
 	}
 }
@@ -103,8 +126,17 @@ func TestInspectRoutes_JSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	var routes []map[string]any
-	if err := json.Unmarshal([]byte(out), &routes); err != nil || len(routes) != 7 {
-		t.Fatalf("err=%v routes=%v", err, routes)
+	if err := json.Unmarshal([]byte(out), &routes); err != nil {
+		t.Fatalf("err=%v out=%s", err, out)
+	}
+	ref := 0
+	for _, r := range routes {
+		if m, _ := r["module"].(string); referenceModules[m] {
+			ref++
+		}
+	}
+	if ref != 7 {
+		t.Fatalf("route modul referensi = %d, want 7: %v", ref, routes)
 	}
 }
 
