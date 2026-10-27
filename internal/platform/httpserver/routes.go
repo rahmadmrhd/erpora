@@ -10,6 +10,10 @@ import (
 	"erpora/internal/platform/tenancy"
 )
 
+// BootstrapPath adalah path route bootstrap platform (GET, publik). Satu-satunya sumber: dipakai pendaftaran route di
+// bawah dan test kesesuaian route ↔ kontrak (internal/app), yang mencocokkannya dengan kontrak platform.
+const BootstrapPath = "/api/bootstrap"
+
 // NewRouter membuat router dengan /healthz, /readyz, /api/bootstrap, /api/ (404 JSON), dan / (SPA).
 func NewRouter(d Deps) *Router {
 	d = withDefaults(d)
@@ -30,7 +34,7 @@ func NewRouter(d Deps) *Router {
 		WriteData(w, http.StatusOK, map[string]string{"status": "ready"})
 	}), WithoutTenant(), Public())
 
-	r.Handle("GET /api/bootstrap", bootstrapHandler(d), Public())
+	r.Handle("GET "+BootstrapPath, bootstrapHandler(d), Public())
 
 	r.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if r.apiGate != nil && r.apiGate(req) {

@@ -7,6 +7,7 @@ import (
 
 	"erpora/contracts"
 	"erpora/internal/platform/apicontract"
+	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/modules/registry"
 	"erpora/modules/example"
 	"erpora/sdk/module"
@@ -54,7 +55,7 @@ func buildConformance(t *testing.T) (*registry.Registry, apicontract.Conformance
 			Public: r.Public, Classification: r.Classification,
 		})
 	}
-	routes = append(routes, apicontract.RouteSpec{Module: registry.PlatformKey, Method: http.MethodGet, Pattern: "/api/bootstrap", Public: true})
+	routes = append(routes, apicontract.RouteSpec{Module: registry.PlatformKey, Method: http.MethodGet, Pattern: httpserver.BootstrapPath, Public: true})
 	return reg, apicontract.ConformanceInput{
 		Set: set, DocOf: docOf, Routes: routes, Capabilities: caps,
 		DispatchEquivalent: map[string]bool{registry.PlatformKey: true},
