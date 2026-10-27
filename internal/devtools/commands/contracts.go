@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -15,7 +17,64 @@ func usageErr(format string, a ...any) error {
 }
 
 func registerContracts(root *cobra.Command) {
-	root.AddCommand(newContractsLint(), newContractsGenerate())
+	root.AddCommand(newContractsLint(), newContractsGenerate(), newContractsBreaking())
+}
+
+func newContractsBreaking() *cobra.Command {
+	return &cobra.Command{
+		Use:   "contracts:breaking [module]",
+		Short: "Deteksi breaking change kontrak terhadap tag rilis terakhir (oasdiff)",
+		Long: "Membandingkan kontrak terbundel HEAD dengan kontrak pada tag rilis terakhir (platform: vX.Y.Z; modul: modules/<dir>/vX.Y.Z) memakai oasdiff.\n" +
+			"Perubahan berlevel WARN atau lebih menggagalkan (api-guidelines section 14.2). Target tanpa tag dilewati. Perubahan breaking hanya diizinkan\n" +
+			"bila ERP_API_BREAKING_APPROVED=true (label PR api-breaking-approved) dan major version manifest lebih besar daripada major tag baseline.",
+		GroupID: GroupContracts,
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			root, err := repoRoot()
+			if err != nil {
+				return err
+			}
+			repo, err := contracttools.LoadRepo(root)
+			if err != nil {
+				return err
+			}
+			only := ""
+			if len(args) == 1 {
+				only = args[0]
+				if _, ok := repo.Module(only); !ok && only != "platform" {
+					return usageErr("target %q tidak dikenal; platform atau modul: %s", only, repo.ModuleNames())
+				}
+			}
+			rs, err := contracttools.CheckBreaking(c.Context(), repo, contracttools.ExecGit(root), contracttools.BreakingOptions{
+				Only: only, Approved: os.Getenv("ERP_API_BREAKING_APPROVED") == "true",
+			})
+			if err != nil {
+				return err
+			}
+			w := c.OutOrStdout()
+			for _, r := range rs {
+				switch {
+				case r.Skipped != "":
+					fmt.Fprintf(w, "skip      %s: %s\n", r.Target, r.Skipped)
+				case len(r.Changes) == 0:
+					fmt.Fprintf(w, "ok        %s (baseline %s)\n", r.Target, r.BaseTag)
+				default:
+					state := "breaking"
+					if r.Approved {
+						state = "approved"
+					}
+					fmt.Fprintf(w, "%-9s %s (baseline %s): %d perubahan\n", state, r.Target, r.BaseTag, len(r.Changes))
+					for _, ch := range r.Changes {
+						fmt.Fprintf(w, "  %-4s %s %s [%s] %s\n", ch.Level, ch.Method, ch.Path, ch.ID, ch.Text)
+					}
+				}
+			}
+			if contracttools.Failed(rs) {
+				return &app.ExitError{Code: 1, Err: errors.New("breaking change pada kontrak API; tambahkan field baru secara aditif, atau lihat api-guidelines section 14")}
+			}
+			return nil
+		},
+	}
 }
 
 func newContractsGenerate() *cobra.Command {

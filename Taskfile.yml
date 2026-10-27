@@ -180,11 +180,17 @@ tasks:
     cmds:
       - go run -tags devtools ./cmd/erpora contracts:generate
 
+  contracts:breaking:
+    desc: Deteksi breaking change kontrak terhadap tag rilis terakhir (oasdiff)
+    cmds:
+      - go run -tags devtools ./cmd/erpora contracts:breaking
+
   contracts:check:
-    desc: Gate kontrak - lint, hasil generate mutakhir (dan breaking change sejak Task 8)
+    desc: Gate kontrak - lint, hasil generate mutakhir, dan breaking change
     cmds:
       - task: contracts:lint
       - go run -tags devtools ./cmd/erpora contracts:generate --check
+      - task: contracts:breaking
 
   ci:
     desc: Jalankan seluruh gate CI secara lokal
