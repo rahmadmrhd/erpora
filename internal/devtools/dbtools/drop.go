@@ -8,7 +8,8 @@ import (
 	"erpora/internal/platform/database"
 )
 
-// Objek milik ekstensi dikecualikan (deptype 'e'); sisanya di current_schema() dihapus.
+// Objek milik ekstensi (deptype 'e') dan objek internal milik objek lain (deptype 'i': konstruktor range, multirange,
+// sequence identity) dikecualikan; yang pertama tidak boleh disentuh, yang kedua ikut terhapus bersama pemiliknya.
 const (
 	// relkind: v view, m materialized view, r tabel, p tabel berpartisi, f foreign table, c tipe komposit mandiri, S sequence.
 	listRelationsSQL = `
@@ -18,7 +19,7 @@ JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = current_schema()
   AND c.relkind IN ('v', 'm', 'r', 'p', 'f', 'c', 'S')
   AND NOT c.relispartition
-  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype IN ('e', 'i'))
 ORDER BY c.oid`
 	listRoutinesSQL = `
 SELECT p.oid::regprocedure::text AS name
@@ -26,14 +27,14 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = current_schema()
   AND p.prokind IN ('f', 'p', 'a')
-  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')`
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype IN ('e', 'i'))`
 	listTypesSQL = `
 SELECT format('%I.%I', n.nspname, t.typname) AS name
 FROM pg_type t
 JOIN pg_namespace n ON n.oid = t.typnamespace
 WHERE n.nspname = current_schema()
-  AND t.typtype IN ('e', 'd')
-  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = t.oid AND d.deptype = 'e')`
+  AND t.typtype IN ('e', 'd', 'r')
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = t.oid AND d.deptype IN ('e', 'i'))`
 )
 
 type relation struct{ Kind, Name string }

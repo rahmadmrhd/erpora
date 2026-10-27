@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"database/sql"
 	"regexp"
 	"strings"
 	"testing"
@@ -106,6 +107,54 @@ func TestDBFresh_ConfirmAndRebuild(t *testing.T) {
 	mustCLI(t, dsn, 0, "db:seed", "example")
 	if n := dbQuery(t, dsn, notes); n != before {
 		t.Fatalf("db:seed tidak idempoten: %d -> %d", before, n)
+	}
+}
+
+func dbExec(t *testing.T, dsn, stmt string) {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(stmt); err != nil {
+		t.Fatalf("%s: %v", stmt, err)
+	}
+}
+
+// G-8: db:fresh menghapus semua jenis tipe buatan pengguna: enum, domain, range (beserta multirange), fungsi, dan view.
+func TestDBFresh_DropsEnumDomainRangeFunctionAndView(t *testing.T) {
+	dsn := pgtest.Start(t)
+	migrateUp(t, dsn)
+	for _, stmt := range []string{
+		"CREATE TYPE mood AS ENUM ('sad', 'ok')",
+		"CREATE DOMAIN posint AS integer CHECK (VALUE > 0)",
+		"CREATE TYPE floatrange AS RANGE (subtype = float8)",
+		"CREATE FUNCTION twice(x integer) RETURNS integer LANGUAGE sql AS 'SELECT x * 2'",
+		"CREATE TABLE zz_probe (id integer, m mood, r floatrange)",
+		"CREATE VIEW zz_probe_v AS SELECT id FROM zz_probe",
+		"CREATE SEQUENCE zz_seq",
+	} {
+		dbExec(t, dsn, stmt)
+	}
+	const userTypes = "SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype IN ('e', 'd', 'r', 'm')"
+	if n := dbQuery(t, dsn, userTypes); n < 4 { // mood, posint, floatrange, multirange-nya
+		t.Fatalf("persiapan: tipe pengguna = %d, want >= 4", n)
+	}
+	out, code := cliRun(t, dsn, nil, "", "db:fresh", "--yes")
+	if code != 0 {
+		t.Fatalf("db:fresh: exit %d\n%s", code, out)
+	}
+	if n := dbQuery(t, dsn, userTypes); n != 0 {
+		t.Errorf("tipe enum/domain/range tersisa setelah db:fresh: %d", n)
+	}
+	for q, what := range map[string]string{
+		"SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'twice'": "fungsi",
+		"SELECT count(*) FROM pg_class WHERE relname IN ('zz_probe', 'zz_probe_v', 'zz_seq')":                                             "tabel/view/sequence",
+	} {
+		if n := dbQuery(t, dsn, q); n != 0 {
+			t.Errorf("%s tersisa setelah db:fresh: %d", what, n)
+		}
 	}
 }
 
