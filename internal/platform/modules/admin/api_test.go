@@ -157,6 +157,9 @@ func (f fixtureAPI) do(method, target, body string, hdr map[string]string) *http
 		rd = strings.NewReader(body)
 	}
 	req := httptest.NewRequest(method, target, rd)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
@@ -471,24 +474,46 @@ func TestAction_IfMatchMismatch412(t *testing.T) {
 	}
 }
 
-func TestAction_BodyValidation(t *testing.T) {
+func TestAction_BodyStrict(t *testing.T) {
 	f := setup(t, allow{})
-	for name, body := range map[string]string{
-		"field tak dikenal": `{"withDeps":true,"bogus":1}`,
-		"dua objek":         `{} {}`,
-		"bukan objek":       `[1]`,
-		"terlalu besar":     `{"withDeps":false,"x":"` + strings.Repeat("a", 5000) + `"}`,
-	} {
-		rec := f.do("POST", "/api/platform/modules/acme.example/install", body, nil)
-		if rec.Code != 400 || errOf(t, rec).Error.Code != "bad_request" {
-			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
-		}
+	const install = "/api/platform/modules/acme.example/install"
+	cases := []struct {
+		name, body string
+		hdr        map[string]string
+		status     int
+		code       string
+		detail     string
+		field      string
+	}{
+		{"field tak dikenal", `{"withDeps":true,"x":1}`, nil, 422, "validation_failed", "unknown_field", "x"},
+		{"terlalu besar", `{"withDeps":false,"x":"` + strings.Repeat("a", 5<<10) + `"}`, nil, 400, "bad_request", "body_too_large", ""},
+		{"content type salah", `{}`, map[string]string{"Content-Type": "text/plain"}, 400, "bad_request", "unsupported_media_type", ""},
+		{"dua objek", `{"enable":true}{"enable":false}`, nil, 400, "bad_request", "trailing_data", ""},
+		{"bukan objek", `[1]`, nil, 400, "bad_request", "expected_object", ""},
+		{"tipe salah", `{"enable":"ya"}`, nil, 422, "validation_failed", "invalid_type", "enable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := f.do("POST", install, tc.body, tc.hdr)
+			if rec.Code != tc.status || errOf(t, rec).Error.Code != tc.code {
+				t.Fatalf("%d %s", rec.Code, rec.Body)
+			}
+			var ds []map[string]string
+			_ = json.Unmarshal(errOf(t, rec).Error.Details, &ds)
+			if len(ds) == 0 || ds[0]["code"] != tc.detail || ds[0]["field"] != tc.field {
+				t.Errorf("details = %v, want code %q field %q", ds, tc.detail, tc.field)
+			}
+		})
+	}
+	// Body kosong tanpa Content-Type diteruskan ke backend.
+	if rec := f.do("POST", install, "", nil); rec.Code != 200 {
+		t.Errorf("body kosong: %d %s", rec.Code, rec.Body)
 	}
 	if rec := f.do("POST", "/api/platform/modules/acme.example/enable", `{"withDeps":true}`, nil); rec.Code != 400 {
 		t.Errorf("withDeps hanya untuk install: %d", rec.Code)
 	}
-	if len(f.be.execReqs) != 0 {
-		t.Error("Execute tidak boleh dipanggil pada body tidak valid")
+	if len(f.be.execReqs) != 1 { // hanya panggilan body kosong
+		t.Errorf("Execute dipanggil %d kali, want 1 (body tidak valid tidak boleh sampai backend)", len(f.be.execReqs))
 	}
 }
 

@@ -3,11 +3,11 @@
 package httpapi
 
 import (
-	"encoding/json"
-	"log/slog"
+	"fmt"
 	"net/http"
 
 	"erpora/modules/example/contract"
+	"erpora/sdk/httpx"
 )
 
 // Handlers menampung handler HTTP modul.
@@ -21,19 +21,8 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	n, err := h.notes.Count(r.Context())
 	if err != nil {
 		// Detail 5xx hanya di log (api-guidelines §8); respons tetap generik.
-		slog.ErrorContext(r.Context(), "gagal membaca jumlah notes", "error", err)
-		body := map[string]any{"code": "internal_error", "message": "terjadi kesalahan pada server"}
-		if id := w.Header().Get("X-Request-Id"); id != "" {
-			body["requestId"] = id
-		}
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": body})
+		httpx.RespondError(w, r, fmt.Errorf("gagal membaca jumlah notes: %w", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]int64{"noteCount": n}})
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteData(w, http.StatusOK, map[string]int64{"noteCount": n})
 }

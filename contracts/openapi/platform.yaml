@@ -150,7 +150,9 @@ paths:
         - { $ref: 'erp:common#/components/requestHeaders/IdempotencyKey' }
       requestBody:
         required: false
-        description: Hanya untuk install; maksimal 4 KiB, field tak dikenal ditolak (400).
+        description: >
+          Hanya untuk install; maksimal 4 KiB, Content-Type application/json, satu objek, field tak dikenal ditolak
+          (422 unknown_field). Body kosong diterima.
         content:
           application/json:
             schema: { $ref: '#/components/schemas/ActionBody' }
@@ -185,7 +187,12 @@ paths:
                     properties:
                       operationId: { $ref: 'erp:common#/components/schemas/Uuid' }
                       status: { type: string, enum: [running] }
-        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '400':
+          description: >
+            bad_request dengan error.details[].code salah satu: unsupported_media_type, body_too_large, malformed_json,
+            expected_object, trailing_data, too_deep, array_too_long, duplicate_key, atau invalid (withDeps/enable bukan untuk
+            install).
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
         '409':
@@ -195,6 +202,7 @@ paths:
         '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
         '422':
           description: >
+            validation_failed dengan error.details[].code unknown_field atau invalid_type (body aksi), atau
             business_rule_violated dengan error.details[].code salah satu: module_required, dependency_not_ready,
             dependents_active, module_incompatible (satu detail per masalah), downgrade_not_supported.
           content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }

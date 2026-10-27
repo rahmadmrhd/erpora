@@ -18,6 +18,7 @@ import (
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/store"
 	"erpora/internal/platform/tenancy"
+	"erpora/sdk/httpx"
 	"erpora/sdk/module"
 )
 
@@ -77,8 +78,14 @@ func (a *API) Register(r module.Registrar) error {
 	r.Handle(http.MethodGet, "/modules", permRead, a.wrap(a.list))
 	r.Handle(http.MethodGet, "/modules/{key}", permRead, a.wrap(a.get))
 	r.Handle(http.MethodGet, "/modules/{key}/{sub}", permRead, a.wrap(a.getSub))
-	r.Handle(http.MethodPost, "/modules/{key}/{operation}", permManage, a.wrap(a.action))
+	r.Handle(http.MethodPost, "/modules/{key}/{operation}", permManage, a.wrap(a.action), module.MaxBodyBytes(4<<10))
 	return nil
+}
+
+// actionBody adalah body opsional POST .../install (batas 4 KiB lewat opsi route, keputusan 20).
+type actionBody struct {
+	WithDeps bool `json:"withDeps"`
+	Enable   bool `json:"enable"`
 }
 
 type handlerFn func(w http.ResponseWriter, r *http.Request, be Backend, t tenancy.TenantID)
@@ -218,9 +225,9 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 		httpserver.WriteError(w, r, http.StatusNotFound, "not_found", "endpoint tidak ditemukan", nil)
 		return
 	}
-	body, err := decodeAction(w, r)
+	body, err := httpx.DecodeJSON[actionBody](w, r, httpx.AllowEmptyBody())
 	if err != nil {
-		badRequest(w, r, "body", err.Error())
+		httpx.RespondError(w, r, err)
 		return
 	}
 	if op != lifecycle.OpInstall && (body.WithDeps || body.Enable) {
