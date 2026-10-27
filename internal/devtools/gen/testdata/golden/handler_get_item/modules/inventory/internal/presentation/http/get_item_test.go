@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -40,6 +41,11 @@ func getItemRestore(t *testing.T) {
 	t.Cleanup(func() { getItemFunc = orig })
 }
 
+// getItemIsDefault melaporkan apakah titik sambung masih fungsi bawaan kerangka (501).
+func getItemIsDefault() bool {
+	return reflect.ValueOf(getItemFunc).Pointer() == reflect.ValueOf(defaultGetItem).Pointer()
+}
+
 // Kerangka belum disambungkan ke use case: harus menjawab 501, bukan panik atau 200 palsu.
 func TestGetItem_NotImplementedByDefault(t *testing.T) {
 	rec := getItemDo("owner", getItemSampleID, "")
@@ -60,6 +66,9 @@ func TestGetItem_InvalidIDIs404(t *testing.T) {
 // 404 not_found (bukan 403) tanpa membocorkan isi record. Kerangka ini memakai "principal" palsu di context; setelah
 // sdk/authz.Check/authz.Filter tersedia, ganti dengan dua principal sungguhan (user A vs user B) dan pertahankan asersinya.
 func TestGetItem_IDOR_OtherPrincipalGets404(t *testing.T) {
+	if !getItemIsDefault() {
+		t.Fatal("getItemFunc sudah disambungkan ke use case sungguhan, sedangkan test IDOR kerangka ini memakai stub (principal palsu) yang menimpa titik sambung dan tetap hijau walau pembatasan scope di use case hilang. Tulis ulang test ini terhadap use case sungguhan di atas repository yang menolak record milik principal lain (dua principal: A vs B), lalu hapus pemeriksaan ini.")
+	}
 	getItemRestore(t)
 	getItemFunc = func(ctx context.Context, id string) (GetItemData, error) {
 		if ctx.Value(getItemPrincipalKey{}) != "owner" {

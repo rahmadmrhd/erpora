@@ -23,7 +23,11 @@ var errListStockCountsNotImplemented = errors.New("ListStockCounts belum disambu
 
 // listStockCountsFunc adalah titik sambung use case (page mulai 1). Ganti dengan pemanggilan use case di application/.
 // Use case WAJIB membatasi hasil ke scope pemanggil (sdk/authz.Filter setelah PRD-001).
-var listStockCountsFunc = func(_ context.Context, _, _ int) ([]ListStockCountsData, int64, error) {
+var listStockCountsFunc = defaultListStockCounts
+
+// defaultListStockCounts adalah titik sambung bawaan kerangka: 501 sampai use case disambungkan.
+// (test NotImplementedByDefault memeriksanya).
+func defaultListStockCounts(_ context.Context, _, _ int) ([]ListStockCountsData, int64, error) {
 	return nil, 0, errListStockCountsNotImplemented
 }
 

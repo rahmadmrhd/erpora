@@ -25,9 +25,14 @@ type [[.Name]]Data struct {
 
 var err[[.Name]]NotImplemented = errors.New("[[.Name]] belum disambungkan ke use case")
 
-// [[.Camel]]Func adalah titik sambung use case. Ganti dengan pemanggilan use case di application/. Pembuatan resource
+// [[.Camel]]Func adalah titik sambung use case; idempotencyKey adalah nilai header Idempotency-Key (kosong = tidak dikirim).
+// Ganti dengan pemanggilan use case di application/. Pembuatan resource
 // WAJIB idempoten terhadap header Idempotency-Key (api-guidelines §7.2) dan memberi Version 1.
-var [[.Camel]]Func = func(_ context.Context, _ [[.Name]]Request) ([[.Name]]Data, error) {
+var [[.Camel]]Func = default[[.Name]]
+
+// default[[.Name]] adalah titik sambung bawaan kerangka: 501 sampai use case disambungkan.
+// (test NotImplementedByDefault memeriksanya).
+func default[[.Name]](_ context.Context, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
 	return [[.Name]]Data{}, err[[.Name]]NotImplemented
 }
 
@@ -39,7 +44,7 @@ func [[.Name]]() http.Handler {
 			httpx.RespondError(w, r, err)
 			return
 		}
-		out, err := [[.Camel]]Func(r.Context(), req)
+		out, err := [[.Camel]]Func(r.Context(), r.Header.Get("Idempotency-Key"), req)
 		switch {
 		case err == nil:
 			w.Header().Set("Location", "[[.BasePath]][[.Path]]/"+out.ID)

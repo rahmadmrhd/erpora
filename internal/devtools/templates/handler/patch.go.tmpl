@@ -31,7 +31,11 @@ var err[[.Name]]NotImplemented = errors.New("[[.Name]] belum disambungkan ke use
 // [[.Camel]]Func adalah titik sambung use case; ifMatch adalah nilai header If-Match (kosong = tidak dikirim). Ganti dengan
 // pemanggilan use case di application/. Use case WAJIB membatasi record ke scope pemanggil (domain.ErrNotFound bila di
 // luar scope) dan memeriksa ifMatch terhadap Version (412 version_mismatch lewat *httpx.Error).
-var [[.Camel]]Func = func(_ context.Context, _, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
+var [[.Camel]]Func = default[[.Name]]
+
+// default[[.Name]] adalah titik sambung bawaan kerangka: 501 sampai use case disambungkan. Test IDOR hasil generate
+// gagal bila [[.Camel]]Func sudah bukan fungsi ini (lihat Test[[.Name]]_IDOR_*).
+func default[[.Name]](_ context.Context, _, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
 	return [[.Name]]Data{}, err[[.Name]]NotImplemented
 }
 

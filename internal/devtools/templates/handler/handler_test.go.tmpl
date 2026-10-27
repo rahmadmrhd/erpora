@@ -5,7 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	[[if .HasID]]"reflect"
+	[[end]]"strings"
 	"testing"
 
 	[[if .HasID]]"[[.Mod.GoPath]]/internal/domain"
@@ -43,6 +44,11 @@ func [[.Camel]]Restore(t *testing.T) {
 	t.Cleanup(func() { [[.Camel]]Func = orig })
 }
 
+[[if .HasID]]// [[.Camel]]IsDefault melaporkan apakah titik sambung masih fungsi bawaan kerangka (501).
+func [[.Camel]]IsDefault() bool {
+	return reflect.ValueOf([[.Camel]]Func).Pointer() == reflect.ValueOf(default[[.Name]]).Pointer()
+}
+[[end]]
 // Kerangka belum disambungkan ke use case: harus menjawab 501, bukan panik atau 200 palsu.
 func Test[[.Name]]_NotImplementedByDefault(t *testing.T) {
 	rec := [[.Camel]]Do("owner", [[.Camel]]SampleID, [[if .HasBody]][[.Camel]]Body[[else]]""[[end]])
@@ -63,13 +69,16 @@ func Test[[.Name]]_InvalidIDIs404(t *testing.T) {
 // 404 not_found (bukan 403) tanpa membocorkan isi record. Kerangka ini memakai "principal" palsu di context; setelah
 // sdk/authz.Check/authz.Filter tersedia, ganti dengan dua principal sungguhan (user A vs user B) dan pertahankan asersinya.
 func Test[[.Name]]_IDOR_OtherPrincipalGets404(t *testing.T) {
+	if ![[.Camel]]IsDefault() {
+		t.Fatal("[[.Camel]]Func sudah disambungkan ke use case sungguhan, sedangkan test IDOR kerangka ini memakai stub (principal palsu) yang menimpa titik sambung dan tetap hijau walau pembatasan scope di use case hilang. Tulis ulang test ini terhadap use case sungguhan di atas repository yang menolak record milik principal lain (dua principal: A vs B), lalu hapus pemeriksaan ini.")
+	}
 	[[.Camel]]Restore(t)
 	[[if eq .Kind "get_item"]][[.Camel]]Func = func(ctx context.Context, id string) ([[.Name]]Data, error) {
 		if ctx.Value([[.Camel]]PrincipalKey{}) != "owner" {
 			return [[.Name]]Data{}, domain.ErrNotFound
 		}
 		return [[.Name]]Data{ID: id, Title: "rahasia-pemilik", Version: 1}, nil
-	}[[end]][[if eq .Kind "post_action"]][[.Camel]]Func = func(ctx context.Context, id, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
+	}[[end]][[if eq .Kind "post_action"]][[.Camel]]Func = func(ctx context.Context, id, _, _ string, _ [[.Name]]Request) ([[.Name]]Data, error) {
 		if ctx.Value([[.Camel]]PrincipalKey{}) != "owner" {
 			return [[.Name]]Data{}, domain.ErrNotFound
 		}
@@ -138,7 +147,7 @@ func Test[[.Name]]_EmptyListIsArray(t *testing.T) {
 
 [[end]][[if eq .Kind "post_create"]]func Test[[.Name]]_CreatesWithLocation(t *testing.T) {
 	[[.Camel]]Restore(t)
-	[[.Camel]]Func = func(_ context.Context, req [[.Name]]Request) ([[.Name]]Data, error) {
+	[[.Camel]]Func = func(_ context.Context, _ string, req [[.Name]]Request) ([[.Name]]Data, error) {
 		return [[.Name]]Data{ID: [[.Camel]]SampleID, Title: req.Title, Version: 1}, nil
 	}
 	rec := [[.Camel]]Do("owner", "", [[.Camel]]Body)
@@ -147,6 +156,28 @@ func Test[[.Name]]_EmptyListIsArray(t *testing.T) {
 	}
 	if got := rec.Header().Get("Location"); got != "[[.BasePath]][[.Path]]/"+[[.Camel]]SampleID {
 		t.Errorf("Location = %q", got)
+	}
+}
+
+[[end]][[if or (eq .Kind "post_create") (eq .Kind "post_action")]]// api-guidelines §7.2: header Idempotency-Key diteruskan ke use case (yang WAJIB idempoten terhadapnya).
+func Test[[.Name]]_ForwardsIdempotencyKey(t *testing.T) {
+	[[.Camel]]Restore(t)
+	var got string
+	[[if eq .Kind "post_create"]][[.Camel]]Func = func(_ context.Context, key string, _ [[.Name]]Request) ([[.Name]]Data, error) {
+		got = key
+		return [[.Name]]Data{ID: [[.Camel]]SampleID, Version: 1}, nil
+	}[[else]][[.Camel]]Func = func(_ context.Context, id, _, key string, _ [[.Name]]Request) ([[.Name]]Data, error) {
+		got = key
+		return [[.Name]]Data{ID: id, Version: 2}, nil
+	}[[end]]
+	mux := http.NewServeMux()
+	mux.Handle("[[.Method]] [[.Path]]", [[.Name]]())
+	req := httptest.NewRequest("[[.Method]]", strings.ReplaceAll("[[.Path]]", "{id}", [[.Camel]]SampleID), strings.NewReader([[.Camel]]Body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "kunci-123")
+	mux.ServeHTTP(httptest.NewRecorder(), req)
+	if got != "kunci-123" {
+		t.Errorf("Idempotency-Key ke use case = %q, want kunci-123", got)
 	}
 }
 

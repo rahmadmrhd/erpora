@@ -23,7 +23,11 @@ var err[[.Name]]NotImplemented = errors.New("[[.Name]] belum disambungkan ke use
 
 // [[.Camel]]Func adalah titik sambung use case (page mulai 1). Ganti dengan pemanggilan use case di application/.
 // Use case WAJIB membatasi hasil ke scope pemanggil (sdk/authz.Filter setelah PRD-001).
-var [[.Camel]]Func = func(_ context.Context, _, _ int) ([][[.Name]]Data, int64, error) {
+var [[.Camel]]Func = default[[.Name]]
+
+// default[[.Name]] adalah titik sambung bawaan kerangka: 501 sampai use case disambungkan.
+// (test NotImplementedByDefault memeriksanya).
+func default[[.Name]](_ context.Context, _, _ int) ([][[.Name]]Data, int64, error) {
 	return nil, 0, err[[.Name]]NotImplemented
 }
 

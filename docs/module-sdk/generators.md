@@ -44,8 +44,8 @@ Setelah `make:module`, langkah lanjutan dijalankan otomatis: `go mod tidy` (modu
 
 Hal yang perlu diketahui:
 
-- Handler hasil generate memakai hook use case tingkat paket (`<camel>Func`) yang secara bawaan menjawab `501` sampai Anda menghubungkannya ke use case.
-- Test IDOR hasil generate memakai principal tiruan dan menegaskan `404` tanpa kebocoran. Upgrade ke `authz.Check`/`authz.Filter` saat PRD-001 menyediakannya.
+- Handler hasil generate memakai hook use case tingkat paket (`<camel>Func`, bawaan `default<Name>`) yang menjawab `501` sampai Anda menghubungkannya ke use case. Header `If-Match` (patch, delete, aksi) dan `Idempotency-Key` (create, aksi) diteruskan ke hook sebagai argumen; use case wajib memeriksanya (api-guidelines section 7).
+- Test IDOR hasil generate (endpoint ber-ID) memakai stub principal palsu yang menimpa hook dan menegaskan `404` tanpa kebocoran. Karena stub itu tetap hijau walau pembatasan scope di use case sungguhan hilang, test tersebut **gagal dengan pesan keras begitu hook sudah disambungkan** (`<camel>Func` bukan lagi `default<Name>`): tulis ulang terhadap use case sungguhan di atas repository yang menolak record milik principal lain (dua principal A vs B; `authz.Check`/`authz.Filter` setelah PRD-001), lalu hapus pemeriksaannya. Penggantian hook global dengan DI penuh (`*Handlers` + port use case) belum dikerjakan; dicatat sebagai pekerjaan lanjutan.
 - Tabel modul **tidak** punya kolom `tenant_id`; tenant ditangani lapisan `sdk/data` (ADR-004).
 - Generator tidak menghasilkan integration test repository (keputusan ★2, bagian 9): tulis manual lewat platform, mengikuti `internal/app/reference_modules_integration_test.go`.
 

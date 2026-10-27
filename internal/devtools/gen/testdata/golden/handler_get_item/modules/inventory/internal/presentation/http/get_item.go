@@ -27,7 +27,11 @@ var errGetItemNotImplemented = errors.New("GetItem belum disambungkan ke use cas
 // Use case WAJIB membatasi pencarian ke scope pemanggil dan mengembalikan domain.ErrNotFound untuk record yang tidak ada
 // ATAU di luar scope (404, bukan 403; PRD-001 FR-119). Setelah sdk/authz tersedia (PRD-001), muat record lewat
 // authz.Check/authz.Filter.
-var getItemFunc = func(_ context.Context, _ string) (GetItemData, error) {
+var getItemFunc = defaultGetItem
+
+// defaultGetItem adalah titik sambung bawaan kerangka: 501 sampai use case disambungkan. Test IDOR hasil generate
+// gagal bila getItemFunc sudah bukan fungsi ini (lihat TestGetItem_IDOR_*).
+func defaultGetItem(_ context.Context, _ string) (GetItemData, error) {
 	return GetItemData{}, errGetItemNotImplemented
 }
 

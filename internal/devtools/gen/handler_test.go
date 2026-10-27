@@ -206,6 +206,35 @@ func modulWithAllHandlers(t *testing.T) (root, modDir string, env []string) {
 	return root, modDir, env
 }
 
+// G-1 (minimal): test IDOR hasil generate memakai stub principal palsu yang menimpa titik sambung. Begitu titik sambung
+// disambungkan ke use case sungguhan, test itu harus GAGAL dengan pesan keras (bukan tetap hijau), supaya developer
+// menulis ulang test IDOR terhadap use case sungguhan dan repository yang menolak record milik principal lain.
+func TestMakeHandler_IDORTestFailsOnceHookIsWired(t *testing.T) {
+	if testing.Short() {
+		t.Skip("membangun modul hasil generate; dilewati pada -short")
+	}
+	root, modDir, env := modulWithAllHandlers(t)
+	_ = root
+	handlerFile := filepath.Join(modDir, "internal", "presentation", "http", "get_order.go")
+	src, err := os.ReadFile(handlerFile) //nolint:gosec // salinan sementara test
+	if err != nil {
+		t.Fatal(err)
+	}
+	wired := strings.Replace(string(src), "var getOrderFunc = defaultGetOrder", "var getOrderFunc = func(ctx context.Context, id string) (GetOrderData, error) { return GetOrderData{ID: id}, nil }", 1)
+	if wired == string(src) {
+		t.Fatalf("titik sambung getOrderFunc tidak ditemukan di get_order.go:\n%s", src)
+	}
+	if err := os.WriteFile(handlerFile, []byte(wired), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "test", "./internal/presentation/http/", "-run", "TestGetOrder_IDOR")
+	cmd.Dir, cmd.Env = modDir, env
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "sudah disambungkan ke use case sungguhan") {
+		t.Fatalf("test IDOR harus gagal dengan pesan keras setelah titik sambung disambungkan; err=%v\n%s", err, out)
+	}
+}
+
 func TestMakeHandler_AllKindsCompileAndPassTests(t *testing.T) {
 	if testing.Short() {
 		t.Skip("membangun modul hasil generate; dilewati pada -short")

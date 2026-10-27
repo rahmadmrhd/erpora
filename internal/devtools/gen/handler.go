@@ -249,8 +249,10 @@ func failFunc(kind, name string) string {
 	case "get_collection":
 		return "func(context.Context, int, int) ([]" + name + "Data, int64, error) { return nil, 0, " + boom + " }"
 	case "post_create":
-		return "func(context.Context, " + name + "Request) (" + name + "Data, error) { return " + name + "Data{}, " + boom + " }"
-	case "post_action", "patch":
+		return "func(context.Context, string, " + name + "Request) (" + name + "Data, error) { return " + name + "Data{}, " + boom + " }"
+	case "post_action":
+		return "func(context.Context, string, string, string, " + name + "Request) (" + name + "Data, error) { return " + name + "Data{}, " + boom + " }"
+	case "patch":
 		return "func(context.Context, string, string, " + name + "Request) (" + name + "Data, error) { return " + name + "Data{}, " + boom + " }"
 	default: // delete
 		return "func(context.Context, string, string) error { return " + boom + " }"
