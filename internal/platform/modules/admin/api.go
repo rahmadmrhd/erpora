@@ -45,7 +45,7 @@ type Backend interface {
 	History(ctx context.Context, t tenancy.TenantID, key string, page, pageSize int) ([]store.Event, int64, error)
 	Operation(ctx context.Context, t tenancy.TenantID, id uuid.UUID) (store.Operation, error)
 	Execute(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error)
-	RetryModule(ctx context.Context, t tenancy.TenantID, key, actor string) (lifecycle.Result, error)
+	RetryModule(ctx context.Context, t tenancy.TenantID, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error)
 }
 
 // API adalah handler /api/platform/modules. Backend di-bind setelah perakitan (route didaftarkan lebih dulu
@@ -254,19 +254,19 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 			}
 			done <- o
 		}()
+		onStarted := func(id uuid.UUID) {
+			select {
+			case started <- id:
+			default:
+			}
+		}
 		if op == lifecycle.OpRetry {
-			res, err := be.RetryModule(ctx, t, key, APIActor)
+			res, err := be.RetryModule(ctx, t, key, APIActor, onStarted)
 			o = outcome{results: []lifecycle.Result{res}, err: err}
 			return
 		}
 		res, err := be.Execute(ctx, lifecycle.Request{
-			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor,
-			OnStarted: func(id uuid.UUID) {
-				select {
-				case started <- id:
-				default:
-				}
-			},
+			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor, OnStarted: onStarted,
 		})
 		o = outcome{results: res, err: err}
 	}()

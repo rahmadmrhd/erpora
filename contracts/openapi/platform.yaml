@@ -135,7 +135,7 @@ paths:
       description: >
         Hanya aktif di development atau dengan ERP_MODULES_ADMIN_API=true (selain itu 404 not_found).
         Sinkron dengan batas tunggu 30 detik; bila lebih lama -> 202 + Location ke operations/{id} dan operasi
-        berlanjut di server (retry hanya dijawab setelah selesai). Operasi yang berstatus failed tetap 200 dengan
+        berlanjut di server (berlaku juga untuk retry). Operasi yang berstatus failed tetap 200 dengan
         operations[].status = failed. Idempoten: operasi yang status targetnya sudah tercapai -> 200 dengan
         operations kosong. Idempotency-Key diterima tetapi tidak disimpan. Kode error lifecycle (FR-19) ada di
         error.details[].code.

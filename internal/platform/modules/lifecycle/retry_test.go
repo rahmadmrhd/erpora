@@ -114,17 +114,29 @@ func TestRetry_OtherTenantOperationNotFound(t *testing.T) {
 
 func TestRetryModule_UsesLastOperation(t *testing.T) {
 	e, _, _ := failedInstall(t)
-	res, err := e.svc.RetryModule(context.Background(), tenantA, "acme.a", "cli:tester")
+	res, err := e.svc.RetryModule(context.Background(), tenantA, "acme.a", "cli:tester", nil)
 	if err != nil || res.Status != "succeeded" || res.To != runtime.StatusInstalled {
 		t.Fatalf("RetryModule = %+v, %v", res, err)
 	}
-	_, err = e.svc.RetryModule(context.Background(), tenantA, "acme.nope", "cli:tester")
+	_, err = e.svc.RetryModule(context.Background(), tenantA, "acme.nope", "cli:tester", nil)
 	wantCode(t, err, CodeModuleNotFound)
 }
 
 func TestRetryModule_NoOperationsIsInvalidTransition(t *testing.T) {
 	rec := &fxRec{}
 	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
-	_, err := e.svc.RetryModule(context.Background(), tenantA, "acme.a", "cli:tester")
+	_, err := e.svc.RetryModule(context.Background(), tenantA, "acme.a", "cli:tester", nil)
 	wantCode(t, err, CodeInvalidTransition)
+}
+
+func TestRetryModule_CallsOnStartedWithOperationID(t *testing.T) {
+	e, _, _ := failedInstall(t)
+	var got uuid.UUID
+	res, err := e.svc.RetryModule(context.Background(), tenantA, "acme.a", "cli:tester", func(id uuid.UUID) { got = id })
+	if err != nil || res.Status != "succeeded" {
+		t.Fatalf("RetryModule = %+v, %v", res, err)
+	}
+	if got == uuid.Nil || got != res.OperationID {
+		t.Errorf("onStarted = %s, operasi = %s", got, res.OperationID)
+	}
 }

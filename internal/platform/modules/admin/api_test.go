@@ -39,7 +39,7 @@ type fakeBE struct {
 	mods     []lifecycle.ModuleState
 	rev      int64
 	execFn   func(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error)
-	retryFn  func(ctx context.Context, key, actor string) (lifecycle.Result, error)
+	retryFn  func(ctx context.Context, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error)
 	ops      map[uuid.UUID]store.Operation
 	events   []store.Event
 	execReqs []lifecycle.Request
@@ -108,10 +108,10 @@ func (f *fakeBE) Execute(ctx context.Context, req lifecycle.Request) ([]lifecycl
 	return []lifecycle.Result{{Module: req.Key, Op: req.Op, From: runtime.StatusInstalled, To: runtime.StatusEnabled, Status: "succeeded", OperationID: opID}}, nil
 }
 
-func (f *fakeBE) RetryModule(ctx context.Context, _ tenancy.TenantID, key, actor string) (lifecycle.Result, error) {
+func (f *fakeBE) RetryModule(ctx context.Context, _ tenancy.TenantID, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error) {
 	f.retried = append(f.retried, key+"|"+actor)
 	if f.retryFn != nil {
-		return f.retryFn(ctx, key, actor)
+		return f.retryFn(ctx, key, actor, onStarted)
 	}
 	return lifecycle.Result{Module: key, Op: lifecycle.OpInstall, Status: "succeeded", OperationID: opID}, nil
 }
@@ -310,7 +310,9 @@ func TestAction_ErrorMapping(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := setup(t, allow{})
 			f.be.execFn = func(context.Context, lifecycle.Request) ([]lifecycle.Result, error) { return nil, tc.err }
-			f.be.retryFn = func(context.Context, string, string) (lifecycle.Result, error) { return lifecycle.Result{}, tc.err }
+			f.be.retryFn = func(context.Context, string, string, func(uuid.UUID)) (lifecycle.Result, error) {
+				return lifecycle.Result{}, tc.err
+			}
 			rec := f.do("POST", "/api/platform/modules/acme.example/"+tc.op, "", nil)
 			if rec.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.wantStatus, rec.Body)
@@ -433,6 +435,27 @@ func TestAction_SlowOperationReturns202(t *testing.T) {
 		t.Errorf("Location = %q", loc)
 	}
 	if !strings.Contains(rec.Body.String(), `"operationId":"`+opID.String()+`"`) || !strings.Contains(rec.Body.String(), `"status":"running"`) {
+		t.Errorf("body = %s", rec.Body)
+	}
+}
+
+// Keputusan 7 berlaku untuk semua mutasi, termasuk retry: lewat SyncWait -> 202 + Location ke operasi retry.
+func TestAction_SlowRetryReturns202(t *testing.T) {
+	f := setup(t, allow{})
+	f.api.syncWait = 30 * time.Millisecond
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	retryOp := uuid.MustParse("0190a1b2-0000-7000-8000-0000000000aa")
+	f.be.retryFn = func(_ context.Context, _, _ string, onStarted func(uuid.UUID)) (lifecycle.Result, error) {
+		onStarted(retryOp)
+		<-release
+		return lifecycle.Result{}, nil
+	}
+	rec := f.do("POST", "/api/platform/modules/acme.example/retry", "", nil)
+	if rec.Code != 202 || rec.Header().Get("Location") != "/api/platform/modules/operations/"+retryOp.String() {
+		t.Fatalf("%d loc=%q %s", rec.Code, rec.Header().Get("Location"), rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"running"`) {
 		t.Errorf("body = %s", rec.Body)
 	}
 }
