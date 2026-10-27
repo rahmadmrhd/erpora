@@ -11,6 +11,9 @@ type Package struct {
 	Imports     []string
 	TestImports []string // impor file _test.go (internal + eksternal); hanya dipakai aturan D2, D7, D8 (Q26)
 	GoFiles     []string // file non-test, relatif terhadap Dir
+	// FileImports: nama file non-test (relatif Dir) -> impor file itu; gabungan semua varian build.
+	// Dipakai aturan DEVTOOLS yang berlaku per file (PRD-000 FR-22.1).
+	FileImports map[string][]string
 }
 
 // GoMod adalah ringkasan satu go.mod.

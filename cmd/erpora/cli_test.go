@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
 )
 
@@ -16,7 +17,8 @@ func run(t *testing.T, args ...string) (string, error) {
 	root := newRootCmd(&out, &errOut)
 	root.SetArgs(args)
 	err := root.Execute()
-	return out.String() + errOut.String(), err
+	// Banner flavor dev (stderr) bukan bagian dari keluaran yang dibandingkan test.
+	return out.String() + stripBanner(errOut.String()), err
 }
 
 func clearEnv(t *testing.T) {
@@ -35,7 +37,7 @@ func TestVersion_PrintsAllFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"platform:", "sdk: 0.1.0", "commit:", "built:", "flavor: release"} {
+	for _, want := range []string{"platform:", "sdk: 0.1.0", "commit:", "built:", "flavor: " + buildinfo.Flavor()} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}

@@ -150,6 +150,25 @@ func Check(r Repo) []Violation {
 			}
 		}
 
+		// DEVTOOLS (PRD-000 FR-22.1): developer tools hanya masuk lewat cmd/erpora/devtools_on.go, per file.
+		if !underPath(rp, "internal/devtools") {
+			files := make([]string, 0, len(p.FileImports))
+			for f := range p.FileImports {
+				files = append(files, f)
+			}
+			sort.Strings(files)
+			for _, f := range files {
+				if p.ImportPath == rootModule+"/cmd/erpora" && f == "devtools_on.go" {
+					continue
+				}
+				for _, imp := range p.FileImports[f] {
+					if underPath(imp, rootModule+"/internal/devtools") {
+						add("DEVTOOLS", p.ImportPath, f+": impor "+imp+" hanya boleh dari cmd/erpora/devtools_on.go (PRD-000 FR-22.1)")
+					}
+				}
+			}
+		}
+
 		for _, f := range p.GoFiles {
 			if strings.HasSuffix(f, "_test.go") {
 				continue

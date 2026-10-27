@@ -56,6 +56,8 @@ tasks:
     cmds:
       - for: { var: GO_MODULES }
         cmd: go -C "{{.ITEM}}" test {{if ne OS "windows"}}-race{{end}} ./...
+      # Flavor dev: banner, grup, dan command developer tools (cmd/erpora memakai file ber-tag devtools).
+      - go test -tags devtools ./cmd/erpora/...
 
   test:integration:
     desc: Jalankan test integrasi (tag integration) di root module

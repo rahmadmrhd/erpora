@@ -5,10 +5,11 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"erpora/internal/platform/buildinfo"
+	"erpora/internal/devtools"
 )
 
-// registerDevtools menandai flavor "dev"; command `dev` ditambahkan di milestone berikutnya.
-func registerDevtools(_ *cobra.Command) {
-	buildinfo.SetFlavor("dev")
+// registerDevtools menambah developer tools (grup make/db/contracts/devtools), banner dev, dan menandai flavor "dev".
+// Satu-satunya file yang boleh mengimpor erpora/internal/devtools (aturan arch DEVTOOLS).
+func registerDevtools(root *cobra.Command, opts *rootOpts) {
+	devtools.Register(root, devtools.Options{EnvFile: func() string { return opts.envFile }})
 }
