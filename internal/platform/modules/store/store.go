@@ -258,6 +258,13 @@ func (s *Store) StartOperation(ctx context.Context, op Operation) error {
 			Updates(map[string]any{"last_operation_id": op.ID, "updated_at": now()}).Error; err != nil {
 			return fmt.Errorf("store: set last_operation_id: %w", err)
 		}
+		// lastOperationId berubah: ETag (= revision) harus berubah agar klien tidak menerima 304 basi (Q32 B-4/R-4).
+		var rev int64
+		if err := tx.Raw(`INSERT INTO tenant_state (tenant_id, module_state_revision) VALUES (?, 1)
+			ON CONFLICT (tenant_id) DO UPDATE SET module_state_revision = tenant_state.module_state_revision + 1, updated_at = now()
+			RETURNING module_state_revision`, tid(op.TenantID)).Scan(&rev).Error; err != nil {
+			return fmt.Errorf("store: naikkan revision: %w", err)
+		}
 		return nil
 	})
 }

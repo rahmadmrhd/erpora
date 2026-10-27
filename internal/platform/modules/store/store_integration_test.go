@@ -90,10 +90,10 @@ func TestCommit_AtomicWithRevision(t *testing.T) {
 		Events:       []store.Event{{ModuleKey: "acme.x", Event: "enabled", Actor: "test", OperationID: opID}},
 		BumpRevision: true,
 	})
-	if err != nil || rev != 1 {
+	if err != nil || rev != 2 { // StartOperation (R-4) + Commit
 		t.Fatalf("Commit = %d, %v", rev, err)
 	}
-	if got, _ := s.Revision(ctx, tenantA); got != 1 {
+	if got, _ := s.Revision(ctx, tenantA); got != 2 {
 		t.Errorf("Revision = %d", got)
 	}
 	ins, err := s.Installations(ctx, tenantA)
@@ -126,8 +126,27 @@ func TestCommit_AtomicWithRevision(t *testing.T) {
 	if n := count(t, db, "SELECT count(*) FROM module_lifecycle_events WHERE module_key = 'acme.y'"); n != 0 {
 		t.Errorf("event acme.y tersimpan (%d)", n)
 	}
-	if got, _ := s.Revision(ctx, tenantA); got != 1 {
-		t.Errorf("Revision = %d setelah commit gagal, want 1", got)
+	if got, _ := s.Revision(ctx, tenantA); got != 3 {
+		t.Errorf("Revision = %d setelah commit gagal, want 3 (hanya bump StartOperation acme.y; Commit gagal tidak menaikkan)", got)
+	}
+}
+
+// R-4: StartOperation mengubah last_operation_id dan karenanya menaikkan revision (ETag) dalam transaksi yang sama;
+// tanpa itu GET dengan If-None-Match lama menjawab 304 basi selama operasi berjalan.
+func TestStartOperation_BumpsRevision(t *testing.T) {
+	_, _, s := setup(t)
+	ctx := context.Background()
+	before, err := s.Revision(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startOp(t, s, tenantA, "acme.x", "install")
+	after, err := s.Revision(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after <= before {
+		t.Errorf("revision tidak naik setelah StartOperation: %d -> %d", before, after)
 	}
 }
 
