@@ -273,7 +273,7 @@ jobs:
       - name: Bukti binary release tanpa developer tools
         run: |
           ./erpora version | grep -q "flavor: release"
-          for cmd in "make:module x" "doctor"; do
+          for cmd in "make:module x" "make:handler" "make:migration" "make:entity" "make:usecase" "make:contract" "make:command" "make:repository" "db:fresh" "db:seed" "contracts:lint" "contracts:generate" "contracts:breaking" "module:check" "doctor" "release:verify-tag v1"; do
             if out="$(./erpora $cmd 2>&1)"; then echo "perintah dev '$cmd' seharusnya gagal" >&2; exit 1; fi
             echo "$out" | grep -q "unknown command" || { echo "keluaran '$cmd' tidak memuat 'unknown command': $out" >&2; exit 1; }
           done
@@ -314,7 +314,7 @@ jobs:
         shell: pwsh
         run: |
           if (-not ((.\erpora.exe version) -match "flavor: release")) { throw "version harus memuat flavor: release" }
-          foreach ($cmd in @("make:module x", "doctor")) {
+          foreach ($cmd in @("make:module x", "make:handler", "make:migration", "make:entity", "make:usecase", "make:contract", "make:command", "make:repository", "db:fresh", "db:seed", "contracts:lint", "contracts:generate", "contracts:breaking", "module:check", "doctor", "release:verify-tag v1")) {
             $parts = $cmd -split " "
             $out = & .\erpora.exe @parts 2>&1 | Out-String
             if ($LASTEXITCODE -eq 0) { throw "perintah dev '$cmd' seharusnya gagal" }

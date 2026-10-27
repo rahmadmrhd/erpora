@@ -38,7 +38,8 @@ func TestReleaseFlavor_NoDevtoolsPackages(t *testing.T) {
 
 func TestReleaseFlavor_UnknownDevCommands(t *testing.T) {
 	cases := [][]string{
-		{"make:module", "x"}, {"make:handler"}, {"db:fresh"}, {"db:seed"},
+		{"make:module", "x"}, {"make:handler"}, {"make:migration"}, {"make:entity"}, {"make:usecase"}, {"make:contract"}, {"make:command"}, {"make:repository"},
+		{"db:fresh"}, {"db:seed"}, {"contracts:breaking"},
 		{"contracts:lint"}, {"contracts:generate"}, {"module:check"}, {"doctor"},
 		{"release:verify-tag", "v1"},
 	}
