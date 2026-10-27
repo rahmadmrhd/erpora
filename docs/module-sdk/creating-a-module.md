@@ -57,7 +57,7 @@ Aturan yang diperiksa registry:
 | --- | --- |
 | `schema_version` | Harus `"1"`. |
 | `key` | Pola `nama.modul`, huruf kecil dengan tanda hubung. Harus unik. |
-| `slug` | Pola kebab-case. Harus unik dan tidak boleh tercadang (lihat ADR-006 keputusan 7). Dipakai sebagai `/api/{slug}` dan prefix nama command. |
+| `slug` | Pola kebab-case, **maksimal 50 karakter** (tabel goose `goose_module_<slug>` harus muat di identifier PostgreSQL 63 byte; Q32). Harus unik dan tidak boleh tercadang (lihat ADR-006 keputusan 7). Dipakai sebagai `/api/{slug}` dan prefix nama command. |
 | `version` | SemVer. Harus sama dengan tag `modules/<name>/vX.Y.Z` (diperiksa CI rilis, M2d). |
 | `trust` | Hanya `builtin` yang diterima di fase ini. |
 | `compatibility.platform`, `compatibility.sdk`, `dependencies[].version` | Constraint SemVer. Selama 0.x, gunakan `^0.1`. |
