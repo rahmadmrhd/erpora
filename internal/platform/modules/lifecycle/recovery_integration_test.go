@@ -30,10 +30,10 @@ func TestService_FailingMigrationThenRetry(t *testing.T) {
 	r := e.exec(t, OpInstall, "acme.fx-mod")
 	if r.Status != "failed" || r.Error == nil || r.Error.Code != "migration_failed" || r.Error.Step != "migrate" {
 		t.Fatalf("install = %+v (%+v)", r, r.Error)
-	// B-10 (Q32): teks SQL/SQLSTATE dari PostgreSQL tidak boleh ada di message; hanya di log.
-	if strings.Contains(r.Error.Message, "SQLSTATE") || strings.Contains(strings.ToLower(r.Error.Message), "syntax") {
-		t.Errorf("message membocorkan teks SQL: %q", r.Error.Message)
-	}
+		// B-10 (Q32): teks SQL/SQLSTATE dari PostgreSQL tidak boleh ada di message; hanya di log.
+		if strings.Contains(r.Error.Message, "SQLSTATE") || strings.Contains(strings.ToLower(r.Error.Message), "syntax") {
+			t.Errorf("message membocorkan teks SQL: %q", r.Error.Message)
+		}
 	}
 	ins, _ := e.st.Installations(ctx, tenantA)
 	if len(ins) != 1 || ins[0].Status != "failed" || ins[0].PreviousStatus != "available" {
