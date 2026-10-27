@@ -56,6 +56,7 @@ Urutan pemeriksaan: baca body (batas ukuran), body kosong, `Content-Type`, linta
 `details[].field` memakai format api-guidelines §8, mis. `lines[2].itemId`. `httpx.AllowEmptyBody()` membuat body kosong menghasilkan DTO kosong dan tidak mewajibkan `Content-Type` (dipakai endpoint aksi dengan body opsional); body tidak kosong tetap wajib `application/json`.
 
 Arch test `DECODE` menolak `httpx.DecodeJSON`, `json.Unmarshal`, dan `(*json.Decoder).Decode` ke tipe yang memuat tipe bernama dari paket `internal/infrastructure` (termasuk lewat slice, map, atau struct pembungkus). Pengecualian hanya `json.Unmarshal`/`Decode` yang dipanggil di dalam paket infrastructure sendiri (payload jsonb milik adapter); `httpx.DecodeJSON` di paket infrastructure selalu ditolak.
+n**Keterbatasan (Q32 M-8):** aturan `DECODE` memeriksa tipe target pada titik panggilan. Pembungkus generik yang menerima type parameter (mis. `func Bind[T any](r *http.Request) T { ... httpx.DecodeJSON[T](...) }`) tidak ditelusuri: tipe yang memuat model infrastructure yang diteruskan lewat type parameter baru terlihat di situs pemanggilan pembungkus, bukan di dalamnya, dan pembungkus yang menyembunyikan tipe di balik interface atau `any` lolos. Penelusuran instansiasi generik ditunda (belum ada konsumen); sampai saat itu, jangan membungkus `httpx.DecodeJSON` dengan fungsi generik buatan sendiri dan tinjau pembungkus semacam itu secara manual di code review.
 
 ## 3. Opsi route (`module.MaxBodyBytes`, `module.Classify`)
 
@@ -87,6 +88,8 @@ resp, err := c.Get(ctx, "https://api.partner.example/v1/rates")
 
 - Skema `https`; `http` hanya untuk host di `AllowHTTPHosts`. Allowlist host per integrasi (`AllowHosts`: host persis atau `*.example.com`).
 - IP divalidasi sesudah resolve DNS dan dial hanya ke IP tervalidasi (anti DNS rebinding); jawaban DNS campuran publik+privat ditolak; host numerik non-kanonik (`2130706433`, `0x7f000001`, `0177.0.0.1`, `127.1`) ditolak; redirect divalidasi per hop (maks 3).
+- Rentang yang ditolak (security-guidelines §3.3, Q32 M-1) mencakup juga IPv4-compatible, SIIT, NAT64 (global dan local-use), 6to4, Teredo, discard-only, dan rentang dokumentasi.
+- **Keterbatasan: redirect tidak dapat dimatikan** (Q32 M-10). Client selalu mengikuti redirect sampai 3 hop, dengan validasi alamat dan skema per hop. Opsi untuk mematikan redirect (atau membatasinya ke host tertentu) **ditunda sampai konsumen pertama** yang membutuhkannya (OIDC/OAuth di PRD-001); sampai saat itu modul yang tidak boleh mengikuti redirect harus memeriksa `resp.Request.URL` pada respons dan menolak bila host berubah.
 - Timeout koneksi 5 detik, total 30 detik, respons maksimal 10 MiB (melewati batas → `egress.ErrResponseTooLarge`, tidak dipotong diam-diam), TLS minimal 1.2, proxy dari environment tidak dipakai.
 - Error tujuan (`*egress.BlockedError`, `ErrBlockedAddress`, dst.) tidak diteruskan mentah ke klien API: petakan ke error generik (mis. `502`/`503`) dan catat detailnya di log.
 - Arch test `EGRESS` melarang `http.DefaultClient`, `http.DefaultTransport`, `http.Get/Post/Head/PostForm`, serta `http.Client{}`/`http.Transport{}` di `modules/**`.
