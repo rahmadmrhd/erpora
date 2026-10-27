@@ -1107,8 +1107,8 @@ Exit gate PRD-000 §11 M2, AC FR-22/FR-23/FR-24.2 (bagian linter), dan item over
 | --- | --- | --- | --- |
 | §11: AC FR-18/FR-19 lulus di integration test | `task test:integration` hijau (`TestService_*`, `TestExample_*`, `TestCLI_*`, `TestAssemble_*`, `TestResolve_*`) | M2b | ✅ |
 | §11: kedua modul referensi dikelola penuh lewat CLI | `TestCLI_ManageBothModules`, `TestCLI_ExitCodes`, `TestCLI_CrashAfterMigrateThenRetry`, `TestCLI_ConcurrentEnableTwoProcesses` | M2b | ✅ |
-| §11: `make:module` menghasilkan modul yang lolos semua gate | `TestMakeModule_PassesAllGates` (12m20s lokal; 521 dtk di `task ci`), job CI `generator` | `7d9c0ca` | ✅ (CI Linux belum dijalankan) |
-| §11: binary release tanpa developer tools | `TestReleaseFlavor_NoDevtoolsPackages`, `TestReleaseFlavor_UnknownDevCommands`, `TestDevtoolsRule_OnlyEntryFile`; Step 2; langkah smoke CI | `f2abbb5`, `bb5a980` | ✅ (smoke CI terhadap artifact belum dijalankan) |
+| §11: `make:module` menghasilkan modul yang lolos semua gate | `TestMakeModule_PassesAllGates` (12m20s lokal; 521 dtk di `task ci`), job CI `generator` | `7d9c0ca` | ✅ lokal Windows; ⏳ job CI `generator` di GitHub belum pernah berjalan |
+| §11: binary release tanpa developer tools | `TestReleaseFlavor_NoDevtoolsPackages`, `TestReleaseFlavor_UnknownDevCommands`, `TestDevtoolsRule_OnlyEntryFile`; Step 2; langkah smoke CI | `f2abbb5`, `bb5a980` | ✅ test lokal dan Step 2; ⏳ langkah smoke CI terhadap artifact belum pernah berjalan di GitHub |
 | FR-22 AC: golden test setiap `make:*` | `TestMakeMigration_Golden`, `TestMakeModule_Golden*`, golden T12 dan T13 (`TestMakeHandler_Golden`) | `ed2dac6`, `69f58ae`, `b7fbbb8`, `f092cb0` | ✅ |
 | FR-22 AC: `--dry-run` tidak mengubah file | `TestApply_DryRunWritesNothing`; langkah 2 `TestMakeModule_PassesAllGates`; Step 3 (3) | `ed2dac6`, `7d9c0ca` | ✅ |
 | FR-22 AC: `db:fresh` ditolak (`ERP_ENV=production` / penanda `production`) | `TestDBFresh_RefusedWithoutTouchingDB` (dibuktikan juga lewat mutasi) | `af1fec7` | ✅ |
@@ -1122,15 +1122,15 @@ Exit gate PRD-000 §11 M2, AC FR-22/FR-23/FR-24.2 (bagian linter), dan item over
 | FR-23 AC: `total: number`, `/getItems`, operasi tanpa permission ditolak dengan pasal | `TestLint_Fixtures` | `ca6e312` | ✅ |
 | FR-23 AC: `Handle` tanpa operasi (atau sebaliknya) gagal | `TestContracts_RoutesMatchOperations/extra_*`, `TestCheckConformance_Table` | `292dee8`, `4e94c67` | ✅ |
 | FR-23 AC: dua modul `Item` digabung tanpa bentrok | `TestMerge_SameSchemaNameTwoModules` | `4e94c67` | ✅ |
-| FR-23 AC: kontrak berubah tanpa generate → CI gagal | `TestCheckGenerated_DetectsStale`, `task contracts:check`, job CI `contracts` | `9c8b041`, `bb5a980` | ✅ |
+| FR-23 AC: kontrak berubah tanpa generate → CI gagal | `TestCheckGenerated_DetectsStale`, `task contracts:check`, job CI `contracts` | `9c8b041`, `bb5a980` | ✅ lokal (`TestCheckGenerated_DetectsStale`, `task contracts:check`); ⏳ job CI `contracts` belum pernah berjalan di GitHub |
 | FR-23 AC: hapus field dari kontrak bertag gagal; field opsional lolos | `TestCheckBreaking_RemovedFieldFails`, `TestCheckBreaking_OptionalFieldPasses` | `83c5020` | ✅ |
 | FR-23.2: test kontrak respons | `TestContractResponses_ReferenceModules` | `1206787` | ✅ |
 | FR-23.3: metrik deprecated | `TestMount_Deprecated*` (operasi dan parameter query; properti body dan klien ditunda, Q31 ★5) | `d73e2b4` | ✅ (cakupan sesuai ★5) |
-| FR-24.2 AC: linter menolak `password` di respons dan token di query | `TestLint_Fixtures/password_response`, `/token_query` | `ca6e312` | ✅ |
+| FR-24.2 AC: linter menolak `password` di respons dan token di query | `TestLint_Fixtures/highly_confidential_in_response` (penolakan `highly_confidential` di respons), `/password_response` (wajib klasifikasi), `/new_password_needs_classification`, `/token_query`, `/reset_token_query` | `ca6e312` | ✅ |
 | M2c ★3: klasifikasi route = kontrak (bersarang) | `TestContracts_ClassificationMatchesRoute`, `TestResponseClassification_Nested` | `292dee8`, `4e94c67` | ✅ |
 | FR-06 AC: tipe TS `packages/module-sdk` dari schema | `manifest.gen.ts` + `manifest.check.ts` (typecheck) + `contracts:generate --check` | `9c8b041` | ✅ |
-| FR-14: workflow validasi tag rilis | `TestVerifyTag_Table`, `.github/workflows/release.yml`, `task release:verify-tag` | `bb5a980` | ✅ (workflow belum dijalankan di GitHub; sintaks YAML diperiksa dengan parser) |
-| FR-14: gate kontrak di CI | job `contracts` di `ci.yml` | `bb5a980` | ✅ (belum dijalankan di GitHub) |
+| FR-14: workflow validasi tag rilis | `TestVerifyTag_Table`, `.github/workflows/release.yml`, `task release:verify-tag` | `bb5a980` | ⏳ test lokal hijau (`TestVerifyTag_Table`); workflow belum pernah berjalan di GitHub (sintaks YAML diperiksa dengan parser) |
+| FR-14: gate kontrak di CI | job `contracts` di `ci.yml` | `bb5a980` | ⏳ job `contracts` belum pernah berjalan di GitHub; `task contracts:check` hijau lokal |
 | Butir ★1–★5 | Disetujui owner 27 Okt 2026, dicatat di PRD-000 Q31 | `c49ed88` | ✅ |
 | Manual: `db:fresh --seed` dengan ketik nama DB | Tidak dijalankan manual (pengaman sesi); dibuktikan test integrasi | — | ⏳ |
 
