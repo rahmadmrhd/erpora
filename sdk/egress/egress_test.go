@@ -73,6 +73,8 @@ func TestClient_RejectsFR24Table(t *testing.T) {
 		"http://127.0.0.1/", "http://169.254.169.254/latest/meta-data/", "http://[::1]/", "http://10.0.0.1/",
 		"http://internal.example.test/", "http://mixed.example.test/", "http://[::ffff:127.0.0.1]/",
 		"http://2130706433/", "http://0x7f000001/", "http://0177.0.0.1/", "http://127.1/",
+		// M-9: port non-standar pada IP literal tetap diblokir (pemeriksaan alamat tidak bergantung pada port).
+		"http://127.0.0.1:8080/", "http://[::1]:9200/", "http://10.0.0.1:6379/", "https://169.254.169.254:8443/", "https://127.0.0.1:1/",
 	} {
 		_, err := c.Get(context.Background(), u)
 		if !errors.Is(err, ErrBlockedAddress) {
@@ -174,6 +176,10 @@ func TestClient_Redirects(t *testing.T) {
 	mux.HandleFunc("/to-metadata", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
 	})
+	// M-9: downgrade https -> http ke host di luar AllowHTTPHosts (juga dengan port non-standar) ditolak.
+	mux.HandleFunc("/to-http-port", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://example.test:8080/", http.StatusFound)
+	})
 	mux.HandleFunc("/to-http", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://example.test/", http.StatusFound)
 	})
@@ -194,10 +200,11 @@ func TestClient_Redirects(t *testing.T) {
 	}
 
 	for path, want := range map[string]error{
-		"/chain/4":     ErrTooManyRedirects,
-		"/to-private":  ErrBlockedAddress,
-		"/to-metadata": ErrBlockedAddress,
-		"/to-http":     ErrSchemeNotAllowed,
+		"/chain/4":      ErrTooManyRedirects,
+		"/to-private":   ErrBlockedAddress,
+		"/to-metadata":  ErrBlockedAddress,
+		"/to-http":      ErrSchemeNotAllowed,
+		"/to-http-port": ErrSchemeNotAllowed,
 	} {
 		if _, err := c.Get(context.Background(), srv.URL+path); !errors.Is(err, want) {
 			t.Errorf("%s: err = %v, want %v", path, err, want)

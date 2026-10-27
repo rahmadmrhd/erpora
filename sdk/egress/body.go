@@ -17,8 +17,10 @@ func (b *limitedBody) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if int64(len(p)) > b.remaining+1 {
-		p = p[:b.remaining+1] // baca satu byte lebih untuk mendeteksi kelebihan
+	// Baca paling banyak satu byte lebih untuk mendeteksi kelebihan. Dibandingkan sebagai remaining < len(p) (bukan
+	// len(p) > remaining+1) agar tidak overflow bila remaining = MaxInt64.
+	if b.remaining < int64(len(p)) {
+		p = p[:b.remaining+1]
 	}
 	n, err := b.rc.Read(p)
 	if int64(n) > b.remaining {
