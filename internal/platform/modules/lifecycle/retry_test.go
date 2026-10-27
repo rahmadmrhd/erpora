@@ -141,6 +141,82 @@ func TestRetryModule_CallsOnStartedWithOperationID(t *testing.T) {
 	}
 }
 
+// B-2 (Q32): retry yang akan membuat modul enabled harus memeriksa ulang dependensi wajib; langkah "dependencies" tidak
+// boleh di-skip hanya karena tercatat succeeded pada operasi asal, dan penolakan terjadi sebelum operasi dimulai.
+func TestRetry_EnableRechecksDependenciesBeforeStarting(t *testing.T) {
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a"})
+	b := newFx(rec, fxSpec{key: "acme.b", deps: []moduleDep{dep("acme.a")}})
+	e := newEnv(t, rec, a, b)
+	for _, step := range []struct {
+		op  Op
+		key string
+	}{{OpInstall, "acme.a"}, {OpEnable, "acme.a"}, {OpInstall, "acme.b"}} {
+		if res, err := e.exec(step.op, step.key); err != nil || res[len(res)-1].Status != "succeeded" {
+			t.Fatalf("%s %s = %+v, %v", step.op, step.key, res, err)
+		}
+	}
+	fail := true
+	b.on("OnEnable", func(context.Context, module.Env) error {
+		if fail {
+			return errors.New("gagal sementara")
+		}
+		return nil
+	})
+	res, err := e.exec(OpEnable, "acme.b")
+	if err != nil || res[len(res)-1].Status != "failed" {
+		t.Fatalf("enable b = %+v, %v", res, err)
+	}
+	// b gagal (previous installed): a boleh dinonaktifkan; sesudah itu retry b tidak boleh membuat b enabled.
+	if res, err := e.exec(OpDisable, "acme.a"); err != nil || res[0].Status != "succeeded" {
+		t.Fatalf("disable a = %+v, %v", res, err)
+	}
+	fail = false
+	opsBefore := len(e.st.opOrder)
+	_, err = e.svc.Retry(context.Background(), tenantA, res[len(res)-1].OperationID, "cli:tester")
+	var le *Error
+	if !errors.As(err, &le) || le.Code != CodeDependencyNotReady {
+		t.Fatalf("Retry err = %v, want dependency_not_ready", err)
+	}
+	if len(e.st.opOrder) != opsBefore {
+		t.Error("penolakan harus terjadi sebelum operasi baru tercatat")
+	}
+	if row := e.st.row("acme.b"); row.Status == "enabled" {
+		t.Errorf("b tidak boleh enabled saat a disabled: %+v", row)
+	}
+}
+
+// B-2 (Q32): upgrade yang akan mengembalikan modul ke enabled ditolak sebelum dimulai bila dependensi wajib tidak enabled;
+// ketika dependensi enabled, upgrade berjalan dan modul kembali enabled.
+func TestExecute_UpgradeRestoringEnabledRequiresEnabledDependencies(t *testing.T) {
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a"})
+	b := newFx(rec, fxSpec{key: "acme.b", deps: []moduleDep{dep("acme.a")}})
+	e := newEnv(t, rec, a, b)
+	e.st.seed(tenantA, "acme.a", runtime.StatusDisabled, "1.0.0")
+	e.st.seed(tenantA, "acme.b", runtime.StatusUpgradePending, "0.9.0")
+	e.st.mu.Lock()
+	br := e.st.rows[rowKey{tenantA, "acme.b"}]
+	br.PreviousStatus = "enabled"
+	e.st.rows[rowKey{tenantA, "acme.b"}] = br
+	e.st.mu.Unlock()
+
+	ops := len(e.st.opOrder)
+	_, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpUpgrade, Key: "acme.b", Actor: "cli:t"})
+	var le *Error
+	if !errors.As(err, &le) || le.Code != CodeDependencyNotReady {
+		t.Fatalf("err = %v, want dependency_not_ready", err)
+	}
+	if len(e.st.opOrder) != ops || e.st.row("acme.b").Status != "upgrade_pending" {
+		t.Errorf("penolakan harus sebelum operasi: ops %d -> %d, row=%+v", ops, len(e.st.opOrder), e.st.row("acme.b"))
+	}
+	e.st.seed(tenantA, "acme.a", runtime.StatusEnabled, "1.0.0")
+	res, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpUpgrade, Key: "acme.b", Actor: "cli:t"})
+	if err != nil || len(res) != 1 || res[0].Status != "succeeded" || res[0].To != runtime.StatusEnabled {
+		t.Fatalf("upgrade saat a enabled = %+v, %v", res, err)
+	}
+}
+
 // B-7: pencatatan module_migrations gagal setelah goose commit (tidak atomik). Retry harus menyelaraskan jejak dengan
 // goose_module_<slug>: file yang sudah diterapkan tetapi belum punya baris tercatat sebagai succeeded.
 func TestRetry_ReconcilesMigrationTrailWithGoose(t *testing.T) {

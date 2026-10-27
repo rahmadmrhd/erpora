@@ -140,3 +140,47 @@ func TestCheck_Prerequisites(t *testing.T) {
 		wantCode(t, check(OpEnable, "acme.nope", nil), CodeModuleNotFound)
 	})
 }
+
+// B-2 (Q32): invarian "modul enabled tidak punya dependensi wajib yang tidak enabled" dijaga juga oleh upgrade/retry
+// yang akan mengembalikan modul ke enabled, dan disable menghitung dependen upgrade_pending/failed yang sebelumnya enabled.
+func TestCheck_DependencyInvariantOnUpgradeAndDisable(t *testing.T) {
+	reg := prereqRegistry(t)
+	rowsOf := func(a, b runtime.Status, bPrev runtime.Status) map[string]store.Installation {
+		rows := mkRows(map[string]runtime.Status{"acme.a": a, "acme.b": b})
+		br := rows["acme.b"]
+		br.PreviousStatus = string(bPrev)
+		rows["acme.b"] = br
+		return rows
+	}
+	t.Run("upgrade b yang akan kembali enabled saat a disabled ditolak", func(t *testing.T) {
+		err := Check(OpUpgrade, "acme.b", View{Reg: reg, Rows: rowsOf(runtime.StatusDisabled, runtime.StatusUpgradePending, runtime.StatusEnabled)})
+		le := wantCode(t, err, CodeDependencyNotReady)
+		if !slices.Equal(le.Related, []string{"acme.a"}) {
+			t.Errorf("Related = %v", le.Related)
+		}
+	})
+	t.Run("upgrade b yang akan kembali installed tidak butuh a enabled", func(t *testing.T) {
+		if err := Check(OpUpgrade, "acme.b", View{Reg: reg, Rows: rowsOf(runtime.StatusDisabled, runtime.StatusUpgradePending, runtime.StatusInstalled)}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("upgrade b yang akan kembali enabled saat a enabled lolos", func(t *testing.T) {
+		if err := Check(OpUpgrade, "acme.b", View{Reg: reg, Rows: rowsOf(runtime.StatusEnabled, runtime.StatusUpgradePending, runtime.StatusEnabled)}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, st := range []runtime.Status{runtime.StatusUpgradePending, runtime.StatusFailed} {
+		t.Run("disable a saat b "+string(st)+" dengan previous enabled ditolak", func(t *testing.T) {
+			err := Check(OpDisable, "acme.a", View{Reg: reg, Rows: rowsOf(runtime.StatusEnabled, st, runtime.StatusEnabled)})
+			le := wantCode(t, err, CodeDependentsActive)
+			if !slices.Equal(le.Related, []string{"acme.b"}) {
+				t.Errorf("Related = %v", le.Related)
+			}
+		})
+		t.Run("disable a saat b "+string(st)+" dengan previous installed lolos", func(t *testing.T) {
+			if err := Check(OpDisable, "acme.a", View{Reg: reg, Rows: rowsOf(runtime.StatusEnabled, st, runtime.StatusInstalled)}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
