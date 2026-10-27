@@ -105,6 +105,98 @@ func TestLint_Fixtures(t *testing.T) {
 			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + reportBlock + "components:\n"}}},
 			want:  []string{"erp-path-collection-plural"}, msg: "api-guidelines §2",
 		},
+		// K-8: fixture negatif untuk rule keamanan dan rule lain (sebelumnya hanya sebagian yang diuji menolak).
+		{
+			// Bukti AC FR-24.2 "linter menolak password di respons": klasifikasi highly_confidential di respons ditolak.
+			name:  "highly_confidential_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string, x-erp-classification: highly_confidential }\n"}}},
+			want:  []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_sibling_of_ref",
+			edits: map[string][][2]string{ex: {{versionProp,
+				versionProp + "        linkId: { $ref: 'erp:common#/components/schemas/Uuid', x-erp-classification: highly_confidential }\n"}}},
+			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_under_if_keyword",
+			edits: map[string][][2]string{ex: {{versionProp,
+				versionProp + "        conditional: { type: object, if: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } }\n"}}},
+			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_under_dependent_schemas",
+			edits: map[string][][2]string{ex: {{versionProp,
+				versionProp + "        dep: { type: object, dependentSchemas: { a: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } } }\n"}}},
+			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name:  "new_password_needs_classification",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        newPassword: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name:  "compound_secret_names_need_classification",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string }\n        apiToken: { type: string }\n        passwordHash: { type: string }\n        bankAccountNumber: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name: "reset_token_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: resetToken, in: query, schema: { type: string } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url", "erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_param_schema_in_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: sessionRef, in: query, schema: { type: string, x-erp-classification: highly_confidential } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url"}, msg: "FR-24.2",
+		},
+		{
+			name:  "classification_invalid",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        flag: { type: string, x-erp-classification: top_secret }\n"}}},
+			want:  []string{"erp-classification-valid"}, msg: "security-guidelines §2",
+		},
+		{
+			name:  "error_not_standard_component",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "        '403': { description: Ditolak }\n  /api/example/notes:\n"}}},
+			want:  []string{"erp-error-standard"}, msg: "api-guidelines §8",
+		},
+		{
+			name:  "missing_error_codes",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "  /api/example/notes:\n"}}},
+			want:  []string{"erp-error-codes-documented"}, msg: "api-guidelines §13",
+		},
+		{
+			name:  "missing_example",
+			edits: map[string][][2]string{ex: {{"              example: { data: { pong: true } }\n", ""}}},
+			want:  []string{"erp-examples"}, msg: "api-guidelines §13",
+		},
+		{
+			name:  "property_not_camel_case",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        Bad_Name: { type: string }\n"}}},
+			want:  []string{"erp-property-camel-case"}, msg: "api-guidelines §4.1",
+		},
+		{
+			name:  "enum_not_snake_case",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        state: { type: string, enum: [CamelCase, ok_value] }\n"}}},
+			want:  []string{"erp-enum-snake-case"}, msg: "api-guidelines §4.1",
+		},
+		{
+			name:  "path_too_nested",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + nestedPathBlock + "components:\n"}}},
+			want:  []string{"erp-path-max-nesting"}, msg: "api-guidelines §2",
+		},
+		{
+			name:  "path_wrong_module_prefix",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + otherPrefixBlock + "components:\n"}}},
+			want:  []string{"erp-path-module-prefix"}, msg: "FR-23.1",
+		},
+		{
+			name:  "patch_without_if_match",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + patchBlock + "components:\n"}}},
+			want:  []string{"erp-if-match"}, msg: "api-guidelines §7.1",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
