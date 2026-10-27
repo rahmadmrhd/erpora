@@ -27,12 +27,13 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 | `x-erp-filterable`, `x-erp-sortable` | properti | Field yang boleh difilter/diurutkan (api-guidelines §5) |
 | `x-erp-field-group` | properti | Field group untuk masking (security-guidelines §2) |
 | `x-erp-extensible-enum` | enum | Nilai baru boleh ditambah tanpa breaking (api-guidelines §14.1) |
+| `x-erp-allow-highly-confidential` | properti respons | Pengecualian eksplisit agar properti `highly_confidential` boleh tampil di respons (mis. gaji di modul HR). Nilai: alasan string tidak kosong; wajib bersama `x-erp-classification: highly_confidential`. Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store` berlaku). Dicetak linter sebagai INFO `erp-highly-confidential-exception` untuk ditinjau reviewer (Q32) |
 
 ## 3. Linter: rule → pasal
 
 `erpora contracts:lint [module]` menjalankan Spectral (terpin di `web/package.json`, dijalankan Bun; tanpa `bun x`/`npx`) dengan ruleset
 `contracts/spectral.yaml` + fungsi kustom `contracts/spectral-functions/`. Seluruh rule `erp-*` berseverity `error` dan pesannya menyebut pasalnya.
-Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, `oas3-api-servers`, `operation-tags`, `openapi-tags`, dan
+Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`info`: dicetak sebagai `INFO …`, exit code tetap 0). Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, `oas3-api-servers`, `operation-tags`, `openapi-tags`, dan
 `oas3-unused-component` dimatikan (yang terakhir karena komponen diekspor ke dokumen lain lewat `erp:`).
 
 | Rule | Menegakkan | Pasal |
@@ -57,7 +58,9 @@ Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, 
 | `erp-classification-valid` | `x-erp-classification` salah satu dari empat kelas | security-guidelines §2 |
 | `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential` | FR-24.2; security-guidelines §2, §3.4 |
 | `erp-no-sensitive-in-url` | Data sensitif (mis. `token`, `password`) tidak lewat path atau query | FR-24.2 |
-| `erp-sensitive-needs-classification` | Properti/parameter bernama sensitif (`password`, `secret`, `token`, `apiKey`, `nik`, `npwp`, `bankAccount`, `salary`, …) wajib punya klasifikasi memadai | FR-24.2; security-guidelines §2 |
+| `erp-sensitive-needs-classification` | Properti/parameter bernama sensitif (dicocokkan **per token camelCase**: `newPassword`, `clientSecret`, `resetToken`, `bankAccountNumber`, …) wajib `x-erp-classification: highly_confidential`: `password`, `secret`, `token`, `apiKey`, `privateKey`, `nik`, `npwp`, `bankAccount`, `salary` (Q32) | FR-24.2; security-guidelines §2 |
+| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama | FR-24.2; security-guidelines §2 |
+| `erp-highly-confidential-exception` (**INFO**) | Mencetak setiap pengecualian beserta alasannya untuk ditinjau reviewer; tidak menggagalkan lint (satu-satunya rule berseverity info) | FR-24.2; security-guidelines §2 |
 
 ## 4. Klasifikasi respons dan `module.Classify`
 
@@ -91,7 +94,7 @@ membandingkannya dengan disk, mencetak file yang basi, dan exit 1. `task contrac
 - Baseline: tag semver tertinggi non-prerelease. Platform: `vX.Y.Z`; modul: `modules/<dir>/vX.Y.Z`; SDK: `sdk/vX.Y.Z`. Kontrak baseline dibundel dari pohon tag yang sama (termasuk `erp:common` dan dependensi). Target tanpa tag dilewati.
 - Perubahan berlevel `WARN` ke atas menggagalkan, karena api-guidelines §14.2 melarang menghapus field apa pun (termasuk field respons opsional yang `oasdiff` nilai WARN). Menambah field opsional lolos.
 - Pengecualian hanya bila **keduanya**: PR berlabel `api-breaking-approved` (env `ERP_API_BREAKING_APPROVED=true` di CI; pada event `push` ke main CI mengaturnya `true`, karena perubahan itu sudah melewati review PR) **dan** major `version` manifest lebih besar daripada major tag baseline. Setelah breaking yang disetujui di-merge dan sebelum tag baru dibuat, PR berikutnya tanpa label tidak gagal: `ERP_API_BREAKING_BASE_REF` (CI: `origin/<base_ref>`) membuat perubahan yang sudah ada di cabang dasar dianggap disetujui, sedangkan perubahan breaking baru tetap butuh label. Syarat "tidak dipakai 6 bulan" (§14.3) diperiksa reviewer, bukan alat.
-- Workflow `.github/workflows/release.yml` (tag `modules/*/v*`, `sdk/v*`) menjalankan `erpora release:verify-tag <tag>`: versi tag harus sama dengan `version` di `module.json` (dan `go.mod` modul harus ada dengan path `erpora/modules/<dir>`) atau dengan `SDKVersion` di `sdk/module/version.go`. Tag platform `vX.Y.Z` dipakai sebagai baseline; platform memakai `info.version` di `contracts/openapi/platform.yaml` sebagai versi yang disetujui.
+- Workflow `.github/workflows/release.yml` (tag `modules/*/v*`, `sdk/v*`, dan `v*`) menjalankan `erpora release:verify-tag <tag>`: versi tag harus sama dengan `version` di `module.json` (dan `go.mod` modul harus ada dengan path `erpora/modules/<dir>`) atau dengan `SDKVersion` di `sdk/module/version.go`. Tag platform `vX.Y.Z` divalidasi terhadap `buildinfo.PlatformVersion` dan dipakai sebagai baseline; platform memakai `info.version` di `contracts/openapi/platform.yaml` sebagai versi yang disetujui, dan test mewajibkan `info.version == PlatformVersion` (Q32).
 
 ## 8. Metrik deprecated
 

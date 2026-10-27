@@ -56,7 +56,7 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
    - `buildinfo.PlatformVersion = "0.1.0"` (`internal/platform/buildinfo`) dicocokkan dengan `compatibility.platform`.
    - `module.SDKVersion = "0.1.0"` (`sdk/module/version.go`) dicocokkan dengan `compatibility.sdk`.
    - `buildinfo.Version` dari `-ldflags` hanya label rilis (bisa `dev`) dan tidak dipakai untuk pencocokan SemVer.
-   - Tag rilis root `vX.Y.Z` harus sama dengan `PlatformVersion`. Pemeriksaan ini belum ada: workflow rilis M2d (`.github/workflows/release.yml`) hanya memvalidasi tag modul dan SDK (lihat butir 5). Tag `vX.Y.Z` dipakai sebagai baseline `erpora contracts:breaking` untuk kontrak platform.
+   - Tag rilis root `vX.Y.Z` harus sama dengan `PlatformVersion` (`internal/platform/buildinfo`, dibaca lewat `go/parser`). Diperiksa oleh `erpora release:verify-tag` yang dijalankan `.github/workflows/release.yml` pada tag `v*` (M2d, Q32 K-6). Versi kontrak platform (`info.version` di `contracts/openapi/platform.yaml`, dipakai baseline dan approval `erpora contracts:breaking`) wajib sama dengan `PlatformVersion`; test `TestContracts_PlatformContractVersionEqualsPlatformVersion` menjaganya.
 
 4. **Constraint 0.x selama pre-1.0.** Modul referensi memakai `compatibility.platform: "^0.1"` dan `compatibility.sdk: "^0.1"`, bukan `^1.0` seperti tabel FR-15. Versi modul referensi tetap `1.0.0`. `acme.example-addon` bergantung pada `acme.example ^1.0` sesuai FR-15.
 
@@ -87,7 +87,7 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
   - Module path bare `erpora/...` harus diganti ke vanity domain sebelum SDK dipublikasikan (ADR-001, Q24). Penggantian itu mengubah import, `go.mod`, dan `replace`.
 - **Pekerjaan lanjutan wajib:**
   - M2b: pemanggilan hook lifecycle dan status modul per tenant (FR-19).
-  - M2d ✅: pemeriksaan tag rilis modul dan SDK terhadap `version` manifest dan `SDKVersion` (`release:verify-tag`). Pemeriksaan tag root terhadap `PlatformVersion` belum ada.
+  - M2d ✅: pemeriksaan tag rilis modul, SDK, dan platform terhadap `version` manifest, `SDKVersion`, dan `PlatformVersion` (`release:verify-tag`).
   - Membuat `docs/module-sdk/versioning.md` yang disebut PRD-000 FR-05/Q15. Dokumen ini belum ada, dan aturan versinya sementara dirujuk ke ADR ini.
 
 ## Pemicu evaluasi ulang

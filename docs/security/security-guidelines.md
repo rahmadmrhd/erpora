@@ -45,6 +45,8 @@ Setiap field group sensitif di manifest (PRD-001 FR-110) **WAJIB** menyatakan ke
 
 Manifest: `"field_groups": [{ "key": "salary", "classification": "highly_confidential", … }]`.
 
+**Kontrak OpenAPI (Q32).** Linter kontrak mencocokkan nama properti dan parameter **per token camelCase** (`newPassword`, `clientSecret`, `resetToken`, `bankAccountNumber`). Nama yang mengandung `password`, `secret`, `token`, `apiKey`, `privateKey`, **`nik`, `npwp`, `bankAccount`, atau `salary`** wajib `x-erp-classification: highly_confidential`. Properti `highly_confidential` **tidak boleh ada di respons** dan data sensitif tidak boleh lewat path/query. Satu-satunya jalan keluar adalah pengecualian eksplisit pada properti respons, `x-erp-allow-highly-confidential: "<alasan>"` (string tidak kosong, mis. modul HR yang sah menampilkan gaji kepada pengguna HR berizin): pengecualian tidak menurunkan klasifikasi (route tetap `highly_confidential`, jadi `Cache-Control: no-store` berlaku, ekspor dan offline tetap dilarang), harus melewati field group + permission yang sesuai, dan setiap pengecualian dicetak `erpora contracts:lint` sebagai temuan `INFO` (`erp-highly-confidential-exception`) agar reviewer meninjaunya. Pengecualian untuk kredensial (`password`, `secret`, `token`, `apiKey`, `privateKey`) hampir tidak pernah dibenarkan.
+
 ## 3. Katalog celah dan aturan pencegahan
 
 Setiap baris memiliki **penegak**. "CI" berarti dicek otomatis; "Review" berarti masuk checklist code review dan Kiro spec.
