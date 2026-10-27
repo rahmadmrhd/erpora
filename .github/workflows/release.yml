@@ -27,5 +27,6 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         # Tag dilewatkan lewat env dan dikutip sebagai satu argumen (tanpa dirender ke shell oleh Task); format tag divalidasi
-        # ketat oleh release:verify-tag (regex modules/<dir>/vX.Y.Z atau sdk/vX.Y.Z).
+        # ketat oleh release:verify-tag (modules/<dir>/vX.Y.Z, sdk/vX.Y.Z, atau vX.Y.Z untuk tag platform). Jalur rilis resmi adalah
+        # workflow ini (env + kutipan); task release:verify-tag untuk pemakaian lokal memakai shellQuote agar $(...) tidak dieksekusi.
         run: go run -tags devtools ./cmd/erpora release:verify-tag "${TAG}"

@@ -97,6 +97,8 @@ jobs:
       # Pada push ke main, breaking yang sudah melewati review PR berlabel diterima (selama MAJOR manifest naik); baseline tag
       # baru ada saat rilis. Pada PR tanpa label, breaking yang sudah ada di cabang dasar (ERP_API_BREAKING_BASE_REF) tidak
       # menggagalkan; breaking baru tetap butuh label (K-1).
+      # ASUMSI (R-10): penerimaan pada push ke main mensyaratkan branch protection main yang mewajibkan PR + status check "contracts"
+      # (diatur di GitHub, tidak dapat diverifikasi dari repo; lihat docs/module-sdk/contracts.md dan docs/operations/deployment.md §10).
       ERP_API_BREAKING_APPROVED: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'api-breaking-approved') }}
       ERP_API_BREAKING_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
     steps:
