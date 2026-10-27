@@ -22,5 +22,6 @@ func Register(root *cobra.Command, opts Options) {
 	registerContracts(root)
 	registerMake(root)
 	registerModule(root)
+	registerDB(root, opts)
 	root.AddCommand(newDoctor(opts))
 }

@@ -17,6 +17,7 @@ func stripBanner(s string) string { return strings.ReplaceAll(s, devtools.Banner
 // developer tools menambah barisnya di sini.
 var wantDevCommands = map[string][]string{
 	"Make":            {"make:migration", "make:module", "make:handler", "make:entity", "make:usecase", "make:contract", "make:command", "make:repository"},
+	"Database":        {"db:fresh", "db:seed"},
 	"Kontrak":         {"contracts:lint", "contracts:generate", "contracts:breaking"},
 	"Modul":           {"module:check"},
 	"Developer tools": {"doctor"},

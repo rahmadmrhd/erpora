@@ -13,6 +13,7 @@ import (
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/lifecycle"
+	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
@@ -22,6 +23,7 @@ import (
 type cliRuntime struct {
 	cfg      config.Config
 	db       *database.DB
+	reg      *registry.Registry
 	svc      *lifecycle.Service
 	tid      tenancy.TenantID
 	conn     database.TenantConnector
@@ -64,6 +66,7 @@ func openCLI(ctx context.Context, cfg config.Config, log *slog.Logger) (*cliRunt
 	return &cliRuntime{
 		cfg:      cfg,
 		db:       db,
+		reg:      reg,
 		svc:      buildLifecycle(reg, db, tid, nil, nil, prov, log, services),
 		tid:      tid,
 		conn:     database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}},
