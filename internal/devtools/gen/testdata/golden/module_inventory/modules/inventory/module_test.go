@@ -53,11 +53,21 @@ func TestRegister_RoutesAndCommand(t *testing.T) {
 			t.Errorf("permission %q tidak ada di capabilities manifest", rt.Permission)
 		}
 	}
-	if len(r.Commands) != 1 || r.Commands[0].Name != "recount" || r.Commands[0].Run == nil {
-		t.Fatalf("commands = %+v", r.Commands)
+	// Command tambahan dari `erpora make:command` boleh bertambah; yang wajib ada hanya recount, dan semuanya punya Run.
+	var recount *module.Command
+	for i, c := range r.Commands {
+		if c.Run == nil {
+			t.Errorf("command %q tidak punya Run", c.Name)
+		}
+		if c.Name == "recount" {
+			recount = &r.Commands[i]
+		}
+	}
+	if recount == nil {
+		t.Fatalf("command recount tidak terdaftar: %+v", r.Commands)
 	}
 	// Tanpa konteks tenant, command gagal dengan error (bukan panic).
-	if err := r.Commands[0].Run(context.Background(), module.Invocation{Out: &bytes.Buffer{}}); err == nil {
+	if err := recount.Run(context.Background(), module.Invocation{Out: &bytes.Buffer{}}); err == nil {
 		t.Error("recount tanpa tenant harus error")
 	}
 }

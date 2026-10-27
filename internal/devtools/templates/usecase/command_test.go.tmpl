@@ -1,0 +1,17 @@
+package application
+
+import (
+	"context"
+	"testing"
+)
+
+// [[.T.Camel]]NopRepo memenuhi Repository tanpa perilaku; method yang tidak di-override panik bila dipanggil,
+// sehingga test ini membuktikan use case tidak menyentuh repo di luar yang diharapkan.
+type [[.T.Camel]]NopRepo struct{ Repository }
+
+func Test[[.T.Pascal]]Handler_Handle(t *testing.T) {
+	h := New[[.T.Pascal]]Handler([[.T.Camel]]NopRepo{})
+	if err := h.Handle(context.Background(), [[.T.Pascal]]Command{}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+}

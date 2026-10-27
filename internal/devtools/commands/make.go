@@ -28,7 +28,38 @@ func (f *makeFlags) apply(c *cobra.Command, build func(root string) (gen.Plan, e
 }
 
 func registerMake(root *cobra.Command) {
-	root.AddCommand(newMakeMigration(), newMakeModule())
+	root.AddCommand(newMakeMigration(), newMakeModule(),
+		newMakeLayer("make:entity", "<module> <Name>", "Buat entity domain (internal/domain) beserta test-nya",
+			func(root string, a []string, _ bool) (gen.Plan, error) { return gen.MakeEntity(root, a[0], a[1]) }, false),
+		newMakeLayer("make:usecase", "<module> <Name> [--query]", "Buat use case (internal/application): command atau query",
+			func(root string, a []string, q bool) (gen.Plan, error) { return gen.MakeUsecase(root, a[0], a[1], q) }, true),
+		newMakeLayer("make:contract", "<module> <Name>", "Buat kontrak publik modul (contract/) tanpa impor internal/",
+			func(root string, a []string, _ bool) (gen.Plan, error) { return gen.MakeContract(root, a[0], a[1]) }, false),
+		newMakeLayer("make:command", "<module> <name>", "Buat command CLI modul dan daftarkan di module.go",
+			func(root string, a []string, _ bool) (gen.Plan, error) { return gen.MakeCommand(root, a[0], a[1]) }, false),
+		newMakeLayer("make:repository", "<module> <Name>", "Buat repository (port, model GORM, repo, mapping) untuk entity yang sudah ada",
+			func(root string, a []string, _ bool) (gen.Plan, error) { return gen.MakeRepository(root, a[0], a[1]) }, false),
+	)
+}
+
+// newMakeLayer membuat command make:* dengan argumen <module> <name> dan flag --force/--dry-run (dan --query bila hasQuery).
+func newMakeLayer(use, args, short string, build func(root string, args []string, query bool) (gen.Plan, error), hasQuery bool) *cobra.Command {
+	var f makeFlags
+	var query bool
+	cmd := &cobra.Command{
+		Use:     use + " " + args,
+		Short:   short,
+		GroupID: GroupMake,
+		Args:    cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, a []string) error {
+			return f.apply(c, func(root string) (gen.Plan, error) { return build(root, a, query) })
+		},
+	}
+	if hasQuery {
+		cmd.Flags().BoolVar(&query, "query", false, "use case baca saja (Query + Result), bukan command")
+	}
+	f.bind(cmd)
+	return cmd
 }
 
 func newMakeModule() *cobra.Command {

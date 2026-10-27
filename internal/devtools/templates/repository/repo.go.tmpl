@@ -1,0 +1,103 @@
+package infrastructure
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"[[.Mod.GoPath]]/internal/domain"
+	"erpora/sdk/data"
+)
+
+// [[.T.Pascal]]Repo mengimplementasi domain.[[.T.Pascal]]Repository. Koneksi diambil per panggilan dari context lewat
+// sdk/data (tenant aktif); repository tidak pernah memegang pool DB.
+type [[.T.Pascal]]Repo struct{}
+
+var _ domain.[[.T.Pascal]]Repository = [[.T.Pascal]]Repo{}
+
+// New[[.T.Pascal]]Repo membuat repository.
+func New[[.T.Pascal]]Repo() [[.T.Pascal]]Repo { return [[.T.Pascal]]Repo{} }
+
+// Get mengembalikan satu [[.T.Pascal]]; ErrNotFound bila tidak ada, ID bukan UUID, atau di luar scope tenant.
+func ([[.T.Pascal]]Repo) Get(ctx context.Context, id string) (domain.[[.T.Pascal]], error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return domain.[[.T.Pascal]]{}, domain.ErrNotFound
+	}
+	db, err := data.DB(ctx)
+	if err != nil {
+		return domain.[[.T.Pascal]]{}, err
+	}
+	var m [[.T.Pascal]]Model
+	if err := db.WithContext(ctx).Where("id = ?", uid).Take(&m).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.[[.T.Pascal]]{}, domain.ErrNotFound
+		}
+		return domain.[[.T.Pascal]]{}, fmt.Errorf("query [[.T.Kebab]]: %w", err)
+	}
+	return [[.T.Camel]]ToDomain(m), nil
+}
+
+// List mengembalikan satu halaman (page mulai 1) terurut created_at lalu id, beserta total.
+func ([[.T.Pascal]]Repo) List(ctx context.Context, page, size int) ([]domain.[[.T.Pascal]], int64, error) {
+	db, err := data.DB(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := db.WithContext(ctx).Model(&[[.T.Pascal]]Model{}).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("hitung [[.T.Kebab]]: %w", err)
+	}
+	var rows [][[.T.Pascal]]Model
+	if err := db.WithContext(ctx).Order("created_at, id").Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("daftar [[.T.Kebab]]: %w", err)
+	}
+	out := make([]domain.[[.T.Pascal]], len(rows))
+	for i, m := range rows {
+		out[i] = [[.T.Camel]]ToDomain(m)
+	}
+	return out, total, nil
+}
+
+// Save membuat (ID kosong; Version 1) atau memperbarui dengan pemeriksaan Version (optimistic concurrency, api-guidelines §7.1).
+// Pembaruan yang tidak mengenai baris (tidak ada, di luar scope, atau Version basi) mengembalikan ErrNotFound; bedakan
+// Version basi (412 version_mismatch) di use case bila diperlukan.
+func (r [[.T.Pascal]]Repo) Save(ctx context.Context, e *domain.[[.T.Pascal]]) error {
+	db, err := data.DB(ctx)
+	if err != nil {
+		return err
+	}
+	m, err := [[.T.Camel]]FromDomain(*e)
+	if err != nil {
+		return err
+	}
+	if m.ID == uuid.Nil {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("buat id: %w", err)
+		}
+		m.ID, m.Version = id, 1
+		if err := db.WithContext(ctx).Create(&m).Error; err != nil {
+			return fmt.Errorf("simpan [[.T.Kebab]]: %w", err)
+		}
+		*e = [[.T.Camel]]ToDomain(m)
+		return nil
+	}
+	res := db.WithContext(ctx).Model(&[[.T.Pascal]]Model{}).Where("id = ? AND version = ?", m.ID, m.Version).
+		Updates(map[string]any{"title": m.Title, "version": m.Version + 1})
+	if res.Error != nil {
+		return fmt.Errorf("perbarui [[.T.Kebab]]: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+	saved, err := r.Get(ctx, e.ID)
+	if err != nil {
+		return err
+	}
+	*e = saved
+	return nil
+}

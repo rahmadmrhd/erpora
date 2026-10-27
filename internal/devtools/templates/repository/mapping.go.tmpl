@@ -1,0 +1,30 @@
+package infrastructure
+
+import (
+	"fmt"
+
+	"github.com/google/uuid"
+
+	"[[.Mod.GoPath]]/internal/domain"
+)
+
+// [[.T.Camel]]ToDomain memetakan model GORM ke entity domain (waktu dalam UTC).
+func [[.T.Camel]]ToDomain(m [[.T.Pascal]]Model) domain.[[.T.Pascal]] {
+	return domain.[[.T.Pascal]]{
+		ID: m.ID.String(), Title: m.Title, Version: m.Version,
+		CreatedAt: m.CreatedAt.UTC(), UpdatedAt: m.UpdatedAt.UTC(),
+	}
+}
+
+// [[.T.Camel]]FromDomain memetakan entity domain ke model GORM; ID kosong menghasilkan uuid.Nil (diisi saat Save).
+func [[.T.Camel]]FromDomain(e domain.[[.T.Pascal]]) ([[.T.Pascal]]Model, error) {
+	m := [[.T.Pascal]]Model{Title: e.Title, Version: e.Version, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
+	if e.ID != "" {
+		id, err := uuid.Parse(e.ID)
+		if err != nil {
+			return [[.T.Pascal]]Model{}, fmt.Errorf("id [[.T.Kebab]] bukan UUID: %w", err)
+		}
+		m.ID = id
+	}
+	return m, nil
+}

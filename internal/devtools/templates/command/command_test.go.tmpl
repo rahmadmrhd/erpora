@@ -1,0 +1,24 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"strings"
+	"testing"
+
+	"erpora/sdk/module"
+)
+
+func Test[[.Pascal]]Command(t *testing.T) {
+	c := [[.Pascal]]Command()
+	if c.Name != "[[.Name]]" || c.Run == nil {
+		t.Fatalf("command = %+v", c)
+	}
+	var out bytes.Buffer
+	if err := c.Run(context.Background(), module.Invocation{Out: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "[[.Name]]") {
+		t.Errorf("keluaran = %q", out.String())
+	}
+}
