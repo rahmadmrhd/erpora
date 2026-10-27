@@ -32,18 +32,19 @@ type rowKey struct {
 // fakeStore adalah Store in-memory yang meniru semantik store.Store (termasuk penimpaan kolom
 // installation oleh Commit), sehingga bug read-modify-write di engine terdeteksi di unit test.
 type fakeStore struct {
-	mu        sync.Mutex
-	rows      map[rowKey]store.Installation
-	ops       map[uuid.UUID]store.Operation
-	opOrder   []uuid.UUID
-	events    []store.Event
-	revision  map[tenancy.TenantID]int64
-	commits   []store.Commit
-	startOps  []store.Operation
-	saveSteps int
-	lockErr   error
-	migs      []store.ModuleMigration
-	lockMu    sync.Mutex
+	mu          sync.Mutex
+	rows        map[rowKey]store.Installation
+	ops         map[uuid.UUID]store.Operation
+	opOrder     []uuid.UUID
+	events      []store.Event
+	revision    map[tenancy.TenantID]int64
+	commits     []store.Commit
+	startOps    []store.Operation
+	saveSteps   int
+	lockErr     error
+	migs        []store.ModuleMigration
+	failRecordN int // jumlah panggilan RecordModuleMigration berikutnya yang gagal (simulasi crash/DB error)
+	lockMu      sync.Mutex
 }
 
 func newFakeStore() *fakeStore {
@@ -214,8 +215,37 @@ func (f *fakeStore) Events(_ context.Context, t tenancy.TenantID, key string, _,
 func (f *fakeStore) RecordModuleMigration(_ context.Context, m store.ModuleMigration) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failRecordN > 0 {
+		f.failRecordN--
+		return errors.New("DB error saat mencatat module_migrations")
+	}
 	f.migs = append(f.migs, m)
 	return nil
+}
+
+func (f *fakeStore) RecordedModuleMigrations(_ context.Context, _ tenancy.TenantID, key string) (map[string]bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]bool{}
+	for _, m := range f.migs {
+		if m.ModuleKey == key && m.ExecutionStatus == "succeeded" {
+			out[m.MigrationKey] = true
+		}
+	}
+	return out, nil
+}
+
+// migrationKeys mengembalikan migration_key yang tercatat succeeded.
+func (f *fakeStore) migrationKeys() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, m := range f.migs {
+		if m.ExecutionStatus == "succeeded" {
+			out = append(out, m.MigrationKey)
+		}
+	}
+	return out
 }
 
 func (f *fakeStore) eventNames(key string) []string {
@@ -268,6 +298,22 @@ func (m *fakeMigrator) Apply(_ context.Context, _ tenancy.TenantID, slug string,
 		}
 	}
 	return nil
+}
+
+func (m *fakeMigrator) Applied(_ context.Context, _ tenancy.TenantID, slug string, fsys fs.FS) ([]migrate.AppliedMigration, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return nil, err
+	}
+	var out []migrate.AppliedMigration
+	for i, e := range entries {
+		if m.applied[slug][e.Name()] {
+			out = append(out, migrate.AppliedMigration{Version: int64(i + 1), Name: e.Name(), Checksum: "sum"})
+		}
+	}
+	return out, nil
 }
 
 func (m *fakeMigrator) Pending(_ context.Context, _ tenancy.TenantID, slug string, fsys fs.FS) ([]string, error) {

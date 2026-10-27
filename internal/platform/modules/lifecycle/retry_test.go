@@ -141,6 +141,32 @@ func TestRetryModule_CallsOnStartedWithOperationID(t *testing.T) {
 	}
 }
 
+// B-7: pencatatan module_migrations gagal setelah goose commit (tidak atomik). Retry harus menyelaraskan jejak dengan
+// goose_module_<slug>: file yang sudah diterapkan tetapi belum punya baris tercatat sebagai succeeded.
+func TestRetry_ReconcilesMigrationTrailWithGoose(t *testing.T) {
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a", migrations: fxMigFS()})
+	e := newEnv(t, rec, a)
+	e.st.failRecordN = 100 // DB error: semua pencatatan jejak gagal selama install
+	res, err := e.exec(OpInstall, "acme.a")
+	if err != nil || len(res) != 1 || res[0].Status != "failed" {
+		t.Fatalf("install = %+v, %v", res, err)
+	}
+	if got := e.st.migrationKeys(); len(got) != 0 {
+		t.Fatalf("belum ada jejak yang boleh tercatat: %v", got)
+	}
+	e.st.failRecordN = 0 // pulih; goose sudah menerapkan file pertama, retry tidak menjalankannya lagi tetapi jejaknya harus dilengkapi.
+	r, err := e.svc.Retry(context.Background(), tenantA, res[0].OperationID, "cli:tester")
+	if err != nil || r.Status != "succeeded" {
+		t.Fatalf("Retry = %+v, %v", r, err)
+	}
+	got := e.st.migrationKeys()
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"0001_one.sql", "0002_two.sql"}) {
+		t.Errorf("jejak module_migrations = %v, want kedua file tercatat tepat sekali", got)
+	}
+}
+
 // B-1: retry enable yang gagal di health harus menjalankan ulang hook:enable, karena efeknya sudah dibatalkan
 // kompensasi hook:disable (langkah hook:enable pada operasi asal tercatat succeeded).
 func TestRetry_EnableAfterHealthFailureRerunsHookEnable(t *testing.T) {

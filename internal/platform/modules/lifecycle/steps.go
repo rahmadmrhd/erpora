@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -344,6 +345,15 @@ func (r *opRun) stepMigrate(ctx context.Context) error {
 			Checksum: a.Checksum, ExecutionStatus: "succeeded", OperationID: r.opID,
 		})
 	})
+	// Jejak module_migrations ditulis setelah goose commit dan tidak atomik dengannya (B-7): apa pun hasil Apply,
+	// selaraskan jejak dengan tabel goose agar file yang sudah diterapkan tetapi belum tercatat (crash/DB error
+	// di antara commit dan pencatatan) tidak hilang selamanya dari jejak.
+	if rerr := r.reconcileMigrationTrail(ctx, src.Migrations()); rerr != nil {
+		if err == nil {
+			return rerr
+		}
+		r.s.log.WarnContext(ctx, "selaraskan jejak migrasi gagal", "error", rerr)
+	}
 	var me *migrate.MigrationError
 	if errors.As(err, &me) {
 		rerr := r.s.d.Store.RecordModuleMigration(ctx, store.ModuleMigration{
@@ -356,6 +366,31 @@ func (r *opRun) stepMigrate(ctx context.Context) error {
 		return &stepFailure{code: codeMigrationFailed, err: err, details: map[string]any{"migration": me.Name, "version": me.Version}}
 	}
 	return err
+}
+
+// reconcileMigrationTrail mencatat sebagai succeeded setiap file yang tertera diterapkan di goose_module_<slug>
+// tetapi belum punya baris succeeded di module_migrations.
+func (r *opRun) reconcileMigrationTrail(ctx context.Context, fsys fs.FS) error {
+	applied, err := r.s.d.Migrator.Applied(ctx, r.t, r.entry.Manifest.Slug, fsys)
+	if err != nil {
+		return err
+	}
+	recorded, err := r.s.d.Store.RecordedModuleMigrations(ctx, r.t, r.key)
+	if err != nil {
+		return err
+	}
+	for _, a := range applied {
+		if recorded[a.Name] {
+			continue
+		}
+		if err := r.s.d.Store.RecordModuleMigration(ctx, store.ModuleMigration{
+			TenantID: r.t, ModuleKey: r.key, ModuleVersion: r.version(), MigrationKey: a.Name,
+			Checksum: a.Checksum, ExecutionStatus: "succeeded", OperationID: r.opID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *opRun) hook(ctx context.Context, call func(ctx context.Context, env module.Env) error, implemented bool) error {

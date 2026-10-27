@@ -488,6 +488,25 @@ func (s *Store) Events(ctx context.Context, t tenancy.TenantID, key string, page
 	return out, total, nil
 }
 
+// RecordedModuleMigrations mengembalikan himpunan migration_key yang tercatat succeeded untuk modul di tenant DB.
+func (s *Store) RecordedModuleMigrations(ctx context.Context, t tenancy.TenantID, key string) (map[string]bool, error) {
+	db, err := s.tenants.For(ctx, t)
+	if err != nil {
+		return nil, fmt.Errorf("store: tenant DB: %w", err)
+	}
+	var keys []string
+	if err := db.WithContext(ctx).Model(&moduleMigrationRow{}).
+		Where("tenant_id = ? AND module_key = ? AND execution_status = ?", tid(t), key, "succeeded").
+		Pluck("migration_key", &keys).Error; err != nil {
+		return nil, fmt.Errorf("store: baca module_migrations: %w", err)
+	}
+	out := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		out[k] = true
+	}
+	return out, nil
+}
+
 // RecordModuleMigration mencatat jejak migrasi modul ke tenant DB lewat connector.
 func (s *Store) RecordModuleMigration(ctx context.Context, m ModuleMigration) error {
 	db, err := s.tenants.For(ctx, m.TenantID)

@@ -96,6 +96,40 @@ func ApplyModule(ctx context.Context, db *database.DB, slug string, fsys fs.FS, 
 	}
 }
 
+// AppliedModuleMigrations mengembalikan file migrasi tertanam yang tercatat diterapkan di tabel goose modul, terurut
+// menurut versi (read-only; tabel goose yang belum ada berarti tidak ada yang diterapkan). Dipakai lifecycle untuk
+// menyelaraskan jejak module_migrations, yang ditulis setelah goose commit dan tidak atomik dengannya (B-7).
+func AppliedModuleMigrations(ctx context.Context, db *database.DB, slug string, fsys fs.FS) ([]AppliedMigration, error) {
+	applied, err := appliedVersions(ctx, db, ModuleTable(slug))
+	if err != nil {
+		return nil, err
+	}
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return nil, fmt.Errorf("migrasi modul %s: %w", slug, err)
+	}
+	var out []AppliedMigration
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		v, err := versionOf(e.Name())
+		if err != nil {
+			return nil, err
+		}
+		if !applied[v] {
+			continue
+		}
+		sum, err := fileChecksum(fsys, e.Name())
+		if err != nil {
+			return nil, fmt.Errorf("migrasi modul %s: %w", slug, err)
+		}
+		out = append(out, AppliedMigration{Version: v, Name: e.Name(), Checksum: sum})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
+	return out, nil
+}
+
 func fileChecksum(fsys fs.FS, p string) (string, error) {
 	b, err := fs.ReadFile(fsys, p)
 	if err != nil {

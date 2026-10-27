@@ -35,12 +35,16 @@ type Store interface {
 	RunningOperations(ctx context.Context, t tenancy.TenantID) ([]store.Operation, error)
 	Events(ctx context.Context, t tenancy.TenantID, key string, page, pageSize int) ([]store.Event, int64, error)
 	RecordModuleMigration(ctx context.Context, m store.ModuleMigration) error
+	// RecordedModuleMigrations mengembalikan migration_key yang sudah tercatat succeeded untuk modul (B-7).
+	RecordedModuleMigrations(ctx context.Context, t tenancy.TenantID, key string) (map[string]bool, error)
 }
 
 // Migrator menerapkan migrasi modul pada tenant DB.
 type Migrator interface {
 	Apply(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS, after func(migrate.AppliedMigration) error) error
 	Pending(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS) ([]string, error)
+	// Applied mengembalikan file migrasi tertanam yang tercatat diterapkan di tabel goose modul (nama, versi, checksum).
+	Applied(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS) ([]migrate.AppliedMigration, error)
 }
 
 type connMigrator struct{ conn database.TenantConnector }
@@ -62,6 +66,14 @@ func (m connMigrator) Pending(ctx context.Context, t tenancy.TenantID, slug stri
 		return nil, err
 	}
 	return migrate.PendingModuleMigrations(ctx, db.DB, slug, fsys)
+}
+
+func (m connMigrator) Applied(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS) ([]migrate.AppliedMigration, error) {
+	db, err := m.conn.For(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return migrate.AppliedModuleMigrations(ctx, db.DB, slug, fsys)
 }
 
 // DefaultLockTimeout adalah batas tunggu advisory lock lifecycle tenant.
