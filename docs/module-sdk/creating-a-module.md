@@ -89,7 +89,7 @@ Manifest wajib dibangun lewat `module.ParseManifest`/`MustParseManifest` dari `m
 
 ## 4. `Register`: route dan command
 
-Modul tidak menerima router. Modul memanggil `Registrar` dan platform yang memasang route:
+Modul tidak menerima router. Modul memanggil `Registrar` dan platform yang memasang route. `Handle` dan `Public` menerima opsi variadik (`module.MaxBodyBytes`, `module.Classify`); handler memakai `erpora/sdk/httpx` untuk amplop respons/error dan `httpx.DecodeJSON` untuk body, `erpora/sdk/egress` untuk koneksi keluar, dan `erpora/sdk/export` untuk ekspor (lihat [`security-primitives.md`](security-primitives.md)):
 
 ```go
 func (m *Module) Register(r module.Registrar) error {
