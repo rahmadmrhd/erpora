@@ -73,13 +73,14 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 | `ERP_DATABASE_URL` | ✅ | — | `postgres://erp:PASSWORD@localhost:5432/erp?sslmode=disable` (gunakan `sslmode=require`/`verify-full` untuk DB remote) |
 | `ERP_DB_SLOW_QUERY_MS` | | `200` | Ambang (milidetik, bilangan bulat ≥ 0) untuk mencatat query database yang melebihi batas sebagai `slow query` (level WARN). `0` menonaktifkan pencatatan query lambat |
 | `ERP_SECRET_KEY` | ✅ (sejak PRD-001) | — | 🔶 Belum tersedia (menunggu PRD-001). 32 byte acak (base64) untuk mengenkripsi kunci JWT, secret settings, dan secret MFA. **Simpan cadangannya terpisah dari backup database**: tanpa kunci ini, data terenkripsi di backup tidak dapat dibaca. Buat dengan `openssl rand -base64 32` |
-| `ERP_ENV` | | `production` | `development` mengaktifkan API mutasi modul & log teks |
+| `ERP_ENV` | | `production` | `development` mengaktifkan API mutasi modul, deteksi N+1, & log teks |
 | `ERP_HTTP_ADDR` | | `127.0.0.1:8080` | Alamat listen. Jangan pakai `0.0.0.0` kecuali ada firewall/proxy |
 | `ERP_LOG_FORMAT` | | `json` | `json` atau `text` |
 | `ERP_TENANCY_MODE` | | `single` | Satu-satunya nilai valid saat ini |
 | `ERP_DEFAULT_TENANT_ID` | | (dibuat otomatis) | UUID tenant default |
 | `ERP_AUTHZ_STUB` | | `deny` (`allow` bila `ERP_ENV=development`) | Mode stub otorisasi sampai PRD-001: `allow` atau `deny`. **`allow` ditolak saat `ERP_ENV=production`** (keputusan Q25) |
-| `ERP_MODULES_ADMIN_API` | | `false` | 🔶 Belum tersedia. **Biarkan `false` di production** sampai autentikasi tersedia; kelola modul lewat CLI |
+| `ERP_MODULES_ADMIN_API` | | `false` | `true` mengaktifkan endpoint **mutasi** `POST /api/platform/modules/{key}/{operation}` di luar `development` (selain itu `404`). **Biarkan `false` di production** sampai autentikasi (PRD-001) tersedia; kelola modul lewat CLI. Endpoint baca tetap tunduk pada permission (`ERP_AUTHZ_STUB`) |
+| `ERP_DB_NPLUSONE_THRESHOLD` | | `10` | Hanya di `development`: peringatan `indikasi N+1` bila satu request menjalankan lebih dari N query dengan bentuk SQL yang sama. `0` mematikan |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | (kosong = telemetry nonaktif) | Endpoint OpenTelemetry Collector |
 | `OTEL_SERVICE_NAME` | | `erpora` | |
 
@@ -124,6 +125,16 @@ sudo -u erpora /opt/erpora/bin/erpora modules list --env-file /etc/erpora/erpora
 # Administrator pertama (sejak PRD-001); password diminta secara interaktif
 sudo -u erpora /opt/erpora/bin/erpora core:create-admin --email admin@example.com --env-file /etc/erpora/erpora.env
 ```
+
+Catatan operasional CLI `erpora modules`:
+
+- **Exit code**: `0` sukses atau tidak ada perubahan; `2` validasi (argumen, key/operasi tidak dikenal, `--tenant` bukan tenant default, konfirmasi `uninstall` hilang: pakai `--yes` di skrip); `3` konflik atau prasyarat tidak terpenuhi (`invalid_transition`, `dependents_active`, `module_required`, `operation_in_progress`, `module_incompatible`); `4` operasi gagal (lihat `modules status <key>`); `1` lainnya.
+- Perintah idempoten: operasi yang status targetnya sudah tercapai mencetak `tidak ada perubahan` dan exit `0`, sehingga `modules install --all --enable` aman diulang.
+- `erpora migrate up` juga meng-install dan meng-enable modul `required` (beserta dependensinya) dengan actor `system:migrate`.
+- `--all` melewati modul yang transisinya tidak sah dan menolak seluruh rencana bila ada prasyarat yang gagal (exit `3`); pakai `modules plan <operasi> --all` untuk dry-run.
+- **Propagasi**: `serve` memeriksa revision status modul setiap 2 detik, jadi perubahan dari CLI terlihat di proses `serve` yang sedang berjalan dalam ≤ 2 detik tanpa restart.
+- Operasi yang gagal atau terputus dilanjutkan dengan `erpora modules retry <operation-id>` (ID ada di `modules status <key>`).
+- API mutasi (bila diaktifkan) menunggu operasi sampai 30 detik; operasi yang lebih lama dijawab `202` dengan header `Location: /api/platform/modules/operations/{id}` untuk dipantau.
 
 Saat login pertama, Administrator wajib mendaftarkan MFA (TOTP). Simpan recovery code di tempat aman. Bila Administrator terakhir kehilangan akses MFA, jalankan `erpora core:reset-mfa` di server.
 
