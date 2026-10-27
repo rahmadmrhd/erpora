@@ -16,26 +16,31 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
-// tagRe: "modules/<dir>/v<semver>" atau "sdk/v<semver>". <dir> = slug tanpa tanda hubung (keputusan 13).
-var tagRe = regexp.MustCompile(`^(?:modules/([a-z0-9]+)|(sdk))/v(.+)$`)
+// tagRe: "modules/<dir>/v<semver>", "sdk/v<semver>", atau tag platform "v<semver>" (Q32 K-6). <dir> = slug tanpa tanda
+// hubung (keputusan 13).
+var tagRe = regexp.MustCompile(`^(?:modules/([a-z0-9]+)/|(sdk)/)?v(.+)$`)
 
 // VerifyTag memeriksa tag rilis terhadap pohon kerja di root:
 //   - "modules/<dir>/vX.Y.Z[-pre]": modules/<dir>/go.mod ada dengan path erpora/modules/<dir>, dan module.json
 //     memuat version yang sama persis dengan versi tag;
-//   - "sdk/vX.Y.Z[-pre]": const SDKVersion di sdk/module/version.go (dibaca lewat go/parser) sama dengan versi tag.
+//   - "sdk/vX.Y.Z[-pre]": const SDKVersion di sdk/module/version.go (dibaca lewat go/parser) sama dengan versi tag;
+//   - "vX.Y.Z[-pre]" (platform): const PlatformVersion di internal/platform/buildinfo (go/parser) sama dengan versi tag.
 //
 // Tag lain atau versi yang bukan semver penuh ditolak. Pesan error menyebut nilai tag dan nilai sumber.
 func VerifyTag(root, tag string) error {
 	m := tagRe.FindStringSubmatch(tag)
 	if m == nil {
-		return fmt.Errorf("format tag %q tidak dikenal: pakai modules/<dir>/vX.Y.Z atau sdk/vX.Y.Z", tag)
+		return fmt.Errorf("format tag %q tidak dikenal: pakai modules/<dir>/vX.Y.Z, sdk/vX.Y.Z, atau vX.Y.Z", tag)
 	}
 	ver := m[3]
 	if _, err := semver.StrictNewVersion(ver); err != nil {
 		return fmt.Errorf("format tag %q: versi %q bukan semver penuh (X.Y.Z[-prerelease])", tag, ver)
 	}
-	if m[2] == "sdk" {
-		return verifySDK(root, tag, ver)
+	switch {
+	case m[2] == "sdk":
+		return verifyConst(filepath.Join(root, "sdk", "module", "version.go"), "SDKVersion", tag, ver, "SDKVersion (sdk/module/version.go)")
+	case m[1] == "":
+		return verifyConst(filepath.Join(root, "internal", "platform", "buildinfo", "buildinfo.go"), "PlatformVersion", tag, ver, "PlatformVersion (internal/platform/buildinfo)")
 	}
 	return verifyModule(root, tag, m[1], ver)
 }
@@ -69,8 +74,8 @@ func verifyModule(root, tag, dir, ver string) error {
 	return nil
 }
 
-func verifySDK(root, tag, ver string) error {
-	path := filepath.Join(root, "sdk", "module", "version.go")
+// verifyConst membaca const string name dari file Go (go/parser) dan membandingkannya dengan versi tag.
+func verifyConst(path, name, tag, ver, label string) error {
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 	if err != nil {
 		return fmt.Errorf("tag %s: %w", tag, err)
@@ -84,7 +89,7 @@ func verifySDK(root, tag, ver string) error {
 		for _, s := range gd.Specs {
 			vs := s.(*ast.ValueSpec) //nolint:errcheck,forcetypeassert // GenDecl CONST selalu berisi ValueSpec
 			for i, n := range vs.Names {
-				if n.Name != "SDKVersion" || i >= len(vs.Values) {
+				if n.Name != name || i >= len(vs.Values) {
 					continue
 				}
 				if lit, isLit := vs.Values[i].(*ast.BasicLit); isLit && lit.Kind == token.STRING {
@@ -96,10 +101,10 @@ func verifySDK(root, tag, ver string) error {
 		}
 	}
 	if !ok {
-		return fmt.Errorf("tag %s: const string SDKVersion tidak ditemukan di sdk/module/version.go", tag)
+		return fmt.Errorf("tag %s: const string %s tidak ditemukan di %s", tag, name, path)
 	}
 	if got != ver {
-		return fmt.Errorf("tag %s: versi tag %s berbeda dari SDKVersion (%s)", tag, ver, got)
+		return fmt.Errorf("tag %s: versi tag %s berbeda dari %s: %s", tag, ver, label, got)
 	}
 	return nil
 }

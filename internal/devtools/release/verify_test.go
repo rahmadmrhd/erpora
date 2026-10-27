@@ -22,6 +22,7 @@ func fixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	write(t, root, "sdk/module/version.go", "package module\n\n// SDKVersion adalah versi SDK.\nconst SDKVersion = \"0.1.0\"\n")
+	write(t, root, "internal/platform/buildinfo/buildinfo.go", "package buildinfo\n\n// PlatformVersion adalah versi platform.\nconst PlatformVersion = \"0.1.0\"\n")
 	write(t, root, "modules/example/go.mod", "module erpora/modules/example\n\ngo 1.27\n")
 	write(t, root, "modules/example/module.json", `{"key":"acme.example","slug":"example","version":"1.0.0"}`)
 	write(t, root, "modules/exampleaddon/go.mod", "module erpora/modules/exampleaddon\n\ngo 1.27\n")
@@ -46,7 +47,11 @@ func TestVerifyTag_Table(t *testing.T) {
 		{"modules/wrongpath/v1.0.0", "erpora/modules/other"},
 		{"sdk/v0.1.0", ""},
 		{"sdk/v0.2.0", "0.1.0"},
-		{"v1.0.0", "format"},
+		// Q32 K-6: tag root vX.Y.Z dicocokkan dengan buildinfo.PlatformVersion.
+		{"v0.1.0", ""},
+		{"v1.0.0", "0.1.0"},
+		{"v0.1", "format"},
+		{"vabc", "format"},
 		{"modules/example/1.0.0", "format"},
 		{"modules/example/v1.0", "format"},
 		{"modules/../sdk/v0.1.0", "format"},
@@ -78,6 +83,9 @@ func TestVerifyTag_RepositoryTagsMatchCurrentVersions(t *testing.T) {
 	// Tag untuk versi yang kini ada di repo harus lolos: menjaga parser tetap cocok dengan file asli.
 	if err := VerifyTag("../../..", "modules/example/v1.0.0"); err != nil {
 		t.Errorf("modules/example: %v", err)
+	}
+	if err := VerifyTag("../../..", "v0.1.0"); err != nil {
+		t.Errorf("platform: %v", err)
 	}
 	if err := VerifyTag("../../..", "sdk/v0.1.0"); err != nil {
 		t.Errorf("sdk: %v", err)

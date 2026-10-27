@@ -1,12 +1,13 @@
 name: Release tag
 
 # Tag rilis modul dan SDK (PRD-000 FR-14): versi pada tag harus sama dengan version di module.json
-# (modules/<dir>/vX.Y.Z) atau SDKVersion (sdk/vX.Y.Z). Tag platform (vX.Y.Z) tidak divalidasi di sini.
+# (modules/<dir>/vX.Y.Z), SDKVersion (sdk/vX.Y.Z), atau buildinfo.PlatformVersion (tag platform vX.Y.Z; Q32 K-6).
 on:
   push:
     tags:
       - "modules/*/v*"
       - "sdk/v*"
+      - "v*"
 
 permissions:
   contents: read

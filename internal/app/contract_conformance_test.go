@@ -7,6 +7,7 @@ import (
 
 	"erpora/contracts"
 	"erpora/internal/platform/apicontract"
+	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/modules/registry"
 	"erpora/modules/example"
@@ -68,6 +69,19 @@ func mismatchKinds(ms []apicontract.Mismatch) []string {
 		out[i] = m.Kind + " " + m.Module + " " + m.Method + " " + m.Path + ": " + m.Detail
 	}
 	return out
+}
+
+// K-6 (Q32): versi kontrak platform (info.version di platform.yaml, dipakai approval breaking dan baseline tag vX.Y.Z)
+// harus sama dengan buildinfo.PlatformVersion yang divalidasi workflow tag root.
+func TestContracts_PlatformContractVersionEqualsPlatformVersion(t *testing.T) {
+	d, err := apicontract.Parse("platform", contracts.PlatformOpenAPI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, _ := d.Spec["info"].(map[string]any)
+	if v, _ := info["version"].(string); v != buildinfo.PlatformVersion {
+		t.Errorf("info.version platform.yaml = %q, buildinfo.PlatformVersion = %q: harus sama (naikkan keduanya bersamaan)", v, buildinfo.PlatformVersion)
+	}
 }
 
 func TestContracts_EveryEntryHasContract(t *testing.T) {
