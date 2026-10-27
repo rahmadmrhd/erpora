@@ -47,33 +47,48 @@ type realEnv struct {
 	svc  *Service
 	db   *gorm.DB
 	st   *store.Store
-	mod  *fxModule
 	snap *runtime.Snapshot
 	reg  *registry.Registry
 	dsn  string
 }
 
-func newRealService(t *testing.T, dsn string, db *gorm.DB, lockTimeout time.Duration, mods ...*fxModule) *realEnv {
+func newRealService(t *testing.T, dsn string, db *gorm.DB, lockTimeout time.Duration, mods []*fxModule, opts ...func(*Deps)) *realEnv {
 	t.Helper()
 	conn := database.SingleTenantConnector{Default: tenantA, DB: database.TenantDB{DB: db}}
 	st := store.New(database.ControlDB{DB: db}, conn)
 	reg := buildFxRegistry(t, mods...)
 	snap := runtime.NewSnapshot()
-	svc := New(Deps{
+	deps := Deps{
 		Registry: reg, Store: st, Migrator: NewMigrator(conn), Tenants: conn,
 		Snapshot: snap, Notifier: runtime.NewLocalNotifier(), LockTimeout: lockTimeout,
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	svc := New(deps)
 	return &realEnv{svc: svc, db: db, st: st, snap: snap, reg: reg, dsn: dsn}
 }
 
-func newRealEnv(t *testing.T, mods ...*fxModule) *realEnv {
+type dbHandle struct {
+	dsn string
+	db  *gorm.DB
+}
+
+// newRealEnvDSN menyalakan PostgreSQL dan menjalankan migrasi platform.
+func newRealEnvDSN(t *testing.T) dbHandle {
 	t.Helper()
 	dsn := pgtest.Start(t)
 	db := openRealDB(t, dsn)
 	if err := migrate.Up(context.Background(), db, config.EnvProduction); err != nil {
 		t.Fatal(err)
 	}
-	return newRealService(t, dsn, db, 0, mods...)
+	return dbHandle{dsn: dsn, db: db}
+}
+
+func newRealEnv(t *testing.T, mods ...*fxModule) *realEnv {
+	t.Helper()
+	h := newRealEnvDSN(t)
+	return newRealService(t, h.dsn, h.db, 0, mods)
 }
 
 func (e *realEnv) exec(t *testing.T, op Op, key string) Result {
@@ -178,8 +193,8 @@ func TestService_ConcurrentEnableTwoStores(t *testing.T) {
 		<-release
 		return nil
 	})
-	e1 := newRealService(t, dsn, db1, 300*time.Millisecond, m1)
-	e2 := newRealService(t, dsn, db2, 300*time.Millisecond, m2)
+	e1 := newRealService(t, dsn, db1, 300*time.Millisecond, []*fxModule{m1})
+	e2 := newRealService(t, dsn, db2, 300*time.Millisecond, []*fxModule{m2})
 	e1.exec(t, OpInstall, "acme.fx-mod")
 	revBefore, _ := e1.st.Revision(ctx, tenantA)
 

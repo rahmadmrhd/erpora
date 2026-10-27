@@ -215,7 +215,7 @@ func (s *Service) expand(req Request) ([]item, error) {
 // simulate memvalidasi seluruh rencana terhadap salinan status (tanpa menulis). Pada --all, transisi yang
 // tidak sah dilewati (modul tidak relevan), sedangkan prasyarat yang gagal menolak seluruh rencana. Hasil
 // parsial dikembalikan bersama error pertama.
-func (s *Service) simulate(items []item, rows map[string]store.Installation, all bool) ([]plannedStep, error) {
+func (s *Service) simulate(items []item, rows map[string]store.Installation, all bool) ([]plannedStep, item, error) {
 	sim := maps.Clone(rows)
 	if sim == nil {
 		sim = map[string]store.Installation{}
@@ -235,11 +235,11 @@ func (s *Service) simulate(items []item, rows map[string]store.Installation, all
 			if all {
 				continue
 			}
-			return out, err
+			return out, it, err
 		}
 		if !noop {
 			if err := Check(it.op, it.key, view); err != nil {
-				return out, err
+				return out, it, err
 			}
 			if it.op == OpUpgrade {
 				to = upgradeTarget(cur)
@@ -256,7 +256,7 @@ func (s *Service) simulate(items []item, rows map[string]store.Installation, all
 		}
 		sim[it.key] = next
 	}
-	return out, nil
+	return out, item{}, nil
 }
 
 // upgradeTarget adalah status setelah upgrade sukses: previous_status (installed bila kosong).
@@ -283,14 +283,14 @@ func (s *Service) Execute(ctx context.Context, req Request) ([]Result, error) {
 	}
 	var results []Result
 	err = s.d.Store.WithTenantLock(ctx, req.Tenant, s.lockTimeout(), func(ctx context.Context) error {
-		if err := s.markInterrupted(ctx, req.Tenant); err != nil {
+		if _, err := s.markInterrupted(ctx, req.Tenant); err != nil {
 			return err
 		}
 		rows, err := s.loadRows(ctx, req.Tenant)
 		if err != nil {
 			return err
 		}
-		planned, perr := s.simulate(items, rows, req.All)
+		planned, _, perr := s.simulate(items, rows, req.All)
 		if perr != nil {
 			return perr
 		}
@@ -306,9 +306,7 @@ func (s *Service) Execute(ctx context.Context, req Request) ([]Result, error) {
 		}
 		return nil
 	})
-	if errors.Is(err, store.ErrLockTimeout) {
-		err = &Error{Code: CodeOperationInProgress, Module: req.Key, Message: "operasi lifecycle lain sedang berjalan untuk tenant ini"}
-	}
+	err = mapLockErr(err, req.Key)
 	if err != nil {
 		s.logRejected(ctx, req, err)
 	}
@@ -320,4 +318,12 @@ func (s *Service) logRejected(ctx context.Context, req Request, err error) {
 	if errors.As(err, &le) {
 		s.log.WarnContext(ctx, "operasi lifecycle ditolak", "operation", string(req.Op), "erp.module.key", req.Key, "code", le.Code, "message", le.Message, "actor", req.Actor)
 	}
+}
+
+// mapLockErr mengubah store.ErrLockTimeout menjadi *Error operation_in_progress.
+func mapLockErr(err error, key string) error {
+	if errors.Is(err, store.ErrLockTimeout) {
+		return &Error{Code: CodeOperationInProgress, Module: key, Message: "operasi lifecycle lain sedang berjalan untuk tenant ini"}
+	}
+	return err
 }
