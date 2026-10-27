@@ -272,4 +272,21 @@ func TestExecGit_ShowMissingIsNotExist(t *testing.T) {
 	}
 }
 
+// K-10: deteksi "tidak ada" tidak boleh bergantung pada teks pesan git (locale); rev tidak valid bukan NotExist.
+func TestExecGit_ShowNotExistIndependentOfLocaleAndBadRev(t *testing.T) {
+	root := releasedRepo(t)
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	t.Setenv("LANGUAGE", "de")
+	g := ExecGit(root)
+	if _, err := g.Show(context.Background(), "modules/example/v1.0.0", "tidak/ada.yaml"); !isNotExist(err) {
+		t.Errorf("path hilang: err = %v, want fs.ErrNotExist", err)
+	}
+	if b, err := g.Show(context.Background(), "modules/example/v1.0.0", "modules/example/module.json"); err != nil || len(b) == 0 {
+		t.Errorf("path ada: %d byte, %v", len(b), err)
+	}
+	if _, err := g.Show(context.Background(), "tag-tidak-ada", "modules/example/module.json"); err == nil || isNotExist(err) {
+		t.Errorf("rev tidak valid harus error biasa (bukan NotExist): %v", err)
+	}
+}
+
 func isNotExist(err error) bool { return errors.Is(err, fs.ErrNotExist) }

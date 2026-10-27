@@ -46,11 +46,17 @@ func (g execGit) Tags(ctx context.Context, pattern string) ([]string, error) {
 }
 
 func (g execGit) Show(ctx context.Context, rev, path string) ([]byte, error) {
+	// Keberadaan path ditentukan dari keluaran `git ls-tree` (kosong = tidak ada), bukan dari teks pesan error git yang
+	// bergantung locale (K-10). rev yang tidak valid membuat ls-tree gagal (exit non-nol) dan dilaporkan sebagai error biasa.
+	listed, stderr, err := g.run(ctx, "ls-tree", "--name-only", rev, "--", path)
+	if err != nil {
+		return nil, fmt.Errorf("git ls-tree %s -- %s: %w: %s", rev, path, err, strings.TrimSpace(stderr))
+	}
+	if strings.TrimSpace(string(listed)) == "" {
+		return nil, fmt.Errorf("%s:%s: %w", rev, path, fs.ErrNotExist)
+	}
 	out, stderr, err := g.run(ctx, "show", rev+":"+path)
 	if err != nil {
-		if strings.Contains(stderr, "does not exist") || strings.Contains(stderr, "exists on disk, but not in") {
-			return nil, fmt.Errorf("%s:%s: %w", rev, path, fs.ErrNotExist)
-		}
 		return nil, fmt.Errorf("git show %s:%s: %w: %s", rev, path, err, strings.TrimSpace(stderr))
 	}
 	return out, nil
