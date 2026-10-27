@@ -46,8 +46,11 @@ type Probe interface {
 // Inputs adalah masukan Run.
 type Inputs struct {
 	Root, EnvFile string // EnvFile kosong = <Root>/.env
-	DSN           string // kosong = ERP_DATABASE_URL belum diatur
-	Ping          func(ctx context.Context, dsn string) error
+	DSN           string // kosong = ERP_DATABASE_URL belum diatur (kecuali ConfigErr terisi)
+	// ConfigErr adalah pesan galat pemuatan konfigurasi selain DSN yang belum diatur (mis. ERP_ENV tidak valid, env-file rusak);
+	// bila terisi, koneksi tidak diperiksa dan pesan ini yang ditampilkan.
+	ConfigErr string
+	Ping      func(ctx context.Context, dsn string) error
 }
 
 // ExecProbe adalah Probe sungguhan (os/exec + os.Stat).
@@ -172,6 +175,9 @@ func checkDocker(ctx context.Context, p Probe) Result {
 }
 
 func checkPostgres(ctx context.Context, in Inputs) Result {
+	if in.ConfigErr != "" {
+		return Result{Name: "postgres", Status: StatusWarn, Detail: "konfigurasi tidak dapat dimuat (koneksi tidak diperiksa): " + in.ConfigErr}
+	}
 	if strings.TrimSpace(in.DSN) == "" {
 		return Result{Name: "postgres", Status: StatusWarn, Detail: "ERP_DATABASE_URL belum diatur"}
 	}

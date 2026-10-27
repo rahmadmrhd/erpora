@@ -132,6 +132,22 @@ func TestRun_Table(t *testing.T) {
 	}
 }
 
+// Catatan reviewer: kegagalan config.Load karena hal lain (mis. ERP_ENV tidak valid, env-file rusak) tidak boleh
+// dilaporkan sebagai "ERP_DATABASE_URL belum diatur"; pesan aslinya yang ditampilkan (status warn).
+func TestRun_ConfigLoadErrorReportedAccurately(t *testing.T) {
+	root := fixtureRoot(t)
+	rs := Run(context.Background(), Inputs{Root: root, ConfigErr: "ERP_ENV: harus development atau production"}, goodProbe(root))
+	st, detail := statusOf(rs, "postgres")
+	if st != StatusWarn || !strings.Contains(detail, "ERP_ENV: harus development atau production") || strings.Contains(detail, "belum diatur") {
+		t.Fatalf("status=%s detail=%q", st, detail)
+	}
+	// Tanpa galat config dan tanpa DSN tetap "belum diatur".
+	rs = Run(context.Background(), Inputs{Root: root}, goodProbe(root))
+	if _, d := statusOf(rs, "postgres"); !strings.Contains(d, "belum diatur") {
+		t.Errorf("detail = %q", d)
+	}
+}
+
 func TestRun_PostgresDetailRedactsPassword(t *testing.T) {
 	root := fixtureRoot(t)
 	p := goodProbe(root)

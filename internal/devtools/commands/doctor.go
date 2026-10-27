@@ -33,11 +33,18 @@ func newDoctor(opts Options) *cobra.Command {
 			if opts.EnvFile != nil {
 				envFile = opts.EnvFile()
 			}
-			dsn := ""
-			if cfg, err := config.Load(envFile); err == nil {
+			dsn, cfgErr := "", ""
+			cfg, err := config.Load(envFile)
+			var ve config.ValidationError
+			switch {
+			case err == nil:
 				dsn = cfg.DatabaseURL
+			case errors.As(err, &ve) && ve.Var == "ERP_DATABASE_URL":
+				// DSN belum diatur: dilaporkan oleh pemeriksaan postgres sebagai warn.
+			default:
+				cfgErr = err.Error() // galat konfigurasi lain (mis. ERP_ENV tidak valid): tampilkan apa adanya
 			}
-			rs := doctor.Run(c.Context(), doctor.Inputs{Root: root, EnvFile: envFile, DSN: dsn, Ping: pingPostgres}, doctor.ExecProbe{})
+			rs := doctor.Run(c.Context(), doctor.Inputs{Root: root, EnvFile: envFile, DSN: dsn, ConfigErr: cfgErr, Ping: pingPostgres}, doctor.ExecProbe{})
 			tw := tabwriter.NewWriter(c.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "NAMA\tSTATUS\tDETAIL")
 			for _, r := range rs {
