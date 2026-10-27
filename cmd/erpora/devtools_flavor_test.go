@@ -16,7 +16,7 @@ func stripBanner(s string) string { return strings.ReplaceAll(s, devtools.Banner
 // wantDevCommands: judul grup -> command dev yang harus terdaftar. Setiap task yang menambah command
 // developer tools menambah barisnya di sini.
 var wantDevCommands = map[string][]string{
-	"Kontrak": {"contracts:lint"},
+	"Kontrak": {"contracts:lint", "contracts:generate"},
 }
 
 func TestDevFlavor_BannerAndVersion(t *testing.T) {

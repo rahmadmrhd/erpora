@@ -5,6 +5,22 @@
     "": {
       "name": "erpora",
     },
+    "packages/module-sdk": {
+      "name": "@erpora/module-sdk",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@biomejs/biome": "2.6.2",
+        "typescript": "6.0.3",
+      },
+    },
+    "packages/platform-contracts": {
+      "name": "@erpora/platform-contracts",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@biomejs/biome": "2.6.2",
+        "typescript": "6.0.3",
+      },
+    },
     "web": {
       "name": "@erpora/web",
       "devDependencies": {
@@ -53,6 +69,10 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.6.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-/PEOo6evlgrQOfKhMNtC/4Gk8ai3hySXXEtjUzCqZe/4iAbMdqelpp7qvZEDyLxlZS+BjOMQFpq2gXI/BPaAqw=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.6.2", "", { "os": "win32", "cpu": "x64" }, "sha512-FVlWD+mDDz8nN5LWKRWUhhb7wKIK0VE3oXQvQBX7Fwwj00CvqMVhMyiz1iz8O5aZGmnkhFlKSwJPrUvMh5prQw=="],
+
+    "@erpora/module-sdk": ["@erpora/module-sdk@workspace:packages/module-sdk"],
+
+    "@erpora/platform-contracts": ["@erpora/platform-contracts@workspace:packages/platform-contracts"],
 
     "@erpora/web": ["@erpora/web@workspace:web"],
 

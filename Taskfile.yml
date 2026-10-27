@@ -166,9 +166,25 @@ tasks:
     desc: Typecheck, lint, dan dependency rules frontend
     cmds:
       - bun install --frozen-lockfile
-      - bun run --filter @erpora/web typecheck
-      - bun run --filter @erpora/web lint
+      - bun run --filter '*' typecheck
+      - bun run --filter '*' lint
       - bun run --filter @erpora/web deps
+
+  contracts:lint:
+    desc: Lint kontrak OpenAPI (Spectral; api-guidelines dan klasifikasi data)
+    cmds:
+      - go run -tags devtools ./cmd/erpora contracts:lint
+
+  contracts:generate:
+    desc: Bangkitkan tipe TS dari kontrak dan manifest (hasilnya di-commit)
+    cmds:
+      - go run -tags devtools ./cmd/erpora contracts:generate
+
+  contracts:check:
+    desc: Gate kontrak - lint, hasil generate mutakhir (dan breaking change sejak Task 8)
+    cmds:
+      - task: contracts:lint
+      - go run -tags devtools ./cmd/erpora contracts:generate --check
 
   ci:
     desc: Jalankan seluruh gate CI secara lokal
