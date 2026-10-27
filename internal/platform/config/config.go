@@ -32,7 +32,13 @@ type Config struct {
 	DBSlowQuery     time.Duration
 	// AuthzStub adalah mode stub otorisasi sampai PRD-001: "allow" atau "deny".
 	AuthzStub string
+	// ModulesAdminAPI (ERP_MODULES_ADMIN_API) mengaktifkan endpoint mutasi /api/platform/modules di luar
+	// development, sampai PRD-001 menyediakan autentikasi. Default false.
+	ModulesAdminAPI bool
 }
+
+// ModulesAdminAPIEnabled: endpoint mutasi modul aktif bila ERP_ENV=development atau ERP_MODULES_ADMIN_API=true.
+func (c Config) ModulesAdminAPIEnabled() bool { return c.Env == EnvDevelopment || c.ModulesAdminAPI }
 
 // ValidationError menyebut variabel environment yang tidak valid.
 type ValidationError struct{ Var, Reason string }
@@ -48,6 +54,7 @@ type raw struct {
 	DefaultTenantID string `env:"ERP_DEFAULT_TENANT_ID"`
 	DBSlowQueryMS   string `env:"ERP_DB_SLOW_QUERY_MS" envDefault:"200"`
 	AuthzStub       string `env:"ERP_AUTHZ_STUB"`
+	ModulesAdminAPI string `env:"ERP_MODULES_ADMIN_API"`
 }
 
 // Load membaca konfigurasi. envFile "" = tanpa file; environment proses menang atas isi file.
@@ -130,6 +137,13 @@ func Load(envFile string) (Config, error) {
 	}
 	if c.AuthzStub == "allow" && c.Env == EnvProduction {
 		return Config{}, ValidationError{"ERP_AUTHZ_STUB", "stub allow dilarang saat ERP_ENV=production: autentikasi dan otorisasi nyata baru tersedia lewat PRD-001, jadi gunakan deny (atau development untuk lokal)"}
+	}
+	switch r.ModulesAdminAPI {
+	case "", "false":
+	case "true":
+		c.ModulesAdminAPI = true
+	default:
+		return Config{}, ValidationError{"ERP_MODULES_ADMIN_API", "harus true atau false"}
 	}
 	var ms int
 	if _, err := fmt.Sscanf(r.DBSlowQueryMS, "%d", &ms); err != nil || ms < 0 || fmt.Sprint(ms) != strings.TrimSpace(r.DBSlowQueryMS) {

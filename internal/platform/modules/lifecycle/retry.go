@@ -29,7 +29,7 @@ func (s *Service) RetryModule(ctx context.Context, t tenancy.TenantID, key, acto
 			return store.Operation{}, err
 		}
 		if len(ops) == 0 {
-			return store.Operation{}, &Error{Code: CodeOperationNotFound, Module: key, Message: "modul belum punya operasi"}
+			return store.Operation{}, &Error{Code: CodeInvalidTransition, Module: key, Message: "modul belum punya operasi failed untuk di-retry"}
 		}
 		return ops[0], nil
 	})

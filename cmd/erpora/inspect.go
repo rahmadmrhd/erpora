@@ -38,6 +38,7 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				"ERP_TENANCY_MODE":      c.TenancyMode,
 				"ERP_DEFAULT_TENANT_ID": tenant,
 				"ERP_AUTHZ_STUB":        c.AuthzStub,
+				"ERP_MODULES_ADMIN_API": strconv.FormatBool(c.ModulesAdminAPI),
 				"ERP_DB_SLOW_QUERY_MS":  strconv.FormatInt(c.DBSlowQuery.Milliseconds(), 10),
 				"flavor":                buildinfo.Flavor(),
 			}

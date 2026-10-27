@@ -84,3 +84,14 @@ func etagMatches(values []string, etag string) bool {
 	}
 	return false
 }
+
+// CheckETag memasang header ETag dan, bila If-None-Match cocok, menjawab 304 lalu mengembalikan true
+// (handler harus berhenti). etag sudah berbentuk kutip, mis. `"7"`.
+func CheckETag(w http.ResponseWriter, r *http.Request, etag string) bool {
+	w.Header().Set("ETag", etag)
+	if etagMatches(r.Header[textproto.CanonicalMIMEHeaderKey("If-None-Match")], etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	return false
+}

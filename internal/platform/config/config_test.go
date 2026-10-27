@@ -14,7 +14,7 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"ERP_DATABASE_URL", "ERP_ENV", "ERP_HTTP_ADDR", "ERP_LOG_FORMAT",
-		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS",
+		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_MODULES_ADMIN_API",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -210,5 +210,40 @@ func TestLoad_EnvFileParseErrorDoesNotLeakSecrets(t *testing.T) {
 				t.Fatalf("error tidak menyebut file: %v", err)
 			}
 		})
+	}
+}
+
+func TestLoad_ModulesAdminAPI(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_DATABASE_URL", "postgres://u:p@h/db")
+
+	t.Setenv("ERP_MODULES_ADMIN_API", "yes")
+	_, err := Load("")
+	wantVar(t, err, "ERP_MODULES_ADMIN_API")
+
+	t.Setenv("ERP_ENV", "production")
+	t.Setenv("ERP_MODULES_ADMIN_API", "")
+	c, err := Load("")
+	if err != nil || c.ModulesAdminAPI || c.ModulesAdminAPIEnabled() {
+		t.Fatalf("production default: %+v, %v", c, err)
+	}
+
+	t.Setenv("ERP_MODULES_ADMIN_API", "true")
+	c, err = Load("")
+	if err != nil || !c.ModulesAdminAPI || !c.ModulesAdminAPIEnabled() {
+		t.Fatalf("production + true: %+v, %v", c, err)
+	}
+
+	t.Setenv("ERP_MODULES_ADMIN_API", "false")
+	c, err = Load("")
+	if err != nil || c.ModulesAdminAPIEnabled() {
+		t.Fatalf("production + false: %+v, %v", c, err)
+	}
+
+	t.Setenv("ERP_ENV", "development")
+	t.Setenv("ERP_MODULES_ADMIN_API", "")
+	c, err = Load("")
+	if err != nil || c.ModulesAdminAPI || !c.ModulesAdminAPIEnabled() {
+		t.Fatalf("development: %+v, %v", c, err)
 	}
 }

@@ -94,13 +94,13 @@ func setupAssembly(t *testing.T) (context.Context, *assembly, string, *gorm.DB) 
 	if err := migrate.Up(context.Background(), db, cfg.Env); err != nil {
 		t.Fatal(err)
 	}
-	reg, err := BuildRegistry()
+	reg, api, err := buildRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	a, err := assemble(ctx, cfg, testLog(), db, testProviders(), reg)
+	a, err := assemble(ctx, cfg, testLog(), db, testProviders(), reg, api)
 	if err != nil {
 		t.Fatal(err)
 	}

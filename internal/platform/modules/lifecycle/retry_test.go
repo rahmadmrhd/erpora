@@ -121,3 +121,10 @@ func TestRetryModule_UsesLastOperation(t *testing.T) {
 	_, err = e.svc.RetryModule(context.Background(), tenantA, "acme.nope", "cli:tester")
 	wantCode(t, err, CodeModuleNotFound)
 }
+
+func TestRetryModule_NoOperationsIsInvalidTransition(t *testing.T) {
+	rec := &fxRec{}
+	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
+	_, err := e.svc.RetryModule(context.Background(), tenantA, "acme.a", "cli:tester")
+	wantCode(t, err, CodeInvalidTransition)
+}

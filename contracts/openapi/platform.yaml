@@ -1,0 +1,316 @@
+openapi: 3.1.0
+info:
+  title: ERPora platform.core
+  version: 0.1.0
+  description: >
+    Endpoint milik platform: bootstrap dan manajemen modul (PRD-000 FR-20.2). Endpoint mutasi
+    (POST /api/platform/modules/{key}/{operation}) hanya aktif bila ERP_ENV=development atau
+    ERP_MODULES_ADMIN_API=true; selain itu 404 not_found (sebelum permission dievaluasi). Production memakai CLI
+    `erpora modules` sampai PRD Identity and Authorization selesai.
+servers:
+  - url: /
+paths:
+  /api/bootstrap:
+    get:
+      operationId: getBootstrap
+      summary: Manifest bootstrap untuk frontend
+      description: Daftar modul terkompilasi (tanpa platform.core) dengan status efektif dari runtime snapshot. ETag = revision.
+      x-erp-public: true
+      parameters:
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: Manifest.
+          headers: { ETag: { $ref: 'erp:common#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BootstrapEnvelope' }
+              example:
+                data:
+                  appVersion: 0.1.0
+                  tenantId: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+                  modules:
+                    - { key: acme.example, slug: example, version: 1.0.0, status: enabled, basePath: /example, offline: false }
+                  permissions: []
+                  revision: 5
+        '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+  /api/platform/modules:
+    get:
+      operationId: listModules
+      summary: Daftar modul beserta status
+      x-erp-permission: platform.modules.read
+      parameters:
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { $ref: 'erp:common#/components/parameters/PageSize' }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: Daftar modul (urut topologis; modul missing di akhir). ETag = revision.
+          headers: { ETag: { $ref: 'erp:common#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Module' } }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+        '304': { description: Tidak berubah. }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
+  /api/platform/modules/{key}:
+    get:
+      operationId: getModule
+      summary: Detail satu modul
+      x-erp-permission: platform.modules.read
+      parameters:
+        - { $ref: '#/components/parameters/Key' }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: Modul. ETag = revision.
+          headers: { ETag: { $ref: 'erp:common#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: { data: { $ref: '#/components/schemas/Module' } }
+        '304': { description: Tidak berubah. }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+  /api/platform/modules/{key}/history:
+    get:
+      operationId: listModuleHistory
+      summary: Riwayat event lifecycle modul (terbaru dulu)
+      description: >
+        Diimplementasi oleh route terdaftar GET /api/platform/modules/{key}/{sub} (sub = history) karena
+        ServeMux menolak GET /modules/{key}/history bersama GET /modules/operations/{id} sebagai bentrok.
+      x-erp-permission: platform.modules.read
+      parameters:
+        - { $ref: '#/components/parameters/Key' }
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { $ref: 'erp:common#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Event lifecycle tenant ini saja.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Event' } }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+  /api/platform/modules/operations/{id}:
+    get:
+      operationId: getModuleOperation
+      summary: Status satu operasi lifecycle (polling untuk respons 202)
+      description: >
+        Operasi milik tenant lain atau yang tidak ada -> 404 not_found (bukan 403). Diimplementasi oleh route
+        terdaftar GET /api/platform/modules/{key}/{sub} dengan key = operations.
+      x-erp-permission: platform.modules.read
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
+      responses:
+        '200':
+          description: Operasi.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: { data: { $ref: '#/components/schemas/Operation' } }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+  /api/platform/modules/{key}/{operation}:
+    post:
+      operationId: runModuleOperation
+      summary: Jalankan operasi lifecycle (install, enable, disable, upgrade, uninstall, retry)
+      description: >
+        Hanya aktif di development atau dengan ERP_MODULES_ADMIN_API=true (selain itu 404 not_found).
+        Sinkron dengan batas tunggu 30 detik; bila lebih lama -> 202 + Location ke operations/{id} dan operasi
+        berlanjut di server (retry hanya dijawab setelah selesai). Operasi yang berstatus failed tetap 200 dengan
+        operations[].status = failed. Idempoten: operasi yang status targetnya sudah tercapai -> 200 dengan
+        operations kosong. Idempotency-Key diterima tetapi tidak disimpan. Kode error lifecycle (FR-19) ada di
+        error.details[].code.
+      x-erp-permission: platform.modules.manage
+      parameters:
+        - { $ref: '#/components/parameters/Key' }
+        - name: operation
+          in: path
+          required: true
+          schema: { type: string, enum: [install, enable, disable, upgrade, uninstall, retry] }
+        - { $ref: 'erp:common#/components/requestHeaders/IfMatch' }
+        - { $ref: 'erp:common#/components/requestHeaders/IdempotencyKey' }
+      requestBody:
+        required: false
+        description: Hanya untuk install; maksimal 4 KiB, field tak dikenal ditolak (400).
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionBody' }
+            example: { withDeps: true, enable: true }
+      responses:
+        '200':
+          description: Operasi selesai (sukses, gagal, atau no-op).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [module, operations]
+                    properties:
+                      module: { $ref: '#/components/schemas/Module' }
+                      operations: { type: array, items: { $ref: '#/components/schemas/Operation' } }
+        '202':
+          description: Belum selesai dalam 30 detik; pantau lewat Location.
+          headers: { Location: { $ref: 'erp:common#/components/headers/Location' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [operationId, status]
+                    properties:
+                      operationId: { $ref: 'erp:common#/components/schemas/Uuid' }
+                      status: { type: string, enum: [running] }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+        '409':
+          description: >
+            invalid_state (detail invalid_transition) atau request_in_progress (detail operation_in_progress).
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '422':
+          description: >
+            business_rule_violated dengan error.details[].code salah satu: module_required, dependency_not_ready,
+            dependents_active, module_incompatible (satu detail per masalah), downgrade_not_supported.
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '500': { $ref: 'erp:common#/components/responses/InternalError' }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
+components:
+  parameters:
+    Key:
+      name: key
+      in: path
+      required: true
+      description: Key modul, mis. acme.example.
+      schema: { type: string }
+  schemas:
+    BootstrapEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [appVersion, tenantId, modules, permissions, revision]
+          properties:
+            appVersion: { type: string }
+            tenantId: { $ref: 'erp:common#/components/schemas/Uuid' }
+            modules:
+              type: array
+              items:
+                type: object
+                required: [key, slug, version, status, basePath, offline]
+                properties:
+                  key: { type: string }
+                  slug: { type: string }
+                  version: { type: string }
+                  status: { $ref: '#/components/schemas/ModuleStatus' }
+                  basePath: { type: string }
+                  offline: { type: boolean }
+            permissions: { type: array, items: { type: string } }
+            revision: { type: integer, format: int64 }
+    ModuleStatus:
+      type: string
+      enum: [available, installed, enabled, disabled, upgrade_pending, failed, uninstalled, missing, incompatible]
+    Dependency:
+      type: object
+      required: [module, version, optional]
+      properties:
+        module: { type: string }
+        version: { type: string }
+        optional: { type: boolean }
+    Module:
+      type: object
+      required: [key, slug, name, binaryVersion, installedVersion, status, required, compatible, incompatibleCodes, dependencies, dependents, lastOperationId]
+      properties:
+        key: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        binaryVersion: { type: string }
+        installedVersion: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/ModuleStatus' }
+        required: { type: boolean }
+        compatible: { type: boolean }
+        incompatibleCodes: { type: array, items: { type: string } }
+        dependencies: { type: array, items: { $ref: '#/components/schemas/Dependency' } }
+        dependents: { type: array, items: { type: string } }
+        lastOperationId: { type: [string, 'null'], format: uuid }
+    Step:
+      type: object
+      required: [name, status, startedAt, durationMs, error]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [running, succeeded, failed, skipped] }
+        startedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+        durationMs: { type: integer, format: int64 }
+        error: { type: [string, 'null'] }
+    Operation:
+      type: object
+      required: [id, moduleKey, operation, fromVersion, toVersion, status, steps, failure, actor, startedAt, finishedAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        moduleKey: { type: string }
+        operation: { type: string, enum: [install, enable, disable, upgrade, uninstall, reconcile] }
+        fromVersion: { type: [string, 'null'] }
+        toVersion: { type: [string, 'null'] }
+        status: { type: string, enum: [running, succeeded, failed] }
+        steps: { type: array, items: { $ref: '#/components/schemas/Step' } }
+        failure:
+          type: [object, 'null']
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            step: { type: string }
+        actor: { type: string }
+        startedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+        finishedAt:
+          oneOf:
+            - { $ref: 'erp:common#/components/schemas/Timestamp' }
+            - { type: 'null' }
+    Event:
+      type: object
+      required: [id, moduleKey, event, actor, operationId, details, occurredAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        moduleKey: { type: string }
+        event:
+          type: string
+          description: installed, enabled, disabled, upgraded, uninstalled, operation_failed, interrupted, retried, reconciled.
+        actor: { type: string, description: 'cli:<user>, api:dev, system:reconcile, atau system:migrate.' }
+        operationId:
+          oneOf:
+            - { $ref: 'erp:common#/components/schemas/Uuid' }
+            - { type: 'null' }
+        details: { type: object, additionalProperties: true }
+        occurredAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+    ActionBody:
+      type: object
+      additionalProperties: false
+      properties:
+        withDeps: { type: boolean, description: Sertakan dependensi wajib (hanya install). }
+        enable: { type: boolean, description: Aktifkan setelah install (hanya install). }

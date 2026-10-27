@@ -103,7 +103,7 @@ func TestInspectRoutes_JSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	var routes []map[string]any
-	if err := json.Unmarshal([]byte(out), &routes); err != nil || len(routes) != 3 {
+	if err := json.Unmarshal([]byte(out), &routes); err != nil || len(routes) != 7 {
 		t.Fatalf("err=%v routes=%v", err, routes)
 	}
 }

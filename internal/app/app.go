@@ -44,7 +44,7 @@ func NewLogger(cfg config.Config, w io.Writer) *slog.Logger {
 func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	// Katalog modul divalidasi sebelum DB dibuka; katalog rusak adalah bug build (exit 2).
-	reg, err := BuildRegistry()
+	reg, api, err := buildRegistry()
 	if err != nil {
 		return &ExitError{Code: 2, Err: fmt.Errorf("katalog modul tidak valid: %w", err)}
 	}
@@ -81,7 +81,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return errors.New("migrasi platform belum diterapkan: jalankan erpora migrate up")
 	}
 
-	a, err := assemble(ctx, cfg, log, db, prov, reg)
+	a, err := assemble(ctx, cfg, log, db, prov, reg, api)
 	if err != nil {
 		return err
 	}

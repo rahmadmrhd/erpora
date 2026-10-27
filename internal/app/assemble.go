@@ -13,6 +13,7 @@ import (
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/migrate"
+	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/lifecycle"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/runtime"
@@ -64,7 +65,7 @@ func defaultTenant(ctx context.Context, cfg config.Config, db *database.DB) (ten
 // assemble merakit router, snapshot, dan lifecycle: reconcile saat startup (FR-19.6), langganan notifikasi
 // revision, watcher antarproses, dan route modul dengan snapshot yang sama. Error reconcile (selain lock
 // timeout, yang dilaporkan sebagai LockSkipped) menggagalkan startup.
-func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, prov observability.Providers, reg *registry.Registry) (*assembly, error) {
+func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, prov observability.Providers, reg *registry.Registry, api *admin.API) (*assembly, error) {
 	tid, err := defaultTenant(ctx, cfg, db)
 	if err != nil {
 		return nil, err
@@ -107,7 +108,14 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 			})
 		},
 	})
-	runtime.Mount(router, reg, snap, authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log)
+	api.Bind(svc)
+	// Gate mutasi (keputusan 8): di luar development tanpa ERP_MODULES_ADMIN_API=true, route aksi mutasi tidak
+	// dilayani (404 sebelum permission), sementara route baca tetap tunduk pada permission.
+	var mountOpts []runtime.MountOption
+	if !cfg.ModulesAdminAPIEnabled() {
+		mountOpts = append(mountOpts, runtime.SkipRoute(admin.IsMutation))
+	}
+	runtime.Mount(router, reg, snap, authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log, mountOpts...)
 	registerTestRoutes(router)
 	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid}, nil
 }
