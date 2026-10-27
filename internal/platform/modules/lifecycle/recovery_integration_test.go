@@ -118,7 +118,7 @@ func TestService_InterruptedOperationMarkedUnderLock(t *testing.T) {
 		t.Fatalf("installations = %+v", ins)
 	}
 
-	res, err := healthy.svc.RetryModule(ctx, tenantA, "acme.fx-mod", "cli:tester", nil)
+	res, err := healthy.svc.RetryModule(ctx, tenantA, "acme.fx-mod", "cli:tester", nil, "")
 	if err != nil || res.Status != "succeeded" || res.To != rt.StatusInstalled {
 		t.Fatalf("Retry = %+v, %v", res, err)
 	}

@@ -46,7 +46,7 @@ type Backend interface {
 	History(ctx context.Context, t tenancy.TenantID, key string, page, pageSize int) ([]store.Event, int64, error)
 	Operation(ctx context.Context, t tenancy.TenantID, id uuid.UUID) (store.Operation, error)
 	Execute(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error)
-	RetryModule(ctx context.Context, t tenancy.TenantID, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error)
+	RetryModule(ctx context.Context, t tenancy.TenantID, key, actor string, onStarted func(uuid.UUID), ifMatch string) (lifecycle.Result, error)
 }
 
 // API adalah handler /api/platform/modules. Backend di-bind setelah perakitan (route didaftarkan lebih dulu
@@ -234,18 +234,8 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 		badRequest(w, r, "body", "withDeps dan enable hanya berlaku untuk install")
 		return
 	}
-	if v := r.Header.Get("If-Match"); v != "" {
-		_, rev, err := be.Module(r.Context(), t, key)
-		if err != nil {
-			a.writeError(w, r, err)
-			return
-		}
-		if strings.Trim(strings.TrimPrefix(strings.TrimSpace(v), "W/"), `"`) != strconv.FormatInt(rev, 10) {
-			httpserver.WriteError(w, r, http.StatusPreconditionFailed, "version_mismatch",
-				"If-Match tidak cocok dengan revision status modul saat ini", map[string]any{"revision": rev})
-			return
-		}
-	}
+	// If-Match dievaluasi oleh lifecycle di dalam advisory lock (RFC 9110: "*", daftar, perbandingan kuat), bukan di sini.
+	ifMatch := strings.TrimSpace(r.Header.Get("If-Match"))
 	// Idempotency-Key diterima tetapi tidak disimpan: setiap operasi idempoten lewat aturan no-op (keputusan 19).
 
 	started := make(chan uuid.UUID, 1)
@@ -268,12 +258,12 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 			}
 		}
 		if op == lifecycle.OpRetry {
-			res, err := be.RetryModule(ctx, t, key, APIActor, onStarted)
+			res, err := be.RetryModule(ctx, t, key, APIActor, onStarted, ifMatch)
 			o = outcome{results: []lifecycle.Result{res}, err: err}
 			return
 		}
 		res, err := be.Execute(ctx, lifecycle.Request{
-			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor, OnStarted: onStarted,
+			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor, OnStarted: onStarted, IfMatch: ifMatch,
 		})
 		o = outcome{results: res, err: err}
 	}()

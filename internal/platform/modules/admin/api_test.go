@@ -99,6 +99,10 @@ func (f *fakeBE) Operation(_ context.Context, t tenancy.TenantID, id uuid.UUID) 
 }
 
 func (f *fakeBE) Execute(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error) {
+	// Lifecycle sungguhan membandingkan If-Match di dalam lock (B-5); fake meniru kontraknya.
+	if req.IfMatch != "" && !lifecycle.MatchIfMatch(req.IfMatch, f.rev) {
+		return nil, &lifecycle.Error{Code: lifecycle.CodeVersionMismatch, Revision: f.rev}
+	}
 	f.mu.Lock()
 	f.execReqs = append(f.execReqs, req)
 	f.mu.Unlock()
@@ -108,7 +112,7 @@ func (f *fakeBE) Execute(ctx context.Context, req lifecycle.Request) ([]lifecycl
 	return []lifecycle.Result{{Module: req.Key, Op: req.Op, From: runtime.StatusInstalled, To: runtime.StatusEnabled, Status: "succeeded", OperationID: opID}}, nil
 }
 
-func (f *fakeBE) RetryModule(ctx context.Context, _ tenancy.TenantID, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error) {
+func (f *fakeBE) RetryModule(ctx context.Context, _ tenancy.TenantID, key, actor string, onStarted func(uuid.UUID), _ string) (lifecycle.Result, error) {
 	f.retried = append(f.retried, key+"|"+actor)
 	if f.retryFn != nil {
 		return f.retryFn(ctx, key, actor, onStarted)
@@ -469,8 +473,15 @@ func TestAction_IfMatchMismatch412(t *testing.T) {
 	if rec.Code != 412 || errOf(t, rec).Error.Code != "version_mismatch" || len(f.be.execReqs) != 0 {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
-	if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"If-Match": `"7"`}); rec.Code != 200 {
-		t.Fatalf("If-Match cocok: %d %s", rec.Code, rec.Body)
+	// RFC 9110: "7", "*", dan daftar entity-tag yang memuat "7" cocok.
+	for _, h := range []string{`"7"`, `*`, `"5", "7"`} {
+		if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"If-Match": h}); rec.Code != 200 {
+			t.Fatalf("If-Match %q cocok: %d %s", h, rec.Code, rec.Body)
+		}
+	}
+	// Tag lemah tidak pernah cocok pada perbandingan kuat.
+	if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"If-Match": `W/"7"`}); rec.Code != 412 {
+		t.Fatalf("If-Match lemah: %d %s", rec.Code, rec.Body)
 	}
 }
 

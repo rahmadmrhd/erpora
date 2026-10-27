@@ -29,6 +29,8 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch le.Code {
 	case lifecycle.CodeModuleNotFound, lifecycle.CodeOperationNotFound:
 		httpserver.WriteError(w, r, http.StatusNotFound, "not_found", "sumber daya tidak ditemukan", nil)
+	case lifecycle.CodeVersionMismatch:
+		httpserver.WriteError(w, r, http.StatusPreconditionFailed, "version_mismatch", le.Message, map[string]any{"revision": le.Revision})
 	case lifecycle.CodeInvalidTransition:
 		httpserver.WriteError(w, r, http.StatusConflict, "invalid_state", le.Message, one)
 	case lifecycle.CodeOperationInProgress:
