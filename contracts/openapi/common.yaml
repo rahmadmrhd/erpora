@@ -31,6 +31,24 @@ components:
         pageSize: { type: integer, minimum: 1, maximum: 200 }
         total: { type: integer, format: int64, minimum: 0 }
         hasMore: { type: boolean }
+    CursorPage:
+      type: object
+      required: [nextCursor, hasMore]
+      description: Metadata pagination cursor (api-guidelines section 6); cursor bersifat opaque.
+      properties:
+        nextCursor:
+          type: [string, 'null']
+          description: Cursor halaman berikutnya; null bila tidak ada.
+        hasMore: { type: boolean }
+    Decimal:
+      type: string
+      pattern: '^-?[0-9]+(\.[0-9]+)?$'
+      description: Uang dan kuantitas sebagai string desimal, tidak pernah float (api-guidelines section 4).
+      examples: ['1250000.50']
+    Date:
+      type: string
+      format: date
+      description: Tanggal kalender ISO 8601, mis. 2026-10-21.
     ErrorDetail:
       type: object
       required: [code, message]
@@ -72,6 +90,16 @@ components:
       in: query
       description: Jumlah item per halaman.
       schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Cursor opaque dari respons sebelumnya; klien tidak boleh membentuk atau mengurainya.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      description: Jumlah item per permintaan (maksimal 1000).
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
   headers:
     ETag:
       description: Versi resource (di endpoint modul platform = revision status modul tenant), mis. "7".

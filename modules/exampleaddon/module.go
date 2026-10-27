@@ -16,6 +16,9 @@ import (
 //go:embed module.json
 var manifestJSON []byte
 
+//go:embed openapi.yaml
+var openAPI []byte
+
 // Module adalah implementasi module.Module untuk acme.example-addon.
 type Module struct {
 	manifest module.Manifest
@@ -30,12 +33,17 @@ func New(notes contract.Notes) *Module {
 	}
 }
 
+// OpenAPI mengembalikan kontrak API modul (module.ContractSource; PRD-000 FR-23.1).
+func (m *Module) OpenAPI() []byte { return openAPI }
+
 // Manifest mengembalikan manifest modul.
 func (m *Module) Manifest() module.Manifest { return m.manifest }
 
 // Register mendaftarkan route ringkasan.
 func (m *Module) Register(r module.Registrar) error {
 	r.Handle(http.MethodGet, "/summary", "example-addon.summary.read", http.HandlerFunc(m.handlers.Summary))
+	// erp:generated:routes
+	// erp:generated:commands
 	return nil
 }
 

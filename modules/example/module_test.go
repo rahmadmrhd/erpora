@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io/fs"
+	"os"
+	"strings"
 	"testing"
 
 	"erpora/sdk/module"
@@ -13,10 +15,35 @@ import (
 var (
 	_ module.Module          = (*Module)(nil)
 	_ module.MigrationSource = (*Module)(nil)
+	_ module.ContractSource  = (*Module)(nil)
 	_ module.Installer       = (*Module)(nil)
 	_ module.HealthChecker   = (*Module)(nil)
 	_ module.DevSeeder       = (*Module)(nil)
 )
+
+// Kontrak OpenAPI modul di-embed; keabsahan dan kesesuaiannya dengan route diperiksa di internal/app
+// (modul tidak boleh mengimpor paket platform).
+func TestOpenAPI_Embedded(t *testing.T) {
+	doc := string(New().OpenAPI())
+	for _, want := range []string{"openapi: 3.1.0", "/api/example/ping", "/api/example/notes", "x-erp-permission: example.ping.read", "x-erp-permission: example.notes.read"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("openapi.yaml tidak memuat %q", want)
+		}
+	}
+}
+
+// Generator make:* menyisipkan registrasi di atas penanda; penanda tidak boleh hilang dari module.go.
+func TestModuleGo_GeneratorMarkers(t *testing.T) {
+	src, err := os.ReadFile("module.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{"// erp:generated:routes", "// erp:generated:commands"} {
+		if strings.Count(string(src), marker) != 1 {
+			t.Errorf("penanda %q harus tepat satu di module.go", marker)
+		}
+	}
+}
 
 func TestManifest_Parses(t *testing.T) {
 	m := New().Manifest()

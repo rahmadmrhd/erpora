@@ -11,6 +11,7 @@ servers:
   - url: /
 paths:
   /api/bootstrap:
+    x-erp-singleton: true
     get:
       operationId: getBootstrap
       summary: Manifest bootstrap untuk frontend

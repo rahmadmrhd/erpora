@@ -1,0 +1,34 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.example-addon
+  version: 1.0.0
+  description: >
+    Kontrak API modul referensi example-addon (PRD-000 FR-23.1). Bergantung pada acme.example, sehingga boleh
+    merujuk komponennya lewat erp:example.
+servers:
+  - url: /
+paths:
+  /api/example-addon/summary:
+    x-erp-singleton: true
+    get:
+      operationId: getExampleAddonSummary
+      summary: Ringkasan jumlah notes
+      description: Resource tunggal yang memakai kontrak publik modul example (contract.Notes).
+      x-erp-permission: example-addon.summary.read
+      responses:
+        '200':
+          description: Ringkasan.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [noteCount]
+                    properties:
+                      noteCount: { $ref: 'erp:example#/components/schemas/NoteCount' }
+              example: { data: { noteCount: 3 } }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '500': { $ref: 'erp:common#/components/responses/InternalError' }

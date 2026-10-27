@@ -1,0 +1,83 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.example
+  version: 1.0.0
+  description: >
+    Kontrak API modul referensi example (PRD-000 FR-23.1). Dokumen ini adalah sumber kebenaran route modul:
+    test kesesuaian mencocokkan method, path, permission, x-erp-public, dan klasifikasi respons dengan route
+    yang didaftarkan di module.go.
+servers:
+  - url: /
+paths:
+  /api/example/ping:
+    x-erp-singleton: true
+    get:
+      operationId: getExamplePing
+      summary: Cek modul example hidup
+      description: Resource tunggal tanpa koleksi; dipakai untuk memvalidasi routing dan permission modul.
+      x-erp-permission: example.ping.read
+      responses:
+        '200':
+          description: Modul menjawab.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [pong]
+                    properties:
+                      pong: { type: boolean }
+              example: { data: { pong: true } }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+  /api/example/notes:
+    get:
+      operationId: listExampleNotes
+      summary: Daftar notes
+      description: Pagination halaman (api-guidelines section 6). page atau pageSize di luar rentang menghasilkan 400 bad_request.
+      x-erp-permission: example.notes.read
+      parameters:
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { $ref: 'erp:common#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Notes tenant ini.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Note' }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+              example:
+                data:
+                  - id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+                    title: Catatan pertama
+                    version: 1
+                    createdAt: '2026-10-21T07:15:00Z'
+                    updatedAt: '2026-10-21T07:15:00Z'
+                page: { page: 1, pageSize: 25, total: 1, hasMore: false }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+components:
+  schemas:
+    Note:
+      type: object
+      required: [id, title, version, createdAt, updatedAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        title:
+          type: string
+          x-erp-classification: internal
+        version: { type: integer, format: int64 }
+        createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+        updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+    NoteCount:
+      type: integer
+      format: int64
+      description: API publik untuk modul lain (contract.Notes.Count); jumlah notes tenant aktif.
