@@ -111,6 +111,65 @@ func TestDecodeJSON_Table(t *testing.T) {
 	}
 }
 
+type innerDTO struct {
+	X string `json:"x"`
+}
+
+type strTagDTO struct {
+	N        int64    `json:"n,string"`
+	Tagged   innerDTO `json:"nested"`
+	innerDTO          // tanpa tag: field dipromosikan ke tingkat atas
+}
+
+// namedEmbedDTO: struct embedded BERTAG diperlakukan sebagai field bernama (tidak dipromosikan).
+type namedEmbedDTO struct {
+	innerDTO `json:"inner"`
+}
+
+// M-9: tag ",string" dan struct embedded bertag/tanpa tag.
+func TestDecodeJSON_StringTagAndEmbedded(t *testing.T) {
+	const js = "application/json"
+	cases := []struct {
+		name, body string
+		status     int
+		detail     string
+	}{
+		{name: "string_tag_quoted_ok", body: `{"n":"5"}`},
+		{name: "string_tag_unquoted_number", body: `{"n":5}`, status: 422, detail: "invalid_type"},
+		{name: "string_tag_non_numeric", body: `{"n":"abc"}`, status: 422, detail: "invalid_type"},
+		{name: "embedded_untagged_promoted_ok", body: `{"x":"a"}`},
+		{name: "tagged_struct_ok", body: `{"nested":{"x":"a"}}`},
+		{name: "tagged_struct_unknown_nested", body: `{"nested":{"y":"a"}}`, status: 422, detail: "unknown_field"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DecodeJSON[strTagDTO](httptest.NewRecorder(), newReq(js, tc.body))
+			assertDecodeResult(t, err, tc.status, tc.detail)
+		})
+	}
+	t.Run("named_embedded_not_promoted", func(t *testing.T) {
+		if _, err := DecodeJSON[namedEmbedDTO](httptest.NewRecorder(), newReq(js, `{"inner":{"x":"a"}}`)); err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		_, err := DecodeJSON[namedEmbedDTO](httptest.NewRecorder(), newReq(js, `{"x":"a"}`))
+		assertDecodeResult(t, err, 422, "unknown_field")
+	})
+}
+
+func assertDecodeResult(t *testing.T, err error, status int, detail string) {
+	t.Helper()
+	if status == 0 {
+		if err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		return
+	}
+	var he *Error
+	if !errors.As(err, &he) || he.Status != status || len(he.Details) == 0 || he.Details[0].Code != detail {
+		t.Fatalf("err = %v (%+v), want %d/%s", err, he, status, detail)
+	}
+}
+
 func TestDecodeJSON_Values(t *testing.T) {
 	got, err := DecodeJSON[createDTO](httptest.NewRecorder(),
 		newReq("application/json", `{"title":"a","lines":[{"itemId":"x","quantity":"1.5"}]}`))
