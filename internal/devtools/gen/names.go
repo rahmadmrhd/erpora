@@ -2,7 +2,13 @@ package gen
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -30,6 +36,10 @@ func ParseModuleName(arg, publisher string) (ModuleName, error) {
 	if registry.IsReservedSlug(arg) {
 		return ModuleName{}, fmt.Errorf("nama modul %q dicadangkan untuk platform", arg)
 	}
+	// Dir (slug tanpa "-") menjadi nama package Go sekaligus alias impor di internal/app/modules.go.
+	if dir := strings.ReplaceAll(arg, "-", ""); token.IsKeyword(dir) || dir == "main" || types.Universe.Lookup(dir) != nil {
+		return ModuleName{}, fmt.Errorf("nama modul %q menghasilkan nama package Go %q yang tidak dapat dipakai (keyword, main, atau identifier predeclared)", arg, dir)
+	}
 	if !slugRe.MatchString(publisher) {
 		return ModuleName{}, fmt.Errorf("publisher %q tidak valid: kebab-case huruf kecil", publisher)
 	}
@@ -50,6 +60,34 @@ func ParseModuleName(arg, publisher string) (ModuleName, error) {
 		Camel: strings.ToLower(p[:1]) + p[1:], Pascal: p, NPM: "@erpora/module-" + dir, GoPath: "erpora/modules/" + dir,
 		Publisher: publisher, Title: title.String(),
 	}, nil
+}
+
+// CheckModuleDir memastikan dir (nama package Go modul baru) tidak bentrok dengan identifier mana pun yang sudah ada
+// di internal/app/modules.go (variabel lokal seperti ex, alias impor, atau nama paket yang diimpor): modul baru diimpor
+// sebagai paket bernama dir, sehingga bentrokan membuat file itu tidak dapat dikompilasi.
+func CheckModuleDir(dir string, modulesGo []byte) error {
+	f, err := parser.ParseFile(token.NewFileSet(), "modules.go", modulesGo, 0)
+	if err != nil {
+		return fmt.Errorf("internal/app/modules.go tidak terbaca: %w", err)
+	}
+	used := map[string]bool{}
+	for _, imp := range f.Imports {
+		p, _ := strconv.Unquote(imp.Path.Value)
+		used[path.Base(p)] = true
+		if imp.Name != nil {
+			used[imp.Name.Name] = true
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok {
+			used[id.Name] = true
+		}
+		return true
+	})
+	if used[dir] {
+		return fmt.Errorf("nama package %q bentrok dengan identifier yang sudah dipakai di internal/app/modules.go; pilih nama modul lain", dir)
+	}
+	return nil
 }
 
 // TypeName adalah turunan nama tipe PascalCase.

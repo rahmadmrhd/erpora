@@ -70,6 +70,38 @@ func TestParseTypeName_Table(t *testing.T) {
 	}
 }
 
+// G-4: Dir yang menjadi nama package Go tidak boleh keyword, "main", atau identifier predeclared.
+func TestParseModuleName_RejectsUnusablePackageNames(t *testing.T) {
+	for _, bad := range []string{"go", "if", "func", "type", "map", "var", "for", "range", "chan", "main", "int", "len", "new", "copy", "nil", "any", "error", "string", "true", "false", "iota", "cap", "bool", "byte", "append", "close", "panic", "print", "min", "max", "clear"} {
+		_, err := ParseModuleName(bad, "acme")
+		if err == nil || !strings.Contains(err.Error(), "package Go") {
+			t.Errorf("%q harus ditolak sebagai nama package Go: %v", bad, err)
+		}
+	}
+	if _, err := ParseModuleName("go-live", "acme"); err != nil {
+		t.Errorf("go-live (dir golive) harus diterima: %v", err)
+	}
+}
+
+// G-4: Dir juga tidak boleh bentrok dengan identifier yang sudah dipakai internal/app/modules.go (mis. variabel ex).
+func TestCheckModuleDirAgainstAssembly(t *testing.T) {
+	src := []byte("package app\n\nimport (\n\t\"erpora/modules/example\"\n\t\"erpora/sdk/module\"\n)\n\nfunc compiledModules() []module.Module {\n\tex := example.New()\n\treturn []module.Module{ex}\n}\n")
+	for _, bad := range []string{"ex", "example", "module", "compiledmodules"} {
+		if bad == "compiledmodules" { // identifier berhuruf besar-kecil campur tidak bentrok dengan dir huruf kecil
+			if err := CheckModuleDir(bad, src); err != nil {
+				t.Errorf("%q harus diterima: %v", bad, err)
+			}
+			continue
+		}
+		if err := CheckModuleDir(bad, src); err == nil || !strings.Contains(err.Error(), "modules.go") {
+			t.Errorf("%q harus ditolak (bentrok di modules.go): %v", bad, err)
+		}
+	}
+	if err := CheckModuleDir("inventory", src); err != nil {
+		t.Errorf("inventory harus diterima: %v", err)
+	}
+}
+
 // G-3: nama yang membuat nama berkas Go bermakna khusus (_test, _<GOOS>, _<GOARCH>) ditolak; berkas itu akan
 // dikecualikan dari build atau dianggap berkas test.
 func TestParseTypeName_RejectsSpecialFileSuffixes(t *testing.T) {

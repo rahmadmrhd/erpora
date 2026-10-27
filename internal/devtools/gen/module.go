@@ -66,6 +66,13 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 			return Plan{}, fmt.Errorf("key %q sudah dipakai modules/%s", name.Key, m.Dir)
 		}
 	}
+	modulesGo, err := readRepoFile(root, "internal/app/modules.go")
+	if err != nil {
+		return Plan{}, err
+	}
+	if err := CheckModuleDir(name.Dir, modulesGo); err != nil {
+		return Plan{}, err
+	}
 	data := moduleData{ModuleName: name, PublisherName: titleCase(o.Publisher), Frontend: o.Frontend}
 	for _, key := range o.Depends {
 		ref, err := ResolveModule(root, key)

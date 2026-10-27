@@ -96,6 +96,9 @@ func TestMakeModule_RejectsCollisions(t *testing.T) {
 		{"dependensi tidak ada", ModuleOptions{Name: "billing", Depends: []string{"acme.missing"}}, "acme.missing"},
 		{"slug cadangan", ModuleOptions{Name: "platform"}, "dicadangkan"},
 		{"nama tidak valid", ModuleOptions{Name: "Billing"}, "tidak valid"},
+		// G-4: nama package yang tidak dapat dipakai atau bentrok dengan identifier di internal/app/modules.go.
+		{"keyword Go", ModuleOptions{Name: "func"}, "package Go"},
+		{"bentrok variabel ex di modules.go", ModuleOptions{Name: "ex"}, "modules.go"},
 	}
 	for _, c := range cases {
 		_, err := MakeModule(root, c.opts)
