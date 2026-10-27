@@ -78,6 +78,8 @@ type Deps struct {
 	Tracer   trace.TracerProvider
 	Meter    metric.MeterProvider
 	Log      *slog.Logger
+	// Services dipasang ke context hook modul (masker field, auditor ekspor); nol = tidak terpasang.
+	Services runtime.Services
 	// LockTimeout 0 berarti DefaultLockTimeout.
 	LockTimeout time.Duration
 	// AfterStep adalah seam test (mis. simulasi crash); nil di produksi.

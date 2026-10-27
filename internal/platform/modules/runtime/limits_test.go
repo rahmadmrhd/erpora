@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -9,17 +11,22 @@ import (
 	"strings"
 	"testing"
 
+	"erpora/internal/platform/audit"
+	"erpora/internal/platform/authorization"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
+	"erpora/sdk/authz"
+	"erpora/sdk/authz/authztest"
+	"erpora/sdk/export"
 	"erpora/sdk/httpx"
 	"erpora/sdk/module"
 )
 
 // limitsRouter memasang satu modul uji dengan route yang didaftarkan register, status modul status.
-func limitsRouter(t *testing.T, status Status, register func(r module.Registrar)) *httpserver.Router {
+func limitsRouter(t *testing.T, status Status, register func(r module.Registrar), opts ...MountOption) *httpserver.Router {
 	t.Helper()
 	reg, err := registry.Build(registry.Options{
 		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
@@ -38,7 +45,7 @@ func limitsRouter(t *testing.T, status Status, register func(r module.Registrar)
 	})
 	snap := NewSnapshot()
 	snap.Apply(tenantA, map[string]Status{"acme.notes": status}, 1)
-	Mount(router, reg, snap, allowAll, nil)
+	Mount(router, reg, snap, allowAll, nil, opts...)
 	return router
 }
 
@@ -150,5 +157,58 @@ func TestMount_GuardBeforeLimits(t *testing.T) {
 	}
 	if rec.Header().Get("Cache-Control") != "" {
 		t.Errorf("guard menjawab sebelum batas request; Cache-Control = %q", rec.Header().Get("Cache-Control"))
+	}
+}
+
+type recAuditor struct{ events []export.Event }
+
+func (a *recAuditor) RecordExport(_ context.Context, e export.Event) error {
+	a.events = append(a.events, e)
+	return nil
+}
+
+func TestMount_InstallsExportServices(t *testing.T) {
+	var gotMasker, gotAuditor bool
+	probe := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMasker, gotAuditor = authz.HasFieldMasker(r.Context()), export.HasAuditor(r.Context())
+	})
+	register := func(r module.Registrar) { r.Handle("GET", "/items", "notes.items.read", probe) }
+	get := func(opts ...MountOption) {
+		gotMasker, gotAuditor = false, false
+		router := limitsRouter(t, StatusEnabled, register, opts...)
+		router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/notes/items", nil))
+	}
+	get()
+	if gotMasker || gotAuditor {
+		t.Errorf("tanpa opsi: masker=%v auditor=%v", gotMasker, gotAuditor)
+	}
+	get(WithServices(Services{Masker: authztest.AllowAllFields, Auditor: &recAuditor{}}))
+	if !gotMasker || !gotAuditor {
+		t.Errorf("dengan opsi: masker=%v auditor=%v", gotMasker, gotAuditor)
+	}
+}
+
+func TestExport_EndToEndThroughMount(t *testing.T) {
+	var logs bytes.Buffer
+	log := observability.NewLogger(&logs, "json", slog.LevelDebug)
+	svc := Services{Masker: authorization.NewStubFieldMasker("allow", log), Auditor: audit.NewExportLog(log)}
+	router := limitsRouter(t, StatusEnabled, func(r module.Registrar) {
+		r.Handle("GET", "/export", "notes.items.read", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			rows := func(yield func(export.Row, error) bool) { yield(export.Row{"id": "1"}, nil) }
+			spec := export.Spec{Resource: "notes.item", Format: export.CSV, Filename: "items", Columns: []export.Column{
+				{Key: "id", Header: "ID", Classification: module.ClassConfidential},
+			}}
+			if err := export.Serve(w, req, spec, rows); err != nil {
+				httpx.RespondError(w, req, err)
+			}
+		}), module.Classify(module.ClassConfidential))
+	}, WithServices(svc))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest("GET", "/api/notes/export", nil))
+	if rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-store" || !strings.Contains(rec.Body.String(), "ID\r\n1\r\n") {
+		t.Fatalf("%d %v %q", rec.Code, rec.Header(), rec.Body.String())
+	}
+	if n := strings.Count(logs.String(), `"msg":"ekspor data"`); n != 1 {
+		t.Errorf("log ekspor = %d: %s", n, logs.String())
 	}
 }

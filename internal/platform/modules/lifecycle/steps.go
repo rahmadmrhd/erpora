@@ -301,7 +301,7 @@ func (r *opRun) invoke(ctx context.Context, sp stepSpec) (err error) {
 func (r *opRun) version() string { return r.entry.Manifest.Version }
 
 func (r *opRun) hookEnv(ctx context.Context) (context.Context, module.Env) {
-	return runtime.ModuleContext(ctx, r.t, r.key, r.s.d.Tenants, r.s.log, "module.lifecycle:"+string(r.op))
+	return runtime.ModuleContext(ctx, r.t, r.key, r.s.d.Tenants, r.s.log, "module.lifecycle:"+string(r.op), r.s.d.Services)
 }
 
 func (r *opRun) stepResolve(context.Context) error {

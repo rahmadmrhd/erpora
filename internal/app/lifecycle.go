@@ -13,16 +13,18 @@ import (
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/lifecycle"
+	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 )
 
 // cliRuntime adalah perakitan minimal untuk perintah CLI: DB, tenant default, connector, dan lifecycle.Service.
 type cliRuntime struct {
-	svc     *lifecycle.Service
-	tid     tenancy.TenantID
-	conn    database.TenantConnector
-	cleanup func()
+	svc      *lifecycle.Service
+	tid      tenancy.TenantID
+	conn     database.TenantConnector
+	cleanup  func()
+	services runtime.Services
 }
 
 // openCLI membuka DB, memastikan migrasi platform sudah diterapkan, membaca tenant default, dan membangun
@@ -56,11 +58,13 @@ func openCLI(ctx context.Context, cfg config.Config, log *slog.Logger) (*cliRunt
 		return nil, err
 	}
 	prov := observability.Providers{Tracer: tnoop.NewTracerProvider(), Meter: noop.NewMeterProvider()}
+	services := platformServices(cfg, log)
 	return &cliRuntime{
-		svc:     buildLifecycle(reg, db, tid, nil, nil, prov, log),
-		tid:     tid,
-		conn:    database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}},
-		cleanup: cleanup,
+		svc:      buildLifecycle(reg, db, tid, nil, nil, prov, log, services),
+		tid:      tid,
+		conn:     database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}},
+		cleanup:  cleanup,
+		services: services,
 	}, nil
 }
 

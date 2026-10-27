@@ -28,7 +28,8 @@ type Mounter interface {
 }
 
 type mountConfig struct {
-	skip func(registry.RouteInfo) bool
+	skip     func(registry.RouteInfo) bool
+	services Services
 }
 
 // MountOption mengubah perilaku Mount.
@@ -64,7 +65,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 			}), httpserver.Public())
 			continue
 		}
-		h := requestLimitsMW(rt, rt.Handler)
+		h := requestLimitsMW(rt, cfg.services, rt.Handler)
 		if !rt.Public {
 			h = permissionMW(authz, rt.Permission, log, h)
 		}

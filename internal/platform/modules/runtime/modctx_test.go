@@ -15,7 +15,9 @@ import (
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 	"erpora/sdk/authz"
+	"erpora/sdk/authz/authztest"
 	"erpora/sdk/data"
+	"erpora/sdk/export"
 )
 
 func fakeConnector(t *testing.T) database.TenantConnector {
@@ -29,7 +31,7 @@ func fakeConnector(t *testing.T) database.TenantConnector {
 }
 
 func TestModuleContext_CarriesTenantProviderModuleAndSystem(t *testing.T) {
-	ctx, env := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "module.lifecycle:enable")
+	ctx, env := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "module.lifecycle:enable", Services{})
 	if id, ok := tenancy.FromContext(ctx); !ok || id != tenantA {
 		t.Errorf("tenant = %v, %v", id, ok)
 	}
@@ -48,7 +50,7 @@ func TestModuleContext_CarriesTenantProviderModuleAndSystem(t *testing.T) {
 }
 
 func TestModuleContext_NoSystemReasonWhenEmpty(t *testing.T) {
-	ctx, _ := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "")
+	ctx, _ := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "", Services{})
 	if _, ok := authz.SystemReason(ctx); ok {
 		t.Error("reason kosong tidak boleh memasang hak sistem")
 	}
@@ -58,7 +60,7 @@ func TestModuleContext_NoSystemReasonWhenEmpty(t *testing.T) {
 func TestModuleContext_LoggerSingleModuleKey(t *testing.T) {
 	var buf bytes.Buffer
 	base := observability.NewLogger(&buf, "json", slog.LevelDebug)
-	ctx, env := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), base, "")
+	ctx, env := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), base, "", Services{})
 	env.Logger.InfoContext(ctx, "x")
 	line := strings.TrimSpace(buf.String())
 	if n := strings.Count(line, `"erp.module.key"`); n != 1 {
@@ -67,5 +69,17 @@ func TestModuleContext_LoggerSingleModuleKey(t *testing.T) {
 	var m map[string]any
 	if err := json.Unmarshal([]byte(line), &m); err != nil || m["erp.module.key"] != "acme.notes" {
 		t.Errorf("log = %s (%v)", line, err)
+	}
+}
+
+func TestModuleContext_InstallsServices(t *testing.T) {
+	ctx, _ := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "",
+		Services{Masker: authztest.AllowAllFields, Auditor: &recAuditor{}})
+	if !authz.HasFieldMasker(ctx) || !export.HasAuditor(ctx) {
+		t.Error("ModuleContext harus memasang masker dan auditor")
+	}
+	ctx, _ = ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "", Services{})
+	if authz.HasFieldMasker(ctx) || export.HasAuditor(ctx) {
+		t.Error("Services kosong tidak boleh memasang apa pun")
 	}
 }

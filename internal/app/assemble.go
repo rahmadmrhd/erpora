@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"erpora/internal/platform/audit"
 	"erpora/internal/platform/authorization"
 	"erpora/internal/platform/bootstrap"
 	"erpora/internal/platform/buildinfo"
@@ -33,7 +34,7 @@ type assembly struct {
 
 // buildLifecycle merakit lifecycle.Service di atas db. snap dan notifier boleh nil (CLI tidak punya snapshot).
 func buildLifecycle(reg *registry.Registry, db *database.DB, tid tenancy.TenantID, snap *runtime.Snapshot,
-	notifier runtime.StateNotifier, prov observability.Providers, log *slog.Logger) *lifecycle.Service {
+	notifier runtime.StateNotifier, prov observability.Providers, log *slog.Logger, svc runtime.Services) *lifecycle.Service {
 	conn := database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}}
 	deps := lifecycle.Deps{
 		Registry: reg,
@@ -45,6 +46,7 @@ func buildLifecycle(reg *registry.Registry, db *database.DB, tid tenancy.TenantI
 		Tracer:   prov.Tracer,
 		Meter:    prov.Meter,
 		Log:      log,
+		Services: svc,
 	}
 	lifecycleTestHooks(&deps)
 	return lifecycle.New(deps)
@@ -72,7 +74,8 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	}
 	snap := runtime.NewSnapshot()
 	notifier := runtime.NewLocalNotifier()
-	svc := buildLifecycle(reg, db, tid, snap, notifier, prov, log)
+	services := platformServices(cfg, log)
+	svc := buildLifecycle(reg, db, tid, snap, notifier, prov, log, services)
 
 	rep, err := svc.Reconcile(ctx, tid)
 	if err != nil {
@@ -117,6 +120,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	if !cfg.ModulesAdminAPIEnabled() {
 		mountOpts = append(mountOpts, runtime.SkipRoute(admin.IsMutation))
 	}
+	mountOpts = append(mountOpts, runtime.WithServices(services))
 	runtime.Mount(router, reg, snap, authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log, mountOpts...)
 	registerTestRoutes(router)
 	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid}, nil
@@ -142,5 +146,14 @@ func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot) func(context.
 			})
 		}
 		return bootstrap.Build(buildinfo.Version, t, mods, rev)
+	}
+}
+
+// platformServices membangun layanan platform yang dipasang ke context modul (route, hook lifecycle,
+// command): masker field dan auditor ekspor stub sampai PRD-001 (FR-112, FR-130).
+func platformServices(cfg config.Config, log *slog.Logger) runtime.Services {
+	return runtime.Services{
+		Masker:  authorization.NewStubFieldMasker(authorization.StubMode(cfg.AuthzStub), log),
+		Auditor: audit.NewExportLog(log),
 	}
 }

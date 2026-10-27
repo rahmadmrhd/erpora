@@ -20,6 +20,7 @@ import (
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/lifecycle"
+	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/testsupport/pgtest"
 )
@@ -150,7 +151,7 @@ func TestAssemble_CrossProcessChangeVisibleViaWatch(t *testing.T) {
 
 	db2 := openTestDB(t, dsn)
 	reg, _ := BuildRegistry()
-	other := buildLifecycle(reg, db2, a.Tenant, nil, nil, testProviders(), testLog())
+	other := buildLifecycle(reg, db2, a.Tenant, nil, nil, testProviders(), testLog(), runtime.Services{})
 	res, err := other.Execute(ctx, lifecycle.Request{Tenant: a.Tenant, Op: lifecycle.OpDisable, Key: "acme.example", Actor: "cli:b"})
 	if err != nil || len(res) != 1 || res[0].Status != "succeeded" {
 		t.Fatalf("disable = %+v, %v", res, err)
