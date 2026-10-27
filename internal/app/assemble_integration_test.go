@@ -88,10 +88,16 @@ func statusOf(b bootData, key string) string {
 }
 
 func setupAssembly(t *testing.T) (context.Context, *assembly, string, *gorm.DB) {
+	return setupAssemblyWith(t, func(*config.Config) {})
+}
+
+// setupAssemblyWith seperti setupAssembly; mutate mengubah config sebelum perakitan (mis. ERP_ENV, gate admin API).
+func setupAssemblyWith(t *testing.T, mutate func(*config.Config)) (context.Context, *assembly, string, *gorm.DB) {
 	t.Helper()
 	dsn := pgtest.Start(t)
 	db := openTestDB(t, dsn)
 	cfg := config.Config{DatabaseURL: dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond}
+	mutate(&cfg)
 	if err := migrate.Up(context.Background(), db, cfg.Env); err != nil {
 		t.Fatal(err)
 	}
