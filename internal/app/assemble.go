@@ -121,6 +121,9 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		mountOpts = append(mountOpts, runtime.SkipRoute(admin.IsMutation))
 	}
 	mountOpts = append(mountOpts, runtime.WithServices(services))
+	if prov.Meter != nil {
+		mountOpts = append(mountOpts, runtime.WithMeter(prov.Meter.Meter("erpora/modules")))
+	}
 	runtime.Mount(router, reg, snap, authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log, mountOpts...)
 	registerTestRoutes(router)
 	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid}, nil

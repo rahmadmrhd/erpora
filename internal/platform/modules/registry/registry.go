@@ -42,6 +42,10 @@ type RouteInfo struct {
 	// MaxBodyBytes sudah diberi default (module.DefaultMaxBodyBytes); Classification kosong = tidak dinyatakan.
 	MaxBodyBytes   int64
 	Classification module.Classification
+	// Deprecated dan DeprecatedParams diisi Build dari kontrak (operasi dengan method dan path persis sama; platform.core
+	// lewat dispatch ServeMux): operasi ditandai deprecated, dan parameter query deprecated (PRD-000 FR-23.3).
+	Deprecated       bool
+	DeprecatedParams []string
 }
 
 // CommandInfo adalah satu command terdaftar; Name berbentuk "<slug>:<name>".
@@ -161,6 +165,7 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		return nil, &Error{Problems: problems}
 	}
 
+	applyDeprecation(entries, col.routes)
 	reg := &Registry{entries: entries, byKey: byKey, graph: graph, routes: col.routes, commands: col.cmds}
 	slices.SortFunc(reg.routes, func(a, b RouteInfo) int {
 		return strings.Compare(a.Pattern+"\x00"+a.Method, b.Pattern+"\x00"+b.Method)

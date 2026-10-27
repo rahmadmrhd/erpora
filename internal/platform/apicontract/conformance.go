@@ -3,7 +3,6 @@ package apicontract
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -169,18 +168,16 @@ func checkDispatch(in ConformanceInput, key string, ops []Operation, routes []Ro
 	}
 	hit := map[string]bool{}
 	for _, op := range ops {
-		examplePath := pathParamRe.ReplaceAllStringFunc(op.Path, func(m string) string {
-			return url.PathEscape(paramExample(in.Set, op, m[1:len(m)-1]))
-		})
-		req, err := http.NewRequest(op.Method, examplePath, http.NoBody)
+		example := examplePath(in.Set, op)
+		req, err := http.NewRequest(op.Method, example, http.NoBody)
 		if err != nil {
-			add("missing_route", key, op.Method, op.Path, "path contoh %q tidak valid: %v", examplePath, err)
+			add("missing_route", key, op.Method, op.Path, "path contoh %q tidak valid: %v", example, err)
 			continue
 		}
 		_, pattern := mux.Handler(req)
 		r, ok := byPattern[pattern]
 		if pattern == "" || !ok {
-			add("missing_route", key, op.Method, op.Path, "tidak ada route terdaftar yang melayani %s %s", op.Method, examplePath)
+			add("missing_route", key, op.Method, op.Path, "tidak ada route terdaftar yang melayani %s %s", op.Method, example)
 			continue
 		}
 		hit[pattern] = true
