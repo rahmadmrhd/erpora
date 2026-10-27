@@ -229,6 +229,9 @@ func (r *opRun) step(ctx context.Context, sp stepSpec) *stepFailure {
 		r.steps = append(r.steps, store.Step{Name: sp.name, Status: "skipped", StartedAt: time.Now().UTC()})
 		return nil
 	}
+	if r.s.d.BeforeStep != nil {
+		r.s.d.BeforeStep(r.op, r.key, sp.name)
+	}
 	started := time.Now()
 	r.steps = append(r.steps, store.Step{Name: sp.name, Status: "running", StartedAt: started.UTC()})
 	idx := len(r.steps) - 1

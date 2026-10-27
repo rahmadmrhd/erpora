@@ -82,6 +82,8 @@ type Deps struct {
 	LockTimeout time.Duration
 	// AfterStep adalah seam test (mis. simulasi crash); nil di produksi.
 	AfterStep func(op Op, key, step string)
+	// BeforeStep adalah seam test (mis. memaksa kontensi lock); dipanggil sebelum langkah dicatat. nil di produksi.
+	BeforeStep func(op Op, key, step string)
 }
 
 // Request adalah permintaan operasi lifecycle.
