@@ -225,7 +225,9 @@ func (r *opRun) runSteps(ctx context.Context, specs []stepSpec) *stepFailure {
 
 // step mencatat langkah ke module_operations.steps sebelum dan sesudah dijalankan, dalam child span.
 func (r *opRun) step(ctx context.Context, sp stepSpec) *stepFailure {
-	if r.rs != nil && r.rs.skip[sp.name] && sp.name != "migrate" {
+	// migrate selalu dijalankan ulang; hook:enable juga, karena kegagalan health membatalkan efeknya lewat hook:disable
+	// walau langkah itu tercatat succeeded (hook wajib idempoten, FR-19.5).
+	if r.rs != nil && r.rs.skip[sp.name] && sp.name != "migrate" && sp.name != "hook:enable" {
 		r.steps = append(r.steps, store.Step{Name: sp.name, Status: "skipped", StartedAt: time.Now().UTC()})
 		return nil
 	}

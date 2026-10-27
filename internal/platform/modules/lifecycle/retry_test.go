@@ -140,3 +140,44 @@ func TestRetryModule_CallsOnStartedWithOperationID(t *testing.T) {
 		t.Errorf("onStarted = %s, operasi = %s", got, res.OperationID)
 	}
 }
+
+// B-1: retry enable yang gagal di health harus menjalankan ulang hook:enable, karena efeknya sudah dibatalkan
+// kompensasi hook:disable (langkah hook:enable pada operasi asal tercatat succeeded).
+func TestRetry_EnableAfterHealthFailureRerunsHookEnable(t *testing.T) {
+	rec := &fxRec{}
+	a := newFx(rec, fxSpec{key: "acme.a"})
+	e := newEnv(t, rec, a)
+	if res, err := e.exec(OpInstall, "acme.a"); err != nil || res[0].Status != "succeeded" {
+		t.Fatalf("install = %+v, %v", res, err)
+	}
+	a.on("Health", func(context.Context, module.Env) error { return errors.New("belum sehat") })
+	res, err := e.exec(OpEnable, "acme.a")
+	if err != nil || res[len(res)-1].Status != "failed" {
+		t.Fatalf("enable = %+v, %v", res, err)
+	}
+	count := func(name string) int {
+		n := 0
+		for _, c := range rec.list() {
+			if c == "acme.a:"+name {
+				n++
+			}
+		}
+		return n
+	}
+	if count("OnEnable") != 1 || count("OnDisable") != 1 {
+		t.Fatalf("setelah enable gagal: OnEnable=%d OnDisable=%d", count("OnEnable"), count("OnDisable"))
+	}
+	a.on("Health", nil) // diperbaiki
+	r, err := e.svc.Retry(context.Background(), tenantA, res[len(res)-1].OperationID, "cli:tester")
+	if err != nil || r.Status != "succeeded" {
+		t.Fatalf("Retry = %+v, %v", r, err)
+	}
+	if got := count("OnEnable"); got != 2 {
+		t.Errorf("OnEnable dipanggil %d kali, want 2 (hook:enable tidak boleh di-skip saat retry)", got)
+	}
+	for _, s := range r.Steps {
+		if s.Name == "hook:enable" && s.Status != "succeeded" {
+			t.Errorf("hook:enable = %s, want succeeded", s.Status)
+		}
+	}
+}
