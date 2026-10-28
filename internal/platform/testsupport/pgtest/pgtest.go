@@ -32,14 +32,16 @@ func StartWithStop(t *testing.T) (dsn string, stop func()) {
 		tcpostgres.WithPassword("erp"),
 		tcpostgres.BasicWaitStrategies(),
 	)
-	if err != nil {
-		t.Fatalf("start postgres container: %v", err)
-	}
+	// Cleanup didaftarkan sebelum memeriksa err: Run bisa mengembalikan container yang sudah dibuat
+	// bersama error (mis. wait strategy timeout) dan container itu harus tetap dihentikan.
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_ = testcontainers.TerminateContainer(c, testcontainers.StopContext(ctx))
 	})
+	if err != nil {
+		t.Fatalf("start postgres container: %v", err)
+	}
 	dsn, err = c.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("connection string: %v", err)
