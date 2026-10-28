@@ -34,11 +34,15 @@ export const frontendModule = defineModule({
   key: "acme.example",
   slug: "example",
   version: "1.0.0",
-  navigation: [{ type: "item", id: "notes", label: msg("example", "nav.notes"), to: "/", icon: "file-text" }],
+  navigation: [
+    { type: "item", id: "notes", label: msg("example", "nav.notes"), to: "/", icon: "file-text" },
+  ],
   registerRoutes: (base) => [
-    createRoute({ getParentRoute: () => base, path: "/", staticData: { crumb: crumb("example", "nav.notes") } }).lazy(
-      () => import("./pages/home").then((m) => m.Route),
-    ),
+    createRoute({
+      getParentRoute: () => base,
+      path: "/",
+      staticData: { crumb: crumb("example", "nav.notes") },
+    }).lazy(() => import("./pages/home").then((m) => m.Route)),
   ],
   offline: defaultOfflinePolicy,
 });
