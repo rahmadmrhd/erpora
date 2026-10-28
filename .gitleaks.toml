@@ -3,10 +3,8 @@ title = "ERPora gitleaks"
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Nilai contoh pengembangan lokal (bukan rahasia)"
+# Bentuk [allowlist] tunggal dipakai karena gitleaks-action (8.24.x) tidak menerapkan `regexes` pada [[allowlists]].
+[allowlist]
+description = "Bukan rahasia: nilai contoh pengembangan lokal dan nama file migrasi goose (kolom migration_key)"
 paths = ['''^\.env\.example$''', '''^infrastructure/docker/docker-compose\.dev\.yml$''']
-
-[[allowlists]]
-description = "Nama file migrasi goose pada kolom migration_key (bukan rahasia)"
 regexes = ['''^[0-9]{4}_[a-z0-9_]+\.sql$''']
