@@ -301,3 +301,29 @@
     }
   }
 }
+
+/* LoadingIcon (kartu DS): delapan titik tumbuh bergiliran; CSS keyframes (bukan SMIL) agar patuh reduced-motion. */
+@layer components {
+  .erpora-loading-dot {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: erpora-loading-dot 1s linear infinite both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .erpora-loading-dot {
+      animation: none;
+      transform: scale(0.7);
+    }
+  }
+}
+
+@keyframes erpora-loading-dot {
+  0%,
+  100% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
