@@ -1,0 +1,24 @@
+{
+  "actions": {
+    "save": "Simpan",
+    "cancel": "Batal",
+    "close": "Tutup",
+    "confirm": "Konfirmasi",
+    "delete": "Hapus",
+    "edit": "Ubah",
+    "add": "Tambah",
+    "search": "Cari",
+    "retry": "Coba lagi",
+    "back": "Kembali",
+    "next": "Berikutnya",
+    "previous": "Sebelumnya"
+  },
+  "status": {
+    "loading": "Memuat…",
+    "empty": "Belum ada data"
+  },
+  "pagination": {
+    "summary": "{total, plural, =0 {Tidak ada data} other {# data}}",
+    "page": "Halaman {page} dari {pages}"
+  }
+}

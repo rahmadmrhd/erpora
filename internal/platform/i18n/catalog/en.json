@@ -1,0 +1,41 @@
+{
+  "app": {
+    "name": "ERPora"
+  },
+  "shell": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "skipToContent": "Skip to content",
+    "language": {
+      "label": "Language"
+    }
+  },
+  "errors": {
+    "bad_request": "The request is not valid.",
+    "invalid_filter": "The filter is not valid.",
+    "invalid_sort": "The sort order is not valid.",
+    "tenant_unresolved": "The tenant could not be determined.",
+    "unauthenticated": "You are not signed in.",
+    "token_expired": "Your session has expired.",
+    "permission_denied": "You do not have permission to do this.",
+    "field_forbidden": "You are not allowed to access this field.",
+    "mfa_required": "Two-step verification is required.",
+    "module_disabled": "The module is not enabled.",
+    "not_found": "The record was not found.",
+    "module_not_found": "The module was not found.",
+    "invalid_state": "The current state does not allow this action.",
+    "request_in_progress": "A similar request is already in progress.",
+    "conflict": "The data conflicts with existing data.",
+    "version_mismatch": "The data has changed; reload and try again.",
+    "validation_failed": "The data is not valid.",
+    "business_rule_violated": "The data violates a business rule.",
+    "idempotency_key_reused": "The idempotency key was already used for another request.",
+    "rate_limited": "Too many requests; try again later.",
+    "unsupported_media_type": "The content type is not supported.",
+    "internal_error": "Something went wrong on the server.",
+    "not_implemented": "This feature is not available yet.",
+    "method_not_allowed": "The method is not supported for this address.",
+    "module_unavailable": "The module is temporarily unavailable.",
+    "not_ready": "The service is not ready."
+  }
+}

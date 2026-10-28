@@ -1,0 +1,41 @@
+{
+  "app": {
+    "name": "ERPora"
+  },
+  "shell": {
+    "loading": "Memuat…",
+    "retry": "Coba lagi",
+    "skipToContent": "Lewati ke konten",
+    "language": {
+      "label": "Bahasa"
+    }
+  },
+  "errors": {
+    "bad_request": "Permintaan tidak valid.",
+    "invalid_filter": "Filter tidak valid.",
+    "invalid_sort": "Pengurutan tidak valid.",
+    "tenant_unresolved": "Tenant tidak dapat ditentukan.",
+    "unauthenticated": "Anda belum masuk.",
+    "token_expired": "Sesi Anda telah berakhir.",
+    "permission_denied": "Anda tidak memiliki izin untuk aksi ini.",
+    "field_forbidden": "Anda tidak boleh mengakses field ini.",
+    "mfa_required": "Verifikasi dua langkah diperlukan.",
+    "module_disabled": "Modul tidak aktif.",
+    "not_found": "Data tidak ditemukan.",
+    "module_not_found": "Modul tidak ditemukan.",
+    "invalid_state": "Status data tidak mengizinkan aksi ini.",
+    "request_in_progress": "Permintaan serupa sedang diproses.",
+    "conflict": "Data bentrok dengan data yang sudah ada.",
+    "version_mismatch": "Data telah berubah; muat ulang lalu coba lagi.",
+    "validation_failed": "Data tidak valid.",
+    "business_rule_violated": "Data melanggar aturan bisnis.",
+    "idempotency_key_reused": "Kunci idempotensi sudah dipakai untuk permintaan lain.",
+    "rate_limited": "Terlalu banyak permintaan; coba lagi nanti.",
+    "unsupported_media_type": "Jenis konten tidak didukung.",
+    "internal_error": "Terjadi kesalahan pada server.",
+    "not_implemented": "Fitur ini belum tersedia.",
+    "method_not_allowed": "Metode tidak didukung untuk alamat ini.",
+    "module_unavailable": "Modul sedang tidak tersedia.",
+    "not_ready": "Layanan belum siap."
+  }
+}

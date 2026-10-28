@@ -1,0 +1,24 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "retry": "Try again",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous"
+  },
+  "status": {
+    "loading": "Loading…",
+    "empty": "No data yet"
+  },
+  "pagination": {
+    "summary": "{total, plural, =0 {No data} one {# item} other {# items}}",
+    "page": "Page {page} of {pages}"
+  }
+}
