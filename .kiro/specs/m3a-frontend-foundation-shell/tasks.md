@@ -93,49 +93,49 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
 - [ ] 7. Checkpoint — `@erpora/ui`
   - Jalankan `bun test`, `typecheck`, `lint`, `deps`, `build`; semua komponen di tabel C ada dan bertest; larangan palet langsung (4.2d) hijau; tanyakan ke user bila ada komponen/varian di luar tabel yang dibutuhkan.
 
-- [ ] 8. `@erpora/module-sdk` (Kelas beban: Sonnet; 8.4 Haiku)
-  - [ ] 8.1 Tulis test `defineModule` dan tipe (merah dulu)
+- [x] 8. `@erpora/module-sdk` (Kelas beban: Sonnet; 8.4 Haiku)
+  - [x] 8.1 Tulis test `defineModule` dan tipe (merah dulu)
     - Modul valid lolos dan hasilnya beku; `key`/`slug`/`version` tidak valid, `id` navigasi ganda, `to` tanpa awalan `/`, grup tanpa anak, `OfflinePolicy` tak valid → `ModuleDefinitionError` dengan pesan menyebut bidang; `defaultOfflinePolicy` sama dengan `docs/architecture/offline-strategy.md` §3; `FrontendModule<"example">` menyimpulkan `slug` literal.
     - **Validates: Requirements 6.1, 6.2**
-  - [ ] 8.2 Implementasi `types.ts`, `define-module.ts`, `offline.ts`
+  - [x] 8.2 Implementasi `types.ts`, `define-module.ts`, `offline.ts`
     - Sesuai `design.md` §3 (`MessageRef`, `NavigationEntry`, `FrontendModule`, `OfflinePolicy`, `defaultOfflinePolicy`, `defineModule`, `ModuleDefinitionError`); ekspor lewat `src/index.ts` (selain `ModuleManifest` yang sudah ada).
     - _Requirements: 6.1_
-  - [ ] 8.3 Tipe route spesifik dan fixture tipe
+  - [x] 8.3 Tipe route spesifik dan fixture tipe
     - `src/routing.ts`: `AppRouterContext`, `createAppRootRoute`, `createModuleBaseRoute`, `ModuleBaseRoute`, `AnyModuleChildRoute`, augmentasi `StaticDataRouteOption` (`crumb`), re-ekspor primitif route (`createRoute`, `createLazyRoute`, `lazyRouteComponent`, `Link`, `Outlet`, `useNavigate`); tambahkan `@tanstack/react-router` dan `@tanstack/react-query` sebagai `peerDependencies` (dan devDependency terpin). Fixture tipe (`routing.check.ts`, dijalankan lewat `typecheck`): anak route dengan `getParentRoute: () => base` valid; parent lain atau `AnyRoute` tak berlabel ditolak (`@ts-expect-error`). Bila generik tak dapat diekspor stabil, pakai fungsi pembangun sebagai satu-satunya pintu (K-28) dan catat.
     - _Requirements: 5.1_
-  - [ ] 8.4 README dan pemeriksaan manifest
+  - [x] 8.4 README dan pemeriksaan manifest
     - Perbarui `packages/module-sdk/README.md` (hapus kalimat "menyusul", jelaskan `defineModule`, `OfflinePolicy`, routing); pastikan `manifest.check.ts` tetap lolos.
     - _Requirements: 6.1_
 
 - [ ] 9. `@erpora/platform-web` lapisan layanan (Kelas beban: Sonnet; 9.10 Haiku)
-  - [ ] 9.1 Tulis test unit dan properti (merah dulu)
+  - [x] 9.1 Tulis test unit dan properti (merah dulu)
     - `prefs` (baca/tulis aman, `localStorage` melempar); `theme` (`parseThemePreference`, `resolveTheme`, `applyTheme`, `ThemeProvider` mengikuti `matchMedia` tanpa reload dan event `storage`; **P6** property test; konsistensi dengan `web/src/theme-init.ts`); `tenancy` (`scopedKey`, **P8**; pemindai: tidak ada `queryKey` selain bootstrap yang tanpa awalan tenant di `web/src` dan `packages/*/src`); `format` (`formatRelativeTime`, `formatDateTime` id/en); `sources` (`emptyNotificationSource`, `anonymousUserSource`, `safeInternalHref` **P9** property test); `api` (`describeApiError` **P10**: semua kode di `design.md` Error Handling terpetakan, kode asing → `error.unknown`, tidak ada `details` mentah); `permissions` (`usePermission` optimistis).
     - **Validates: Requirements 4.1, 4.2, 4.3, 7.1, 11.4, 12.3, 14.2, 14.3**
-  - [ ] 9.2 Implementasi `prefs/`, `theme/`, `tenancy/`, `format/`, `permissions/`
+  - [x] 9.2 Implementasi `prefs/`, `theme/`, `tenancy/`, `format/`, `permissions/`
     - Sesuai `design.md` §5.1, 5.3, 5.6, 5.10. `ThemeProvider` memasang kelas pada `document.documentElement` dan `color-scheme`.
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 7.1, 14.2_
-  - [ ] 9.3 Perluas klien `@erpora/platform-contracts` (test dulu)
+  - [x] 9.3 Perluas klien `@erpora/platform-contracts` (test dulu)
     - Test: hasil sukses memuat `etag`; `304` → `{ ok: false, status: 304, error.code: "not_modified" }`; header `If-None-Match`/`If-Match` lewat `init.headers` terkirim; mutasi tanpa body tidak menyetel `Content-Type` (pemanggil wajib `body: {}`). Implementasi aditif di `client.ts`; perbarui `client.check.ts` dan `README.md`; `getLocale()` mengikuti spec i18n (12.6).
     - _Requirements: 7.2, 7.5_
   - [ ] 9.4 Bootstrap dan keselarasan `I18nProvider` (test dulu)
     - Test **P5** (`createBootstrapFetcher`: 200 menyimpan `etag`; 304 mengembalikan referensi objek sama; galat melempar), `BootstrapProvider` (memuat → ready; galat → `error` dengan `retry`; refetch saat focus lewat `QueryClient` palsu; `useFeature`, `useTenantId`). Implementasi sesuai §5.2. **Selaraskan `I18nProvider`** hasil spec i18n agar membaca `tenantId` dan `bootstrap.i18n` dari konteks `BootstrapProvider` (satu query `["bootstrap"]`), bukan query sendiri; jalankan ulang test i18n.
     - **Validates: Requirements 7.1, 7.2, 7.3, 12.5**
-  - [ ] 9.5 Registry modul (test dulu)
+  - [x] 9.5 Registry modul (test dulu)
     - Test **P1** dan **P2** (property test `fast-check`: daftar modul dan bootstrap acak), `resolveModules` (tidak ada di bootstrap → diabaikan + peringatan sekali; versi berbeda → peringatan; `offline` tak cocok → peringatan), `selectNavigation` (hanya `enabled`, urutan stabil, `to` absolut), `moduleStatus`, `useModuleRegistry` bereaksi terhadap perubahan bootstrap. Implementasi sesuai §5.4.
     - **Validates: Requirements 6.2, 6.3, 6.4, 6.5, 6.8**
-  - [ ] 9.6 Klien platform, `msg()`/`crumb()`/`Message`
+  - [x] 9.6 Klien platform, `msg()`/`crumb()`/`Message`
     - `createPlatformClient`, `describeApiError`, `msg`, `crumb`, komponen `Message` (memakai `useTranslation(ref.ns)`); fixture tipe: kunci salah ketik pada `msg("example", "tidak.ada")` gagal `tsc`.
     - _Requirements: 14.4, 6.1_
-  - [ ] 9.7 Aksi halaman dan tata letak (test dulu)
+  - [x] 9.7 Aksi halaman dan tata letak (test dulu)
     - Test **P13** dan perilaku: `usePageActions` mendaftar saat mount (sinkron), menggantikan saat berubah, membersihkan saat unmount; `onSelect` memakai closure terbaru tanpa render ulang konsumen; `usePageLayout({ scroll: false })` dan kembalinya ke `true`; beberapa pemanggil digabung berurutan. Implementasi `page/` sesuai §5.7.
     - **Validates: Requirements 10.3, 10.4**
-  - [ ] 9.8 Sumber notifikasi dan pengguna
+  - [x] 9.8 Sumber notifikasi dan pengguna
     - Implementasi `sources/` sesuai §5.8 (`NotificationSourceProvider`, `useNotifications` dengan Query, `CurrentUserSourceProvider`, `useCurrentUser`); test dengan sumber tiruan: memuat/kosong/galat, `markRead` dan `markAllRead` memperbarui hitungan, kunci query berawalan tenant, tidak ada data pengguna di storage.
     - _Requirements: 11.2, 11.3, 11.4, 12.3, 14.2_
-  - [ ] 9.9 Pemuat TanStack DB lazy
+  - [x] 9.9 Pemuat TanStack DB lazy
     - `db/index.ts` (`loadDb`, `useDb` dengan Suspense, hasil ter-cache); tambahkan dependensi `@tanstack/react-db` dan `@tanstack/query-db-collection` (versi pasti). Test memastikan `loadDb()` memberi `createCollection`/`useLiveQuery`/`queryCollectionOptions` dan hanya dimuat sekali. **Impor DB hanya lewat `import()`** (diperiksa test pemindai: tidak ada impor statis `@tanstack/react-db` di `index.ts` atau berkas yang diimpor entry).
     - _Requirements: 7.4, 1.4_
-  - [ ] 9.10 Ekspor dan gate paket
+  - [x] 9.10 Ekspor dan gate paket
     - `src/index.ts` mengekspor API publik; `typecheck`, `lint`, `deps` (F1 sampai F4 hijau), `bun test`.
     - _Requirements: 1.5, 7.1_
 
