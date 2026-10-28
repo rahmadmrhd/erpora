@@ -391,7 +391,7 @@ func (p *parser) parseBlock(name string, level int) (node, error) {
 	for {
 		o := option{}
 		if sel == "" {
-			if !(isPlural && p.cur() == '=') {
+			if !isPlural || p.cur() != '=' {
 				break
 			}
 			start := p.pos
