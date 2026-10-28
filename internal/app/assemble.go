@@ -69,7 +69,7 @@ func defaultTenant(ctx context.Context, cfg config.Config, db *database.DB) (ten
 // assemble merakit router, snapshot, dan lifecycle: reconcile saat startup (FR-19.6), langganan notifikasi
 // revision, watcher antarproses, dan route modul dengan snapshot yang sama. Error reconcile (selain lock
 // timeout, yang dilaporkan sebagai LockSkipped) menggagalkan startup.
-func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, prov observability.Providers, reg *registry.Registry, api *admin.API) (*assembly, error) {
+func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, prov observability.Providers, reg *registry.Registry, apis *platformAPIs) (*assembly, error) {
 	tid, err := defaultTenant(ctx, cfg, db)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,8 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 			})
 		},
 	})
-	api.Bind(svc)
+	apis.Modules.Bind(svc)
+	apis.I18n.Bind(i18nSvc)
 	// Gate mutasi (keputusan 8): di luar development tanpa ERP_MODULES_ADMIN_API=true, route aksi mutasi tidak
 	// dilayani (404 sebelum permission), sementara route baca tetap tunduk pada permission.
 	var mountOpts []runtime.MountOption
