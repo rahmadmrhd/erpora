@@ -13,6 +13,7 @@ import (
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
+	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/lifecycle"
@@ -30,6 +31,7 @@ type assembly struct {
 	Lifecycle *lifecycle.Service
 	Snapshot  *runtime.Snapshot
 	Tenant    tenancy.TenantID
+	I18n      *i18n.Service
 }
 
 // buildLifecycle merakit lifecycle.Service di atas db. snap dan notifier boleh nil (CLI tidak punya snapshot).
@@ -74,7 +76,15 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	}
 	snap := runtime.NewSnapshot()
 	notifier := runtime.NewLocalNotifier()
+	// Katalog terjemahan divalidasi sebelum apa pun dilayani: galat struktural menggagalkan startup (exit 2).
+	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, moduleActive(reg, func(t tenancy.TenantID, key string) bool {
+		return snap.Status(t, key) == runtime.StatusEnabled
+	}))
+	if err != nil {
+		return nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}
+	}
 	services := platformServices(cfg, log)
+	services.I18n = i18nHook(i18nSvc, reg)
 	svc := buildLifecycle(reg, db, tid, snap, notifier, prov, log, services)
 
 	rep, err := svc.Reconcile(ctx, tid)
@@ -104,6 +114,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		Dev:        cfg.Env == config.EnvDevelopment,
 		// Deteksi N+1 hanya di development (ERP_DB_NPLUSONE_THRESHOLD, 0 = mati).
 		NPlusOneThreshold: cfg.DBNPlusOneThreshold,
+		I18n:              i18nSvc,
 		Bootstrap:         bootstrapFrom(reg, snap),
 		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
 		Authenticate: func(next http.Handler) http.Handler {
@@ -126,7 +137,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	}
 	runtime.Mount(router, reg, snap, authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log, mountOpts...)
 	registerTestRoutes(router)
-	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid}, nil
+	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid, I18n: i18nSvc}, nil
 }
 
 // bootstrapFrom membentuk isi /api/bootstrap dari katalog (tanpa platform.core) dan snapshot runtime.
