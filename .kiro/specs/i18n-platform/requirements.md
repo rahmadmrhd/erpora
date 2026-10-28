@@ -41,8 +41,10 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 2. THE modul SHALL hanya membaca dan menulis namespace-nya sendiri ditambah `ui` dan `platform`; mengakses katalog modul lain SHALL ditolak dan ditegakkan arch test (selaras D1–D9).
 3. THE manifest modul SHALL mendeklarasikan `locales` (daftar bahasa yang disediakan) dan `defaultLocale`; WHEN katalog untuk bahasa yang dideklarasikan tidak ada, THE `module:check` SHALL gagal.
 4. THE struktur berkas JSON SHALL berupa **objek bersarang** (diputuskan 29 Okt 2026); pesan adalah nilai string di daun, dan SHALL diakses dengan **notasi titik** (`note.title`, atau lengkap `example::note.title`) di Go, TypeScript, override, CLI, dan API. Struktur bersarang SHALL konsisten antar bahasa dalam satu namespace.
-5. THE segmen kunci SHALL hanya memuat `[A-Za-z0-9_-]` dan SHALL tidak memuat titik; satu kunci SHALL tidak boleh sekaligus menjadi daun (pesan) dan cabang (objek) pada tingkat yang sama.
-6. WHEN `make:module` dijalankan, THE generator SHALL membuat `i18n/id.json` dan `i18n/en.json` berisi kunci contoh bersarang.
+5. THE segmen kunci (nama properti JSON) SHALL boleh memuat titik (diputuskan 29 Okt 2026). THE runtime SHALL meratakan pohon menjadi peta kunci-lengkap→pesan dengan menggabungkan segmen memakai `.` (mis. `{"order": {"status.draft": "Draf"}}` menjadi `order.status.draft`), dan pencarian SHALL memakai peta itu tanpa penelusuran bertingkat atau backtracking.
+6. THE kunci lengkap hasil perataan SHALL unik per namespace dan bahasa; WHEN dua jalur berbeda menghasilkan kunci lengkap yang sama (mis. `{"a.b": {"c": "x"}}` dan `{"a": {"b.c": "y"}}` keduanya menjadi `a.b.c`), THE `i18n:check` SHALL gagal dengan menyebut kedua jalur.
+7. THE karakter segmen SHALL dibatasi ke `[A-Za-z0-9_.-]`; segmen SHALL tidak kosong, tidak diawali atau diakhiri titik, tidak memuat titik berurutan (`..`), dan tidak memuat `::` (pemisah namespace).
+8. WHEN `make:module` dijalankan, THE generator SHALL membuat `i18n/id.json` dan `i18n/en.json` berisi kunci contoh bersarang.
 
 ### Requirement 2: Format pesan ICU MessageFormat
 
@@ -126,7 +128,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 
 #### Acceptance Criteria
 
-1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa dalam satu namespace; argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); satu kunci menjadi daun sekaligus cabang; atau segmen kunci melanggar aturan Requirement 1.5.
+1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa dalam satu namespace; argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); dua jalur menghasilkan kunci lengkap yang sama setelah perataan (Requirement 1.6); atau segmen kunci melanggar karakter yang diizinkan (Requirement 1.7).
 2. THE `erpora i18n:status` SHALL menampilkan persentase kelengkapan per bahasa per namespace.
 3. THE `erpora i18n:add <locale>` SHALL membuat kerangka katalog bahasa baru dari bahasa default untuk modul yang dipilih.
 4. THE pemeriksaan i18n SHALL menjadi bagian dari gate lokal dan CI (`task lint` atau gate khusus), dan SHALL diperiksa oleh `make:module`/`test:generator` untuk modul hasil generate.
