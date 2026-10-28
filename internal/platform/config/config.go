@@ -37,6 +37,9 @@ type Config struct {
 	ModulesAdminAPI bool
 	// DBNPlusOneThreshold (ERP_DB_NPLUSONE_THRESHOLD, default 10, 0 = mati): ambang peringatan N+1 di development.
 	DBNPlusOneThreshold int
+	// DBStatementTimeout (ERP_DB_STATEMENT_TIMEOUT_MS, default 30000, valid 1000..600000) membatasi tiap statement
+	// pada pool `erpora serve` (Q26 butir 7). CLI tidak memakainya.
+	DBStatementTimeout time.Duration
 }
 
 // ModulesAdminAPIEnabled: endpoint mutasi modul aktif bila ERP_ENV=development atau ERP_MODULES_ADMIN_API=true.
@@ -58,6 +61,7 @@ type raw struct {
 	AuthzStub       string `env:"ERP_AUTHZ_STUB"`
 	ModulesAdminAPI string `env:"ERP_MODULES_ADMIN_API"`
 	NPlusOne        string `env:"ERP_DB_NPLUSONE_THRESHOLD" envDefault:"10"`
+	StatementMS     string `env:"ERP_DB_STATEMENT_TIMEOUT_MS" envDefault:"30000"`
 }
 
 // Load membaca konfigurasi. envFile "" = tanpa file; environment proses menang atas isi file.
@@ -158,5 +162,10 @@ func Load(envFile string) (Config, error) {
 		return Config{}, ValidationError{"ERP_DB_NPLUSONE_THRESHOLD", "harus bilangan bulat >= 0 (0 = mati)"}
 	}
 	c.DBNPlusOneThreshold = np
+	var st int
+	if _, err := fmt.Sscanf(r.StatementMS, "%d", &st); err != nil || fmt.Sprint(st) != strings.TrimSpace(r.StatementMS) || st < 1000 || st > 600000 {
+		return Config{}, ValidationError{"ERP_DB_STATEMENT_TIMEOUT_MS", "harus bilangan bulat 1000 sampai 600000 (milidetik)"}
+	}
+	c.DBStatementTimeout = time.Duration(st) * time.Millisecond
 	return c, nil
 }

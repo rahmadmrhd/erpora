@@ -70,7 +70,7 @@ Setiap baris memiliki **penegak**. "CI" berarti dicek otomatis; "Review" berarti
 | **Command injection**: DILARANG `os/exec` dengan input pengguna; bila perlu proses eksternal, argumen sebagai slice terpisah tanpa shell | gosec G204 |
 | **Template injection**: template email/dokumen memakai `html/template` (escape otomatis); template buatan admin dijalankan di mode terbatas tanpa akses fungsi berbahaya | Review |
 | **LDAP/expression/header injection**: nilai dari pengguna tidak dimasukkan ke header email, nama file, atau ekspresi tanpa validasi ketat (tolak `\r`, `\n`) | Test helper |
-| **CSV/formula injection**: sel ekspor yang diawali `=`, `+`, `-`, `@`, tab, atau CR diberi awalan `'` | Helper ekspor bersama + test |
+| **CSV/formula injection**: sel ekspor yang diawali `=`, `+`, `-`, `@`, tab, atau CR diberi awalan `'`, kecuali string desimal murni (`^-?[0-9]+(\.[0-9]+)?$`, mis. `-1250.00`) yang tidak dapat menjadi formula (PRD-000 Q30 butir 7) | Helper ekspor bersama (`sdk/export`) + test |
 
 ### 3.3. SSRF (OWASP A10, API7)
 
@@ -201,10 +201,15 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | --- | --- |
 | Arch test D1–D11, header keamanan, request ID, DSN redaction, secret scan | **M1** (sedang dibangun) |
 | Route permission allowlist, kontrak ↔ route, linter kontrak | **M2** (PRD-000) |
-| Timeout query database per request (`statement_timeout`) | **M2c** (PRD-000 Q26) |
+| Timeout query database per request (`statement_timeout`) | **M2c ✅** (PRD-000 Q26, Q30) |
 | Authz helper, test IDOR, analyzer authz, MFA, audit | **PRD-001** |
 | SBOM, `SECURITY.md`, gosec | **M1** (PRD-000 FR-24.1) |
-| `sdk/egress`, klasifikasi data + `x-erp-classification`, `DecodeJSON`, `no-store`, `sdk/export` | **M2** (PRD-000 FR-24.2) |
+| `sdk/egress` (anti-SSRF) + arch test `EGRESS` | **M2c ✅** (PRD-000 FR-24.2) |
+| `httpx.DecodeJSON` + arch test `DECODE` | **M2c ✅** |
+| `Cache-Control: no-store` berbasis klasifikasi route (`module.Classify`) | **M2c ✅** |
+| `sdk/export` (CSV/XLSX, masking, audit) | **M2c ✅** |
+| Klasifikasi field group di manifest | **M2c ✅** |
+| Linter kontrak `x-erp-classification`; kesesuaian klasifikasi route ↔ kontrak | **M2d** (PRD-000 FR-23) |
 | `SafeHtml`, OWASP ZAP baseline | **M3** (PRD-000 FR-24.3) |
 | Pipeline upload file | **PRD Files** (sebelum fitur upload pertama) |
 

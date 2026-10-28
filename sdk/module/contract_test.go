@@ -23,9 +23,10 @@ func (fakeModule) SeedDev(context.Context, module.Env) error                 { r
 
 type fakeRegistrar struct{ commands []module.Command }
 
-func (*fakeRegistrar) Handle(method, path, permission string, h http.Handler) {}
-func (*fakeRegistrar) Public(method, path string, h http.Handler)             {}
-func (r *fakeRegistrar) Command(c module.Command)                             { r.commands = append(r.commands, c) }
+func (*fakeRegistrar) Handle(method, path, permission string, h http.Handler, opts ...module.RouteOption) {
+}
+func (*fakeRegistrar) Public(method, path string, h http.Handler, opts ...module.RouteOption) {}
+func (r *fakeRegistrar) Command(c module.Command)                                             { r.commands = append(r.commands, c) }
 
 var (
 	_ module.Module          = fakeModule{}

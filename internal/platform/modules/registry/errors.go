@@ -58,6 +58,7 @@ const (
 	CodePermissionMissing    = "permission_missing"
 	CodePermissionUndeclared = "permission_undeclared"
 	CodeInvalidRoute         = "invalid_route"
+	CodeInvalidRouteOption   = "invalid_route_option"
 	CodeRouteConflict        = "route_conflict"
 	CodeInvalidCommand       = "invalid_command"
 	CodeCommandConflict      = "command_conflict"

@@ -81,6 +81,7 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 | `ERP_AUTHZ_STUB` | | `deny` (`allow` bila `ERP_ENV=development`) | Mode stub otorisasi sampai PRD-001: `allow` atau `deny`. **`allow` ditolak saat `ERP_ENV=production`** (keputusan Q25) |
 | `ERP_MODULES_ADMIN_API` | | `false` | `true` mengaktifkan endpoint **mutasi** `POST /api/platform/modules/{key}/{operation}` di luar `development` (selain itu `404`). **Biarkan `false` di production** sampai autentikasi (PRD-001) tersedia; kelola modul lewat CLI. Endpoint baca tetap tunduk pada permission (`ERP_AUTHZ_STUB`) |
 | `ERP_DB_NPLUSONE_THRESHOLD` | | `10` | Hanya di `development`: peringatan `indikasi N+1` bila satu request menjalankan lebih dari N query dengan bentuk SQL yang sama. `0` mematikan |
+| `ERP_DB_STATEMENT_TIMEOUT_MS` | | `30000` | Batas waktu setiap statement SQL pada koneksi proses `erpora serve` (milidetik, 1000–600000; di luar rentang proses gagal start dengan exit 2). Statement yang melewatinya dibatalkan (SQLSTATE `57014`). Tidak berlaku untuk CLI (`migrate`, `modules`, command modul), sehingga migrasi panjang tidak terputus; operasi lifecycle lewat API admin di dalam `serve` ikut dibatasi |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | (kosong = telemetry nonaktif) | Endpoint OpenTelemetry Collector |
 | `OTEL_SERVICE_NAME` | | `erpora` | |
 

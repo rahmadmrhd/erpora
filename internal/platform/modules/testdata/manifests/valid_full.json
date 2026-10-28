@@ -21,7 +21,17 @@
   "signature": "c2lnbmF0dXJl",
   "requested_permissions": ["network.outbound"],
   "license": "MIT",
-  "resources": [{ "name": "orders", "actions": ["read", "create"] }],
+  "resources": [
+    {
+      "key": "x.note",
+      "name": "orders",
+      "actions": ["read", "create"],
+      "field_groups": [
+        { "key": "general", "fields": ["title"], "classification": "internal" },
+        { "key": "pricing", "fields": ["cost"], "classification": "confidential" }
+      ]
+    }
+  ],
   "scope_dimensions": [{ "key": "branch" }],
   "default_roles": [{ "key": "example.manager", "permissions": ["orders.read"] }],
   "settings": { "example.limit": { "type": "integer", "default": 10 } }

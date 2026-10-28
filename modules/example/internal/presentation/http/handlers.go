@@ -4,14 +4,14 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"erpora/modules/example/internal/application"
 	"erpora/modules/example/internal/domain"
+	"erpora/sdk/httpx"
 )
 
 // NoteLister adalah use case daftar notes.
@@ -33,35 +33,27 @@ type noteDTO struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-type pageDTO struct {
-	Page     int   `json:"page"`
-	PageSize int   `json:"pageSize"`
-	Total    int64 `json:"total"`
-	HasMore  bool  `json:"hasMore"`
-}
-
 // Ping menjawab {"data":{"pong":true}}.
 func (h *Handlers) Ping(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]bool{"pong": true}})
+	httpx.WriteData(w, http.StatusOK, map[string]bool{"pong": true})
 }
 
 // ListNotes menjawab daftar notes dengan pagination halaman (api-guidelines §6).
 func (h *Handlers) ListNotes(w http.ResponseWriter, r *http.Request) {
 	page, ok := intParam(r, "page", 1, 1, 1<<30)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "bad_request", "parameter page harus bilangan bulat >= 1")
+		badParam(w, r, "page", "parameter page harus bilangan bulat >= 1")
 		return
 	}
 	size, ok := intParam(r, "pageSize", application.DefaultPageSize, 1, application.MaxPageSize)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "bad_request", "parameter pageSize harus bilangan bulat 1 sampai 200")
+		badParam(w, r, "pageSize", "parameter pageSize harus bilangan bulat 1 sampai 200")
 		return
 	}
 	items, total, err := h.notes.ListNotes(r.Context(), page, size)
 	if err != nil {
 		// Detail 5xx hanya di log (api-guidelines §8); respons tetap generik.
-		slog.ErrorContext(r.Context(), "gagal membaca daftar notes", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal_error", "terjadi kesalahan pada server")
+		httpx.RespondError(w, r, fmt.Errorf("gagal membaca daftar notes: %w", err))
 		return
 	}
 	out := make([]noteDTO, len(items))
@@ -71,9 +63,8 @@ func (h *Handlers) ListNotes(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: n.CreatedAt.UTC().Format(time.RFC3339), UpdatedAt: n.UpdatedAt.UTC().Format(time.RFC3339),
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"data": out,
-		"page": pageDTO{Page: page, PageSize: size, Total: total, HasMore: int64(page)*int64(size) < total},
+	httpx.WritePage(w, http.StatusOK, out, httpx.Page{
+		Page: page, PageSize: size, Total: total, HasMore: int64(page)*int64(size) < total,
 	})
 }
 
@@ -90,16 +81,7 @@ func intParam(r *http.Request, name string, def, minV, maxV int) (int, bool) {
 	return v, true
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	body := map[string]any{"code": code, "message": message}
-	if id := w.Header().Get("X-Request-Id"); id != "" {
-		body["requestId"] = id
-	}
-	writeJSON(w, status, map[string]any{"error": body})
+func badParam(w http.ResponseWriter, r *http.Request, field, msg string) {
+	httpx.WriteError(w, r, http.StatusBadRequest, "bad_request", msg,
+		[]httpx.Detail{{Field: field, Code: "invalid", Message: msg}})
 }

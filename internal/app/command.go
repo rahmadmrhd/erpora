@@ -48,7 +48,7 @@ func RunModuleCommand(ctx context.Context, cfg config.Config, log *slog.Logger, 
 	reason := "cli:" + name
 	ctx, span := otel.Tracer("erpora/cli").Start(ctx, "command "+name, trace.WithAttributes(attribute.String("erp.module.key", key), attribute.String("erp.actor", run.Actor)))
 	defer span.End()
-	mctx, env := runtime.ModuleContext(ctx, rt.tid, key, rt.conn, log, reason)
+	mctx, env := runtime.ModuleContext(ctx, rt.tid, key, rt.conn, log, reason, rt.services)
 
 	out := run.Out
 	if out == nil {

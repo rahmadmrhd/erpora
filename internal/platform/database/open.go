@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/stdlib"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -24,10 +27,32 @@ const pingTimeout = 5 * time.Second
 // Open membuka koneksi GORM, memasang logger slog + tracing, dan memverifikasi dengan Ping (5 dtk).
 // Error koneksi tidak pernah memuat password.
 func Open(ctx context.Context, cfg config.Config, tp trace.TracerProvider, log *slog.Logger) (*gorm.DB, error) {
+	return OpenWith(ctx, cfg, tp, log, OpenOptions{})
+}
+
+// OpenOptions mengatur Open untuk pemanggil tertentu.
+type OpenOptions struct {
+	// StatementTimeout > 0 dipasang sebagai runtime parameter di setiap koneksi pool; 0 = tanpa batas.
+	StatementTimeout time.Duration
+}
+
+// OpenWith seperti Open dengan opsi tambahan.
+func OpenWith(ctx context.Context, cfg config.Config, tp trace.TracerProvider, log *slog.Logger, o OpenOptions) (*gorm.DB, error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+	dialector := postgres.Open(cfg.DatabaseURL)
+	if o.StatementTimeout > 0 {
+		// Batas dipasang sebagai runtime parameter koneksi (bukan SET sesi) agar setiap koneksi pool
+		// membawa nilai yang sama sejak dibuat dan tidak terbawa antar request.
+		pgcfg, perr := pgx.ParseConfig(cfg.DatabaseURL)
+		if perr != nil {
+			return nil, connError(cfg.DatabaseURL, perr)
+		}
+		pgcfg.RuntimeParams["statement_timeout"] = strconv.FormatInt(o.StatementTimeout.Milliseconds(), 10)
+		dialector = postgres.New(postgres.Config{Conn: stdlib.OpenDB(*pgcfg)})
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{
 		// Ping otomatis GORM memakai context.Background() tanpa timeout; koneksi pertama dilakukan
 		// oleh PingContext(ctx) di bawah agar menghormati ctx dan batas 5 detik.
 		DisableAutomaticPing: true,

@@ -63,3 +63,18 @@ func TestSummary_ContractErrorIsLogged(t *testing.T) {
 		t.Fatalf("error tidak tercatat di log: %q", out)
 	}
 }
+
+func TestSummary_500CarriesRequestID(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rec.Header().Set("X-Request-Id", "req-1")
+	New(fakeNotes{err: errors.New("SELECT rahasia")}).Summary(rec, httptest.NewRequest(http.MethodGet, "/summary", nil))
+	var body struct {
+		Error struct {
+			Code      string
+			RequestID string `json:"requestId"`
+		}
+	}
+	if rec.Code != 500 || json.Unmarshal(rec.Body.Bytes(), &body) != nil || body.Error.Code != "internal_error" || body.Error.RequestID != "req-1" {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+}

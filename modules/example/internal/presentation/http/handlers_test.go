@@ -118,3 +118,37 @@ func TestNotes_InternalErrorIsLogged(t *testing.T) {
 		t.Fatalf("error tidak tercatat di log: %q", out)
 	}
 }
+
+func TestListNotes_BadPageEnvelope(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rec.Header().Set("X-Request-Id", "req-1")
+	New(&fakeLister{}).ListNotes(rec, httptest.NewRequest(http.MethodGet, "/notes?page=0", nil))
+	var b struct {
+		Error struct {
+			Code      string
+			RequestID string `json:"requestId"`
+			Details   []struct{ Field, Code string }
+		}
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 400 || b.Error.Code != "bad_request" || b.Error.RequestID != "req-1" ||
+		len(b.Error.Details) != 1 || b.Error.Details[0].Field != "page" || b.Error.Details[0].Code != "invalid" {
+		t.Errorf("%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPing_BodyUnchanged(t *testing.T) {
+	rec := serve(New(&fakeLister{}).Ping, "/ping")
+	if rec.Body.String() != `{"data":{"pong":true}}`+"\n" {
+		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
+func TestListNotes_RepoErrorIs500Generic(t *testing.T) {
+	rec := serve(New(&fakeLister{err: errors.New("SELECT rahasia")}).ListNotes, "/notes")
+	if rec.Code != 500 || errCode(t, rec) != "internal_error" || strings.Contains(rec.Body.String(), "rahasia") {
+		t.Errorf("%d %s", rec.Code, rec.Body.String())
+	}
+}

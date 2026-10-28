@@ -14,6 +14,7 @@ type Route struct {
 	Method, Path, Permission string
 	Public                   bool
 	Handler                  http.Handler
+	Options                  module.RouteConfig // hasil ResolveRouteOptions, tanpa default platform
 }
 
 // Recorder adalah module.Registrar yang hanya merekam pendaftaran, berurutan sesuai pemanggilan.
@@ -28,13 +29,13 @@ var _ module.Registrar = (*Recorder)(nil)
 func NewRecorder() *Recorder { return &Recorder{} }
 
 // Handle merekam route yang dilindungi permission.
-func (r *Recorder) Handle(method, path, permission string, h http.Handler) {
-	r.Routes = append(r.Routes, Route{Method: method, Path: path, Permission: permission, Handler: h})
+func (r *Recorder) Handle(method, path, permission string, h http.Handler, opts ...module.RouteOption) {
+	r.Routes = append(r.Routes, Route{Method: method, Path: path, Permission: permission, Handler: h, Options: module.ResolveRouteOptions(opts...)})
 }
 
 // Public merekam route tanpa permission.
-func (r *Recorder) Public(method, path string, h http.Handler) {
-	r.Routes = append(r.Routes, Route{Method: method, Path: path, Public: true, Handler: h})
+func (r *Recorder) Public(method, path string, h http.Handler, opts ...module.RouteOption) {
+	r.Routes = append(r.Routes, Route{Method: method, Path: path, Public: true, Handler: h, Options: module.ResolveRouteOptions(opts...)})
 }
 
 // Command merekam perintah CLI modul.

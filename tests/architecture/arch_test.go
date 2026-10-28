@@ -35,3 +35,18 @@ func TestGoVersion(t *testing.T) {
 		}
 	}
 }
+
+// TestRepositorySecurityRules menegakkan EGRESS dan DECODE (FR-24.2) pada modul di repo nyata.
+func TestRepositorySecurityRules(t *testing.T) {
+	pkgs, err := archcheck.LoadTypedRepo("../..")
+	if err != nil {
+		t.Fatalf("archcheck.LoadTypedRepo: %v", err)
+	}
+	var lines []string
+	for _, v := range archcheck.CheckSecurity(pkgs) {
+		lines = append(lines, v.Rule+": "+v.Package+" — "+v.Detail)
+	}
+	if len(lines) > 0 {
+		t.Fatalf("pelanggaran keamanan modul:\n%s", strings.Join(lines, "\n"))
+	}
+}

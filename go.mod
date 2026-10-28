@@ -5,6 +5,8 @@ go 1.27
 toolchain go1.27.3
 
 require (
+	erpora/modules/example v0.0.0
+	erpora/modules/exampleaddon v0.0.0
 	erpora/sdk v0.0.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/caarlos0/env/v11 v11.4.1
@@ -29,6 +31,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0
 	golang.org/x/mod v0.42.0
 	golang.org/x/text v0.43.0
+	golang.org/x/tools v0.52.0
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 	gorm.io/plugin/opentelemetry v0.1.16
@@ -36,8 +39,6 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
-	erpora/modules/example v0.0.0
-	erpora/modules/exampleaddon v0.0.0
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
 	github.com/ClickHouse/ch-go v0.74.0 // indirect
@@ -131,7 +132,6 @@ require (
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261010193011-f71dc92da45e // indirect
-	golang.org/x/tools v0.52.0 // indirect
 	golang.org/x/vuln v1.9.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261005182115-fad411399dd8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect

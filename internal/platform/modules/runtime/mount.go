@@ -28,7 +28,8 @@ type Mounter interface {
 }
 
 type mountConfig struct {
-	skip func(registry.RouteInfo) bool
+	skip     func(registry.RouteInfo) bool
+	services Services
 }
 
 // MountOption mengubah perilaku Mount.
@@ -43,10 +44,11 @@ func SkipRoute(skip func(registry.RouteInfo) bool) MountOption {
 }
 
 // Mount mendaftarkan semua route modul dari registry ke router. Tiap handler
-// dibungkus guard status modul, lalu pengecekan permission (kecuali Public).
+// dibungkus batas request (body limit, no-store), pengecekan permission (kecuali Public), lalu
+// guard status modul.
 // Route platform.core ikut dipasang di sini: guard selalu enabled, permission tetap berlaku.
 // Rantai penuh: otel -> recover -> requestScope -> Authenticate (kecuali Public)
-// -> tenantContext -> guard -> permission -> handler.
+// -> tenantContext -> guard -> permission -> batas request -> handler.
 func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, log *slog.Logger, opts ...MountOption) {
 	var cfg mountConfig
 	for _, o := range opts {
@@ -63,7 +65,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 			}), httpserver.Public())
 			continue
 		}
-		h := rt.Handler
+		h := requestLimitsMW(rt, cfg.services, rt.Handler)
 		if !rt.Public {
 			h = permissionMW(authz, rt.Permission, log, h)
 		}

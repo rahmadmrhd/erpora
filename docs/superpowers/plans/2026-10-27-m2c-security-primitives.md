@@ -634,6 +634,32 @@ Baris Q30 PRD-000 mencatat keputusan 1–7 sesuai jawaban owner, ditambah 8, 9, 
 - [ ] Manual: `task erpora -- serve`, lalu `curl -s -X POST -H "Content-Type: text/plain" -d "{}" localhost:8080/api/platform/modules/acme.example/enable` (dengan `ERP_ENV=development`) → `400` dengan `details[0].code == "unsupported_media_type"`; `curl -sI localhost:8080/api/example/notes` → tanpa `Cache-Control` (klasifikasi `internal`).
 - [ ] Ledger `.superpowers/sdd/<tanggal>-m2c/progress.md` diperbarui; tidak ada push tanpa permintaan user.
 
+## Hasil verifikasi exit M2c
+
+Setiap butir di bawah dibuktikan oleh test yang namanya ada di repo (diperiksa dengan `git grep "func <nama>"`).
+
+| Butir (FR-24.2 AC / overview / Q) | Test | Berkas |
+| --- | --- | --- |
+| Egress menolak `http://127.0.0.1`, `http://169.254.169.254`, `http://[::1]`, `http://10.0.0.1`, hostname privat, host numerik | `TestClient_RejectsFR24Table`, `TestBlockedReason_Table` | `sdk/egress/egress_test.go`, `sdk/egress/addr_test.go` |
+| Egress menolak redirect ke alamat privat | `TestClient_Redirects` | `sdk/egress/egress_test.go` |
+| Anti DNS rebinding, timeout, batas ukuran, content type | `TestClient_DialsValidatedIP`, `TestClient_Timeout`, `TestClient_ResponseLimits` | `sdk/egress/egress_test.go` |
+| Arch test menolak fixture modul yang memakai `http.Get` | `TestEgress_FixtureViolations` | `internal/archcheck/typed_test.go` |
+| `DecodeJSON` menolak body > batas, field tak dikenal, kedalaman berlebih | `TestDecodeJSON_Table`, `TestMount_DecodeUsesRouteLimit`, `TestAction_BodyStrict` | `sdk/httpx/decode_test.go`, `internal/platform/modules/runtime/limits_test.go`, `internal/platform/modules/admin/api_test.go` |
+| Batas body ditegakkan platform tanpa `DecodeJSON` | `TestMount_BodyLimitEnforcedWithoutDecode` | `internal/platform/modules/runtime/limits_test.go` |
+| Batas body dapat ditimpa per route | `TestRegister_RouteOptionsDefaultsAndValues`, `TestMount_DecodeUsesRouteLimit` | `internal/platform/modules/registry/route_options_test.go`, `limits_test.go` |
+| Arch test: decode ke tipe `internal/infrastructure` ditolak | `TestDecode_FixtureViolations` | `internal/archcheck/typed_test.go` |
+| `no-store` untuk `confidential`/`highly_confidential` | `TestMount_NoStoreByClassification`, `TestServe_Headers` | `limits_test.go`, `sdk/export/serve_test.go` |
+| Ekspor CSV mengawali `=1+1` dengan `'` | `TestSanitizeCell_Table`, `TestWrite_CSV_Golden` | `sdk/export/cell_test.go`, `sdk/export/export_test.go` |
+| Ekspor menolak nilai bersarang dan kolom `highly_confidential` | `TestWrite_NestedValueRejected`, `TestValidate_HighlyConfidentialColumnRejected` | `sdk/export/export_test.go` |
+| Ekspor menghormati `MaskFields` dan mencatat audit | `TestWrite_MaskedColumnsEmpty`, `TestValidate_ConfidentialRequiresAuditor`, `TestExport_EndToEndThroughMount`, `TestMount_InstallsExportServices` | `sdk/export/export_test.go`, `limits_test.go` |
+| Klasifikasi `field_groups` di manifest | `TestValidate_FieldGroupClassification` | `internal/platform/modules/manifest/validate_test.go` |
+| Q25: helper error `sdk/httpx` | `TestWriteError_Envelope`, `TestRespondError_MapsHttpxError` | `sdk/httpx/respond_test.go` |
+| Q26 butir 7: `statement_timeout` | `TestStatementTimeout_AllPooledConnections`, `TestOpen_NoStatementTimeoutByDefault` | `internal/platform/database/statement_timeout_integration_test.go` |
+| Q26 butir 13: opsi per-route variadik | `TestRecorder_RecordsRouteOptions`, `TestResolveRouteOptions` | `sdk/module/moduletest/moduletest_test.go`, `sdk/module/route_test.go` |
+| Repo nyata lolos `EGRESS`/`DECODE` | `TestRepositorySecurityRules` | `tests/architecture/arch_test.go` |
+
+Bagian AC FR-24.2 tentang linter kontrak (`password` di respons, token di query) dinilai di M2d (FR-23).
+
 ## Di luar cakupan M2c (sengaja)
 
 - Linter kontrak Spectral untuk `x-erp-classification` (menolak `password` di respons, token di query, field sensitif tanpa klasifikasi) dan assertion kesesuaian `RouteInfo.Classification` ↔ kontrak → **M2d** (FR-23; bagian AC FR-24.2 tentang linter dinilai di sana).

@@ -63,7 +63,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 	}()
 
-	db, err := database.Open(ctx, cfg, prov.Tracer, log)
+	db, err := database.OpenWith(ctx, cfg, prov.Tracer, log, serveOpenOptions(cfg))
 	if err != nil {
 		return err
 	}
@@ -137,4 +137,10 @@ func (r dbReadiness) Ready(ctx context.Context) error {
 		return fmt.Errorf("%d migrasi belum diterapkan", n)
 	}
 	return nil
+}
+
+// serveOpenOptions adalah opsi koneksi khusus pool `serve`: batas statement (Q26 butir 7).
+// CLI (migrate, modules, command modul) memakai database.Open tanpa batas agar migrasi panjang tidak terputus.
+func serveOpenOptions(cfg config.Config) database.OpenOptions {
+	return database.OpenOptions{StatementTimeout: cfg.DBStatementTimeout}
 }

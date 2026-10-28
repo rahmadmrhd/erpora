@@ -97,3 +97,26 @@ func TestValidate_ManifestMismatch(t *testing.T) {
 		t.Fatalf("problems = %+v", got)
 	}
 }
+
+func TestValidate_FieldGroupClassification(t *testing.T) {
+	assertProblems(t, Validate(load(t, "valid_full.json")), nil)
+	assertProblems(t, Validate(load(t, "bad_field_group_classification.json")),
+		[]wantProblem{{"schema_invalid", "/resources/0/field_groups/0/classification"}})
+
+	for _, class := range []string{"public", "internal", "confidential", "highly_confidential"} {
+		t.Run(class, func(t *testing.T) {
+			raw := []byte(`{
+  "schema_version": "1", "key": "acme.example", "slug": "example", "name": "X",
+  "version": "1.0.0", "publisher": {"id": "a", "name": "A"}, "trust": "builtin",
+  "compatibility": {"platform": "^0.1", "sdk": "^0.1"}, "dependencies": [],
+  "capabilities": [], "migrations": {"strategy": "none"}, "offline": {"mode": "online-only"},
+  "resources": [{"key": "x.note", "field_groups": [{"key": "g", "classification": "` + class + `"}]}]
+}`)
+			m, err := module.ParseManifest(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertProblems(t, Validate(m), nil)
+		})
+	}
+}
