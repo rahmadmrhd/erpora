@@ -18,7 +18,8 @@ paths:
       description: >-
         Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status
         tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini.
-        ETag = revision.
+        Memuat juga bahasa yang didukung dan revisi katalog terjemahan per namespace aktif (i18n). ETag = revision snapshot
+        (ditambah penanda revisi katalog bila ada).
       x-erp-public: true
       parameters:
         - { name: If-None-Match, in: header, schema: { type: string } }
@@ -37,7 +38,46 @@ paths:
                     - { key: acme.example, slug: example, version: 1.0.0, status: enabled, basePath: /example, offline: false }
                   permissions: []
                   revision: 5
+                  i18n:
+                    defaultLocale: id
+                    locales: [{ code: id, name: Bahasa Indonesia }, { code: en, name: English }]
+                    revisions: { ui: 3f9a1c20b7d84e55, platform: 8c01d2e9a4b6f730, example: 11aa22bb33cc44dd }
         '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+  /api/platform/i18n/{locale}/{namespace}:
+    x-erp-singleton: true
+    get:
+      operationId: getI18nCatalog
+      summary: Katalog terjemahan satu namespace dan bahasa
+      description: >-
+        Katalog efektif (pesan ICU MessageFormat) namespace `ui`, `platform`, atau slug modul aktif pada bahasa yang
+        diminta, dengan rantai fallback bahasa sudah digabung (PRD-000 FR-25). `locale` divalidasi terhadap registri
+        bahasa dan `namespace` terhadap daftar tertutup (ui, platform, modul aktif); selain itu 404 not_found tanpa
+        membedakan penyebabnya. Publik pada fase ini (hanya teks terjemahan). ETag berubah bila isi berubah; selalu
+        direvalidasi (Cache-Control private, no-cache).
+      x-erp-public: true
+      parameters:
+        - { $ref: '#/components/parameters/Locale' }
+        - { $ref: '#/components/parameters/Namespace' }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: Katalog efektif. ETag = hash isi `messages`.
+          headers:
+            ETag: { $ref: 'erp:common#/components/headers/ETag' }
+            Cache-Control: { description: 'private, no-cache', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/I18nCatalogEnvelope' }
+              example:
+                data:
+                  locale: en
+                  namespace: ui
+                  revision: 3f9a1c20b7d84e55
+                  messages:
+                    actions.save: Save
+                    pagination.summary: '{total, plural, =0 {No data} one {# item} other {# items}}'
+        '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
   /api/platform/modules:
     get:
       operationId: listModules
@@ -294,6 +334,18 @@ paths:
         '503': { $ref: 'erp:common#/components/responses/NotReady' }
 components:
   parameters:
+    Locale:
+      name: locale
+      in: path
+      required: true
+      description: Kode bahasa terdaftar di registri bahasa (mis. id, en, en-GB).
+      schema: { type: string, maxLength: 16 }
+    Namespace:
+      name: namespace
+      in: path
+      required: true
+      description: ui, platform, atau slug modul aktif.
+      schema: { type: string, maxLength: 50 }
     Key:
       name: key
       in: path
@@ -325,6 +377,40 @@ components:
                   offline: { type: boolean }
             permissions: { type: array, items: { type: string } }
             revision: { type: integer, format: int64 }
+            i18n:
+              type: object
+              description: Bahasa yang didukung dan revisi katalog per namespace aktif (PRD-000 FR-25); frontend memuat ulang katalog bila revisinya berubah.
+              required: [defaultLocale, locales, revisions]
+              properties:
+                defaultLocale: { type: string }
+                locales:
+                  type: array
+                  items:
+                    type: object
+                    required: [code, name]
+                    properties:
+                      code: { type: string }
+                      name: { type: string }
+                revisions:
+                  type: object
+                  additionalProperties: { type: string }
+    I18nCatalogEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [locale, namespace, revision, messages]
+          properties:
+            locale: { type: string }
+            namespace: { type: string }
+            revision:
+              type: string
+              description: 'Revisi namespace (sama dengan bootstrap.i18n.revisions[namespace]).'
+            messages:
+              type: object
+              description: Kunci lengkap bertitik ke pesan ICU MessageFormat.
+              additionalProperties: { type: string }
     ModuleStatus:
       type: string
       enum: [available, installed, enabled, disabled, upgrade_pending, failed, uninstalled, missing, incompatible]

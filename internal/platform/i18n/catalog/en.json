@@ -36,6 +36,7 @@
     "not_implemented": "This feature is not available yet.",
     "method_not_allowed": "The method is not supported for this address.",
     "module_unavailable": "The module is temporarily unavailable.",
-    "not_ready": "The service is not ready."
+    "not_ready": "The service is not ready.",
+    "invalid_i18n_override": "The term override is not valid."
   }
 }

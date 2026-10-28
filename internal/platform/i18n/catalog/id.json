@@ -36,6 +36,7 @@
     "not_implemented": "Fitur ini belum tersedia.",
     "method_not_allowed": "Metode tidak didukung untuk alamat ini.",
     "module_unavailable": "Modul sedang tidak tersedia.",
-    "not_ready": "Layanan belum siap."
+    "not_ready": "Layanan belum siap.",
+    "invalid_i18n_override": "Istilah pengganti tidak valid."
   }
 }

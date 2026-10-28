@@ -205,6 +205,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 ```
 
 - `code` **stabil** dan menjadi kontrak (klien boleh bergantung padanya). `message` untuk manusia, mengikuti `Accept-Language` / preferensi user, dan **JANGAN** di-parse oleh klien.
+- `message` **terlokalisasi** oleh platform (PRD-000 FR-25): bila katalog terjemahan memuat `errors.<code>` (namespace modul pemilik route, lalu `platform`), teks itu menggantikan `message` dari handler sesuai bahasa hasil negosiasi `Accept-Language`; bila tidak ada, `message` handler dipakai apa adanya. Hanya `message` yang berubah: `code` dan `details` tidak pernah disentuh, sehingga override istilah oleh pemilik instalasi pun tidak mengubah kontrak.
 - `field` memakai path JSON (`lines[2].itemId`).
 - Error 5xx tidak pernah memuat detail internal (stack trace, SQL); detail ada di log dengan `requestId`/`traceId` yang sama.
 
@@ -212,6 +213,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | --- | --- | --- |
 | 400 | `bad_request`, `invalid_filter`, `invalid_sort` | Parameter/format request salah |
 | 400 | `tenant_unresolved` | Tenant untuk request tidak dapat ditentukan oleh resolver |
+| 400 | `invalid_i18n_override` | Override istilah terjemahan ditolak (kunci tidak ada di katalog bawaan, sintaks ICU tidak valid, argumen berbeda, HTML, terlalu panjang); `details[].code` memerinci: `unknown_key`, `invalid_syntax`, `param_mismatch`, `html_not_allowed`, `too_long` (PRD-000 FR-25, tahap I5) |
 | 401 | `unauthenticated`, `token_expired` | Token tidak ada/tidak valid/kedaluwarsa |
 | 403 | `permission_denied` | Tidak punya permission aksi |
 | 403 | `field_forbidden` | Membaca/memfilter/mengubah field terlarang |
