@@ -19,6 +19,10 @@ Rujukan "Blueprint §x" / "arsitektur §x" di PRD menunjuk dokumen awal yang sud
 
 Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** sebelum mengerjakan. Keputusan baru dicatat di tabel keputusan PRD terkait (Q-number) atau ADR.
 
+**Saat me-review kode/PR:** keputusan yang tercatat di tabel keputusan PRD (Q-number) atau ADR sebagai disetujui pemilik produk adalah perilaku yang disengaja — jangan laporkan sebagai temuan kecuali implementasinya menyimpang dari keputusan itu.
+
+`CLAUDE.md` (Claude Code) dan `AGENTS.md` (Codex) **harus identik**; ubah keduanya bersamaan (`TestAgentsMDMatchesClaudeMD` di `tests/architecture` menegakkannya).
+
 ## Alur kerja fitur baru
 
 - **Fitur yang sudah tercakup PRD** → ikuti PRD; rencana implementasi di `docs/superpowers/plans/`.
@@ -63,4 +67,4 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - TDD: tulis test yang gagal dulu, lalu implementasi.
 - Satu commit per unit kerja yang bisa diuji; pesan commit konvensional (`feat(scope): …`, `fix:`, `docs:`, `chore:`).
 - Jangan push atau membuat PR tanpa diminta.
-- Temuan review: kerjakan semua yang sesuai spek (termasuk Minor); yang di luar/bertentangan dengan spek ditanyakan dulu (lihat CLAUDE.md global).
+- Temuan review: kerjakan semua yang sesuai spek (termasuk Minor); yang di luar/bertentangan dengan spek ditanyakan dulu (lihat instruksi global: `~/.claude/CLAUDE.md` / `~/.codex/AGENTS.md`).
