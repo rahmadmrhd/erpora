@@ -21,6 +21,7 @@ import (
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
+	sdki18n "erpora/sdk/i18n"
 	"erpora/sdk/module"
 )
 
@@ -82,8 +83,11 @@ func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bo
 		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
 		PlatformCapabilities: []string{"platform.modules.read"},
 		Platform: func(r module.Registrar) error {
-			r.Handle("GET", "/modules", "platform.modules.read", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			r.Handle("GET", "/modules", "platform.modules.read", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				hits++
+				if sc, _ := sdki18n.ScopeFrom(req.Context()); sc != "platform" {
+					t.Errorf("scope i18n route platform = %q, want platform", sc)
+				}
 				w.WriteHeader(http.StatusOK)
 			}))
 			return nil
@@ -101,6 +105,9 @@ func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bo
 				}
 				if _, ok := tenancy.FromContext(ctx); !ok {
 					t.Error("tenant tidak ada di context")
+				}
+				if sc, _ := sdki18n.ScopeFrom(ctx); sc != "notes" {
+					t.Errorf("scope i18n = %q, want slug modul notes", sc)
 				}
 				w.WriteHeader(http.StatusOK)
 			}))

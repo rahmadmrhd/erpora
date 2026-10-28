@@ -14,8 +14,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"erpora/internal/platform/database"
+	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/tenancy"
 	"erpora/sdk/data"
+	sdki18n "erpora/sdk/i18n"
 )
 
 const (
@@ -154,4 +156,18 @@ func setBaseHeaders(h http.Header, id string) {
 	h.Set("Content-Security-Policy", csp)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+}
+
+// localeContext menegosiasikan bahasa dari Accept-Language terhadap registri bahasa (hasil selalu anggota
+// registri; Requirement 3.4) dan memasang locale serta Resolver terjemahan (terikat tenant) ke context.
+// Berjalan SETELAH tenantContext. Sebelum PRD-001 tidak ada preferensi pengguna; setelah itu urutannya
+// preferensi pengguna, Accept-Language, default (Requirement 3.1) cukup mengubah titik ini.
+func localeContext(svc *i18n.Service, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		loc := svc.Registry().Negotiate(r.Header.Get("Accept-Language"))
+		t, _ := tenancy.FromContext(r.Context())
+		ctx := sdki18n.WithLocale(r.Context(), sdki18n.Locale(loc))
+		ctx = sdki18n.WithResolver(ctx, svc.Resolver(t))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

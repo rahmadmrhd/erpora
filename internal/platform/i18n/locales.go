@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+
+	"golang.org/x/text/language"
 )
 
 //go:embed locales.json
@@ -36,7 +38,9 @@ type Registry struct {
 	Default string       `json:"default"`
 	Locales []LocaleInfo `json:"locales"`
 
-	byCode map[string]LocaleInfo
+	byCode  map[string]LocaleInfo
+	matcher language.Matcher // dibangun ParseRegistry; indeks cocok = indeks order
+	order   []LocaleInfo     // Locales dengan bahasa default di indeks 0
 }
 
 // Load membaca registri bawaan (locales.json yang di-embed).
@@ -89,6 +93,16 @@ func ParseRegistry(data []byte) (*Registry, error) {
 			}
 		}
 	}
+	tags := make([]language.Tag, len(r.Locales))
+	for i, l := range r.Locales {
+		tags[i] = language.Make(l.Code)
+	}
+	// Bahasa default harus berada di indeks 0 agar menjadi jawaban saat tidak ada kecocokan.
+	di := slices.IndexFunc(r.Locales, func(l LocaleInfo) bool { return l.Code == r.Default })
+	tags[0], tags[di] = tags[di], tags[0]
+	r.order = slices.Clone(r.Locales)
+	r.order[0], r.order[di] = r.order[di], r.order[0]
+	r.matcher = language.NewMatcher(tags)
 	return &r, nil
 }
 

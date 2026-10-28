@@ -14,6 +14,7 @@ import (
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
+	sdki18n "erpora/sdk/i18n"
 )
 
 // Authorizer memutuskan apakah request pada ctx boleh memakai permission.
@@ -60,6 +61,10 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 		log = slog.Default()
 	}
 	m.SetAPIGate(apiGate(reg, snap))
+	scopes := map[string]string{} // key modul -> namespace i18n (slug)
+	for _, e := range reg.Entries() {
+		scopes[e.Manifest.Key] = e.Manifest.Slug
+	}
 	deprecated := newDeprecatedCounter(cfg.meter)
 	for _, rt := range reg.Routes() {
 		if cfg.skip != nil && cfg.skip(rt) {
@@ -73,7 +78,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 		if !rt.Public {
 			h = permissionMW(authz, rt.Permission, log, h)
 		}
-		h = guardMW(snap, rt.Module, h)
+		h = guardMW(snap, rt.Module, scopes[rt.Module], h)
 		var ropts []httpserver.RouteOption
 		if rt.Public {
 			ropts = append(ropts, httpserver.Public())
@@ -104,11 +109,12 @@ func apiGate(reg *registry.Registry, snap *Snapshot) func(*http.Request) bool {
 	}
 }
 
-func guardMW(snap *Snapshot, key string, next http.Handler) http.Handler {
+// guardMW juga mengikat i18n.T ke namespace modul pemilik route (scope = slug; PRD-000 FR-25, Requirement 4.1).
+func guardMW(snap *Snapshot, key, scope string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("erp.module.key", key))
 		httpserver.SetModule(r.Context(), key)
-		r = r.WithContext(observability.WithModule(r.Context(), key))
+		r = r.WithContext(sdki18n.WithScope(observability.WithModule(r.Context(), key), scope))
 		tid, _ := tenancy.FromContext(r.Context())
 		switch st := snap.Status(tid, key); st {
 		case StatusEnabled:

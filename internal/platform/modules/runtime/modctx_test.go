@@ -18,6 +18,7 @@ import (
 	"erpora/sdk/authz/authztest"
 	"erpora/sdk/data"
 	"erpora/sdk/export"
+	sdki18n "erpora/sdk/i18n"
 )
 
 func fakeConnector(t *testing.T) database.TenantConnector {
@@ -81,5 +82,24 @@ func TestModuleContext_InstallsServices(t *testing.T) {
 	ctx, _ = ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "", Services{})
 	if authz.HasFieldMasker(ctx) || export.HasAuditor(ctx) {
 		t.Error("Services kosong tidak boleh memasang apa pun")
+	}
+}
+
+func TestModuleContext_InstallsI18nFromServices(t *testing.T) {
+	var gotT tenancy.TenantID
+	var gotKey string
+	svc := Services{I18n: func(ctx context.Context, tid tenancy.TenantID, key string) context.Context {
+		gotT, gotKey = tid, key
+		return sdki18n.WithScope(sdki18n.WithLocale(ctx, "id"), "notes")
+	}}
+	ctx, _ := ModuleContext(context.Background(), tenantA, "acme.notes", fakeConnector(t), nil, "", svc)
+	if gotT != tenantA || gotKey != "acme.notes" {
+		t.Errorf("hook dipanggil dengan %v, %q", gotT, gotKey)
+	}
+	if sc, _ := sdki18n.ScopeFrom(ctx); sc != "notes" {
+		t.Errorf("scope = %q", sc)
+	}
+	if l, _ := sdki18n.LocaleFrom(ctx); l != "id" {
+		t.Errorf("locale = %q", l)
 	}
 }
