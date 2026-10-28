@@ -37,7 +37,7 @@ function declarations(body: string): Map<string, string> {
 }
 
 /** Bagian CSS di luar blok @media (prefers-color-scheme: dark) dan @theme/@layer: hanya :root dan .dark. */
-const mediaStart = css.indexOf("@media (prefers-color-scheme: dark)");
+const mediaStart = css.search(/@media \(prefers-color-scheme: dark\)\s*\{/);
 const mediaBody = bodyAt(css, css.indexOf("{", mediaStart));
 const cssWithoutMedia = css.slice(0, mediaStart) + css.slice(mediaStart + mediaBody.length + 2);
 
