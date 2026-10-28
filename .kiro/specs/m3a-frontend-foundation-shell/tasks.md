@@ -48,49 +48,49 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
 - [x] 3. Checkpoint — toolchain
   - Jalankan `bun install --frozen-lockfile`, `bun run --filter '*' typecheck`, `bun run --filter '*' lint`, `bun run --filter @erpora/web deps`, `bun test --pass-with-no-tests`, `bun run --filter @erpora/web build`; pastikan laporan build mencetak ukuran JS awal dan tidak ada pelanggaran CSP. Tanyakan ke user bila anggaran sudah mendekati batas.
 
-- [ ] 4. Fondasi `@erpora/ui`: paket, tema, font, utilitas (Kelas beban: Sonnet; 4.1 Haiku)
-  - [ ] 4.1 Kerangka paket `packages/ui`
+- [x] 4. Fondasi `@erpora/ui`: paket, tema, font, utilitas (Kelas beban: Sonnet; 4.1 Haiku)
+  - [x] 4.1 Kerangka paket `packages/ui`
     - Dari hasil spike 1.3: `package.json` (`@erpora/ui`, `exports`, `sideEffects`, `peerDependencies` react/react-dom, dependensi dipin), `tsconfig.json` (`strict`, `noUncheckedIndexedAccess`, `jsx`), `components.json`, `src/index.ts` (kosong dulu), `src/lib/utils.ts` (`cn` = `twMerge(clsx(...))`), `README.md` singkat (cara `bun run shadcn add`, aturan "komponen milik repo", larangan nilai palet langsung). Tidak ada impor paket repo lain.
     - _Requirements: 3.1, 3.4_
-  - [ ] 4.2 Test tema dan token (merah dulu)
+  - [x] 4.2 Test tema dan token (merah dulu)
     - `src/styles/theme.test.ts`: (a) paritas blok `.dark` dan `@media (prefers-color-scheme: dark)` (**P15**); (b) semua token wajib (`design.md` §2) ada di `:root` dan `.dark`; (c) kontras dihitung dari nilai `theme.css` (util konversi oklch ke sRGB di test): pasangan `foreground`/`background`, `card`, `popover`, `muted-foreground` di `background`/`muted`/`secondary`/`sidebar`, `sidebar-foreground`/`sidebar`, `sidebar-accent-foreground`/`sidebar-accent`, `primary-foreground`/`primary`, `destructive-foreground`/`destructive`, dan pasangan `status-*` ≥ 4,5:1 di kedua tema; `ring` terhadap `background` dan `muted` ≥ 3:1 (angka K-14); (d) pemindai `src/components/**/*.tsx` menolak kelas palet langsung (`zinc-`, `gray-`, `slate-`, `red-`, … dan `#hex`/`rgb(`) di luar `theme.css` (R2.2).
     - **Validates: Requirements 2.1, 2.2, 2.4, 2.5**
-  - [ ] 4.3 `src/styles/theme.css` dan font
+  - [x] 4.3 `src/styles/theme.css` dan font
     - Implementasi sesuai `design.md` §2: token DS dengan penyesuaian K-14, `@theme inline`, `@custom-variant dark`, blok `.dark` dan salinan `@media`, token ukuran kontrol (28/34/40 px) dan `--sidebar-width: 14.25rem`, `--sidebar-width-icon: 3.25rem`, `--navbar-height: 3rem`, lapisan dasar (border, body `text-sm`, fokus 2 px `ring` offset 3 px, `prefers-reduced-motion`). `@font-face` Figtree variabel dengan jalur relatif ke berkas dari `@fontsource-variable/figtree` (salin atau rujuk lewat `node_modules` sesuai hasil spike); tambahkan dependensi `@fontsource-variable/figtree` dan `tw-animate-css`.
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
-  - [ ] 4.4 Label bawaan dan ikon (test dulu)
+  - [x] 4.4 Label bawaan dan ikon (test dulu)
     - Test: `useUiLabel()` tanpa provider mengembalikan kunci; dengan `UiLabelsProvider` memanggil fungsi `t`; `resolveIcon` mengenali nama terdaftar dan mengembalikan `undefined` untuk nama asing; `initialsOf("Rahmad Maulana") === "RM"`, nama satu kata, kosong → `"?"`. Implementasi `src/labels.tsx` dan `src/icons.ts` (±40 ikon lucide, impor bernama) serta ekspor `IconName`.
     - _Requirements: 9.8, 14.4_
 
-- [ ] 5. Komponen `@erpora/ui` sederhana (Kelas beban: Haiku; spesifikasi lengkap di tabel C `design.md`)
-  - [ ] 5.1 Tulis test komponen sederhana (merah dulu)
+- [x] 5. Komponen `@erpora/ui` sederhana (Kelas beban: Haiku; spesifikasi lengkap di tabel C `design.md`)
+  - [x] 5.1 Tulis test komponen sederhana (merah dulu)
     - Satu `*.test.tsx` per komponen di `packages/ui/src/components/`: **Button** (varian primary/secondary/outline/ghost/destructive, ukuran sm/md/lg/icon, `loading` → `aria-busy` + `LoadingIcon`, `size="icon"` tanpa `aria-label` memicu peringatan dev), **LoadingIcon** (delapan titik, `aria-label` diteruskan, tanpa SMIL), **Separator**, **Skeleton**, **Kbd**, **Label**, **Badge**, **BadgeStatus** (`tone` → kelas token `status-*`, label dari children), **Avatar** (gambar gagal → inisial), **Checkbox** (Spasi mengubah, `aria-checked`), **Alert** (peran `alert` untuk destructive, `status` lainnya), **EmptyState**, **ErrorPage** (judul/deskripsi/aksi; `status` 404/403/500/503).
     - **Validates: Requirements 3.5, 14.1**
-  - [ ] 5.2 Pasang dan adaptasi komponen
+  - [x] 5.2 Pasang dan adaptasi komponen
     - Jalankan `bun run shadcn add button separator skeleton label badge avatar checkbox alert` (versi CLI terpin), lalu adaptasi: token DS (tanpa palet langsung), varian dan ukuran DS, `loading` pada Button, denyut Skeleton mati di reduced-motion, Alert hanya tampilan outline (K-14). Tulis komposit `LoadingIcon` (CSS keyframes), `Kbd`, `BadgeStatus`, `EmptyState`, `ErrorPage` tanpa `shadcn add`. Pin ulang versi dependensi yang ditulis CLI.
     - _Requirements: 2.2, 3.1, 3.2, 14.1_
-  - [ ] 5.3 Ekspor barrel dan periksa aturan
+  - [x] 5.3 Ekspor barrel dan periksa aturan
     - `src/index.ts` mengekspor semua komponen dan tipe (`StatusTone`, `IconName`); jalankan `bun run --filter '*' typecheck lint`, `deps` (F2 dan F4 hijau).
     - _Requirements: 3.2, 3.4_
 
-- [ ] 6. Komponen `@erpora/ui` interaktif dan Sidebar (Kelas beban: Sonnet)
-  - [ ] 6.1 Tulis test komponen interaktif (merah dulu)
+- [x] 6. Komponen `@erpora/ui` interaktif dan Sidebar (Kelas beban: Sonnet)
+  - [x] 6.1 Tulis test komponen interaktif (merah dulu)
     - **Tooltip** (muncul saat fokus/hover, teks saja), **DropdownMenu** (buka dengan klik dan keyboard, panah, Esc, radio group, submenu, item `destructive`), **Popover** (buka, tutup klik luar dan Esc), **Collapsible** (Enter/Spasi, `aria-expanded`), **Dialog** (fokus terperangkap, Esc menutup, tombol tutup berlabel dari `UiLabels`, `aria-labelledby`), **AlertDialog** (tidak tertutup lewat Esc/klik luar... sesuai DS hanya Batal/aksi; fokus awal pada Batal), **Sheet** (sisi `left`, tombol tutup berlabel), **Breadcrumb** (`nav` bernama dari `UiLabels`, item terakhir `aria-current="page"`, elipsis membuka menu), **Table** (peran `table`, header `th scope`), **Toast** (`toast.error` dengan aksi "Coba lagi", wilayah `aria-live`).
     - **Validates: Requirements 3.5, 14.1**
-  - [ ] 6.2 Pasang dan adaptasi komponen interaktif
+  - [x] 6.2 Pasang dan adaptasi komponen interaktif
     - `bun run shadcn add tooltip dropdown-menu popover collapsible dialog alert-dialog sheet breadcrumb table sonner`; adaptasi sesuai tabel C: teks bawaan lewat `useUiLabel`, `DropdownMenuItem variant="destructive"`, `Dialog` dengan `align`/`forceAsDialog`/lebar 512 dan 896 px, `Toaster` gaya token (tengah atas, 5 detik, tombol tutup), tautan breadcrumb bergaya teks muted, animasi menghormati reduced-motion.
     - _Requirements: 2.2, 3.1, 3.2, 14.1_
-  - [ ] 6.3 `collapseCrumbs` dan property test (test dulu)
+  - [x] 6.3 `collapseCrumbs` dan property test (test dulu)
     - `src/lib/breadcrumb.ts`: `collapseCrumbs(crumbs, { compact })` → `{ visible, folded }` (`n ≤ 3` dan tidak compact: semua; selain itu `[pertama, elipsis, terakhir]`, compact: `[elipsis, terakhir]`). Property test `fast-check` **P4**: terakhir selalu halaman, `visible + folded` selalu memuat semua masukan, tidak lebih dari 3 tingkat terlihat.
     - **Validates: Requirements 10.2**
-  - [ ] 6.4 Test Sidebar (merah dulu)
+  - [x] 6.4 Test Sidebar (merah dulu)
     - Tiga keadaan (diperluas, terlipat ke ikon dengan tooltip nama, `Sheet` di layar < 768 px dengan `matchMedia` palsu), Ctrl+B dan Cmd+B membalik keadaan, tombol `SidebarTrigger`, persistensi di `localStorage["erpora.sidebar"]` dan pemulihan saat dimuat ulang, nilai rusak/`localStorage` melempar → diperluas, `<nav>` bernama, navigasi keyboard penuh (Tab/panah/Enter), `SidebarMenuBadge` dan titik saat terlipat.
     - **Validates: Requirements 9.3, 9.4, 9.5, 9.7, 14.1**
-  - [ ] 6.5 Pasang dan adaptasi Sidebar
+  - [x] 6.5 Pasang dan adaptasi Sidebar
     - `bun run shadcn add sidebar`; adaptasi: lebar dari token (14,25/3,25 rem), penyimpanan `localStorage` dengan `try/catch` menggantikan cookie, label lewat `UiLabels` ("Toggle Sidebar", judul/deskripsi Sheet), `side="left"` `collapsible="icon"`, item terpilih `sidebar-accent` (K-16), hapus `Rail`, varian `floating`/`inset` yang tidak dipakai dibiarkan tetapi tidak diekspor. Ctrl/Cmd+B tetap.
     - _Requirements: 9.3, 9.4, 9.5, 9.7_
 
-- [ ] 7. Checkpoint — `@erpora/ui`
+- [x] 7. Checkpoint — `@erpora/ui`
   - Jalankan `bun test`, `typecheck`, `lint`, `deps`, `build`; semua komponen di tabel C ada dan bertest; larangan palet langsung (4.2d) hijau; tanyakan ke user bila ada komponen/varian di luar tabel yang dibutuhkan.
 
 - [x] 8. `@erpora/module-sdk` (Kelas beban: Sonnet; 8.4 Haiku)
