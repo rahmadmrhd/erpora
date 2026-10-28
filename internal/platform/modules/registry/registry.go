@@ -6,6 +6,7 @@ package registry
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"slices"
 	"strings"
@@ -61,6 +62,9 @@ type Entry struct {
 	// Contract adalah isi openapi.yaml modul (module.ContractSource) atau Options.PlatformContract untuk
 	// platform.core; nil bila tidak ada.
 	Contract []byte
+	// Catalogs adalah katalog terjemahan modul (module.CatalogSource, berkas "<locale>.json" di akar);
+	// nil bila modul tidak membawa katalog. Namespace katalog = Manifest.Slug.
+	Catalogs fs.FS
 }
 
 // Registry adalah katalog modul yang sudah tervalidasi.
@@ -109,7 +113,9 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		}
 		contract, cproblems := contractOf(mf.Key, mf.Slug, m)
 		problems = append(problems, cproblems...)
-		e := Entry{Manifest: mf, Module: m, Contract: contract}
+		catalogs, iproblems := catalogsOf(mf, m)
+		problems = append(problems, iproblems...)
+		e := Entry{Manifest: mf, Module: m, Contract: contract, Catalogs: catalogs}
 		byKey[mf.Key] = e
 		unique = append(unique, e)
 	}
@@ -211,6 +217,44 @@ func contractOf(key, slug string, m module.Module) (contract []byte, problems []
 		return data, []Problem{{Module: key, Field: "/contract", Code: CodeInvalidContract, Message: err.Error()}}
 	}
 	return data, nil
+}
+
+// catalogsOf mengambil katalog modul (module.CatalogSource) dengan recover dan memastikan konsistensi dengan
+// bagian "i18n" manifest: CatalogSource wajib punya bagian i18n dan sebaliknya, defaultLocale termasuk locales,
+// dan setiap bahasa yang dideklarasikan punya berkas "<locale>.json". Kecocokan bahasa dengan registri bahasa
+// platform diperiksa saat i18n.Service dibangun (registri bukan urusan registry modul).
+func catalogsOf(mf module.Manifest, m module.Module) (catalogs fs.FS, problems []Problem) {
+	bad := func(format string, a ...any) []Problem {
+		return []Problem{{Module: mf.Key, Field: "/i18n", Code: CodeI18nMismatch, Message: fmt.Sprintf(format, a...)}}
+	}
+	cs, isSource := m.(module.CatalogSource)
+	switch {
+	case !isSource && mf.I18n == nil:
+		return nil, nil
+	case !isSource:
+		return nil, bad("manifest mendeklarasikan i18n tetapi modul tidak mengimplementasikan CatalogSource (Catalogs())")
+	case mf.I18n == nil:
+		return nil, bad("modul mengimplementasikan CatalogSource tetapi manifest tidak punya bagian \"i18n\"")
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			catalogs = nil
+			problems = bad("Catalogs() panic: %v", p)
+		}
+	}()
+	fsys := cs.Catalogs()
+	if fsys == nil {
+		return nil, bad("Catalogs() mengembalikan nil")
+	}
+	if !slices.Contains(mf.I18n.Locales, mf.I18n.DefaultLocale) {
+		problems = append(problems, bad("defaultLocale %q tidak ada di locales", mf.I18n.DefaultLocale)...)
+	}
+	for _, loc := range mf.I18n.Locales {
+		if _, err := fs.Stat(fsys, loc+".json"); err != nil {
+			problems = append(problems, bad("berkas katalog %s.json untuk bahasa %q tidak ditemukan", loc, loc)...)
+		}
+	}
+	return fsys, problems
 }
 
 // safeManifest memanggil m.Manifest() dengan recover; modul nil atau panic dilaporkan sebagai pesan.

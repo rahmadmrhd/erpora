@@ -100,6 +100,22 @@
         }
       }
     },
+    "i18n": {
+      "type": "object",
+      "description": "PRD-000 FR-25: katalog terjemahan modul (namespace = slug). Opsional; modul tanpa bagian ini tidak punya namespace.",
+      "additionalProperties": false,
+      "required": ["locales", "defaultLocale"],
+      "properties": {
+        "locales": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$" }
+        },
+        "defaultLocale": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$" }
+      }
+    },
     "artifact": { "type": "string", "description": "Marketplace: lokasi artefak modul." },
     "checksum": { "type": "string", "description": "Marketplace: checksum artefak." },
     "signature": { "type": "string", "description": "Marketplace: tanda tangan artefak." },

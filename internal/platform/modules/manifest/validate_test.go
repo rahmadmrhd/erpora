@@ -122,3 +122,36 @@ func TestValidate_FieldGroupClassification(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_I18nSection(t *testing.T) {
+	doc := func(i18n string) module.Manifest {
+		raw := []byte(`{
+  "schema_version": "1", "key": "acme.example", "slug": "example", "name": "X",
+  "version": "1.0.0", "publisher": {"id": "a", "name": "A"}, "trust": "builtin",
+  "compatibility": {"platform": "^0.1", "sdk": "^0.1"}, "dependencies": [],
+  "capabilities": [], "migrations": {"strategy": "none"}, "offline": {"mode": "online-only"}` + i18n + `}`)
+		m, err := module.ParseManifest(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	if got := Validate(doc(``)); len(got) != 0 {
+		t.Errorf("tanpa i18n harus valid: %+v", got)
+	}
+	if got := Validate(doc(`, "i18n": {"locales": ["id", "en"], "defaultLocale": "id"}`)); len(got) != 0 {
+		t.Errorf("i18n sah harus valid: %+v", got)
+	}
+	for name, in := range map[string]string{
+		"locales kosong":      `, "i18n": {"locales": [], "defaultLocale": "id"}`,
+		"locales ganda":       `, "i18n": {"locales": ["id", "id"], "defaultLocale": "id"}`,
+		"kode bahasa salah":   `, "i18n": {"locales": ["ID"], "defaultLocale": "ID"}`,
+		"tanpa defaultLocale": `, "i18n": {"locales": ["id"]}`,
+		"field tak dikenal":   `, "i18n": {"locales": ["id"], "defaultLocale": "id", "x": 1}`,
+	} {
+		got := Validate(doc(in))
+		if len(got) == 0 || got[0].Code != CodeSchemaInvalid {
+			t.Errorf("%s: problems = %+v, want schema_invalid", name, got)
+		}
+	}
+}
