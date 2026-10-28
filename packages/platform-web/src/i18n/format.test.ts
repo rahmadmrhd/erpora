@@ -83,3 +83,17 @@ describe("formatRich", () => {
     expect(formatRich<Node>(compile("id", "<b>x</b>{b}"), { b: "y" }, tags)).toEqual(["xy"]);
   });
 });
+
+describe("argumen bool", () => {
+  test("bool pada {nama} polos menjadi teks true/false (sama dengan Go)", () => {
+    const c = compile("en", "<b>{ok}</b>/{no}");
+    expect(format(c, { ok: true, no: false })).toBe("true/false");
+    expect(formatRich<string>(c, { ok: true, no: false }, { b: (x) => x.join("") }).join("")).toBe(
+      "true/false",
+    );
+  });
+
+  test("bool pada select memilih kunci true/false", () => {
+    expect(format(compile("en", "{f, select, true {Y} other {N}}"), { f: true })).toBe("Y");
+  });
+});

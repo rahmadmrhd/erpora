@@ -41,6 +41,8 @@ export class Compiled {
   /** @internal */ readonly ast: MessageFormatElement[];
   /** @internal */ readonly argNames: ReadonlySet<string>;
   /** @internal */ readonly tagNames: ReadonlySet<string>;
+  /** @internal nama argumen yang dipakai sebagai `{nama}` polos (bool diubah menjadi teks). */
+  readonly plainArgNames: ReadonlySet<string>;
   /** @internal pesan lengkap dengan tag utuh (untuk formatRich). */
   readonly full: IntlMessageFormat;
   /** @internal pesan dengan semua tag dilucuti (untuk format teks polos). */
@@ -54,11 +56,13 @@ export class Compiled {
     ast: MessageFormatElement[],
     argNames: ReadonlySet<string>,
     tagNames: ReadonlySet<string>,
+    plainArgNames: ReadonlySet<string>,
     full: IntlMessageFormat,
   ) {
     this.ast = ast;
     this.argNames = argNames;
     this.tagNames = tagNames;
+    this.plainArgNames = plainArgNames;
     this.full = full;
     this.plainAst = tagNames.size === 0 ? ast : transform(ast, none, none);
     this.plain = tagNames.size === 0 ? full : new IntlMessageFormat(this.plainAst, locale);
@@ -84,8 +88,9 @@ export function compile(locale: string, source: string): Compiled {
     const ast = full.getAst();
     const argNames = new Set<string>();
     const tagNames = new Set<string>();
-    scan(ast, argNames, tagNames);
-    compiled = new Compiled(locale, source, ast, argNames, tagNames, full);
+    const plainArgNames = new Set<string>();
+    scan(ast, argNames, tagNames, plainArgNames);
+    compiled = new Compiled(locale, source, ast, argNames, tagNames, plainArgNames, full);
   } catch (err) {
     if (err instanceof I18nFormatError) throw err;
     throw new I18nFormatError(
@@ -113,7 +118,7 @@ export function format(compiled: Compiled, args: Args = {}): string {
           transform(compiled.plainAst, (name) => missing.has(name), none),
           compiled.locale,
         );
-  const out = mf.format(args);
+  const out = mf.format(prepareArgs(compiled, args));
   return typeof out === "string" ? out : String(out);
 }
 
@@ -141,13 +146,28 @@ export function formatRich<T>(
           transform(compiled.ast, (name) => missing.has(name), handled),
           compiled.locale,
         );
-  const values: Record<string, unknown> = { ...args };
+  const values: Record<string, unknown> = { ...prepareArgs(compiled, args) };
   for (const name of compiled.tagNames) {
     if (handled(name)) values[name] = tags[name];
   }
   const out = mf.format<T>(values as Parameters<typeof mf.format<T>>[0]);
   if (Array.isArray(out)) return out;
   return out === "" ? [] : [out];
+}
+
+/**
+ * Nilai bool pada `{nama}` polos menjadi "true"/"false" (FormatJS menjadikan false teks kosong dan true
+ * objek; Go memilih teks, lihat sdk/i18n/icu_number.go). Pada select tetap bermakna lewat kunci "true"/"false".
+ */
+function prepareArgs(compiled: Compiled, args: Args): Args {
+  let copy: Record<string, ArgValue> | undefined;
+  for (const name of compiled.plainArgNames) {
+    if (Object.hasOwn(args, name) && typeof args[name] === "boolean") {
+      copy ??= { ...args };
+      copy[name] = String(args[name]);
+    }
+  }
+  return copy ?? args;
 }
 
 function missingArgs(compiled: Compiled, args: Args): Set<string> {
@@ -161,7 +181,12 @@ function missingArgs(compiled: Compiled, args: Args): Set<string> {
 }
 
 /** Mengumpulkan nama argumen dan tag, dan menolak konstruksi yang tidak didukung (Requirement 2.1, 2.6). */
-function scan(els: MessageFormatElement[], argNames: Set<string>, tagNames: Set<string>): void {
+function scan(
+  els: MessageFormatElement[],
+  argNames: Set<string>,
+  tagNames: Set<string>,
+  plainArgNames: Set<string>,
+): void {
   for (const el of els) {
     switch (el.type) {
       case TYPE.literal:
@@ -169,6 +194,7 @@ function scan(els: MessageFormatElement[], argNames: Set<string>, tagNames: Set<
         break;
       case TYPE.argument:
         argNames.add(el.value);
+        plainArgNames.add(el.value);
         break;
       case TYPE.number:
       case TYPE.date:
@@ -178,7 +204,8 @@ function scan(els: MessageFormatElement[], argNames: Set<string>, tagNames: Set<
         );
       case TYPE.select:
         argNames.add(el.value);
-        for (const opt of Object.values(el.options)) scan(opt.value, argNames, tagNames);
+        for (const opt of Object.values(el.options))
+          scan(opt.value, argNames, tagNames, plainArgNames);
         break;
       case TYPE.plural:
         if (el.pluralType === "ordinal") {
@@ -188,11 +215,12 @@ function scan(els: MessageFormatElement[], argNames: Set<string>, tagNames: Set<
           throw new I18nFormatError(`{${el.value}, plural, offset:...} tidak didukung`);
         }
         argNames.add(el.value);
-        for (const opt of Object.values(el.options)) scan(opt.value, argNames, tagNames);
+        for (const opt of Object.values(el.options))
+          scan(opt.value, argNames, tagNames, plainArgNames);
         break;
       case TYPE.tag:
         tagNames.add(el.value);
-        scan(el.children, argNames, tagNames);
+        scan(el.children, argNames, tagNames, plainArgNames);
         break;
     }
   }
