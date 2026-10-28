@@ -11,7 +11,7 @@ export interface ApiError {
 }
 
 export type ApiResult<T> =
-  | { ok: true; status: number; data: T; page?: unknown }
+  | { ok: true; status: number; data: T; page?: unknown; etag?: string }
   | { ok: false; status: number; error: ApiError };
 
 export interface ClientOptions {
@@ -127,7 +127,11 @@ export function createClient<Paths>(opts: ClientOptions = {}): TypedClient<Paths
       body,
       credentials: "same-origin",
     });
-    const text = res.status === 204 || res.status === 304 ? "" : await res.text();
+    // 304 (If-None-Match/If-Match cocok) bukan galat server: pemanggil memakai `status === 304` dan data terakhirnya.
+    if (res.status === 304) {
+      return { ok: false, status: 304, error: { code: "not_modified", message: "" } };
+    }
+    const text = res.status === 204 ? "" : await res.text();
     let parsed: { data?: unknown; page?: unknown; error?: ApiError } | undefined;
     if (text !== "") {
       try {
@@ -136,7 +140,10 @@ export function createClient<Paths>(opts: ClientOptions = {}): TypedClient<Paths
         parsed = undefined;
       }
     }
-    if (res.ok) return { ok: true, status: res.status, data: parsed?.data, page: parsed?.page };
+    if (res.ok) {
+      const etag = res.headers.get("ETag") ?? undefined;
+      return { ok: true, status: res.status, data: parsed?.data, page: parsed?.page, etag };
+    }
     return {
       ok: false,
       status: res.status,
