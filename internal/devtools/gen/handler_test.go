@@ -223,7 +223,9 @@ func modulWithAllHandlers(t *testing.T) (root, modDir string, env []string) {
 	if err := os.WriteFile(gomod, []byte(strings.ReplaceAll(string(data), "=> ../../sdk", "=> "+filepath.ToSlash(realSDK))), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off", "GOSUMDB=off")
+	// GOPROXY/GOSUMDB tidak dimatikan: dependensi transitif sdk (mis. golang.org/x/text lewat gorm) belum tentu ada
+	// di module cache runner CI, jadi harus boleh diunduh dan diverifikasi.
+	env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	return root, modDir, env
 }
 

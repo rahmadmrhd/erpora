@@ -206,7 +206,8 @@ func TestLayers_GeneratedCodeCompilesAndPassesArch(t *testing.T) {
 	if err := os.WriteFile(gomod, []byte(patched), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	env := append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off", "GOSUMDB=off")
+	// Lihat modulWithAllHandlers: proxy dan sumdb dibiarkan aktif agar dependensi transitif sdk dapat diunduh di CI.
+	env := append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	for _, args := range [][]string{{"build", "./..."}, {"vet", "./..."}, {"test", "./..."}} {
 		cmd := exec.Command("go", args...)
 		cmd.Dir, cmd.Env = modDir, env
