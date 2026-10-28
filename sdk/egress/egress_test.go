@@ -318,3 +318,28 @@ func TestClient_IgnoresProxyEnv(t *testing.T) {
 		t.Error("Transport.Proxy harus nil")
 	}
 }
+
+// Codex PR#7 C3: resolver kustom yang mengembalikan IP ber-zone (fe80::1%eth0) tidak boleh lolos blockedAddr;
+// alamat ber-zone ditolak di semua jalur (termasuk IP publik ber-zone).
+func TestClient_RejectsZonedAddressesFromResolver(t *testing.T) {
+	cleanHooks(t)
+	dials := 0
+	setDialHook(func(context.Context, string, string) (net.Conn, error) { dials++; return nil, errStop })
+	zoned := func(s string) netip.Addr { return netip.MustParseAddr(s) }
+	c, err := New(Config{Resolver: &stubResolver{m: map[string][]netip.Addr{
+		"ll.example.test":      {zoned("fe80::1%eth0")},
+		"public6.example.test": {zoned("2606:4700:4700::1111%eth0")},
+		"mixed6.example.test":  {zoned("2606:4700:4700::1111"), zoned("fe80::1%eth0")},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{"https://ll.example.test/", "https://public6.example.test/", "https://mixed6.example.test/"} {
+		if _, err := c.Get(context.Background(), u); !errors.Is(err, ErrBlockedAddress) {
+			t.Errorf("%s: err = %v, want ErrBlockedAddress", u, err)
+		}
+	}
+	if dials != 0 {
+		t.Errorf("dial dipanggil %d kali, want 0", dials)
+	}
+}
