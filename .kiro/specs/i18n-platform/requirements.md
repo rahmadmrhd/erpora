@@ -40,8 +40,9 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 1. THE katalog modul SHALL berada di `modules/<name>/i18n/<locale>.json` dengan namespace sama dengan slug modul; komponen generik di `packages/ui/i18n/<locale>.json` (namespace `ui`) dan platform di `internal/platform/i18n/<locale>.json` (namespace `platform`).
 2. THE modul SHALL hanya membaca dan menulis namespace-nya sendiri ditambah `ui` dan `platform`; mengakses katalog modul lain SHALL ditolak dan ditegakkan arch test (selaras D1–D9).
 3. THE manifest modul SHALL mendeklarasikan `locales` (daftar bahasa yang disediakan) dan `defaultLocale`; WHEN katalog untuk bahasa yang dideklarasikan tidak ada, THE `module:check` SHALL gagal.
-4. THE struktur berkas JSON SHALL berupa objek kunci→pesan `[TODO: design]` (rata dengan kunci bertitik atau bersarang) dan konsisten antar bahasa.
-5. WHEN `make:module` dijalankan, THE generator SHALL membuat `i18n/id.json` dan `i18n/en.json` berisi kunci contoh.
+4. THE struktur berkas JSON SHALL berupa **objek bersarang** (diputuskan 29 Okt 2026); pesan adalah nilai string di daun, dan SHALL diakses dengan **notasi titik** (`note.title`, atau lengkap `example::note.title`) di Go, TypeScript, override, CLI, dan API. Struktur bersarang SHALL konsisten antar bahasa dalam satu namespace.
+5. THE segmen kunci SHALL hanya memuat `[A-Za-z0-9_-]` dan SHALL tidak memuat titik; satu kunci SHALL tidak boleh sekaligus menjadi daun (pesan) dan cabang (objek) pada tingkat yang sama.
+6. WHEN `make:module` dijalankan, THE generator SHALL membuat `i18n/id.json` dan `i18n/en.json` berisi kunci contoh bersarang.
 
 ### Requirement 2: Format pesan ICU MessageFormat
 
@@ -125,7 +126,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 
 #### Acceptance Criteria
 
-1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa dalam satu namespace; argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; atau berkas JSON memuat kunci ganda.
+1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa dalam satu namespace; argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); satu kunci menjadi daun sekaligus cabang; atau segmen kunci melanggar aturan Requirement 1.5.
 2. THE `erpora i18n:status` SHALL menampilkan persentase kelengkapan per bahasa per namespace.
 3. THE `erpora i18n:add <locale>` SHALL membuat kerangka katalog bahasa baru dari bahasa default untuk modul yang dipilih.
 4. THE pemeriksaan i18n SHALL menjadi bagian dari gate lokal dan CI (`task lint` atau gate khusus), dan SHALL diperiksa oleh `make:module`/`test:generator` untuk modul hasil generate.
@@ -187,7 +188,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 | - | ---------- | ------ |
 | 1 | Katalog disajikan API (A) atau di-bundle saat build (B) | **Diputuskan 29 Okt 2026: A**, agar istilah dapat dikustomisasi (Requirement 12) |
 | 2 | Pustaka ICU Go vs subset parser buatan sendiri | Evaluasi di design; cadangan: subset parser + `golang.org/x/text/feature/plural` |
-| 3 | Struktur JSON: rata (kunci bertitik) vs bersarang | Rata dengan kunci bertitik (mudah dicek kunci ganda dan di-diff) |
+| 3 | Struktur JSON: rata vs bersarang | **Diputuskan 29 Okt 2026: bersarang**, diakses dengan notasi titik seperti `laravel-react-i18n` |
 | 4 | Teks kaya (tebal/tautan) | Penanda tag ICU rich text dirender komponen, tanpa HTML di katalog |
 | 5 | Format angka/tanggal dalam pesan | Mulai dari argumen dan plural saja; angka/tanggal diformat di kode lewat `Intl`/`golang.org/x/text` |
 | 6 | Letak runtime frontend | `@erpora/platform-web` (sesuai CLAUDE.md) |
