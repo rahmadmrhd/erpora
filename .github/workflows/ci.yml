@@ -322,6 +322,8 @@ jobs:
             if ($LASTEXITCODE -eq 0) { throw "perintah dev '$cmd' seharusnya gagal" }
             if ($out -notmatch "unknown command") { throw "keluaran '$cmd' tidak memuat 'unknown command': $out" }
           }
+          # Perintah dev terakhir memang gagal; tanpa ini pwsh memakai $LASTEXITCODE-nya sebagai exit code step.
+          exit 0
       - name: Serve dan cek /readyz
         shell: pwsh
         run: |
