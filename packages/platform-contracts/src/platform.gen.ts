@@ -10,9 +10,29 @@ export type paths = {
     };
     /**
      * Manifest bootstrap untuk frontend
-     * @description Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini. ETag = revision.
+     * @description Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini. Memuat juga bahasa yang didukung dan revisi katalog terjemahan per namespace aktif (i18n). ETag = revision snapshot (ditambah penanda revisi katalog bila ada).
      */
     get: operations["getBootstrap"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/platform/i18n/{locale}/{namespace}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Katalog terjemahan satu namespace dan bahasa
+     * @description Katalog efektif (pesan ICU MessageFormat) namespace `ui`, `platform`, atau slug modul aktif pada bahasa yang diminta, dengan rantai fallback bahasa sudah digabung (PRD-000 FR-25). `locale` divalidasi terhadap registri bahasa dan `namespace` terhadap daftar tertutup (ui, platform, modul aktif); selain itu 404 not_found tanpa membedakan penyebabnya. Publik pada fase ini (hanya teks terjemahan). ETag berubah bila isi berubah; selalu direvalidasi (Cache-Control private, no-cache).
+     */
+    get: operations["getI18nCatalog"];
     put?: never;
     post?: never;
     delete?: never;
@@ -134,6 +154,17 @@ export type components = {
     BootstrapEnvelope: {
       data: {
         appVersion: string;
+        /** @description Bahasa yang didukung dan revisi katalog per namespace aktif (PRD-000 FR-25); frontend memuat ulang katalog bila revisinya berubah. */
+        i18n?: {
+          defaultLocale: string;
+          locales: {
+            code: string;
+            name: string;
+          }[];
+          revisions: {
+            [key: string]: string;
+          };
+        };
         modules: {
           basePath: string;
           key: string;
@@ -206,6 +237,18 @@ export type components = {
       moduleKey: string;
       occurredAt: components["schemas"]["common.Timestamp"];
       operationId: components["schemas"]["common.Uuid"] | null;
+    };
+    I18nCatalogEnvelope: {
+      data: {
+        locale: string;
+        /** @description Kunci lengkap bertitik ke pesan ICU MessageFormat. */
+        messages: {
+          [key: string]: string;
+        };
+        namespace: string;
+        /** @description Revisi namespace (sama dengan bootstrap.i18n.revisions[namespace]). */
+        revision: string;
+      };
     };
     Module: {
       binaryVersion: string;
@@ -329,6 +372,10 @@ export type components = {
     "common.PageSize": number;
     /** @description Key modul, mis. acme.example. */
     Key: string;
+    /** @description Kode bahasa terdaftar di registri bahasa (mis. id, en, en-GB). */
+    Locale: string;
+    /** @description ui, platform, atau slug modul aktif. */
+    Namespace: string;
   };
   requestBodies: never;
   headers: {
@@ -363,6 +410,24 @@ export interface operations {
            * @example {
            *       "data": {
            *         "appVersion": "0.1.0",
+           *         "i18n": {
+           *           "defaultLocale": "id",
+           *           "locales": [
+           *             {
+           *               "code": "id",
+           *               "name": "Bahasa Indonesia"
+           *             },
+           *             {
+           *               "code": "en",
+           *               "name": "English"
+           *             }
+           *           ],
+           *           "revisions": {
+           *             "example": "11aa22bb33cc44dd",
+           *             "platform": "8c01d2e9a4b6f730",
+           *             "ui": "3f9a1c20b7d84e55"
+           *           }
+           *         },
            *         "modules": [
            *           {
            *             "basePath": "/example",
@@ -389,6 +454,57 @@ export interface operations {
         };
         content?: never;
       };
+    };
+  };
+  getI18nCatalog: {
+    parameters: {
+      query?: never;
+      header?: {
+        "If-None-Match"?: string;
+      };
+      path: {
+        /** @description Kode bahasa terdaftar di registri bahasa (mis. id, en, en-GB). */
+        locale: components["parameters"]["Locale"];
+        /** @description ui, platform, atau slug modul aktif. */
+        namespace: components["parameters"]["Namespace"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Katalog efektif. ETag = hash isi `messages`. */
+      200: {
+        headers: {
+          /** @description private, no-cache */
+          "Cache-Control"?: string;
+          ETag: components["headers"]["common.ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "data": {
+           *         "locale": "en",
+           *         "messages": {
+           *           "actions.save": "Save",
+           *           "pagination.summary": "{total, plural, =0 {No data} one {# item} other {# items}}"
+           *         },
+           *         "namespace": "ui",
+           *         "revision": "3f9a1c20b7d84e55"
+           *       }
+           *     }
+           */
+          "application/json": components["schemas"]["I18nCatalogEnvelope"];
+        };
+      };
+      /** @description Tidak berubah (If-None-Match cocok dengan ETag). */
+      304: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["common.NotFound"];
     };
   };
   listModules: {
