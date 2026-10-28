@@ -11,3 +11,12 @@ export function cspViolations(html: string): string[] {
   if (/javascript:/i.test(html)) problems.push("javascript: URL");
   return problems;
 }
+
+// CSS hasil build harus kompatibel dengan CSP (`default-src 'self'`, tanpa `font-src data:`):
+// tanpa font `data:` dan tanpa URL eksternal (http(s):// atau protokol-relatif //).
+export function cssViolations(css: string): string[] {
+  const problems: string[] = [];
+  if (/url\(\s*["']?\s*data:font/i.test(css)) problems.push("data:font URL");
+  if (/url\(\s*["']?\s*(?:https?:)?\/\//i.test(css)) problems.push("external URL");
+  return problems;
+}
