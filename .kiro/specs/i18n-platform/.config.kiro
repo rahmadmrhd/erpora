@@ -1,0 +1,6 @@
+{
+  "specId": "2cbf7eef-6644-4304-8dd8-d539702ae635",
+  "workflowType": "requirements-first",
+  "specType": "feature",
+  "description": "i18n-platform: satu katalog terjemahan ICU MessageFormat yang dipakai backend (Go) dan frontend (React), terpisah per modul (namespace), disajikan backend lewat API, dengan kunci terketik dan pemeriksaan kelengkapan (PRD-000 Q34; dibutuhkan M3a)"
+}

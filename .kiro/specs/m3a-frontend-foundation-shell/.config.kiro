@@ -1,0 +1,6 @@
+{
+  "specId": "7b286f2e-7eb1-4ccc-b87e-587eae1e3b26",
+  "workflowType": "requirements-first",
+  "specType": "feature",
+  "description": "M3a: fondasi frontend ERPora (React + shadcn di @erpora/ui, token ERP Design System), shell (sidebar, navbar, notifikasi, menu avatar, theme switcher), TanStack Router, registry modul TS, dan halaman /settings/modules (PRD-000 Q33, FR-08, FR-09, FR-20.3)"
+}
