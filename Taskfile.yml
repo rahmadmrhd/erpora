@@ -182,12 +182,19 @@ tasks:
       - bun run --filter @erpora/web dev
 
   web:check:
-    desc: Typecheck, lint, dan dependency rules frontend
+    desc: Typecheck, lint, dependency rules, test, dan build frontend (anggaran bundle + csp-check)
     cmds:
       - bun install --frozen-lockfile
       - bun run --filter '*' typecheck
       - bun run --filter '*' lint
       - bun run --filter @erpora/web deps
+      - bun test --pass-with-no-tests
+      - bun run --filter @erpora/web build
+
+  web:test:
+    desc: Test frontend (bun test dari root; memuat preload DOM happy-dom)
+    cmds:
+      - bun test --pass-with-no-tests
 
   contracts:lint:
     desc: Lint kontrak OpenAPI (Spectral; api-guidelines dan klasifikasi data)

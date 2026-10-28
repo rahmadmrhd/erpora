@@ -69,6 +69,8 @@ jobs:
       - run: bun run --filter @erpora/web typecheck
       - run: bun run --filter @erpora/web lint
       - run: bun run --filter @erpora/web deps
+      - run: bun test --pass-with-no-tests
+      - run: bun run --filter @erpora/web build
       - run: bun audit
 
   integration:
