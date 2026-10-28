@@ -6,15 +6,15 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
 
 ## Tasks
 
-- [ ] 1. Tahap I0 — Spike mesin ICU (kode spike dibuang, hanya hasil yang dicatat)
-  - [ ] 1.1 Spike mesin ICU Go: bandingkan `kaptinlin/messageformat-go/mf1` dan parser subset sendiri + `golang.org/x/text/feature/plural`
+- [x] 1. Tahap I0 — Spike mesin ICU (kode spike dibuang, hanya hasil yang dicatat)
+  - [x] 1.1 Spike mesin ICU Go: bandingkan `kaptinlin/messageformat-go/mf1` dan parser subset sendiri + `golang.org/x/text/feature/plural`
     - Kerjakan di direktori scratchpad (bukan di repo). Tulis 30 kasus awal (plural `id`/`en`, `select`, `=N`, `#`, kutip ICU `'{'`, argumen hilang, tag rich `<b>`, pesan sangat bersarang, pesan sangat panjang) dalam format `{ "locale", "message", "args", "expected" }`.
     - Jalankan keduanya terhadap kasus itu; catat: kasus yang lolos, perilaku argumen hilang, dukungan tag rich, ukuran dependensi transitif, dan apakah dapat dibatasi (`Limits`).
     - _Requirements: 2.1, 2.2, 2.3, 2.5_
-  - [ ] 1.2 Spike ukuran `intl-messageformat` di frontend
+  - [x] 1.2 Spike ukuran `intl-messageformat` di frontend
     - Bangun bundel kecil dengan `Bun.build` (minify + gzip) yang mengimpor `intl-messageformat` dan memformat satu pesan plural + rich; catat ukuran gzip dan bandingkan dengan anggaran NFR-04 (entry shell ≤ 200 KB gzip). Catat juga ukuran bila hanya `@formatjs/icu-messageformat-parser` yang dipakai.
     - _Requirements: 6.1, 6.7_
-  - [ ] 1.3 Catat keputusan spike
+  - [x] 1.3 Catat keputusan spike
     - Perbarui `design.md` (D-2, D-3) dengan pilihan akhir, alasan, dan versi yang di-pin; tambahkan satu kalimat hasil spike ke PRD-000 Q35 (butir D-2/D-3). Bila mf1 lolos ≥ semua kasus inti, pilih mf1; selain itu parser sendiri.
     - Commit: `docs(spec): hasil spike I0 mesin ICU`
     - _Requirements: 2.1, 11.5_
