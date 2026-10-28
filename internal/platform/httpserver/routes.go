@@ -3,7 +3,6 @@ package httpserver
 import (
 	"net/http"
 	"net/textproto"
-	"strconv"
 	"strings"
 
 	"erpora/internal/platform/bootstrap"
@@ -67,7 +66,7 @@ func bootstrapHandler(d Deps) http.Handler {
 		} else {
 			m = bootstrap.Build(d.AppVersion, tid, nil, 0)
 		}
-		etag := `"` + strconv.FormatInt(m.Revision, 10) + `"`
+		etag := m.ETag()
 		w.Header().Set("ETag", etag)
 		if etagMatches(req.Header[textproto.CanonicalMIMEHeaderKey("If-None-Match")], etag) {
 			w.WriteHeader(http.StatusNotModified)

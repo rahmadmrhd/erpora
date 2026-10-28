@@ -115,7 +115,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		// Deteksi N+1 hanya di development (ERP_DB_NPLUSONE_THRESHOLD, 0 = mati).
 		NPlusOneThreshold: cfg.DBNPlusOneThreshold,
 		I18n:              i18nSvc,
-		Bootstrap:         bootstrapFrom(reg, snap),
+		Bootstrap:         bootstrapFrom(reg, snap, i18nSvc),
 		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
 		Authenticate: func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,9 +142,11 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 }
 
 // bootstrapFrom membentuk isi /api/bootstrap dari katalog (tanpa platform.core) dan snapshot runtime.
-// ETag = revision snapshot.
-func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot) func(context.Context, tenancy.TenantID) bootstrap.Manifest {
-	return func(_ context.Context, t tenancy.TenantID) bootstrap.Manifest {
+// Bagian i18n memuat bahasa terdaftar dan revisi katalog namespace aktif; ETag mengikuti revision snapshot
+// dan revisi katalog (bootstrap.Manifest.ETag). Bidang tambahan kelak (mis. features) ditambahkan sebagai
+// struct bersarang opsional pada bootstrap.Manifest seperti I18n, tanpa mengubah fungsi ini.
+func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot, i18nSvc *i18n.Service) func(context.Context, tenancy.TenantID) bootstrap.Manifest {
+	return func(ctx context.Context, t tenancy.TenantID) bootstrap.Manifest {
 		statuses, rev := snap.Statuses(t)
 		var mods []bootstrap.ModuleInput
 		for _, e := range reg.Entries() {
@@ -160,7 +162,16 @@ func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot) func(context.
 				Key: m.Key, Slug: m.Slug, Version: m.Version, Status: string(st), OfflineMode: m.Offline.Mode,
 			})
 		}
-		return bootstrap.Build(buildinfo.Version, t, mods, rev)
+		m := bootstrap.Build(buildinfo.Version, t, mods, rev)
+		if i18nSvc != nil {
+			lr := i18nSvc.Registry()
+			locales := make([]bootstrap.I18nLocale, 0, len(lr.Locales))
+			for _, l := range lr.Locales {
+				locales = append(locales, bootstrap.I18nLocale{Code: l.Code, Name: l.Name})
+			}
+			m.I18n = bootstrap.NewI18n(lr.Default, locales, i18nSvc.Revisions(ctx, t))
+		}
+		return m
 	}
 }
 
