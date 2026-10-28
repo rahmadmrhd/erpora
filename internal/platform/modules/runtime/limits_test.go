@@ -212,3 +212,46 @@ func TestExport_EndToEndThroughMount(t *testing.T) {
 		t.Errorf("log ekspor = %d: %s", n, logs.String())
 	}
 }
+
+// Codex PR#7 C5: handler tidak dapat menimpa atau menghapus Cache-Control: no-store pada route confidential ke atas.
+func TestMount_NoStoreCannotBeOverriddenByHandler(t *testing.T) {
+	handlers := map[string]http.HandlerFunc{
+		"overwrite": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			w.WriteHeader(http.StatusOK)
+		},
+		"delete": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Del("Cache-Control")
+			_, _ = w.Write([]byte("x"))
+		},
+		"overwrite_then_write": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header()["Cache-Control"] = []string{"max-age=60"}
+			_, _ = w.Write([]byte("x"))
+		},
+		"delete_without_write": func(w http.ResponseWriter, _ *http.Request) { w.Header().Del("Cache-Control") },
+		"flush": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Cache-Control", "public")
+			w.(http.Flusher).Flush()
+		},
+		"controller_flush": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Cache-Control", "public")
+			_ = http.NewResponseController(w).Flush()
+		},
+		"error_helper": func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Cache-Control", "public")
+			httpx.WriteError(w, req, 422, "validation_failed", "x", nil)
+		},
+	}
+	for name, h := range handlers {
+		t.Run(name, func(t *testing.T) {
+			router := limitsRouter(t, StatusEnabled, func(r module.Registrar) {
+				r.Handle("GET", "/items", "notes.items.read", h, module.Classify(module.ClassConfidential))
+			})
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest("GET", "/api/notes/items", nil))
+			if got := rec.Header().Values("Cache-Control"); len(got) != 1 || got[0] != "no-store" {
+				t.Errorf("Cache-Control = %q, want [no-store]", got)
+			}
+		})
+	}
+}
