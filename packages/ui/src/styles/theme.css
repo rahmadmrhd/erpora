@@ -77,7 +77,8 @@
   --overlay: rgba(0, 0, 0, 0.8);
   --notification-badge-bg: oklch(57.7% 0.245 27.325);
   --notification-dot: oklch(62.3% 0.214 259.815);
-  --logout-fg: oklch(63.7% 0.237 25.331);
+  /* K-14 (tambahan): red-500 DS 3,76:1 di popover terang; red-700 memenuhi 4,5:1 (teks item "Keluar"). Gelap tetap red-500. */
+  --logout-fg: oklch(50.5% 0.213 27.518);
 
   /* Ukuran shell (K-15): mockup yang disetujui, bukan bawaan shadcn/DS. */
   --sidebar-width: 14.25rem;

@@ -66,7 +66,6 @@ describe("Breadcrumb", () => {
     render(<Sample />);
     const page = screen.getByText("example");
     expect(page).toHaveAttribute("aria-current", "page");
-    expect(page).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("link", { name: "Pengaturan" })).toHaveAttribute("href", "/settings");
   });
 

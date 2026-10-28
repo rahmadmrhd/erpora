@@ -239,6 +239,8 @@ describe("kontras token (K-14)", () => {
     ["primary-foreground", "primary"],
     ["destructive-foreground", "destructive"],
     ["invert-foreground", "invert"],
+    ["logout-fg", "popover"],
+    ["logout-fg", "accent"],
     ["status-primary-fg", "status-primary-bg"],
     ["status-success-fg", "status-success-bg"],
     ["status-error-fg", "status-error-bg"],

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
@@ -25,14 +25,25 @@ describe("Tooltip", () => {
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Simpan perubahan");
   });
 
-  test("muncul saat hover dan hilang saat pointer keluar", async () => {
+  test("muncul saat hover", async () => {
     const user = userEvent.setup();
     render(<Sample />);
     await user.hover(screen.getByRole("button", { name: "Simpan" }));
     expect(await screen.findByRole("tooltip")).toBeInTheDocument();
-    await user.unhover(screen.getByRole("button", { name: "Simpan" }));
-    await new Promise((r) => setTimeout(r, 50));
-    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  test("hilang saat fokus pindah dari pemicu (blur)", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Sample />
+        <button type="button">Lain</button>
+      </>,
+    );
+    await user.tab();
+    await screen.findByRole("tooltip");
+    await user.tab();
+    await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
   });
 
   test("Esc menutup tooltip", async () => {

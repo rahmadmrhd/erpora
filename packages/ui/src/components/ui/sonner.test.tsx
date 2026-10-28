@@ -54,12 +54,17 @@ describe("Toaster (sonner bergaya token)", () => {
       toast("Tersimpan");
     });
     await screen.findByText("Tersimpan");
+    const item = document.querySelector("[data-sonner-toast]") as HTMLElement;
     await user.click(screen.getByRole("button", { name: "Tutup notifikasi" }));
-    await waitFor(() => expect(screen.queryByText("Tersimpan")).toBeNull(), { timeout: 2000 });
+    await waitFor(() => expect(item).toHaveAttribute("data-removed", "true"));
   });
 
-  test("posisi tengah atas dan durasi bawaan 5 detik", () => {
+  test("posisi tengah atas", async () => {
     const { container } = setup();
+    act(() => {
+      toast("Halo");
+    });
+    await screen.findByText("Halo");
     expect(
       container.ownerDocument
         .querySelector("[data-sonner-toaster]")

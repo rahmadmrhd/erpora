@@ -50,13 +50,15 @@ describe("DropdownMenu", () => {
     screen.getByRole("button", { name: "Menu" }).focus();
     await user.keyboard("{Enter}");
     await screen.findByRole("menu");
+    // Radix dapat sudah memfokuskan item pertama saat dibuka dengan keyboard; panah memastikan sebuah item terfokus.
     await user.keyboard("{ArrowDown}");
     const items = screen.getAllByRole("menuitem");
-    expect(items[0]).toHaveFocus();
+    const start = items.indexOf(document.activeElement as HTMLElement);
+    expect(start).toBeGreaterThanOrEqual(0);
     await user.keyboard("{ArrowDown}");
-    expect(items[1]).toHaveFocus();
+    expect(items[start + 1]).toHaveFocus();
     await user.keyboard("{ArrowUp}");
-    expect(items[0]).toHaveFocus();
+    expect(items[start]).toHaveFocus();
   });
 
   test("Enter pada item memanggil onSelect lalu menutup menu", async () => {
