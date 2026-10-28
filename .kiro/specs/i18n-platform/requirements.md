@@ -8,7 +8,8 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 - Satu katalog bersama untuk FE dan BE, tetapi terpisah di setiap modul.
 - Sintaks pesan: **ICU MessageFormat** (standar), bukan gaya Laravel (`:name`, `a|b`). Alasan: standar industri dengan plural CLDR lengkap dan alat penerjemah profesional; kekurangannya (kunci DS dan paket Laravel Lang perlu dikonversi, dukungan Go) diterima.
 
-**Usulan yang belum dikonfirmasi (ditandai `[TODO]`):** katalog disajikan backend lewat API per namespace (opsi A) dan bukan di-bundle saat build (opsi B).
+- Katalog **disajikan backend lewat API per namespace (opsi A)**, bukan di-bundle saat build (opsi B). Alasan: istilah/bahasa dapat dikustomisasi pemilik instalasi tanpa build ulang (Requirement 12).
+- Pemilik instalasi dapat **menimpa (override) teks bawaan** tanpa mengubah kode (Requirement 12). Cakupan awal: API dan CLI; UI manajemen istilah menyusul di blok lain.
 
 **Rujukan yang sudah dipelajari:** Laravel Lang (`Laravel-Lang/lang`, `publisher`) dan `laravel-react-i18n`. Konsep yang diambil: namespace per paket (`package::group.key`), nama field (`attributes`) dipakai bersama validasi dan form, pelacak kelengkapan per bahasa, fallback ke bahasa default. Yang tidak diambil: katalog tunggal tanpa pemisahan per modul, pemuatan saat build, dan keterikatan pada Vite.
 
@@ -16,7 +17,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 
 **Risiko:** pustaka ICU MessageFormat untuk Go kecil dan kurang terpelihara (hasil pencarian GitHub: 2–14 bintang; salah satunya terakhir diubah 2018). Design harus memutuskan antara memakai pustaka yang dipilih atau subset parser buatan sendiri, dengan aturan plural dari `golang.org/x/text` `[TODO: verifikasi]`.
 
-**Di luar spec ini (non-goals):** penyimpanan bahasa per pengguna (PRD-001, `user_preferences.locale`); template email dan notifikasi server (PRD Notifications memakai runtime ini); terjemahan data master (nama produk dua bahasa); format angka/tanggal/mata uang di luar yang disediakan ICU; tata letak RTL; UI manajemen terjemahan dan terjemahan mesin; migrasi massal kunci dari aplikasi Laravel lama.
+**Di luar spec ini (non-goals):** penyimpanan bahasa per pengguna (PRD-001, `user_preferences.locale`); template email dan notifikasi server (PRD Notifications memakai runtime ini); terjemahan data master (nama produk dua bahasa); format angka/tanggal/mata uang di luar yang disediakan ICU; tata letak RTL; UI manajemen istilah (API dan CLI-nya masuk spec ini) dan terjemahan mesin; migrasi massal kunci dari aplikasi Laravel lama.
 
 ## Glossary
 
@@ -26,6 +27,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 - **ICU MessageFormat**: sintaks pesan standar Unicode (`{name}`, `{n, plural, one {…} other {…}}`, `{x, select, …}`).
 - **Bahasa default**: `id`; bahasa rujukan untuk kelengkapan dan fallback.
 - **Locale aktif**: bahasa yang dipakai untuk satu request atau sesi.
+- **Override**: teks pengganti yang disimpan di database oleh pemilik instalasi untuk satu (namespace, bahasa, kunci); menimpa teks katalog bawaan.
 
 ## Requirements
 
@@ -61,7 +63,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 #### Acceptance Criteria
 
 1. THE locale aktif SHALL ditentukan dengan urutan: pilihan eksplisit pengguna (`user_preferences.locale` setelah PRD-001; sebelum itu preferensi dari frontend), lalu header `Accept-Language`, lalu `defaultLocale` sistem (`id`).
-2. THE fallback SHALL berjenjang: bahasa persis (`en-US`), bahasa induk (`en`), bahasa default (`id`), lalu kunci itu sendiri.
+2. THE fallback SHALL berjenjang untuk setiap kunci: override untuk bahasa persis, katalog bawaan bahasa persis (`en-US`), lalu bahasa induk (`en`) dengan urutan yang sama, lalu bahasa default (`id`), lalu kunci itu sendiri.
 3. WHEN pesan tidak ditemukan sampai kunci sendiri, THE runtime SHALL mengembalikan `namespace::kunci` dan mencatat peringatan (galat di mode pengujian).
 4. THE nilai `Accept-Language` dan bahasa yang diminta SHALL divalidasi terhadap daftar bahasa yang didukung; nilai tak dikenal SHALL jatuh ke fallback tanpa error dan SHALL tidak mengalir ke path berkas.
 
@@ -78,7 +80,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 5. THE pesan validasi dan nama field SHALL memakai konvensi `fields.<resource>.<field>` di katalog modul sehingga label form (FE) dan pesan validasi (BE) memakai teks yang sama.
 6. THE `sdk/i18n` SHALL tidak mengimpor `internal/` (D5/D9) dan SHALL aman dipakai bersamaan oleh banyak goroutine.
 
-### Requirement 5: API penyaji katalog `[TODO: konfirmasi opsi A]`
+### Requirement 5: API penyaji katalog (opsi A, diputuskan 29 Okt 2026)
 
 **User Story:** Sebagai frontend, saya ingin mengambil katalog dari backend per namespace, sehingga teks selalu cocok dengan versi binary dan modul yang aktif.
 
@@ -90,7 +92,8 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 4. THE endpoint SHALL didokumentasikan di `contracts/openapi/platform.yaml` dan tipe TS-nya dibangkitkan ke `packages/platform-contracts`; `contracts:check` SHALL lolos.
 5. THE respons SHALL hanya berisi pesan terjemahan (data non-rahasia); katalog SHALL tidak pernah memuat rahasia, data pribadi, atau data tenant.
 6. THE endpoint SHALL memakai amplop dan aturan api-guidelines (kecuali bentuk respons katalog yang ditetapkan di design) dan dapat di-cache (`Cache-Control`) tanpa membocorkan antar-tenant.
-7. [TODO: konfirmasi] Opsi B (katalog di-bundle saat build) hanya dipertimbangkan bila opsi A ditolak.
+7. THE respons SHALL sudah menggabungkan override (Requirement 12) di atas katalog bawaan, sehingga frontend menerima satu katalog final; `ETag` SHALL berubah bila katalog bawaan atau override namespace itu berubah.
+8. Opsi B (katalog di-bundle saat build) ditolak karena tidak mendukung kustomisasi tanpa build ulang; ia tidak dikerjakan.
 
 ### Requirement 6: Runtime frontend
 
@@ -161,14 +164,32 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 4. THE dokumentasi `docs/module-sdk/i18n.md` SHALL menjelaskan format, konvensi kunci, dan alur kerja penerjemah.
 5. THE perubahan di luar PRD SHALL dicatat sebagai keputusan di PRD-000 (Q34) dan, bila menyentuh kontrak, di api-guidelines (penambahan saja; tanpa breaking change).
 
+### Requirement 12: Kustomisasi istilah (override)
+
+**User Story:** Sebagai administrator instalasi, saya ingin mengganti teks tertentu (mis. "Pelanggan" menjadi "Klien") tanpa mengubah kode atau membangun ulang, sehingga istilah sesuai bahasa bisnis perusahaan saya.
+
+#### Acceptance Criteria
+
+1. THE platform SHALL menyimpan override di tabel platform dengan kolom `tenant_id` NOT NULL, `namespace`, `locale`, `key`, `message`, `updated_by`, `updated_at`, dengan kunci unik (tenant, namespace, locale, key); skema lewat migrasi goose.
+2. THE API SHALL menyediakan baca, simpan, dan hapus override (`/api/platform/i18n/overrides`), dilindungi permission `platform.i18n.read` dan `platform.i18n.manage` (kontrak di `contracts/openapi/platform.yaml`, tipe TS dibangkitkan).
+3. WHEN simpan override, THE backend SHALL memvalidasi: namespace dan kunci ada di katalog bawaan (override hanya untuk kunci yang sudah ada), sintaks ICU valid, argumen dan tipenya sama dengan pesan bawaan, tanpa HTML, dan batas ukuran; pelanggaran SHALL ditolak `400` dengan kode galat yang jelas.
+4. THE override SHALL dibaca dengan scope tenant dan SHALL tidak pernah menembus tenant lain; tenant selalu dari context, bukan dari parameter.
+5. THE CLI SHALL menyediakan `erpora i18n:override set|list|rm` sebagai antarmuka utama (seperti `erpora modules`), dengan konfirmasi untuk penghapusan.
+6. WHEN override berubah, THE revisi namespace SHALL naik sehingga `ETag` katalog berubah dan frontend memuat ulang tanpa reload halaman.
+7. THE setiap perubahan override SHALL dicatat ke audit (log terstruktur sampai audit writer PRD-001 tersedia).
+8. THE endpoint mutasi SHALL memakai pengamanan sementara yang sama dengan FR-20.2 (aktif hanya bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true`) sampai PRD-001 menyediakan authz sungguhan; di luar itu `404`.
+9. THE override SHALL tidak menimpa pesan galat yang kodenya menjadi kontrak: `code` tetap stabil; hanya `message` yang berubah.
+10. [TODO: konfirmasi cakupan] API dan CLI masuk spec ini; UI manajemen istilah dikerjakan di blok lain (usulan: bagian pengaturan M3a atau blok M3 berikutnya).
+
 ## Pertanyaan terbuka (untuk dikonfirmasi sebelum `/spec-design`)
 
 | # | Pertanyaan | Usulan |
 | - | ---------- | ------ |
-| 1 | Katalog disajikan API (A) atau di-bundle saat build (B) | A (satu sumber di backend, hanya modul aktif) |
+| 1 | Katalog disajikan API (A) atau di-bundle saat build (B) | **Diputuskan 29 Okt 2026: A**, agar istilah dapat dikustomisasi (Requirement 12) |
 | 2 | Pustaka ICU Go vs subset parser buatan sendiri | Evaluasi di design; cadangan: subset parser + `golang.org/x/text/feature/plural` |
 | 3 | Struktur JSON: rata (kunci bertitik) vs bersarang | Rata dengan kunci bertitik (mudah dicek kunci ganda dan di-diff) |
 | 4 | Teks kaya (tebal/tautan) | Penanda tag ICU rich text dirender komponen, tanpa HTML di katalog |
 | 5 | Format angka/tanggal dalam pesan | Mulai dari argumen dan plural saja; angka/tanggal diformat di kode lewat `Intl`/`golang.org/x/text` |
 | 6 | Letak runtime frontend | `@erpora/platform-web` (sesuai CLAUDE.md) |
 | 7 | Urutan terhadap M3a | Spec ini lebih dulu; M3a memakai runtime-nya |
+| 8 | Cakupan override (R12.10) | API dan CLI di spec ini; UI manajemen istilah di blok lain |
