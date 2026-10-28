@@ -37,7 +37,9 @@ describe("defineModule: modul valid", () => {
             type: "group",
             id: "reports",
             label: label("nav.reports"),
-            children: [{ type: "item", id: "sales", label: label("nav.sales"), to: "/reports/sales" }],
+            children: [
+              { type: "item", id: "sales", label: label("nav.sales"), to: "/reports/sales" },
+            ],
           },
         ],
       }),
@@ -182,14 +184,46 @@ describe("defineModule: ModuleDefinitionError menyebut bidang", () => {
     const base = defaultOfflinePolicy;
     const cases: [string, unknown, string][] = [
       ["mode asing", { ...base, mode: "kapan-saja" }, "offline.mode"],
-      ["assets.strategy asing", { ...base, assets: { strategy: "eager" } }, "offline.assets.strategy"],
-      ["collections bukan array", { ...base, data: { ...base.data, collections: "notes" } }, "offline.data.collections"],
-      ["collections berisi bukan string", { ...base, data: { ...base.data, collections: [1] } }, "offline.data.collections"],
-      ["maxAgeSeconds negatif", { ...base, data: { ...base.data, maxAgeSeconds: -1 } }, "offline.data.maxAgeSeconds"],
-      ["maxAgeSeconds pecahan", { ...base, data: { ...base.data, maxAgeSeconds: 1.5 } }, "offline.data.maxAgeSeconds"],
-      ["maxRecords nol", { ...base, data: { ...base.data, maxRecords: 0 } }, "offline.data.maxRecords"],
-      ["sync.enabled bukan boolean", { ...base, sync: { ...base.sync, enabled: "ya" } }, "offline.sync.enabled"],
-      ["sync.conflict asing", { ...base, sync: { ...base.sync, conflict: "merge" } }, "offline.sync.conflict"],
+      [
+        "assets.strategy asing",
+        { ...base, assets: { strategy: "eager" } },
+        "offline.assets.strategy",
+      ],
+      [
+        "collections bukan array",
+        { ...base, data: { ...base.data, collections: "notes" } },
+        "offline.data.collections",
+      ],
+      [
+        "collections berisi bukan string",
+        { ...base, data: { ...base.data, collections: [1] } },
+        "offline.data.collections",
+      ],
+      [
+        "maxAgeSeconds negatif",
+        { ...base, data: { ...base.data, maxAgeSeconds: -1 } },
+        "offline.data.maxAgeSeconds",
+      ],
+      [
+        "maxAgeSeconds pecahan",
+        { ...base, data: { ...base.data, maxAgeSeconds: 1.5 } },
+        "offline.data.maxAgeSeconds",
+      ],
+      [
+        "maxRecords nol",
+        { ...base, data: { ...base.data, maxRecords: 0 } },
+        "offline.data.maxRecords",
+      ],
+      [
+        "sync.enabled bukan boolean",
+        { ...base, sync: { ...base.sync, enabled: "ya" } },
+        "offline.sync.enabled",
+      ],
+      [
+        "sync.conflict asing",
+        { ...base, sync: { ...base.sync, conflict: "merge" } },
+        "offline.sync.conflict",
+      ],
       ["bukan objek", null, "offline"],
     ];
     test.each(cases)("%s", (_name, offline, field) => {
