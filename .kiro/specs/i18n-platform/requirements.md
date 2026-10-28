@@ -27,6 +27,8 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 - **ICU MessageFormat**: sintaks pesan standar Unicode (`{name}`, `{n, plural, one {…} other {…}}`, `{x, select, …}`).
 - **Bahasa default**: `id`; bahasa rujukan untuk kelengkapan dan fallback.
 - **Locale aktif**: bahasa yang dipakai untuk satu request atau sesi.
+- **Registri bahasa**: daftar bahasa yang didukung platform beserta bahasa fallback-nya (`internal/platform/i18n/locales.json`).
+- **Fallback**: bahasa tujuan bila sebuah kunci tidak ditemukan di bahasa aktif.
 - **Override**: teks pengganti yang disimpan di database oleh pemilik instalasi untuk satu (namespace, bahasa, kunci); menimpa teks katalog bawaan.
 
 ## Requirements
@@ -66,9 +68,14 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 #### Acceptance Criteria
 
 1. THE locale aktif SHALL ditentukan dengan urutan: pilihan eksplisit pengguna (`user_preferences.locale` setelah PRD-001; sebelum itu preferensi dari frontend), lalu header `Accept-Language`, lalu `defaultLocale` sistem (`id`).
-2. THE fallback SHALL berjenjang untuk setiap kunci: override untuk bahasa persis, katalog bawaan bahasa persis (`en-US`), lalu bahasa induk (`en`) dengan urutan yang sama, lalu bahasa default (`id`), lalu kunci itu sendiri.
+2. THE fallback SHALL berjenjang untuk setiap kunci: override untuk bahasa persis, katalog bawaan bahasa persis (`en-US`), lalu **bahasa fallback yang dikonfigurasi** untuk bahasa itu (Requirement 3.5), lalu bahasa default (`id`), lalu kunci itu sendiri; pada setiap tingkat urutannya override sebelum katalog bawaan.
 3. WHEN pesan tidak ditemukan sampai kunci sendiri, THE runtime SHALL mengembalikan `namespace::kunci` dan mencatat peringatan (galat di mode pengujian).
 4. THE nilai `Accept-Language` dan bahasa yang diminta SHALL divalidasi terhadap daftar bahasa yang didukung; nilai tak dikenal SHALL jatuh ke fallback tanpa error dan SHALL tidak mengalir ke path berkas.
+5. THE platform SHALL memiliki registri bahasa (`internal/platform/i18n/locales.json`) berisi daftar bahasa yang didukung, dengan setiap entri memuat `code`, `name` (nama asli bahasa), dan `fallback` (kode bahasa tujuan fallback; opsional). Contoh: `{ "code": "ms", "fallback": "id" }`, `{ "code": "en-GB", "fallback": "en" }`.
+6. THE registri SHALL divalidasi saat startup dan oleh `i18n:check`: `fallback` harus menunjuk bahasa yang terdaftar, rantai fallback tidak boleh bersiklus dan dibatasi kedalamannya, dan bahasa default tidak punya fallback.
+7. WHEN fallback dipakai untuk sebuah kunci, THE runtime SHALL mencatat peringatan satu kali per (bahasa, namespace, kunci) di mode pengembangan dan pengujian, dan SHALL tidak mencatat di produksi selain metrik hitung.
+8. THE modul SHALL hanya dapat menyediakan bahasa yang terdaftar di registri; modul yang mendeklarasikan bahasa tak terdaftar SHALL ditolak `module:check`.
+9. [TODO: konfirmasi] Pengaturan fallback per instalasi (dapat diubah admin tanpa build ulang, seperti override) ditunda; spec ini mengatur fallback lewat registri di repo.
 
 ### Requirement 4: Runtime backend (`sdk/i18n`)
 
@@ -128,10 +135,14 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 
 #### Acceptance Criteria
 
-1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa dalam satu namespace; argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); dua jalur menghasilkan kunci lengkap yang sama setelah perataan (Requirement 1.6); atau segmen kunci melanggar karakter yang diizinkan (Requirement 1.7).
+1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa lengkap dalam satu namespace (aturan rinci di butir 3 dan 4); argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); dua jalur menghasilkan kunci lengkap yang sama setelah perataan (Requirement 1.6); atau segmen kunci melanggar karakter yang diizinkan (Requirement 1.7).
 2. THE `erpora i18n:status` SHALL menampilkan persentase kelengkapan per bahasa per namespace.
-3. THE `erpora i18n:add <locale>` SHALL membuat kerangka katalog bahasa baru dari bahasa default untuk modul yang dipilih.
-4. THE pemeriksaan i18n SHALL menjadi bagian dari gate lokal dan CI (`task lint` atau gate khusus), dan SHALL diperiksa oleh `make:module`/`test:generator` untuk modul hasil generate.
+3. THE `i18n:check` SHALL membandingkan kunci setiap bahasa terhadap bahasa default dalam tiap namespace dan melaporkan secara terperinci: kunci yang **hilang** di sebuah bahasa, kunci **berlebih** yang tidak ada di bahasa default, dan argumen ICU yang tidak cocok; laporan SHALL menyebut berkas, bahasa, dan kunci lengkap, dan tersedia dalam format teks dan `--json`.
+4. THE bahasa SHALL dianggap **lengkap** secara bawaan: kunci hilang atau berlebih di bahasa lengkap SHALL membuat `i18n:check` gagal. Sebuah bahasa dapat ditandai `partial: true` di registri; untuk bahasa `partial`, kunci hilang SHALL hanya menjadi peringatan (teks jatuh ke fallback) sedangkan kunci berlebih dan argumen tak cocok tetap gagal.
+5. THE exit code `i18n:check` SHALL membedakan kegagalan validasi (kunci/format) dari kegagalan prasyarat (registri/konfigurasi), agar mudah dipakai di skrip dan CI.
+6. THE pengecekan kesesuaian SHALL juga berjalan terhadap katalog hasil override di CI untuk fixture uji, memastikan override tidak mengubah kesesuaian argumen (Requirement 12.3).
+7. THE `erpora i18n:add <locale>` SHALL membuat kerangka katalog bahasa baru dari bahasa default untuk modul yang dipilih.
+8. THE pemeriksaan i18n SHALL menjadi bagian dari gate lokal dan CI (`task lint` atau gate khusus), dan SHALL diperiksa oleh `make:module`/`test:generator` untuk modul hasil generate.
 
 ### Requirement 9: Kesamaan perilaku Go dan TypeScript
 
@@ -196,3 +207,5 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 | 6 | Letak runtime frontend | `@erpora/platform-web` (sesuai CLAUDE.md) |
 | 7 | Urutan terhadap M3a | Spec ini lebih dulu; M3a memakai runtime-nya |
 | 8 | Cakupan override (R12.10) | API dan CLI di spec ini; UI manajemen istilah di blok lain |
+| 9 | Fallback ke bahasa tertentu (R3.5–R3.9) | Registri bahasa di repo dengan `fallback` per bahasa; pengaturan fallback per instalasi ditunda |
+| 10 | Bahasa lengkap vs `partial` (R8.4) | Lengkap secara bawaan (gagal bila kunci hilang); `partial: true` hanya untuk bahasa yang sengaja belum selesai |
