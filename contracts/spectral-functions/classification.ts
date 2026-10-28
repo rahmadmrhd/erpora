@@ -102,22 +102,115 @@ function hasAllowReason(o: Obj): boolean {
   return typeof v === "string" && v.trim() !== "";
 }
 
-/** erp-allow-highly-confidential-valid: pengecualian harus berisi alasan string tidak kosong dan menyertai klasifikasi highly_confidential. */
+// R-3 (Q32 butir 14, direvisi 28 Okt 2026): pengecualian x-erp-allow-highly-confidential dibatasi ke data HR, yaitu
+// properti bernama nik, npwp, bankAccount*, atau salary (per token, termasuk bentuk gabungan). Nama kredensial
+// (password, secret, token, apiKey, privateKey, ...) tidak pernah boleh dikecualikan.
+const ALLOW_SINGLES = new Set(["nik", "npwp", "salary"]);
+const ALLOW_PAIRS = new Set(["bank account"]);
+const CRED_SINGLES = new Set(["password", "passwd", "secret", "token"]);
+const CRED_PAIRS = new Set(["api key", "private key", "access token", "refresh token"]);
+
+/** Mengumpulkan properti (nilai di peta `properties`) beserta namanya dalam subpohon skema; mengikuti $ref, aman siklus. */
+function collectProps(
+  root: unknown,
+  node: unknown,
+  doc: string,
+  seen: Set<unknown>,
+  out: Map<Obj, Set<string>>,
+): void {
+  const o = asObj(node);
+  if (!o || seen.has(o)) return;
+  seen.add(o);
+  for (const kw of SCHEMA_MAPS) {
+    for (const [k, v] of Object.entries(asObj(o[kw]) ?? {})) {
+      const vo = asObj(v);
+      if (kw === "properties" && vo) {
+        const names = out.get(vo) ?? new Set<string>();
+        names.add(k);
+        out.set(vo, names);
+      }
+      collectProps(root, v, doc, seen, out);
+    }
+  }
+  for (const kw of SCHEMA_SINGLE) collectProps(root, o[kw], doc, seen, out);
+  for (const kw of SCHEMA_LISTS)
+    for (const v of asArr(o[kw])) collectProps(root, v, doc, seen, out);
+  if (asStr(o.$ref) !== undefined) {
+    const r = follow(root, o, doc);
+    if (r && asObj(r.node) !== o) collectProps(root, r.node, r.doc, seen, out);
+  }
+}
+
+function collectMediaProps(
+  root: unknown,
+  content: unknown,
+  doc: string,
+  out: Map<Obj, Set<string>>,
+): void {
+  for (const media of Object.values(asObj(content) ?? {})) {
+    collectProps(root, asObj(media)?.schema, doc, new Set(), out);
+  }
+}
+
+/** Properti yang dapat dicapai dari respons 2xx (sah untuk pengecualian) dan dari konteks lain (terlarang). */
+function allowContexts(root: unknown): { allowed: Map<Obj, Set<string>>; forbidden: Set<Obj> } {
+  const allowed = new Map<Obj, Set<string>>();
+  const other = new Map<Obj, Set<string>>();
+  for (const op of operations(currentDoc(root))) {
+    for (const [code, resp] of Object.entries(asObj(op.node.responses) ?? {})) {
+      const r = follow(root, resp);
+      const content = r ? asObj(r.node)?.content : undefined;
+      collectMediaProps(root, content, r?.doc ?? "", /^2/.test(code) ? allowed : other);
+    }
+    const rb = follow(root, op.node.requestBody);
+    if (rb) collectMediaProps(root, asObj(rb.node)?.content, rb.doc, other);
+    for (const p of parametersOf(root, op)) {
+      collectProps(root, p.schema, "", new Set(), other);
+      collectMediaProps(root, p.content, "", other);
+    }
+  }
+  return { allowed, forbidden: new Set(other.keys()) };
+}
+
+/** erp-allow-highly-confidential-valid: pengecualian harus berisi alasan string tidak kosong, menyertai highly_confidential, dan sah penempatan/namanya. */
 export function allowHighlyValid(root: unknown): Result[] {
   const out: Result[] = [];
+  const ctxs = allowContexts(root);
   for (const [path, node] of walkDoc(root)) {
     const o = asObj(node);
     if (!o || !(ALLOW_HIGHLY in o)) continue;
+    const at = [...path, ALLOW_HIGHLY];
     if (!hasAllowReason(o)) {
       out.push({
         message: `${ALLOW_HIGHLY} wajib berisi alasan berupa string tidak kosong (FR-24.2, security-guidelines §2)`,
-        path: [...path, ALLOW_HIGHLY],
+        path: at,
       });
     } else if (o["x-erp-classification"] !== "highly_confidential") {
       out.push({
         message: `${ALLOW_HIGHLY} hanya bermakna bersama x-erp-classification: highly_confidential pada elemen yang sama (FR-24.2, security-guidelines §2)`,
-        path: [...path, ALLOW_HIGHLY],
+        path: at,
       });
+    }
+    const names = ctxs.allowed.get(o);
+    if (!names || ctxs.forbidden.has(o)) {
+      out.push({
+        message: `${ALLOW_HIGHLY} hanya sah pada properti skema respons 2xx (bukan di requestBody, parameter, respons non-2xx, atau skema akar) (FR-24.2, security-guidelines §2)`,
+        path: at,
+      });
+      continue;
+    }
+    for (const name of names) {
+      if (matchesTerms(name, CRED_SINGLES, CRED_PAIRS)) {
+        out.push({
+          message: `${ALLOW_HIGHLY} tidak boleh dipakai pada properti kredensial "${name}" (FR-24.2, security-guidelines §2)`,
+          path: at,
+        });
+      } else if (!matchesTerms(name, ALLOW_SINGLES, ALLOW_PAIRS)) {
+        out.push({
+          message: `${ALLOW_HIGHLY} hanya sah untuk properti data HR (nik, npwp, bankAccount*, salary); "${name}" di luar kelompok itu (FR-24.2, security-guidelines §2)`,
+          path: at,
+        });
+      }
     }
   }
   return out;

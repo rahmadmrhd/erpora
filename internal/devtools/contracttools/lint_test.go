@@ -203,6 +203,57 @@ func TestLint_Fixtures(t *testing.T) {
 			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        label: { type: string, x-erp-classification: internal, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "highly_confidential",
 		},
+		// R-3 (Q32 butir 14): pengecualian hanya untuk data HR (nik, npwp, bankAccount*, salary) pada properti respons 2xx.
+		{
+			name:  "allow_highly_on_password",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_api_key",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        apiKey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_joined_private_key",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        privatekey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_client_secret",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_refresh_token",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        refreshToken: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_hr_name_with_credential_token",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        bankAccountPassword: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_name_outside_hr_group",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        fullName: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "data HR",
+		},
+		{
+			name:  "allow_highly_in_non_2xx_response",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n        '404':\n          description: Tidak ada.\n          content:\n            application/json:\n              schema:\n                type: object\n                properties:\n                  nik: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n  /api/example/notes:\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-error-standard"}, msg: "respons 2xx",
+		},
+		{
+			name:  "allow_highly_in_parameter_schema",
+			edits: map[string][][2]string{ex: {{pageSizeParam, pageSizeParam + "        - name: filter\n          in: query\n          schema:\n            type: object\n            properties:\n              nik: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "respons 2xx",
+		},
+		{
+			name:  "allow_highly_on_response_root_schema",
+			edits: map[string][][2]string{ex: {{"          description: Modul menjawab.\n          content:\n            application/json:\n              schema:\n                type: object\n", "          description: Modul menjawab.\n          content:\n            application/json:\n              schema:\n                type: object\n                x-erp-classification: highly_confidential\n                x-erp-allow-highly-confidential: 'alasan'\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "respons 2xx",
+		},
 		{
 			name:  "classification_invalid",
 			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        flag: { type: string, x-erp-classification: top_secret }\n"}}},
@@ -429,3 +480,30 @@ const reportBlock = `  /api/example/report:
               example: { data: { total: '1.00' } }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
 `
+
+// R-3 (Q32 butir 14): pengecualian sah untuk setiap nama kelompok data HR pada properti respons 200.
+func TestLint_HighlyConfidentialExceptionAllowedForHRNames(t *testing.T) {
+	bun := requireBun(t)
+	for _, name := range []string{"nik", "npwp", "bankAccountNumber", "monthlySalary", "bankaccount"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			copyRepoSubset(t, root, "example", "exampleaddon")
+			editFile(t, root, "modules/example/openapi.yaml",
+				[2]string{versionProp, versionProp + "        " + name + ": { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'Modul HR menampilkan data kepada HR berizin' }\n"})
+			repo, err := LoadRepo(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo.ToolsRoot = realRoot
+			res, err := Lint(context.Background(), repo, "example", bun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range res {
+				if r.Severity != SeverityInfo {
+					t.Errorf("tidak boleh ada error/warn: %s %s", r.Rule, r.Message)
+				}
+			}
+		})
+	}
+}

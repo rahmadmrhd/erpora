@@ -27,7 +27,7 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 | `x-erp-filterable`, `x-erp-sortable` | properti | Field yang boleh difilter/diurutkan (api-guidelines §5) |
 | `x-erp-field-group` | properti | Field group untuk masking (security-guidelines §2) |
 | `x-erp-extensible-enum` | enum | Nilai baru boleh ditambah tanpa breaking (api-guidelines §14.1) |
-| `x-erp-allow-highly-confidential` | properti respons | Pengecualian eksplisit agar properti `highly_confidential` boleh tampil di respons (mis. gaji di modul HR). Nilai: alasan string tidak kosong; wajib bersama `x-erp-classification: highly_confidential`. Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store` berlaku). Dicetak linter sebagai INFO `erp-highly-confidential-exception` untuk ditinjau reviewer (Q32) |
+| `x-erp-allow-highly-confidential` | properti respons 2xx | Pengecualian eksplisit agar properti `highly_confidential` boleh tampil di respons; hanya untuk nama data HR (`nik`, `npwp`, `bankAccount*`, `salary`), ERROR pada nama kredensial/nama lain dan di luar properti respons 2xx (Q32 butir 14). Nilai: alasan string tidak kosong; wajib bersama `x-erp-classification: highly_confidential`. Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store` berlaku). Dicetak linter sebagai INFO `erp-highly-confidential-exception` untuk ditinjau reviewer (Q32) |
 
 ## 3. Linter: rule → pasal
 
@@ -59,7 +59,7 @@ Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`i
 | `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential` | FR-24.2; security-guidelines §2, §3.4 |
 | `erp-no-sensitive-in-url` | Data sensitif (mis. `token`, `password`) tidak lewat path atau query | FR-24.2 |
 | `erp-sensitive-needs-classification` | Properti/parameter bernama sensitif (dicocokkan **per token camelCase**: `newPassword`, `clientSecret`, `resetToken`, `bankAccountNumber`, …) wajib `x-erp-classification: highly_confidential`: `password`, `secret`, `token`, `apiKey`, `privateKey`, `nik`, `npwp`, `bankAccount`, `salary` (Q32) | FR-24.2; security-guidelines §2 |
-| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama | FR-24.2; security-guidelines §2 |
+| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama; hanya pada properti respons 2xx bernama data HR (bukan kredensial) | FR-24.2; security-guidelines §2 |
 | `erp-highly-confidential-exception` (**INFO**) | Mencetak setiap pengecualian beserta alasannya untuk ditinjau reviewer; tidak menggagalkan lint (satu-satunya rule berseverity info) | FR-24.2; security-guidelines §2 |
 
 ## 4. Klasifikasi respons dan `module.Classify`

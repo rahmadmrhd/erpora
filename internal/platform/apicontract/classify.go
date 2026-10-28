@@ -48,7 +48,7 @@ func (s *Set) ResponseClassification(op Operation) (module.Classification, error
 			if !ok {
 				continue
 			}
-			if err := c.schema(doc, schema, -1); err != nil {
+			if err := c.schema(doc, schema, -1, ""); err != nil {
 				return "", fmt.Errorf("%s %s respons %s: %w", op.Method, op.Path, code, err)
 			}
 		}
@@ -85,7 +85,7 @@ func (c *classifier) leaf(inherited int) {
 	}
 }
 
-func (c *classifier) schema(doc string, node any, inherited int) error {
+func (c *classifier) schema(doc string, node any, inherited int, prop string) error {
 	m, ok := node.(map[string]any)
 	if !ok { // skema boolean
 		c.leaf(inherited)
@@ -96,6 +96,12 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 	if raw, ok := m[AllowHighlyConfidentialExt]; ok {
 		if s, isStr := raw.(string); !isStr || strings.TrimSpace(s) == "" {
 			return fmt.Errorf("%s: alasan wajib berupa string tidak kosong", AllowHighlyConfidentialExt)
+		}
+		if prop == "" {
+			return fmt.Errorf("%s hanya sah pada properti skema respons 2xx, bukan pada skema akar atau subskema lain", AllowHighlyConfidentialExt)
+		}
+		if err := checkAllowHighlyName(prop); err != nil {
+			return err
 		}
 	}
 	if raw, ok := m["x-erp-classification"]; ok {
@@ -123,13 +129,13 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 			if err != nil {
 				return err
 			}
-			if err := c.schema(doc2, target, inherited); err != nil {
+			if err := c.schema(doc2, target, inherited, ""); err != nil {
 				return err
 			}
 		}
 	}
 
-	each := func(v any, f func(child any) error) error {
+	each := func(v any, f func(key string, child any) error) error {
 		switch x := v.(type) {
 		case map[string]any:
 			names := make([]string, 0, len(x))
@@ -139,15 +145,16 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 			sort.Strings(names)
 			for _, k := range names {
 				descended = true
-				if err := f(x[k]); err != nil {
+				if err := f(k, x[k]); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}
-	recur := func(child any) error { return c.schema(doc, child, inherited) }
-	if err := each(m["properties"], recur); err != nil {
+	recur := func(_ string, child any) error { return c.schema(doc, child, inherited, "") }
+	property := func(name string, child any) error { return c.schema(doc, child, inherited, name) }
+	if err := each(m["properties"], property); err != nil {
 		return err
 	}
 	if err := each(m["dependentSchemas"], recur); err != nil {
@@ -159,7 +166,7 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 	for _, kw := range []string{"items", "additionalProperties", "unevaluatedProperties", "unevaluatedItems", "contains", "not", "if", "then", "else", "propertyNames"} {
 		if child, ok := m[kw].(map[string]any); ok {
 			descended = true
-			if err := c.schema(doc, child, inherited); err != nil {
+			if err := c.schema(doc, child, inherited, ""); err != nil {
 				return err
 			}
 		}
@@ -168,7 +175,7 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 		if list, ok := m[kw].([]any); ok {
 			for _, child := range list {
 				descended = true
-				if err := c.schema(doc, child, inherited); err != nil {
+				if err := c.schema(doc, child, inherited, ""); err != nil {
 					return err
 				}
 			}
@@ -176,6 +183,62 @@ func (c *classifier) schema(doc string, node any, inherited int) error {
 	}
 	if !descended {
 		c.leaf(inherited)
+	}
+	return nil
+}
+
+// R-3 (Q32 butir 14): pengecualian x-erp-allow-highly-confidential hanya untuk data HR (nik, npwp, bankAccount*,
+// salary; per token, termasuk bentuk gabungan) dan tidak pernah untuk nama kredensial. Harus konsisten dengan
+// contracts/spectral-functions/classification.ts (allowHighlyValid).
+var (
+	allowSingles = map[string]bool{"nik": true, "npwp": true, "salary": true}
+	allowPairs   = []string{"bank account"}
+	credSingles  = map[string]bool{"password": true, "passwd": true, "secret": true, "token": true}
+	credPairs    = []string{"api key", "private key", "access token", "refresh token"}
+
+	camelLowerUpper = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+	camelAcronym    = regexp.MustCompile(`([A-Z]+)([A-Z][a-z])`)
+	nonAlnum        = regexp.MustCompile(`[^A-Za-z0-9]+`)
+)
+
+// nameTokens memecah nama menjadi token huruf kecil (newPassword -> new, password; APIKey -> api, key).
+func nameTokens(name string) []string {
+	s := camelLowerUpper.ReplaceAllString(name, "$1 $2")
+	s = camelAcronym.ReplaceAllString(s, "$1 $2")
+	var out []string
+	for _, t := range nonAlnum.Split(s, -1) {
+		if t != "" {
+			out = append(out, strings.ToLower(t))
+		}
+	}
+	return out
+}
+
+// matchesTerms: token tunggal, pasangan token berurutan, atau bentuk gabungan istilah dua kata di dalam satu token.
+func matchesTerms(name string, singles map[string]bool, pairs []string) bool {
+	t := nameTokens(name)
+	for i, tok := range t {
+		if singles[tok] {
+			return true
+		}
+		for _, p := range pairs {
+			if i+1 < len(t) && tok+" "+t[i+1] == p {
+				return true
+			}
+			if strings.Contains(tok, strings.Replace(p, " ", "", 1)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func checkAllowHighlyName(prop string) error {
+	if matchesTerms(prop, credSingles, credPairs) {
+		return fmt.Errorf("%s tidak boleh dipakai pada properti kredensial %q", AllowHighlyConfidentialExt, prop)
+	}
+	if !matchesTerms(prop, allowSingles, allowPairs) {
+		return fmt.Errorf("%s hanya sah untuk properti data HR (nik, npwp, bankAccount*, salary); %q di luar kelompok itu", AllowHighlyConfidentialExt, prop)
 	}
 	return nil
 }

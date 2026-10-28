@@ -169,3 +169,53 @@ paths:
 		t.Errorf("got %q err %v, want public", got, err)
 	}
 }
+
+// R-3 (Q32 butir 14): pengecualian hanya untuk properti data HR (nik, npwp, bankAccount*, salary; per token, termasuk
+// bentuk gabungan) pada properti skema respons 2xx; konsisten dengan rule Spectral erp-allow-highly-confidential-valid.
+func TestResponseClassification_AllowHighlyRestrictedToHRProperties(t *testing.T) {
+	classify := func(t *testing.T, schema string) error {
+		t.Helper()
+		src := `openapi: 3.1.0
+info: {title: p, version: '1'}
+paths:
+  /api/p/people:
+    get:
+      operationId: listPeople
+      x-erp-permission: p.people.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+` + schema
+		d, err := Parse("p", []byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := NewSet(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = s.ResponseClassification(d.Operations()[0])
+		return err
+	}
+	prop := func(name string) string {
+		return "                type: object\n                properties:\n                  " + name +
+			": { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"
+	}
+	for _, ok := range []string{"nik", "npwp", "monthlySalary", "bankAccountNumber", "bankaccount", "salary"} {
+		if err := classify(t, prop(ok)); err != nil {
+			t.Errorf("%s harus lolos: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"password", "apiKey", "privatekey", "clientSecret", "refreshToken", "bankAccountPassword", "fullName", "label"} {
+		if err := classify(t, prop(bad)); err == nil {
+			t.Errorf("%s harus ditolak", bad)
+		}
+	}
+	root := "                type: object\n                x-erp-classification: highly_confidential\n                x-erp-allow-highly-confidential: 'alasan'\n                properties:\n                  nik: { type: string }\n"
+	if err := classify(t, root); err == nil {
+		t.Error("pengecualian pada skema akar harus ditolak")
+	}
+}
