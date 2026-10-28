@@ -2,7 +2,7 @@ import type { ApiError } from "@erpora/platform-contracts";
 
 /**
  * Semua kode galat stabil di `docs/architecture/api-guidelines.md` §8. Tiap kode terpetakan ke kunci pesan
- * `error.<code>` di namespace katalog `platform` (satu kunci per kode).
+ * `errors.<code>` di namespace katalog `platform` (satu kunci per kode).
  */
 const KNOWN_CODES = [
   "bad_request",
@@ -34,11 +34,11 @@ const KNOWN_CODES = [
 ] as const;
 
 export type KnownApiErrorCode = (typeof KNOWN_CODES)[number];
-export type ApiErrorKey = `error.${KnownApiErrorCode}` | "error.unknown";
+export type ApiErrorKey = `errors.${KnownApiErrorCode}` | "errors.unknown";
 
-/** Awalan kunci pesan galat di katalog `platform` (satu tempat bila penamaan katalog berubah). */
-export const API_ERROR_KEY_PREFIX = "error.";
-export const API_ERROR_UNKNOWN: ApiErrorKey = "error.unknown";
+/** Awalan kunci pesan galat di katalog `platform` (sama dengan `errors.<code>` katalog backend; keputusan G14). */
+export const API_ERROR_KEY_PREFIX = "errors.";
+export const API_ERROR_UNKNOWN: ApiErrorKey = "errors.unknown";
 
 /** Himpunan lengkap kunci yang dapat dikembalikan `describeApiError` (semua wajib ada di katalog `platform`). */
 export const API_ERROR_KEYS: readonly ApiErrorKey[] = [
@@ -77,7 +77,7 @@ function globalDetailCodes(details: unknown): string[] {
 
 /**
  * Memetakan `ApiError` ke kunci pesan terjemahan. Total: tidak pernah melempar. Urutan: detail global yang dikenal
- * (lebih spesifik), lalu `error.code`, lalu `error.unknown`. Teks `message` dan `details` server tidak pernah
+ * (lebih spesifik), lalu `error.code`, lalu `errors.unknown`. Teks `message` dan `details` server tidak pernah
  * disalin ke hasil (tidak ada kebocoran stack/SQL ke UI); UI memakai pesan dari katalog.
  */
 export function describeApiError(error: ApiError): ApiErrorDescription {

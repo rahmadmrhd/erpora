@@ -20,7 +20,7 @@ Layanan frontend platform (`@erpora/platform-web`) yang dipakai bersama app shel
   `offline_mismatch`, `slug_mismatch`), `selectNavigation` (hanya modul `enabled`, `to` absolut), `moduleStatus`,
   `ModuleRegistryProvider` dan `useModuleRegistry`.
 - **`api`**: `createPlatformClient` (klien terketik + `Accept-Language`) dan `describeApiError` (kode galat ke kunci pesan
-  `error.<code>`, tidak pernah menyalin `details` mentah).
+  `errors.<code>`, tidak pernah menyalin `details` mentah).
 - **`msg`**: `msg(ns, key)` dan `crumb(ns, key)` terketik (`createMsgHelpers<Catalogs>()` untuk katalog lokal), `Message`,
   `useMessage`, `MessageTranslatorProvider`.
 - **`theme`**: `ThemeProvider`, `useTheme`, `parseThemePreference`, `resolveTheme`, `applyTheme`; konsisten dengan
@@ -37,7 +37,7 @@ Layanan frontend platform (`@erpora/platform-web`) yang dipakai bersama app shel
 
 1. `I18nCatalogs` sementara dideklarasikan di `src/msg/catalogs.ts`; bila `src/i18n` mendefinisikannya, hapus dan impor dari sana.
 2. `Message`/`useMessage` membaca terjemahan lewat `MessageTranslatorProvider useTranslate={(ns) => useTranslation(ns).t}`.
-3. Kunci galat `error.*` (`api/errors.ts`, `API_ERROR_KEY_PREFIX`) harus ada di katalog `platform`.
+3. Kunci galat `errors.*` (`api/errors.ts`, `API_ERROR_KEY_PREFIX`) harus ada di katalog `platform`.
 4. `createPlatformClient({ getLocale })` mengirim `Accept-Language` lewat `headers`; dapat dialihkan ke opsi `getLocale` klien
    kontrak bila spec i18n menambahkannya.
 5. `I18nProvider` harus membaca `tenantId` dan `bootstrap.i18n` dari `BootstrapProvider` (M3a task 9.4).

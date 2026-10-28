@@ -3,7 +3,7 @@ import type { ApiError } from "@erpora/platform-contracts";
 import fc from "fast-check";
 import { API_ERROR_KEYS, API_ERROR_UNKNOWN, describeApiError } from "./errors";
 
-// Semua kode di api-guidelines §8 (dan Error Handling M3a design) harus terpetakan ke kunci `error.<code>`.
+// Semua kode di api-guidelines §8 (dan Error Handling M3a design) harus terpetakan ke kunci `errors.<code>`.
 const KNOWN_CODES = [
   "bad_request",
   "invalid_filter",
@@ -39,13 +39,13 @@ const err = (over: Partial<ApiError> & { code: string }): ApiError => ({
 });
 
 describe("describeApiError", () => {
-  test.each(KNOWN_CODES)("kode %s terpetakan ke error.%s", (code) => {
+  test.each(KNOWN_CODES)("kode %s terpetakan ke errors.%s", (code) => {
     const d = describeApiError(err({ code }));
-    expect(d.key).toBe(`error.${code}`);
+    expect(d.key).toBe(`errors.${code}`);
     expect(API_ERROR_KEYS).toContain(d.key);
   });
 
-  test("kode asing, kosong, atau http_error jatuh ke error.unknown", () => {
+  test("kode asing, kosong, atau http_error jatuh ke errors.unknown", () => {
     for (const code of ["", "aneh", "http_error", "__proto__", "constructor"]) {
       expect(describeApiError(err({ code })).key).toBe(API_ERROR_UNKNOWN);
     }
@@ -55,7 +55,7 @@ describe("describeApiError", () => {
     const d = describeApiError(
       err({ code: "bad_request", details: [{ code: "unsupported_media_type", message: "x" }] }),
     );
-    expect(d.key).toBe("error.unsupported_media_type");
+    expect(d.key).toBe("errors.unsupported_media_type");
   });
 
   test("details level field diabaikan (kode top-level yang dipakai)", () => {
@@ -65,14 +65,14 @@ describe("describeApiError", () => {
         details: [{ field: "lines[2].itemId", code: "not_found", message: "x" }],
       }),
     );
-    expect(d.key).toBe("error.validation_failed");
+    expect(d.key).toBe("errors.validation_failed");
   });
 
   test("details berupa objek konteks (mis. 412) tidak mengganggu", () => {
     const d = describeApiError(
       err({ code: "version_mismatch", details: { expected: 3, actual: 4 } }),
     );
-    expect(d.key).toBe("error.version_mismatch");
+    expect(d.key).toBe("errors.version_mismatch");
   });
 
   test("requestId diteruskan sebagai parameter; tidak ada bila tidak ada", () => {
