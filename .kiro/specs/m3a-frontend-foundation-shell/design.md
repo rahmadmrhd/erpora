@@ -661,6 +661,12 @@ Pemilik produk menyatakan: "jika ada hal yang butuh keputusanku, lakukan dulu se
 | K-33 | **Aksesibilitas tambahan:** tautan "Lewati ke konten", `RouteAnnouncer` (`aria-live`), fokus ke `<main>` pada navigasi | R14.1 (keyboard dan ARIA); TanStack Router tidak mengumumkan perubahan halaman | Tanpa pengumuman rute |
 | K-34 | **Layar boot (bootstrap gagal) memakai kamus bawaan tiga kalimat id/en**, bukan kunci i18n | Runtime i18n butuh bootstrap (tenantId, daftar bahasa); tanpa pengecualian ini kegagalan bootstrap tidak dapat menampilkan teks → **PK-4** | HTML statis tanpa teks; menunggu katalog (tak pernah tersedia saat backend mati) |
 
+**Hasil spike 1.3 (shadcn 4.21.5, 29 Okt 2026; kode spike dibuang):** konfigurasi K-10 (`components.json` dengan alias `@erpora/ui/*`, `exports` self-reference) **berfungsi** di ketiga alat: `shadcn add button --dry-run` lalu `add button` menulis `src/components/ui/button.tsx` (sesuai alias `ui`); `tsc --noEmit` dari `web` dan dari `packages/ui` membaca impor `@erpora/ui/components/ui/button` dan `@erpora/ui/lib/utils` (self-reference lewat `exports`) tanpa galat; `Bun.build` dari `web` membundelnya (61 KB minified termasuk runtime JSX). Tidak perlu alternatif impor relatif. **Dua temuan yang mengubah alur kerja `shadcn add`:**
+
+1. Registry `new-york-v4` yang dilayani CLI 4.21.5 menulis `import { cn } from "cn"` dan menambahkan dependensi `cn@^0.5.0` (paket npm resmi shadcn, rilis 16 Okt 2026, belum berumur 14 hari) alih-alih `@/lib/utils`; perilaku sama pada konfigurasi `@/` standar. Aturan repo: **setelah setiap `bun run shadcn add`**, ganti `from "cn"` menjadi `from "@erpora/ui/lib/utils"` (`cn` milik repo = `twMerge(clsx(...))`) dan hapus `cn` dari `dependencies` sebelum `bun install` (README `packages/ui` mencatat langkah ini).
+2. CLI menulis dependensi dengan `^` (mis. `radix-ui`); setiap versi yang ditulis CLI dipin ulang ke versi pasti tabel B (sudah dijadwalkan di task 5.2/6.2).
+
+
 ### B. Versi pustaka terpin (K-9)
 
 | Paket | Versi (stabil, ≥ 14 hari) | Catatan verifikasi |
