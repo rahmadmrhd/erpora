@@ -1,0 +1,3 @@
+# `bun test` dari root: DOM happy-dom lebih dulu (dom.ts), lalu matcher dan polyfill (setup.ts). Urutan penting.
+[test]
+preload = ["./web/test/dom.ts", "./web/test/setup.ts"]
