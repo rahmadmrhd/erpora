@@ -226,6 +226,11 @@ func TestList_EnvelopeAndPagination(t *testing.T) {
 	if rec := f.do("GET", "/api/platform/modules?pageSize=500", "", nil); rec.Code != 400 || errOf(t, rec).Error.Code != "bad_request" {
 		t.Errorf("pageSize 500: %d %s", rec.Code, rec.Body)
 	}
+	for _, q := range []string{"page=9223372036854775807", "page=4611686018427387904&pageSize=200"} {
+		if rec := f.do("GET", "/api/platform/modules?"+q, "", nil); rec.Code != 400 || errOf(t, rec).Error.Code != "bad_request" {
+			t.Errorf("%s: %d %s (offset overflow harus 400)", q, rec.Code, rec.Body)
+		}
+	}
 	if rec := f.do("GET", "/api/platform/modules?page=0", "", nil); rec.Code != 400 {
 		t.Errorf("page 0: %d", rec.Code)
 	}

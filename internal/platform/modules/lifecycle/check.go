@@ -142,6 +142,14 @@ func Check(op Op, key string, v View) error {
 				Message: "modul yang bergantung masih ter-install: " + strings.Join(active, ", "), Related: active}
 		}
 	case OpUpgrade:
+		// Versi binary lebih rendah daripada versi ter-install (mis. binary di-rollback sebelum reconcile): hook upgrade
+		// tidak boleh dipanggil dengan pasangan versi mundur dan installed_version tidak boleh tertimpa (FR-19.6).
+		if cur, has := v.Rows[key]; has {
+			if cmp, ok := compareVersions(e.Manifest.Version, cur.InstalledVersion); ok && cmp < 0 {
+				return &Error{Code: CodeDowngradeNotSupported, Module: key,
+					Message: fmt.Sprintf("versi binary %s lebih lama dari versi ter-install %s", e.Manifest.Version, cur.InstalledVersion)}
+			}
+		}
 		// Upgrade yang akan mengembalikan modul ke enabled (previous_status enabled) harus menjaga invarian yang sama
 		// dengan enable: semua dependensi wajib sudah enabled (Q32 B-2). Ditolak sebelum operasi dimulai.
 		if cur, has := v.Rows[key]; has && upgradeTarget(cur) == runtime.StatusEnabled {

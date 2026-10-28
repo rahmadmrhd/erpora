@@ -52,6 +52,10 @@ var (
 // blockedReason melaporkan apakah a (setelah Unmap) berada di rentang terblokir, termasuk IPv4 yang
 // tertanam pada NAT64 (64:ff9b::/96) dan 6to4 (2002::/16).
 func blockedReason(a netip.Addr) (reason string, blocked bool) {
+	// Alamat ber-zone (fe80::1%eth0) tidak cocok dengan Prefix.Contains dan dapat lolos; tolak di semua jalur.
+	if a.Zone() != "" {
+		return "zoned", true
+	}
 	a = a.Unmap()
 	if !a.IsValid() {
 		return "invalid", true

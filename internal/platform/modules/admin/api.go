@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"mime"
 	"net/http"
 	"runtime/debug"
@@ -132,6 +133,10 @@ func pageParams(w http.ResponseWriter, r *http.Request) (page, size int, ok bool
 			return 0, 0, false
 		}
 		size = n
+	}
+	if page-1 > math.MaxInt/size {
+		badRequest(w, r, "page", "page terlalu besar untuk pageSize ini")
+		return 0, 0, false
 	}
 	return page, size, true
 }

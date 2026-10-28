@@ -23,6 +23,12 @@ const (
 // DefaultMaxRows adalah batas baris ekspor sinkron (api-guidelines §10 melarang proses panjang tanpa Jobs).
 const DefaultMaxRows = 10000
 
+// Batas dimensi lembar XLSX: 1.048.576 baris (satu untuk header) dan 16.384 kolom.
+const (
+	xlsxMaxDataRows = 1048575
+	xlsxMaxColumns  = 16384
+)
+
 var (
 	ErrInvalidSpec             = errors.New("export: spec tidak valid")
 	ErrForbiddenClassification = errors.New("export: kolom highly_confidential tidak boleh diekspor")
@@ -100,6 +106,15 @@ func Validate(ctx context.Context, spec Spec) error {
 	}
 	if len(spec.Columns) == 0 {
 		return invalid("minimal satu kolom")
+	}
+	if spec.Format == XLSX {
+		// Dimensi lembar XLSX (ECMA-376/Excel): 1.048.576 baris termasuk header dan 16.384 kolom.
+		if len(spec.Columns) > xlsxMaxColumns {
+			return invalid("XLSX maksimal %d kolom", xlsxMaxColumns)
+		}
+		if spec.MaxRows > xlsxMaxDataRows {
+			return invalid("XLSX maksimal %d baris data (header ikut dihitung)", xlsxMaxDataRows)
+		}
 	}
 	seen := map[string]bool{}
 	var highest module.Classification
