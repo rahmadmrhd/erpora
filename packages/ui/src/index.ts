@@ -70,6 +70,28 @@ export {
   SheetTitle,
   SheetTrigger,
 } from "./components/ui/sheet";
+export {
+  SIDEBAR_STORAGE_KEY,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarProvider,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "./components/ui/sidebar";
 export { Skeleton } from "./components/ui/skeleton";
 export { Toaster } from "./components/ui/sonner";
 export {
@@ -83,6 +105,7 @@ export {
   TableRow,
 } from "./components/ui/table";
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
+export { useIsMobile } from "./hooks/use-mobile";
 export { type IconName, iconRegistry, resolveIcon } from "./icons";
 export { type UiKey, type UiLabelFn, UiLabelsProvider, uiKeys, useUiLabel } from "./labels";
 export { type CollapsedCrumbs, type CrumbSlot, collapseCrumbs } from "./lib/breadcrumb";
