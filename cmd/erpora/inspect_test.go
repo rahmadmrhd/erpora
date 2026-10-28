@@ -135,8 +135,8 @@ func TestInspectRoutes_JSON(t *testing.T) {
 			ref++
 		}
 	}
-	if ref != 7 {
-		t.Fatalf("route modul referensi = %d, want 7: %v", ref, routes)
+	if ref != 8 {
+		t.Fatalf("route modul referensi = %d, want 8: %v", ref, routes)
 	}
 }
 
