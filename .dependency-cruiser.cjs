@@ -1,7 +1,7 @@
 /**
  * Aturan batas frontend (PRD-000 §4.2 / Q21). Dijalankan lewat `bun run --filter @erpora/web deps` (web/deps.ts memindai web/src, packages, modules; folder yang belum ada dilewati).
  * Struktur target: web/ = app shell; packages/{ui,platform-web,module-sdk,platform-contracts};
- * modules/<name>/web = frontend modul. Folder modul/packages belum ada di M1; aturan tetap valid dan aktif.
+ * modules/<name>/web = frontend modul. F4 (M3a K-22, PRD-000 §4.2): packages/ui adalah daun, tidak mengimpor paket repo lain. Folder modul/packages belum ada di M1; aturan tetap valid dan aktif.
  */
 const SHARED = "^packages/(ui|platform-web|module-sdk)/";
 const MODULE_WEB = "^modules/[^/]+/web/";
@@ -51,6 +51,24 @@ module.exports = {
       severity: "error",
       from: { path: "^packages/" , pathNot: "^packages/(module-sdk|platform-contracts)/node_modules/" },
       to: { path: MODULE_WEB },
+    },
+    {
+      name: "F4-ui-is-a-leaf",
+      comment:
+        "@erpora/ui adalah komponen generik (daun): tidak boleh mengimpor paket repo lain " +
+        "(@erpora/platform-web, @erpora/module-sdk, @erpora/platform-contracts, @erpora/module-*). " +
+        "Label dari luar lewat props atau konteks (UiLabels). Impor ke @erpora/ui sendiri (self-reference) diizinkan.",
+      severity: "error",
+      from: { path: "^packages/ui/" },
+      to: {
+        path: [
+          "^packages/(platform-web|module-sdk|platform-contracts|ui-contracts)/",
+          "^modules/",
+          "node_modules/@erpora/",
+          "^@erpora/",
+        ],
+        pathNot: ["^packages/ui/", "node_modules/@erpora/ui(/|$)", "^@erpora/ui(/|$)"],
+      },
     },
   ],
   options: {
