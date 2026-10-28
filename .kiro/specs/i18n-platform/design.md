@@ -426,9 +426,9 @@ Properti yang harus selalu benar (diuji dengan test berbasis properti/fuzz bila 
 
 **Arsitektur/kontrak:** archcheck `I1`; `contracts:check` (route, permission, klasifikasi cocok dengan kontrak); `module:check` untuk bagian `i18n`; `test:generator` memastikan modul hasil `make:module` lolos `i18n:check`.
 
-## Keputusan yang perlu dikonfirmasi pemilik produk
+## Keputusan desain (D-1 sampai D-9 disetujui pemilik produk, 29 Okt 2026; dicatat di PRD-000 Q35)
 
-Butir berikut menyimpang dari atau menambah aturan yang ada, sehingga disetujui dulu dan dicatat (PRD-000 Q-number / ADR) sebelum dikerjakan:
+Butir berikut menyimpang dari atau menambah aturan yang ada; seluruhnya **disetujui sesuai usulan** dan dicatat di PRD-000 Q35:
 
 | # | Keputusan | Usulan | Pro | Kontra |
 | - | --------- | ------ | --- | ------ |
