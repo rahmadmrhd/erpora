@@ -20,5 +20,19 @@
   "pagination": {
     "summary": "{total, plural, =0 {Tidak ada data} other {# data}}",
     "page": "Halaman {page} dari {pages}"
+  },
+  "breadcrumb": {
+    "label": "Jejak halaman",
+    "more": "Tampilkan jalur lengkap"
+  },
+  "sidebar": {
+    "label": "Navigasi utama",
+    "toggle": "Ciutkan atau perluas sidebar",
+    "title": "Menu navigasi",
+    "description": "Menu navigasi utama aplikasi"
+  },
+  "toast": {
+    "close": "Tutup notifikasi",
+    "region": "Notifikasi"
   }
 }
