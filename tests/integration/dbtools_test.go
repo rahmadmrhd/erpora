@@ -4,6 +4,7 @@ package integration
 
 import (
 	"database/sql"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -79,7 +80,7 @@ func TestDBFresh_ConfirmAndRebuild(t *testing.T) {
 	}
 
 	// Nama database benar: dibangun ulang; kedua modul enabled, notes kembali ke seed install.
-	out = mustCLIStdin(t, dsn, 0, "erp\n", "db:fresh")
+	out = mustCLIStdin(t, dsn, 0, dbNameOf(t, dsn)+"\n", "db:fresh")
 	if n := dbQuery(t, dsn, notes); n != 3 {
 		t.Fatalf("notes setelah fresh = %d, want 3\n%s", n, out)
 	}
@@ -179,4 +180,14 @@ func mustCLIStdin(t *testing.T, dsn string, want int, stdin string, args ...stri
 		t.Fatalf("erpora %s: exit %d, want %d\n%s", strings.Join(args, " "), code, want, out)
 	}
 	return out
+}
+
+// dbNameOf mengembalikan nama database pada DSN (container memakai "erp"; server eksternal memakai nama sementara).
+func dbNameOf(t *testing.T, dsn string) string {
+	t.Helper()
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimPrefix(u.Path, "/")
 }
