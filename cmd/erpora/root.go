@@ -35,6 +35,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.AddGroup(
 		&cobra.Group{ID: groupRuntime, Title: "Runtime"},
 		&cobra.Group{ID: groupInspect, Title: "Inspect"},
+		&cobra.Group{ID: groupModule, Title: "Modul"},
 	)
 
 	// --- daftar command ---
@@ -46,7 +47,9 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newInspectPermissionsCmd("permission:list", true),
 		newMigrateCmd(opts),
 		newServeCmd(opts),
+		newModulesCmd(opts, defaultBackend),
 	)
+	addModuleCommands(root, opts)
 	registerDevtools(root)
 	return root
 }
@@ -59,6 +62,9 @@ func exitCode(err error) int {
 	var xe *app.ExitError
 	if errors.As(err, &xe) {
 		return xe.Code
+	}
+	if lifecycleExitCode(err) != 1 {
+		return lifecycleExitCode(err)
 	}
 	var ve config.ValidationError
 	if errors.As(err, &ve) {

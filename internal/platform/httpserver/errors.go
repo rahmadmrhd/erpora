@@ -43,3 +43,19 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
+
+// PageInfo adalah metadata pagination halaman (api-guidelines section 6).
+type PageInfo struct {
+	Page     int   `json:"page"`
+	PageSize int   `json:"pageSize"`
+	Total    int64 `json:"total"`
+	HasMore  bool  `json:"hasMore"`
+}
+
+// WritePage menulis amplop daftar {"data": [...], "page": {...}}.
+func WritePage(w http.ResponseWriter, status int, data any, page PageInfo) {
+	writeJSON(w, status, struct {
+		Data any      `json:"data"`
+		Page PageInfo `json:"page"`
+	}{data, page})
+}

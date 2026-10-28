@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"erpora/internal/platform/bootstrap"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
@@ -33,8 +34,12 @@ type Deps struct {
 	Readiness  ReadinessChecker
 	Assets     fs.FS
 	AppVersion string
+	// Bootstrap membentuk isi GET /api/bootstrap dari runtime snapshot; nil = bootstrap.Build(AppVersion, t, nil, 0).
+	Bootstrap func(ctx context.Context, t tenancy.TenantID) bootstrap.Manifest
 	// Dev true = mode development: SPA menampilkan halaman "frontend belum di-build" bila aset belum ada (FR-12).
 	Dev bool
+	// NPlusOneThreshold > 0 mengaktifkan deteksi N+1 per request, hanya bila Dev (FR-07 guardrail 5).
+	NPlusOneThreshold int
 	// Authenticate membungkus route non-Public; nil = pass-through (autentikasi nyata datang dari PRD-001).
 	Authenticate func(http.Handler) http.Handler
 }
@@ -92,7 +97,7 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	if !cfg.public && r.deps.Authenticate != nil {
 		h = r.deps.Authenticate(h)
 	}
-	h = requestScope(r.deps.Logger, pattern, h)
+	h = requestScope(r.deps.Logger, pattern, r.nPlusOneThreshold(), h)
 	h = recoverMW(r.deps.Logger, h)
 	h = otelhttp.NewHandler(h, pattern,
 		otelhttp.WithTracerProvider(r.deps.Tracer),
@@ -144,4 +149,11 @@ func withDefaults(d Deps) Deps {
 		d.Tracer = noop.NewTracerProvider()
 	}
 	return d
+}
+
+func (r *Router) nPlusOneThreshold() int {
+	if r.deps.Dev {
+		return r.deps.NPlusOneThreshold
+	}
+	return 0
 }

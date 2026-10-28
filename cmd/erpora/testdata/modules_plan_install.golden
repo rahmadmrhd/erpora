@@ -1,0 +1,4 @@
+1. acme.example  install  enabled  tidak ada perubahan
+2. acme.example-addon  install  available → installed
+   langkah: resolve, compatibility, migrate, hook:install
+   migrasi tertunda: 0001_create.sql

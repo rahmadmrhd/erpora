@@ -269,6 +269,11 @@ func TestServe_NormalBinaryHasNoTestRoute(t *testing.T) {
 	if strings.Contains(body, "slow-done") {
 		t.Fatalf("biner normal memuat route uji: %s", body)
 	}
+	// Seam crash/delay lifecycle juga hanya ada pada biner bertag integration: biner normal mengabaikan env-nya.
+	out, code := cliRunBin(t, bin, dsn, []string{"ERP_TEST_CRASH_AFTER_STEP=migrate", "ERP_TEST_STEP_DELAY=hook:install:30s"}, "", "modules", "install", "acme.example")
+	if code != 0 {
+		t.Fatalf("biner normal harus mengabaikan ERP_TEST_CRASH_AFTER_STEP (exit %d): %s", code, out)
+	}
 }
 
 // Kontrak HTTP dasar pada biner nyata: ETag bootstrap, 404 JSON untuk /api/*, cache sw.js, fallback SPA.

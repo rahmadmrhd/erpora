@@ -24,6 +24,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"erpora/internal/platform/bootstrap"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
@@ -125,6 +126,39 @@ func TestBootstrap_NotModified(t *testing.T) {
 	rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"0"`})
 	if rec.Code != 304 || rec.Body.Len() != 0 {
 		t.Fatalf("%d %q", rec.Code, rec.Body)
+	}
+}
+
+func newBootstrapRouter(t *testing.T) *Router {
+	t.Helper()
+	return NewRouter(Deps{
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Bootstrap: func(_ context.Context, tn tenancy.TenantID) bootstrap.Manifest {
+			return bootstrap.Build("9.9.9", tn, []bootstrap.ModuleInput{
+				{Key: "acme.example", Slug: "example", Version: "1.0.0", Status: "enabled", OfflineMode: "online-only"},
+			}, 5)
+		},
+	})
+}
+
+func TestBootstrap_FromDepsHook(t *testing.T) {
+	r := newBootstrapRouter(t)
+	rec := do(r, "GET", "/api/bootstrap", nil)
+	if rec.Code != 200 || rec.Header().Get("ETag") != `"5"` {
+		t.Fatalf("%d etag=%q", rec.Code, rec.Header().Get("ETag"))
+	}
+	d := decode(t, rec)["data"].(map[string]any)
+	mods := d["modules"].([]any)
+	if len(mods) != 1 || mods[0].(map[string]any)["status"] != "enabled" || d["revision"] != float64(5) {
+		t.Fatalf("data %v", d)
+	}
+	if rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"5"`}); rec.Code != 304 {
+		t.Fatalf("If-None-Match: %d", rec.Code)
+	}
+	if rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"4"`}); rec.Code != 200 {
+		t.Fatalf("etag lama: %d", rec.Code)
 	}
 }
 
@@ -579,12 +613,42 @@ func TestTenantContext_ResolverErrorIs400(t *testing.T) {
 }
 
 func TestConnectorProvider_NonDefaultTenantErrors(t *testing.T) {
-	p := connectorProvider{conn: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}}}
+	p := database.DataProvider(database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}})
 	other := tenancy.TenantID(uuid.New())
 	if _, err := p.DB(tenancy.WithTenant(context.Background(), other)); !errors.Is(err, database.ErrUnknownTenant) {
 		t.Fatalf("err = %v, want ErrUnknownTenant", err)
 	}
 	if _, err := p.DB(context.Background()); !errors.Is(err, data.ErrNoTenantContext) {
 		t.Fatalf("tanpa tenant: err = %v", err)
+	}
+}
+
+// FR-07 guardrail 5: requestScope memasang counter N+1 hanya di development.
+func TestNPlusOne_RequestScopeWarnsOnlyInDev(t *testing.T) {
+	for _, tc := range []struct {
+		dev  bool
+		want int
+	}{{true, 1}, {false, 0}} {
+		var buf bytes.Buffer
+		log := slog.New(slog.NewTextHandler(&buf, nil))
+		gl := database.NewGormLogger(log, 0)
+		r := NewRouter(Deps{
+			Logger:    log,
+			Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+			Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+			Dev:       tc.dev, NPlusOneThreshold: 2,
+		})
+		r.Handle("GET /api/test/n1", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			for range 3 {
+				gl.Trace(req.Context(), time.Now(), func() (string, int64) { return "SELECT 1 WHERE id = $1", 1 }, nil)
+			}
+			WriteData(w, 200, "ok")
+		}))
+		if rec := do(r, "GET", "/api/test/n1", nil); rec.Code != 200 {
+			t.Fatalf("code %d", rec.Code)
+		}
+		if n := strings.Count(buf.String(), "indikasi N+1"); n != tc.want {
+			t.Errorf("dev=%v: warnings = %d, want %d: %s", tc.dev, n, tc.want, buf.String())
+		}
 	}
 }

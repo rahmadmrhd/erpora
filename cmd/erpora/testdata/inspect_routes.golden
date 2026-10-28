@@ -1,4 +1,8 @@
-MODULE              METHOD  PATTERN                     PERMISSION                  PUBLIC
-acme.example-addon  GET     /api/example-addon/summary  example-addon.summary.read  false
-acme.example        GET     /api/example/notes          example.notes.read          false
-acme.example        GET     /api/example/ping           example.ping.read           false
+MODULE              METHOD  PATTERN                                  PERMISSION                  PUBLIC
+acme.example-addon  GET     /api/example-addon/summary               example-addon.summary.read  false
+acme.example        GET     /api/example/notes                       example.notes.read          false
+acme.example        GET     /api/example/ping                        example.ping.read           false
+platform.core       GET     /api/platform/modules                    platform.modules.read       false
+platform.core       GET     /api/platform/modules/{key}              platform.modules.read       false
+platform.core       POST    /api/platform/modules/{key}/{operation}  platform.modules.manage     false
+platform.core       GET     /api/platform/modules/{key}/{sub}        platform.modules.read       false

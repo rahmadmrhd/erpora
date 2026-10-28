@@ -30,7 +30,7 @@ func NewRouter(d Deps) *Router {
 		WriteData(w, http.StatusOK, map[string]string{"status": "ready"})
 	}), WithoutTenant(), Public())
 
-	r.Handle("GET /api/bootstrap", bootstrapHandler(d.AppVersion), Public())
+	r.Handle("GET /api/bootstrap", bootstrapHandler(d), Public())
 
 	r.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if r.apiGate != nil && r.apiGate(req) {
@@ -54,10 +54,15 @@ func NewRouter(d Deps) *Router {
 	return r
 }
 
-func bootstrapHandler(appVersion string) http.Handler {
+func bootstrapHandler(d Deps) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		tid, _ := tenancy.FromContext(req.Context())
-		m := bootstrap.Snapshot(appVersion, tid.String())
+		var m bootstrap.Manifest
+		if d.Bootstrap != nil {
+			m = d.Bootstrap(req.Context(), tid)
+		} else {
+			m = bootstrap.Build(d.AppVersion, tid, nil, 0)
+		}
 		etag := `"` + strconv.FormatInt(m.Revision, 10) + `"`
 		w.Header().Set("ETag", etag)
 		if etagMatches(req.Header[textproto.CanonicalMIMEHeaderKey("If-None-Match")], etag) {
@@ -76,6 +81,17 @@ func etagMatches(values []string, etag string) bool {
 				return true
 			}
 		}
+	}
+	return false
+}
+
+// CheckETag memasang header ETag dan, bila If-None-Match cocok, menjawab 304 lalu mengembalikan true
+// (handler harus berhenti). etag sudah berbentuk kutip, mis. `"7"`.
+func CheckETag(w http.ResponseWriter, r *http.Request, etag string) bool {
+	w.Header().Set("ETag", etag)
+	if etagMatches(r.Header[textproto.CanonicalMIMEHeaderKey("If-None-Match")], etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return true
 	}
 	return false
 }

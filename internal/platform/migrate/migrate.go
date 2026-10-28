@@ -82,11 +82,15 @@ func UpWithTenant(ctx context.Context, db *database.DB, env config.Env, want *uu
 func Status(ctx context.Context, db *database.DB) ([]TargetStatus, error) {
 	var out []TargetStatus
 	for _, t := range targets {
-		embedded, err := embeddedVersions(t)
+		sub, err := fs.Sub(migrations.FS, string(t))
 		if err != nil {
 			return nil, err
 		}
-		applied, err := appliedVersions(ctx, db, t)
+		embedded, err := embeddedVersions(sub)
+		if err != nil {
+			return nil, fmt.Errorf("migrasi %s: %w", t, err)
+		}
+		applied, err := appliedVersions(ctx, db, "goose_"+string(t))
 		if err != nil {
 			return nil, err
 		}
@@ -123,11 +127,10 @@ func Pending(ctx context.Context, db *database.DB) (int, error) {
 }
 
 // appliedVersions membaca versi yang sudah diterapkan lewat to_regclass + SELECT (tanpa menulis).
-func appliedVersions(ctx context.Context, db *database.DB, t Target) (map[int64]bool, error) {
-	table := "goose_" + string(t)
+func appliedVersions(ctx context.Context, db *database.DB, table string) (map[int64]bool, error) {
 	var reg *string
 	if err := db.WithContext(ctx).Raw("SELECT to_regclass(?)::text", table).Scan(&reg).Error; err != nil {
-		return nil, fmt.Errorf("status %s: %w", t, err)
+		return nil, fmt.Errorf("status %s: %w", table, err)
 	}
 	applied := map[int64]bool{}
 	if reg == nil {
@@ -136,7 +139,7 @@ func appliedVersions(ctx context.Context, db *database.DB, t Target) (map[int64]
 	var rows []int64
 	// Nama tabel berasal dari konstanta internal, bukan input pengguna.
 	if err := db.WithContext(ctx).Raw("SELECT version_id FROM " + table + " WHERE is_applied").Scan(&rows).Error; err != nil {
-		return nil, fmt.Errorf("status %s: %w", t, err)
+		return nil, fmt.Errorf("status %s: %w", table, err)
 	}
 	for _, v := range rows {
 		if v > 0 { // baris versi 0 adalah penanda awal goose
@@ -147,8 +150,8 @@ func appliedVersions(ctx context.Context, db *database.DB, t Target) (map[int64]
 }
 
 // embeddedVersions membaca nomor versi dari nama file migrasi tertanam ("0001_nama.sql").
-func embeddedVersions(t Target) ([]int64, error) {
-	entries, err := fs.ReadDir(migrations.FS, string(t))
+func embeddedVersions(fsys fs.FS) ([]int64, error) {
+	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
 		return nil, err
 	}
@@ -158,12 +161,21 @@ func embeddedVersions(t Target) ([]int64, error) {
 		if e.IsDir() || !strings.HasSuffix(name, ".sql") {
 			continue
 		}
-		prefix, _, _ := strings.Cut(name, "_")
-		v, err := strconv.ParseInt(prefix, 10, 64)
+		v, err := versionOf(name)
 		if err != nil {
-			return nil, fmt.Errorf("nama migrasi %s/%s tidak valid: %w", t, name, err)
+			return nil, err
 		}
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// versionOf mengambil nomor versi dari nama file migrasi ("0001_nama.sql").
+func versionOf(name string) (int64, error) {
+	prefix, _, _ := strings.Cut(name, "_")
+	v, err := strconv.ParseInt(prefix, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("nama migrasi %s tidak valid: %w", name, err)
+	}
+	return v, nil
 }

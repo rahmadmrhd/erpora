@@ -70,12 +70,12 @@ type fixture struct {
 	logs   *bytes.Buffer
 }
 
-func newFixture(t *testing.T, authz Authorizer, order *[]string) fixture {
+func newFixture(t *testing.T, authz Authorizer, order *[]string, opts ...MountOption) fixture {
 	t.Helper()
-	return newFixtureLog(t, authz, order, false)
+	return newFixtureLog(t, authz, order, false, opts...)
 }
 
-func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bool) fixture {
+func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bool, opts ...MountOption) fixture {
 	t.Helper()
 	hits := 0
 	reg, err := registry.Build(registry.Options{
@@ -142,7 +142,7 @@ func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bo
 	if nilLogger {
 		mountLog = nil
 	}
-	Mount(router, reg, snap, authz, mountLog)
+	Mount(router, reg, snap, authz, mountLog, opts...)
 	return fixture{router: router, snap: snap, rec: sr, hits: &hits, logs: logs}
 }
 
@@ -183,7 +183,7 @@ func TestMount_StatusGuard(t *testing.T) {
 		for _, target := range []string{"/api/notes/items", "/api/notes/status"} {
 			t.Run(string(tc.status)+target, func(t *testing.T) {
 				f := newFixture(t, allowAll, nil)
-				f.snap.Set(tenantA, map[string]Status{"acme.notes": tc.status}, 1)
+				f.snap.Apply(tenantA, map[string]Status{"acme.notes": tc.status}, 1)
 				rec := f.do("GET", target)
 				if rec.Code != tc.code {
 					t.Fatalf("status = %d, want %d (%s)", rec.Code, tc.code, rec.Body.String())
@@ -204,7 +204,7 @@ func TestMount_StatusGuard(t *testing.T) {
 
 func TestMount_PermissionDeny(t *testing.T) {
 	f := newFixture(t, denyAll, nil)
-	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	rec := f.do("GET", "/api/notes/items")
 	if rec.Code != 403 || errCode(t, rec) != "permission_denied" {
 		t.Fatalf("protected: %d %s", rec.Code, rec.Body.String())
@@ -217,7 +217,7 @@ func TestMount_PermissionDeny(t *testing.T) {
 func TestMount_MiddlewareOrder(t *testing.T) {
 	var order []string
 	f := newFixture(t, allowAll, &order)
-	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	if rec := f.do("GET", "/api/notes/items"); rec.Code != 200 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -263,7 +263,7 @@ func TestMount_PlatformRoutes(t *testing.T) {
 // M3: penolakan karena Authorizer nil dicatat lewat logger aplikasi, bukan slog.Default.
 func TestMount_NilAuthorizerDeniesAndLogsViaAppLogger(t *testing.T) {
 	f := newFixture(t, nil, nil)
-	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	rec := f.do("GET", "/api/notes/items")
 	if rec.Code != 403 {
 		t.Fatalf("status = %d", rec.Code)
@@ -275,7 +275,7 @@ func TestMount_NilAuthorizerDeniesAndLogsViaAppLogger(t *testing.T) {
 
 func TestMount_TrailingSlashAndWrongMethod(t *testing.T) {
 	f := newFixture(t, allowAll, nil)
-	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	rec := f.do("GET", "/api/notes/items/")
 	if rec.Code != 404 || errCode(t, rec) != "not_found" || *f.hits != 0 {
 		t.Fatalf("trailing slash: %d %s hits=%d", rec.Code, rec.Body.String(), *f.hits)
@@ -294,16 +294,37 @@ func TestSnapshot(t *testing.T) {
 	if s.Status(tenantA, "x.y") != StatusAvailable {
 		t.Error("modul tak dikenal = available")
 	}
-	s.Set(tenantA, map[string]Status{"x.y": StatusDisabled}, 7)
+	s.Apply(tenantA, map[string]Status{"x.y": StatusDisabled}, 7)
 	if s.Status(tenantA, "x.y") != StatusDisabled || s.Revision(tenantA) != 7 {
-		t.Error("Set tidak tercermin")
+		t.Error("Apply tidak tercermin")
+	}
+}
+
+// Keputusan 8: route yang di-skip tidak dipasang; catch-all /api/ menjawab 404 not_found
+// sebelum permission dievaluasi (stub deny tidak menghasilkan 403). Route lain tetap terpasang.
+func TestMount_SkipRouteNotMounted(t *testing.T) {
+	skip := SkipRoute(func(ri registry.RouteInfo) bool { return ri.Pattern == "/api/platform/modules" })
+	f := newFixture(t, denyAll, nil, skip)
+	rec := f.do("GET", "/api/platform/modules")
+	if rec.Code != 404 || errCode(t, rec) != "not_found" {
+		t.Fatalf("skipped route: %d %s", rec.Code, rec.Body.String())
+	}
+	if *f.hits != 0 {
+		t.Error("handler route yang di-skip dipanggil")
+	}
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	if rec := f.do("GET", "/api/notes/status"); rec.Code != 200 {
+		t.Fatalf("route lain harus tetap terpasang: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := f.do("GET", "/api/notes/items"); rec.Code != 403 || errCode(t, rec) != "permission_denied" {
+		t.Fatalf("route lain tetap dijaga permission: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
 // Minor 1: logger nil pada Mount jatuh ke slog.Default, bukan nil-pointer panic.
 func TestMount_NilLoggerDefaultsToSlogDefault(t *testing.T) {
 	f := newFixtureLog(t, nil, nil, true)
-	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	rec := f.do("GET", "/api/notes/items")
 	if rec.Code != 403 || errCode(t, rec) != "permission_denied" {
 		t.Fatalf("status = %d %s (bukan 500)", rec.Code, rec.Body.String())
@@ -315,7 +336,7 @@ func TestMount_StubDenyLogHasModule(t *testing.T) {
 	var logs bytes.Buffer
 	stub := authorization.NewStub("deny", observability.NewLogger(&logs, "text", slog.LevelDebug))
 	f := newFixture(t, stub, nil)
-	f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+	f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 	if rec := f.do("GET", "/api/notes/items"); rec.Code != 403 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -336,7 +357,7 @@ func TestMount_NonEnabledModuleHasNoHTTPSurface(t *testing.T) {
 		} {
 			t.Run(string(st)+" "+tc.method+tc.target, func(t *testing.T) {
 				f := newFixture(t, allowAll, nil)
-				f.snap.Set(tenantA, map[string]Status{"acme.notes": st}, 1)
+				f.snap.Apply(tenantA, map[string]Status{"acme.notes": st}, 1)
 				rec := f.do(tc.method, tc.target)
 				if rec.Code != 404 || errCode(t, rec) != "module_not_found" {
 					t.Fatalf("%d %s", rec.Code, rec.Body.String())
@@ -349,7 +370,7 @@ func TestMount_NonEnabledModuleHasNoHTTPSurface(t *testing.T) {
 	}
 	t.Run("enabled: 405 + Allow dan 404 not_found", func(t *testing.T) {
 		f := newFixture(t, allowAll, nil)
-		f.snap.Set(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
+		f.snap.Apply(tenantA, map[string]Status{"acme.notes": StatusEnabled}, 1)
 		rec := f.do("POST", "/api/notes/items")
 		if rec.Code != 405 || rec.Header().Get("Allow") == "" || errCode(t, rec) != "method_not_allowed" {
 			t.Fatalf("%d allow=%q %s", rec.Code, rec.Header().Get("Allow"), rec.Body.String())

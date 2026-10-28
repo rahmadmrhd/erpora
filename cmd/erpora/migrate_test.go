@@ -38,3 +38,14 @@ func TestMigrate_InRuntimeGroup(t *testing.T) {
 		t.Errorf("migrate missing from list:\n%s", out)
 	}
 }
+
+func TestMigrateStatus_ModuleRowsGolden(t *testing.T) {
+	var buf bytes.Buffer
+	printStatus(&buf, []migrate.TargetStatus{
+		{Target: migrate.Control, Current: 2, Latest: 2, Pending: 0},
+		{Target: migrate.Tenant, Current: 2, Latest: 2, Pending: 0},
+		{Target: migrate.Target("module:acme.example"), Current: 2, Latest: 2, Pending: 0},
+		{Target: migrate.Target("module:acme.example-addon"), Current: 0, Latest: 1, Pending: 1},
+	})
+	golden(t, "migrate_status_modules.golden", buf.String())
+}

@@ -1,0 +1,122 @@
+openapi: 3.1.0
+info:
+  title: ERPora - komponen bersama
+  version: 0.1.0
+  description: >
+    Skema, parameter, header, dan respons error yang dipakai semua kontrak (api-guidelines.md
+    section 4, 6, 7, 8, 12). Kontrak lain merujuk lewat erp:common#/components/...
+    Linter Spectral, pembangkitan tipe, dan test kesesuaian kontrak datang di M2d.
+paths: {}
+components:
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+      description: UUID (v7 untuk ID baru).
+    Timestamp:
+      type: string
+      format: date-time
+      description: ISO 8601 UTC, mis. 2026-10-21T07:15:00Z.
+    DataEnvelope:
+      type: object
+      required: [data]
+      description: Amplop respons sukses; sebuah respons tidak pernah berisi data dan error sekaligus.
+      properties:
+        data: {}
+    Page:
+      type: object
+      required: [page, pageSize, total, hasMore]
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 200 }
+        total: { type: integer, format: int64, minimum: 0 }
+        hasMore: { type: boolean }
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      description: Satu butir detail error. code stabil dan menjadi kontrak; message untuk manusia.
+      properties:
+        field: { type: string, description: 'Path JSON field, mis. lines[2].itemId.' }
+        code: { type: string }
+        message: { type: string }
+      additionalProperties: true
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Kode stabil (api-guidelines section 8).
+            message: { type: string }
+            details:
+              description: Array ErrorDetail, atau objek konteks (mis. pada 412 version_mismatch).
+              oneOf:
+                - type: array
+                  items: { $ref: '#/components/schemas/ErrorDetail' }
+                - type: object
+                  additionalProperties: true
+            requestId: { type: string }
+            traceId: { type: string }
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Halaman, mulai 1.
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      description: Jumlah item per halaman.
+      schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+  headers:
+    ETag:
+      description: Versi resource (di endpoint modul platform = revision status modul tenant), mis. "7".
+      schema: { type: string }
+    Location:
+      description: URL resource atau operasi yang dibuat/berjalan (201/202).
+      schema: { type: string }
+    XRequestId:
+      description: ID request; selalu ada pada respons.
+      schema: { type: string }
+  requestHeaders:
+    IfMatch:
+      name: If-Match
+      in: header
+      description: Opsional. Revision yang diharapkan; tidak cocok -> 412 version_mismatch.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: >
+        UUID dari klien. Diterima, tetapi untuk endpoint platform modul TIDAK disimpan (setiap operasi
+        idempoten lewat aturan no-op); penyimpanan 24 jam menunggu infrastruktur idempotency.
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest:
+      description: Parameter atau body salah (bad_request).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    PermissionDenied:
+      description: Tidak punya permission (permission_denied).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Tidak ada, atau di luar scope (not_found). Record di luar scope selalu 404, bukan 403.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: invalid_state atau request_in_progress.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    PreconditionFailed:
+      description: If-Match tidak cocok (version_mismatch).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unprocessable:
+      description: validation_failed atau business_rule_violated; kode spesifik di error.details[].code.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    InternalError:
+      description: internal_error; tanpa detail internal.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotReady:
+      description: not_ready; layanan belum siap.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

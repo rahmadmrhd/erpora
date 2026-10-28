@@ -1,4 +1,3 @@
-// Package lifecycle (stub) adalah tempat lifecycle modul dan runtime activation.
-// Tanggung jawab: state machine modul, operasi, reconcile, dan hooks.
-// Diisi oleh: PRD-000 FR-19.
+// Package lifecycle berisi state machine lifecycle modul (murni, tanpa I/O) dan engine Service
+// yang menjalankan operasi install/enable/disable/upgrade/uninstall/retry, reconcile, dan plan (PRD-000 FR-19).
 package lifecycle

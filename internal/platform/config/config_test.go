@@ -14,7 +14,7 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"ERP_DATABASE_URL", "ERP_ENV", "ERP_HTTP_ADDR", "ERP_LOG_FORMAT",
-		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS",
+		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_MODULES_ADMIN_API", "ERP_DB_NPLUSONE_THRESHOLD",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -210,5 +210,62 @@ func TestLoad_EnvFileParseErrorDoesNotLeakSecrets(t *testing.T) {
 				t.Fatalf("error tidak menyebut file: %v", err)
 			}
 		})
+	}
+}
+
+func TestLoad_ModulesAdminAPI(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_DATABASE_URL", "postgres://u:p@h/db")
+
+	t.Setenv("ERP_MODULES_ADMIN_API", "yes")
+	_, err := Load("")
+	wantVar(t, err, "ERP_MODULES_ADMIN_API")
+
+	t.Setenv("ERP_ENV", "production")
+	t.Setenv("ERP_MODULES_ADMIN_API", "")
+	c, err := Load("")
+	if err != nil || c.ModulesAdminAPI || c.ModulesAdminAPIEnabled() {
+		t.Fatalf("production default: %+v, %v", c, err)
+	}
+
+	t.Setenv("ERP_MODULES_ADMIN_API", "true")
+	c, err = Load("")
+	if err != nil || !c.ModulesAdminAPI || !c.ModulesAdminAPIEnabled() {
+		t.Fatalf("production + true: %+v, %v", c, err)
+	}
+
+	t.Setenv("ERP_MODULES_ADMIN_API", "false")
+	c, err = Load("")
+	if err != nil || c.ModulesAdminAPIEnabled() {
+		t.Fatalf("production + false: %+v, %v", c, err)
+	}
+
+	t.Setenv("ERP_ENV", "development")
+	t.Setenv("ERP_MODULES_ADMIN_API", "")
+	c, err = Load("")
+	if err != nil || c.ModulesAdminAPI || !c.ModulesAdminAPIEnabled() {
+		t.Fatalf("development: %+v, %v", c, err)
+	}
+}
+
+func TestLoad_DBNPlusOneThreshold(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_DATABASE_URL", "postgres://u:p@h/db")
+	c, err := Load("")
+	if err != nil || c.DBNPlusOneThreshold != 10 {
+		t.Fatalf("default: %+v, %v", c, err)
+	}
+	t.Setenv("ERP_DB_NPLUSONE_THRESHOLD", "0")
+	if c, err = Load(""); err != nil || c.DBNPlusOneThreshold != 0 {
+		t.Fatalf("0 (mati): %+v, %v", c, err)
+	}
+	t.Setenv("ERP_DB_NPLUSONE_THRESHOLD", "25")
+	if c, err = Load(""); err != nil || c.DBNPlusOneThreshold != 25 {
+		t.Fatalf("25: %+v, %v", c, err)
+	}
+	for _, bad := range []string{"-1", "abc", "1.5"} {
+		t.Setenv("ERP_DB_NPLUSONE_THRESHOLD", bad)
+		_, err := Load("")
+		wantVar(t, err, "ERP_DB_NPLUSONE_THRESHOLD")
 	}
 }
