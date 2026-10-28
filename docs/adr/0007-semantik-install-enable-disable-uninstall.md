@@ -21,7 +21,7 @@ Modul dapat diaktifkan dan dinonaktifkan pada runtime tanpa rebuild binary (PRD-
 | install | `available`, `uninstalled` | `installed` | `installed`, `enabled`, `disabled` |
 | enable | `installed`, `disabled` | `enabled` | `enabled` |
 | disable | `enabled` | `disabled` | `disabled` |
-| upgrade | `upgrade_pending` | status sebelumnya (`previous_status`) | `installed`/`enabled`/`disabled` dengan versi sama |
+| upgrade | `upgrade_pending` (atau `installed`/`enabled`/`disabled` dengan versi lebih lama: Execute mereconcile lebih dulu dalam lock yang sama, Q32 butir 17) | status sebelumnya (`previous_status`) | `installed`/`enabled`/`disabled` dengan versi sama |
 | uninstall | `installed`, `disabled` | `uninstalled` | `uninstalled` |
 
 Pasangan lain adalah `invalid_transition`. Operasi yang status targetnya sudah tercapai adalah **no-op sukses**: tanpa baris operasi, event, atau kenaikan revision. Ini membuat `install --all --enable` dapat diulang. Prasyarat (`Check`) dievaluasi setelah tabel transisi, sehingga no-op selalu menang.
@@ -57,7 +57,7 @@ Setelah memperoleh lock, setiap operasi dan reconcile menandai semua operasi `ru
 
 ### 7. Reconcile saat startup
 
-`serve` menjalankan `Reconcile` sebelum melayani request: versi binary > ter-install → `upgrade_pending` (event `reconciled`); versi binary < ter-install → operasi `reconcile` `failed` `downgrade_not_supported`, modul `failed`, `previous_status` disimpan, event `operation_failed`; binary kembali ke versi ter-install → status semula dipulihkan (`reconciled`, `version_restored`), baik dari `failed` (downgrade) maupun dari `upgrade_pending` (rollback binary; Q32); baris tanpa modul → `missing` + WARN. Reconcile tidak pernah memigrasi, meng-install, atau meng-enable; migrasi hanya lewat `migrate up` dan operasi lifecycle.
+`serve` menjalankan `Reconcile` sebelum melayani request: versi binary > ter-install → `upgrade_pending` (event `reconciled`); versi binary < ter-install → operasi `reconcile` `failed` `downgrade_not_supported`, modul `failed`, `previous_status` disimpan, event `operation_failed`; binary kembali ke versi ter-install → status semula dipulihkan (`reconciled`, `version_restored`), baik dari `failed` (downgrade) maupun dari `upgrade_pending` (rollback binary; Q32); baris tanpa modul → `missing` + WARN. Reconcile tidak pernah memigrasi, meng-install, atau meng-enable; migrasi hanya lewat `migrate up` dan operasi lifecycle. `upgrade` (CLI/API) menjalankan langkah reconcile yang sama untuk modul terkait **di dalam lock operasinya** sebelum prasyarat (satu lock, tanpa reconcile ganda), sehingga upgrade bisa langsung dilakukan setelah binary diganti tanpa `serve`; versi binary lebih lama tetap `downgrade_not_supported` (Q32 butir 17, 28 Okt 2026).
 
 ### 8. Revision dan propagasi
 
