@@ -57,9 +57,9 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 1. THE pesan SHALL ditulis dalam ICU MessageFormat dan SHALL mendukung minimal: argumen sederhana `{name}`, `plural` (kategori CLDR `zero|one|two|few|many|other`, `=N`, dan `#`), dan `select`.
 2. THE aturan plural SHALL mengikuti CLDR untuk bahasa yang dipakai, sama di Go dan TypeScript.
 3. WHEN argumen yang dibutuhkan pesan tidak diberikan, THE runtime SHALL tidak crash: ia SHALL mengembalikan pesan dengan argumen tak terisi ditampilkan apa adanya dan mencatat peringatan di mode pengembangan.
-4. THE pesan SHALL tidak berisi HTML; teks kaya (tebal, tautan) SHALL ditangani lewat komponen berparameter di sisi tampilan, bukan markup dalam katalog `[TODO: design: pola penanda `<b>…</b>` ala ICU rich text atau komponen terpisah]`.
+4. THE pesan SHALL tidak berisi HTML; teks kaya (tebal, tautan) SHALL ditangani lewat penanda tag bergaya ICU (mis. `<b>…</b>`) yang dirender komponen di sisi tampilan, bukan HTML dalam katalog (diputuskan 29 Okt 2026; sintaks rincinya di design).
 5. THE batas kedalaman penyarangan dan ukuran pesan SHALL ditetapkan untuk mencegah pesan berbahaya atau salah ketik menghabiskan sumber daya.
-6. [TODO: design] Cakupan format angka/tanggal di dalam pesan (`{n, number}`, `{d, date}`) dan keterkaitannya dengan locale/zona waktu pengguna.
+6. THE pesan SHALL mendukung argumen dan plural saja; angka, tanggal, dan mata uang SHALL diformat di kode (`Intl` di frontend, `golang.org/x/text` di backend) memakai locale aktif dan diteruskan sebagai argumen teks (diputuskan 29 Okt 2026).
 
 ### Requirement 3: Penentuan locale dan fallback
 
@@ -75,7 +75,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 6. THE registri SHALL divalidasi saat startup dan oleh `i18n:check`: `fallback` harus menunjuk bahasa yang terdaftar, rantai fallback tidak boleh bersiklus dan dibatasi kedalamannya, dan bahasa default tidak punya fallback.
 7. WHEN fallback dipakai untuk sebuah kunci, THE runtime SHALL mencatat peringatan satu kali per (bahasa, namespace, kunci) di mode pengembangan dan pengujian, dan SHALL tidak mencatat di produksi selain metrik hitung.
 8. THE modul SHALL hanya dapat menyediakan bahasa yang terdaftar di registri; modul yang mendeklarasikan bahasa tak terdaftar SHALL ditolak `module:check`.
-9. [TODO: konfirmasi] Pengaturan fallback per instalasi (dapat diubah admin tanpa build ulang, seperti override) ditunda; spec ini mengatur fallback lewat registri di repo.
+9. THE fallback SHALL ditentukan **hanya dari registri di repo** (diputuskan 29 Okt 2026); tidak ada pengaturan fallback per instalasi atau lewat database.
 
 ### Requirement 4: Runtime backend (`sdk/i18n`)
 
@@ -135,14 +135,15 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 
 #### Acceptance Criteria
 
-1. THE `erpora i18n:check` SHALL gagal bila: sintaks ICU tidak valid; kunci tidak sama antar bahasa lengkap dalam satu namespace (aturan rinci di butir 3 dan 4); argumen/tipe argumen tidak sama antar bahasa untuk kunci yang sama; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); dua jalur menghasilkan kunci lengkap yang sama setelah perataan (Requirement 1.6); atau segmen kunci melanggar karakter yang diizinkan (Requirement 1.7).
+1. THE `erpora i18n:check` SHALL membedakan dua tingkat temuan (diputuskan 29 Okt 2026: proses build hanya memberi **peringatan** untuk ketidaksesuaian antar bahasa). **Peringatan** (build tidak gagal): kunci hilang atau berlebih antar bahasa (butir 3 dan 4) dan argumen/tipe argumen yang tidak sama antar bahasa untuk kunci yang sama. **Galat** (build gagal) `[TODO: konfirmasi: galat struktural tetap menggagalkan build karena katalog tidak dapat dimuat atau maknanya tidak pasti]`: sintaks ICU tidak valid; JSON tidak valid; kunci bernamespace pemilik lain; pesan berisi HTML; berkas JSON memuat kunci ganda pada tingkat yang sama (dibaca dengan pembaca JSON yang tidak diam-diam membuang duplikat); dua jalur menghasilkan kunci lengkap yang sama setelah perataan (Requirement 1.6); atau segmen kunci melanggar karakter yang diizinkan (Requirement 1.7).
 2. THE `erpora i18n:status` SHALL menampilkan persentase kelengkapan per bahasa per namespace.
 3. THE `i18n:check` SHALL membandingkan kunci setiap bahasa terhadap bahasa default dalam tiap namespace dan melaporkan secara terperinci: kunci yang **hilang** di sebuah bahasa, kunci **berlebih** yang tidak ada di bahasa default, dan argumen ICU yang tidak cocok; laporan SHALL menyebut berkas, bahasa, dan kunci lengkap, dan tersedia dalam format teks dan `--json`.
-4. THE bahasa SHALL dianggap **lengkap** secara bawaan: kunci hilang atau berlebih di bahasa lengkap SHALL membuat `i18n:check` gagal. Sebuah bahasa dapat ditandai `partial: true` di registri; untuk bahasa `partial`, kunci hilang SHALL hanya menjadi peringatan (teks jatuh ke fallback) sedangkan kunci berlebih dan argumen tak cocok tetap gagal.
-5. THE exit code `i18n:check` SHALL membedakan kegagalan validasi (kunci/format) dari kegagalan prasyarat (registri/konfigurasi), agar mudah dipakai di skrip dan CI.
-6. THE pengecekan kesesuaian SHALL juga berjalan terhadap katalog hasil override di CI untuk fixture uji, memastikan override tidak mengubah kesesuaian argumen (Requirement 12.3).
-7. THE `erpora i18n:add <locale>` SHALL membuat kerangka katalog bahasa baru dari bahasa default untuk modul yang dipilih.
-8. THE pemeriksaan i18n SHALL menjadi bagian dari gate lokal dan CI (`task lint` atau gate khusus), dan SHALL diperiksa oleh `make:module`/`test:generator` untuk modul hasil generate.
+4. THE bahasa SHALL dianggap **lengkap** secara bawaan: kunci hilang atau berlebih di bahasa lengkap SHALL menjadi peringatan di `i18n:check` biasa (mode build) dan menjadi kegagalan hanya bila `i18n:check --strict` dipakai. Sebuah bahasa dapat ditandai `partial: true` di registri sebagai pernyataan bahwa ia sengaja belum selesai; untuk bahasa `partial`, kunci hilang SHALL tidak dilaporkan sebagai peringatan (teks jatuh ke fallback) dan tidak menggagalkan `--strict`, sedangkan kunci berlebih dan argumen tak cocok tetap dilaporkan.
+5. THE gate bawaan (`task build`, `task lint`, CI) SHALL memakai mode biasa (peringatan saja); `--strict` SHALL tersedia sebagai pilihan tetapi tidak dipakai gate bawaan.
+6. THE exit code `i18n:check` SHALL membedakan kegagalan validasi (kunci/format) dari kegagalan prasyarat (registri/konfigurasi), agar mudah dipakai di skrip dan CI.
+7. THE pengecekan kesesuaian SHALL juga berjalan terhadap katalog hasil override di CI untuk fixture uji, memastikan override tidak mengubah kesesuaian argumen (Requirement 12.3).
+8. THE `erpora i18n:add <locale>` SHALL membuat kerangka katalog bahasa baru dari bahasa default untuk modul yang dipilih.
+9. THE pemeriksaan i18n SHALL menjadi bagian dari gate lokal dan CI (`task lint` atau gate khusus; temuan sesuai butir 1 dan 5), dan SHALL diperiksa oleh `make:module`/`test:generator` untuk modul hasil generate.
 
 ### Requirement 9: Kesamaan perilaku Go dan TypeScript
 
@@ -193,19 +194,19 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 7. THE setiap perubahan override SHALL dicatat ke audit (log terstruktur sampai audit writer PRD-001 tersedia).
 8. THE endpoint mutasi SHALL memakai pengamanan sementara yang sama dengan FR-20.2 (aktif hanya bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true`) sampai PRD-001 menyediakan authz sungguhan; di luar itu `404`.
 9. THE override SHALL tidak menimpa pesan galat yang kodenya menjadi kontrak: `code` tetap stabil; hanya `message` yang berubah.
-10. [TODO: konfirmasi cakupan] API dan CLI masuk spec ini; UI manajemen istilah dikerjakan di blok lain (usulan: bagian pengaturan M3a atau blok M3 berikutnya).
+10. THE API dan CLI SHALL masuk spec ini; UI manajemen istilah dikerjakan di blok lain (diputuskan 29 Okt 2026).
 
-## Pertanyaan terbuka (untuk dikonfirmasi sebelum `/spec-design`)
+## Keputusan atas pertanyaan terbuka (disetujui pemilik produk, 29 Okt 2026)
 
-| # | Pertanyaan | Usulan |
-| - | ---------- | ------ |
-| 1 | Katalog disajikan API (A) atau di-bundle saat build (B) | **Diputuskan 29 Okt 2026: A**, agar istilah dapat dikustomisasi (Requirement 12) |
-| 2 | Pustaka ICU Go vs subset parser buatan sendiri | Evaluasi di design; cadangan: subset parser + `golang.org/x/text/feature/plural` |
-| 3 | Struktur JSON: rata vs bersarang | **Diputuskan 29 Okt 2026: bersarang**, diakses dengan notasi titik seperti `laravel-react-i18n` |
-| 4 | Teks kaya (tebal/tautan) | Penanda tag ICU rich text dirender komponen, tanpa HTML di katalog |
-| 5 | Format angka/tanggal dalam pesan | Mulai dari argumen dan plural saja; angka/tanggal diformat di kode lewat `Intl`/`golang.org/x/text` |
-| 6 | Letak runtime frontend | `@erpora/platform-web` (sesuai CLAUDE.md) |
+| # | Pertanyaan | Keputusan |
+| - | ---------- | --------- |
+| 1 | Katalog disajikan API atau di-bundle saat build | **A: disajikan API**, agar istilah dapat dikustomisasi (R5, R12) |
+| 2 | Pustaka ICU Go vs subset parser sendiri | Dievaluasi di design; cadangan: subset parser + `golang.org/x/text/feature/plural` `[TODO: verifikasi]` |
+| 3 | Struktur JSON | **Bersarang**, akses notasi titik; segmen boleh bertitik dengan perataan dan cek tabrakan (R1.4-R1.7) |
+| 4 | Teks kaya (tebal/tautan) | Penanda tag ICU yang dirender komponen, tanpa HTML di katalog (R2.4) |
+| 5 | Format angka/tanggal dalam pesan | Argumen dan plural saja; angka/tanggal diformat di kode lewat `Intl`/`golang.org/x/text` (R2.6) |
+| 6 | Letak runtime frontend | `@erpora/platform-web` (R6.7) |
 | 7 | Urutan terhadap M3a | Spec ini lebih dulu; M3a memakai runtime-nya |
-| 8 | Cakupan override (R12.10) | API dan CLI di spec ini; UI manajemen istilah di blok lain |
-| 9 | Fallback ke bahasa tertentu (R3.5–R3.9) | Registri bahasa di repo dengan `fallback` per bahasa; pengaturan fallback per instalasi ditunda |
-| 10 | Bahasa lengkap vs `partial` (R8.4) | Lengkap secara bawaan (gagal bila kunci hilang); `partial: true` hanya untuk bahasa yang sengaja belum selesai |
+| 8 | Cakupan override | API dan CLI di spec ini; UI manajemen istilah di blok lain (R12.10) |
+| 9 | Fallback | Registri bahasa **di repo saja**; tidak ada fallback per instalasi (R3.5-R3.9) |
+| 10 | Bahasa lengkap vs `partial`; severity | Ketidaksesuaian antar bahasa hanya **peringatan saat build**; `--strict` opsional dan tidak dipakai gate bawaan (R8.1, R8.4, R8.5) |
