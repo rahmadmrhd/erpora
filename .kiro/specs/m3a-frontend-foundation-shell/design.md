@@ -751,3 +751,18 @@ Bila PK-1 ditolak, task 14.3 diganti menjadi: tambahkan endpoint `GET /api/platf
 - **Tipe route modul (`ModuleBaseRoute`)** bergantung pada generik TanStack Router yang rumit; task 8.3 memverifikasi lewat fixture tipe (positif dan negatif) sebelum modul referensi ditulis.
 - **happy-dom dan Radix**: sebagian perilaku (pointer capture, `ResizeObserver`, `scrollIntoView`) perlu polyfill di `test/setup.ts`; keputusan uji perilaku nyata di peramban ditunda ke Playwright (M3g).
 - **Perubahan templat generator** memengaruhi seluruh modul baru: ditutup golden test dan `task test:generator` (lama, di VPS).
+
+## Catatan integrasi (hasil task 1.1, 29 Okt 2026)
+
+Keadaan nyata prasyarat `i18n-platform` saat M3a grup 1-2 dikerjakan (diverifikasi di working tree, bukan diasumsikan). Bagian ini menggantikan placeholder "Catatan integrasi" di `tasks.md` (berkas itu tidak diubah implementer; pemilik alur menandainya).
+
+| Prasyarat (tasks.md 1.1) | Keadaan | Dampak pada M3a |
+| --- | --- | --- |
+| `packages/platform-web` ada | **Ada** (`@erpora/platform-web`, `src/i18n/format.ts`: `compile`/`format`/`formatRich`/`I18nFormatError`; test konformansi Go-TS dan test properti `fast-check` hijau; `intl-messageformat` 12.1.3 dan `@formatjs/icu-messageformat-parser` 3.5.21 dipin) | Dipakai apa adanya; belum memuat React |
+| `I18nProvider`, `useTranslation`, `createTestI18n` | **Belum ada** (i18n 12.4/12.5 menunggu toolchain React grup 2 ini) | Task 9.4 M3a (penyelarasan `I18nProvider` dengan konteks bootstrap) bergantung pada penyelesaian 12.4/12.5 i18n; belum dapat dikerjakan sebelum itu |
+| `keys.gen.ts` (platform, ui, modul) dan `i18n:generate` | **Belum ada** | `UiKey` (task 4.4) dan teks shell menunggu generator; `modules/example/web/src/i18n/keys.gen.ts` belum ada |
+| `UiLabels` (konteks tipis di `@erpora/ui`) | **Belum ada** (`packages/ui` belum ada; dibuat di 4.x) | Dibuat di task 4.4 M3a |
+| `GET /api/platform/i18n/{locale}/{namespace}` dan bidang `i18n` di bootstrap | **Belum ada** (tidak ada kode i18n di `internal/platform`; dikerjakan agent Go terpisah, inti `sdk/i18n` sedang berjalan) | Tidak menghalangi grup 1-2 (toolchain); menghalangi 9.4 dan shell |
+| `modules/example/web` | Belum ada (M3a 13.2 membuatnya) | - |
+
+Keputusan: grup 1 dan 2 serta checkpoint 3 tidak bergantung pada runtime i18n sehingga dilanjutkan; bagian yang bergantung (9.4, teks shell berbasis `keys.gen.ts`) dikerjakan setelah i18n tahap I3-I6 selesai.
