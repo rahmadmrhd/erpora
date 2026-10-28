@@ -19,34 +19,34 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
     - Commit: `docs(spec): hasil spike I0 mesin ICU`
     - _Requirements: 2.1, 11.5_
 
-- [ ] 2. Tahap I1 — Inti `sdk/i18n` (modul Go `sdk`)
-  - [ ] 2.1 `sdk/i18n/limits.go` dan tipe `Issue`
+- [x] 2. Tahap I1 — Inti `sdk/i18n` (modul Go `sdk`)
+  - [x] 2.1 `sdk/i18n/limits.go` dan tipe `Issue`
     - `Limits{MaxMessageLen, MaxDepth, MaxOptions, MaxArgs, MaxKeys, MaxFileBytes, MaxKeyLen}` dengan `DefaultLimits()` (2000, 8, 20, 32, 5000, 1 MB, 200). `Issue{File, Locale, Key, Code, Detail}` dengan kode: `invalid_json`, `duplicate_key`, `flatten_collision`, `invalid_segment`, `invalid_icu`, `html_not_allowed`, `too_large`.
     - _Requirements: 2.5, 10.4_
-  - [ ] 2.2 Fixture konformansi dan harness uji Go (merah dulu)
+  - [x] 2.2 Fixture konformansi dan harness uji Go (merah dulu)
     - Buat `sdk/i18n/testdata/conformance.json` dari kasus spike 1.1 (dibersihkan, ≥ 40 kasus: plural `id`/`en`, `select`, `=N`, `#`, escape/kutip, argumen hilang, rich, batas ukuran). Tulis `conformance_test.go` yang memuat fixture dan memanggil `Compile`+`Format` (gagal karena belum ada implementasi).
     - _Requirements: 9.1, 9.2_
-  - [ ] 2.3 Tulis test `ParseCatalog` (merah dulu)
+  - [x] 2.3 Tulis test `ParseCatalog` (merah dulu)
     - Kasus: pohon valid diratakan (`note.title`, `note.status.draft`); segmen bertitik `{"a.b":{"c":"x"}}`; tabrakan `{"a.b":{"c":..}}` vs `{"a":{"b.c":..}}` → `flatten_collision` menyebut kedua jalur; kunci ganda pada tingkat sama → `duplicate_key`; karakter terlarang, segmen kosong, `..`, awalan/akhiran titik, `::` → `invalid_segment`; pesan berisi HTML (`<script>`) → `html_not_allowed`; JSON rusak; berkas > `MaxFileBytes`; kunci > `MaxKeys`.
     - **Validates: Requirements 1.4, 1.5, 1.6, 1.7, 8.1**
-  - [ ] 2.4 Implementasi `ParseCatalog(r io.Reader, lim Limits) (Flat, []Issue)`
+  - [x] 2.4 Implementasi `ParseCatalog(r io.Reader, lim Limits) (Flat, []Issue)`
     - `sdk/i18n/catalog.go` + `flatten.go`: baca dengan `json.Decoder.Token()` (pembaca token melaporkan kunci ganda yang dibuang `encoding/json` biasa), ratakan dengan `.`, deteksi tabrakan, validasi karakter segmen, deteksi HTML (`<` hanya sebagai tag rich bernama `[a-z][a-z0-9]*`), hormati `Limits`. Tidak ada I/O selain `r`.
     - _Requirements: 1.4, 1.5, 1.6, 1.7, 2.4, 10.4_
-  - [ ] 2.5 Implementasi `Compile`/`Message`/`Format` sesuai keputusan I0
+  - [x] 2.5 Implementasi `Compile`/`Message`/`Format` sesuai keputusan I0
     - `sdk/i18n/icu.go`: antarmuka `Message{Format(loc Locale, args Args) (string, error); Params() []Param}`, `Compile(src, lim)`, `Param{Name, Kind}`. Dukungan: argumen, `plural` (kategori CLDR, `=N`, `#`), `select`, tag rich (dilucuti pada `Format` teks polos), kutip ICU. `selectordinal` dan `{x, number}` ditolak. Argumen hilang → placeholder apa adanya (bukan panic). Hasil harus meloloskan fixture 2.2.
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.6_
-  - [ ] 2.6 `Locale`, konteks, dan `T`
+  - [x] 2.6 `Locale`, konteks, dan `T`
     - `sdk/i18n/localizer.go`: `type Locale string`, `WithLocale`, `WithScope`, antarmuka `Resolver` kecil yang disuntik platform (`Resolve(ctx, ns, key, loc) (src string, ok bool)`), `T(ctx, key, args...)` (kunci relatif ke scope; `ui::`/`platform::` absolut; namespace modul lain ditolak → `ns::key` + peringatan). Aman untuk banyak goroutine, tidak pernah panik (recover mengembalikan kunci).
     - _Requirements: 4.1, 4.6_
-  - [ ] 2.7 Tulis test properti dan fuzz inti SDK
+  - [x] 2.7 Tulis test properti dan fuzz inti SDK
     - **P1 Perataan deterministik** (`testing/quick`: pohon acak tanpa tabrakan → setiap daun dapat dicari lewat kunci lengkap; dua jalur sama → selalu `flatten_collision`).
     - **P4 Format total dan terbatas** (`go test -fuzz` pada `Compile`/`Format`: tidak panik, selesai dalam batas waktu, input di atas batas ditolak oleh `Compile`).
     - **P12 Namespace tertutup** (`T` dengan scope `m` tidak pernah memberi pesan dari namespace modul lain).
     - **Validates: Requirements 1.6, 2.5, 4.1, 4.6, 10.4**
-  - [ ] 2.8 Naikkan `golang.org/x/text` di `sdk/go.mod` (indirect `v0.20.0` → versi root `v0.43.0` atau sesuai `go mod tidy`), jalankan `task check:gomod check:gowork-off`, dan naikkan `SDKVersion` minor.
+  - [x] 2.8 Naikkan `golang.org/x/text` di `sdk/go.mod` (indirect `v0.20.0` → versi root `v0.43.0` atau sesuai `go mod tidy`), jalankan `task check:gomod check:gowork-off`, dan (keputusan G9, 29 Okt 2026) `SDKVersion` tetap `0.1.0`: penambahan aditif SDK tidak menaikkan versi selama SDK belum di-tag (ADR-0006 butir 2 dan 5; preseden `ContractSource`), dan `^0.1` pada manifest modul akan putus bila naik ke 0.2.0.
     - _Requirements: 4.6_
 
-- [ ] 3. Checkpoint — inti SDK
+- [x] 3. Checkpoint — inti SDK
   - Jalankan `task lint arch check:gowork-off test` dan pastikan `sdk/i18n` hijau (termasuk fuzz singkat). Tanyakan ke user bila ada keraguan.
 
 - [ ] 4. Tahap I2 — Runtime katalog backend (tanpa override)
