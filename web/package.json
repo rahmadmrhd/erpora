@@ -10,13 +10,13 @@
     "deps": "bun deps.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.2",
+    "@biomejs/biome": "2.6.3",
     "@stoplight/spectral-core": "1.24.0",
     "@stoplight/spectral-functions": "1.11.0",
     "@stoplight/spectral-parsers": "1.0.5",
     "@stoplight/spectral-ref-resolver": "1.0.5",
     "@stoplight/spectral-rulesets": "1.23.0",
-    "@types/bun": "1.4.3",
+    "@types/bun": "1.4.4",
     "dependency-cruiser": "18.7.0",
     "json-schema-to-typescript": "16.0.0",
     "openapi-typescript": "7.13.0",
