@@ -199,7 +199,7 @@ M3a adalah blok pertama M3 (frontend core, PRD-000 Q33). Ia membangun fondasi ya
 1. THE shell dan komponen fondasi SHALL dapat dioperasikan dengan keyboard, memakai peran dan label ARIA yang benar, dan menghormati `prefers-reduced-motion`.
 2. THE aplikasi SHALL tidak menyimpan rahasia, token, atau data sensitif di `localStorage`/`sessionStorage`; hanya preferensi UI (tema, bahasa, keadaan sidebar).
 3. THE permission di frontend SHALL hanya dipakai untuk UX; setiap keputusan akses tetap ditegakkan backend.
-4. THE setiap teks UI SHALL melalui kunci terjemahan dari runtime `i18n-platform` (Requirement 12.5) dan SHALL NOT memakai emoji.
+4. THE setiap teks UI SHALL melalui kunci terjemahan dari runtime `i18n-platform` (Requirement 12.5) dan SHALL NOT memakai emoji; satu-satunya pengecualian adalah layar "bootstrap gagal" yang memakai kamus bawaan id/en karena runtime i18n membutuhkan bootstrap (PRD-000 Q36).
 5. THE aplikasi SHALL menampilkan batas galat (error boundary) di shell sehingga galat satu halaman tidak merobohkan sidebar dan navbar.
 
 ### Requirement 15: Gate pengerjaan M3a
