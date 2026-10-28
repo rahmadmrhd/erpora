@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -20,7 +23,8 @@ func clearOtelEnv(t *testing.T) {
 	}
 }
 
-func TestSetup_NoEndpointIsNoop(t *testing.T) {
+// K5: tanpa endpoint, provider SDK tanpa exporter: tidak ada koneksi keluar, tetapi span punya ID valid.
+func TestSetup_NoEndpointHasValidSpanIDsWithoutExporter(t *testing.T) {
 	clearOtelEnv(t)
 	p, shutdown, err := Setup(context.Background(), Options{ServiceVersion: "1", Environment: "test"})
 	if err != nil {
@@ -29,9 +33,18 @@ func TestSetup_NoEndpointIsNoop(t *testing.T) {
 	if p.Enabled {
 		t.Fatal("Enabled must be false")
 	}
-	if _, ok := p.Tracer.(noop.TracerProvider); !ok {
-		t.Fatalf("tracer provider is %T, want noop", p.Tracer)
+	if _, ok := p.Tracer.(noop.TracerProvider); ok {
+		t.Fatal("tracer provider tidak boleh noop: ID span harus valid")
 	}
+	if _, ok := p.Tracer.(*sdktrace.TracerProvider); !ok {
+		t.Fatalf("tracer provider is %T, want *sdktrace.TracerProvider", p.Tracer)
+	}
+	// Provider dibuat tanpa exporter/span processor (lihat Setup), jadi tidak ada ekspor atau koneksi keluar.
+	_, span := p.Tracer.Tracer("t").Start(context.Background(), "op")
+	if !span.SpanContext().TraceID().IsValid() || !span.SpanContext().SpanID().IsValid() {
+		t.Fatalf("span context tidak valid: %v", span.SpanContext())
+	}
+	span.End()
 	if err := shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -144,5 +157,72 @@ func TestLogger_AddsRequestID(t *testing.T) {
 	}
 	if rec["request_id"] != "req-123" {
 		t.Fatalf("rec = %v", rec)
+	}
+}
+
+// Q26 butir 3: TraceHandler menjadi sumber tunggal erp.module.key dari context, tanpa menggandakan
+// atribut yang sudah disertakan pemanggil.
+func TestTraceHandler_ModuleKeyFromContextNoDuplicate(t *testing.T) {
+	var buf bytes.Buffer
+	log := NewLogger(&buf, "text", slog.LevelDebug)
+	ctx := WithModule(context.Background(), "acme.notes")
+	log.InfoContext(ctx, "dari context")
+	log.InfoContext(ctx, "eksplisit", "erp.module.key", "acme.notes")
+	log.InfoContext(context.Background(), "tanpa modul")
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("lines = %q", lines)
+	}
+	if strings.Count(lines[0], "erp.module.key=acme.notes") != 1 {
+		t.Errorf("dari context: %s", lines[0])
+	}
+	if strings.Count(lines[1], "erp.module.key=") != 1 {
+		t.Errorf("tidak boleh ganda: %s", lines[1])
+	}
+	if strings.Contains(lines[2], "erp.module.key") {
+		t.Errorf("tanpa modul: %s", lines[2])
+	}
+}
+
+type fakeSpanExporter struct{ shutdown int }
+
+func (f *fakeSpanExporter) ExportSpans(context.Context, []sdktrace.ReadOnlySpan) error { return nil }
+func (f *fakeSpanExporter) Shutdown(context.Context) error                             { f.shutdown++; return nil }
+
+// Exporter metrik gagal dibuat -> exporter span yang sudah dibuat harus di-Shutdown (tanpa kebocoran).
+func TestSetup_MetricExporterFailureShutsDownSpanExporter(t *testing.T) {
+	clearOtelEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	span := &fakeSpanExporter{}
+	wantErr := errors.New("metrik gagal")
+	orig := newExporters
+	newExporters = func(bool) exporterFactory {
+		return exporterFactory{
+			span:   func(context.Context) (sdktrace.SpanExporter, error) { return span, nil },
+			metric: func(context.Context) (sdkmetric.Exporter, error) { return nil, wantErr },
+		}
+	}
+	defer func() { newExporters = orig }()
+
+	_, _, err := Setup(context.Background(), Options{})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+	if span.shutdown != 1 {
+		t.Fatalf("Shutdown exporter span dipanggil %d kali, want 1", span.shutdown)
+	}
+}
+
+func TestSetup_SpanExporterFailureReturnsError(t *testing.T) {
+	clearOtelEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	wantErr := errors.New("span gagal")
+	orig := newExporters
+	newExporters = func(bool) exporterFactory {
+		return exporterFactory{span: func(context.Context) (sdktrace.SpanExporter, error) { return nil, wantErr }}
+	}
+	defer func() { newExporters = orig }()
+	if _, _, err := Setup(context.Background(), Options{}); !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v", err)
 	}
 }

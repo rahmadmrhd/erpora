@@ -158,7 +158,8 @@ func TestRules_ReservedSlug(t *testing.T) {
 }
 
 func TestRules_InvalidRoute(t *testing.T) {
-	paths := []string{"x", "", "/../x", "/a/../b", "//x", "example.com/x"}
+	// Tanpa trailing slash (api-guidelines §2): "/" dan "/x/" menjadi subtree ServeMux, jadi ditolak.
+	paths := []string{"x", "", "/../x", "/a/../b", "//x", "example.com/x", "/", "/items/"}
 	for _, p := range paths {
 		t.Run("path="+p, func(t *testing.T) {
 			_, err := Build(testOpts(), newFake(spec("acme.a", "a"), registerWith(func(r module.Registrar) {
@@ -198,4 +199,17 @@ func TestRules_Commands(t *testing.T) {
 		r.Command(module.Command{Name: "recount", Run: run})
 	})))
 	expect(t, problemsOf(t, err), "command_conflict", "acme.a")
+}
+
+// Pola rusak yang datang SETELAH route valid harus invalid_route, bukan route_conflict.
+func TestRules_BrokenPatternAfterValidRouteIsInvalidNotConflict(t *testing.T) {
+	_, err := Build(testOpts(), newFake(spec("acme.a", "a", "a.x.read"), registerWith(func(r module.Registrar) {
+		r.Handle("GET", "/items", "a.x.read", okHandler)
+		r.Handle("GET", "/{broken", "a.x.read", okHandler)
+	})))
+	ps := problemsOf(t, err)
+	expect(t, ps, "invalid_route", "acme.a")
+	if _, bad := findProblem(ps, "route_conflict"); bad {
+		t.Fatalf("pola rusak tidak boleh dilaporkan sebagai route_conflict: %v", ps)
+	}
 }

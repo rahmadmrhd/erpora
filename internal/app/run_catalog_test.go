@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestRun_BrokenCatalogExits2BeforeDB(t *testing.T) {
 		Env:         config.EnvDevelopment, LogFormat: "text", TenancyMode: "single", HTTPAddr: "127.0.0.1:0",
 		AuthzStub: "deny",
 	}
-	err := Run(context.Background(), cfg, io.Discard)
+	err := Run(context.Background(), cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var xe *ExitError
 	if !errors.As(err, &xe) || xe.Code != 2 {
 		t.Fatalf("err = %v, diharapkan *ExitError{Code: 2}", err)

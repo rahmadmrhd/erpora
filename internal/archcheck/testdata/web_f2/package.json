@@ -1,0 +1,11 @@
+{
+  "name": "@erpora/module-exampleaddon",
+  "version": "1.0.0",
+  "dependencies": {
+    "@erpora/ui": "workspace:*",
+    "@erpora/module-example": "workspace:*"
+  },
+  "peerDependencies": {
+    "@erpora/module-lain": "workspace:*"
+  }
+}

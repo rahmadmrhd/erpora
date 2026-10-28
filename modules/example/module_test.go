@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"io/fs"
-	"net/http"
 	"testing"
 
 	"erpora/sdk/module"
+	"erpora/sdk/module/moduletest"
 )
 
 var (
@@ -27,35 +27,24 @@ func TestManifest_Parses(t *testing.T) {
 
 func TestMigrations_Embedded(t *testing.T) {
 	names, err := fs.Glob(New().Migrations(), "*.sql")
-	if err != nil || len(names) != 1 || names[0] != "0001_create_example_notes.sql" {
+	if err != nil || len(names) != 2 || names[0] != "0001_create_example_notes.sql" || names[1] != "0002_add_example_notes_version.sql" {
 		t.Fatalf("names = %v err = %v", names, err)
 	}
 }
 
-type recRegistrar struct {
-	routes   map[string]string // "METHOD path" -> permission
-	commands []module.Command
-}
-
-func (r *recRegistrar) Handle(method, path, permission string, _ http.Handler) {
-	r.routes[method+" "+path] = permission
-}
-func (r *recRegistrar) Public(string, string, http.Handler) {}
-func (r *recRegistrar) Command(c module.Command)            { r.commands = append(r.commands, c) }
-
 func TestRegister_RoutesAndCommand(t *testing.T) {
-	r := &recRegistrar{routes: map[string]string{}}
+	r := moduletest.NewRecorder()
 	if err := New().Register(r); err != nil {
 		t.Fatal(err)
 	}
-	if r.routes["GET /ping"] != "example.ping.read" || r.routes["GET /notes"] != "example.notes.read" {
-		t.Errorf("routes = %v", r.routes)
+	if r.Permission("GET", "/ping") != "example.ping.read" || r.Permission("GET", "/notes") != "example.notes.read" {
+		t.Errorf("routes = %+v", r.Routes)
 	}
-	if len(r.commands) != 1 || r.commands[0].Name != "recount" || r.commands[0].Run == nil {
-		t.Fatalf("commands = %+v", r.commands)
+	if len(r.Commands) != 1 || r.Commands[0].Name != "recount" || r.Commands[0].Run == nil {
+		t.Fatalf("commands = %+v", r.Commands)
 	}
 	// Tanpa konteks tenant, command gagal dengan error (bukan panic).
-	if err := r.commands[0].Run(context.Background(), module.Invocation{Out: &bytes.Buffer{}}); err == nil {
+	if err := r.Commands[0].Run(context.Background(), module.Invocation{Out: &bytes.Buffer{}}); err == nil {
 		t.Error("recount tanpa tenant harus error")
 	}
 }

@@ -45,8 +45,9 @@ func recoverMW(log *slog.Logger, next http.Handler) http.Handler {
 			// Hanya tipe panic yang dicatat di span (nilai panic bisa memuat data).
 			span.RecordError(fmt.Errorf("panic dalam handler: %T", rec))
 			span.SetStatus(codes.Error, "panic")
+			// Nilai panic tidak dicatat (bisa memuat rahasia): hanya tipe + stack, sama seperti span.
 			log.ErrorContext(r.Context(), "panic dalam handler",
-				"panic", rec, "stack", string(debug.Stack()))
+				"panic_type", fmt.Sprintf("%T", rec), "stack", string(debug.Stack()))
 			if sw.wrote {
 				panic(http.ErrAbortHandler)
 			}
@@ -77,7 +78,7 @@ func requestScope(log *slog.Logger, pattern string, next http.Handler) http.Hand
 				"status", status, "duration_ms", time.Since(start).Milliseconds(),
 			}
 			if meta.module != "" {
-				attrs = append(attrs, "module", meta.module)
+				attrs = append(attrs, "erp.module.key", meta.module)
 			}
 			log.InfoContext(r.Context(), "http request", attrs...)
 		}()

@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,5 +45,21 @@ func TestSummary_ContractErrorIs500WithoutDetail(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "rahasia") {
 		t.Errorf("detail bocor: %s", rec.Body.String())
+	}
+}
+
+// api-guidelines §8: detail 5xx ada di log (bukan di respons).
+func TestSummary_ContractErrorIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	rec := httptest.NewRecorder()
+	New(fakeNotes{err: errors.New("SELECT rahasia")}).Summary(rec, httptest.NewRequest(http.MethodGet, "/summary", nil))
+	if rec.Code != 500 || strings.Contains(rec.Body.String(), "rahasia") {
+		t.Fatalf("respons harus generik: %d %s", rec.Code, rec.Body.String())
+	}
+	if out := buf.String(); !strings.Contains(out, "level=ERROR") || !strings.Contains(out, "SELECT rahasia") {
+		t.Fatalf("error tidak tercatat di log: %q", out)
 	}
 }

@@ -9,12 +9,15 @@ import (
 	"time"
 )
 
-const notBuiltPage = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>ERP</title></head>` +
-	`<body><h1>ERP</h1><p>frontend belum di-build. Jalankan <code>task build</code> atau <code>bun run build</code> di folder web.</p></body></html>`
+const notBuiltPage = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>ERPora</title></head>` +
+	`<body><h1>ERPora</h1><p>frontend belum di-build. Jalankan <code>task build</code> atau <code>bun run build</code> di folder web.</p></body></html>`
 
 // NewSPA melayani aset statis dan fallback index.html untuk rute SPA.
-// Aturan: file ada -> sajikan; /assets/* tidak ada -> 404; Accept memuat text/html -> index.html; selain itu 404.
-func NewSPA(assets fs.FS) http.Handler {
+// Aturan (PRD-000 FR-04): file ada -> sajikan; /assets/* tidak ada -> 404; /api/* -> 404 (tidak pernah index.html);
+// path tanpa ekstensi -> index.html apa pun Accept-nya (mis. curl); path berekstensi -> index.html hanya bila
+// Accept memuat text/html, selain itu 404. dev=true menampilkan halaman "frontend belum di-build" (FR-12) saat
+// index.html tidak ada; di luar dev respons 404 JSON.
+func NewSPA(assets fs.FS, dev bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -36,7 +39,11 @@ func NewSPA(assets fs.FS) http.Handler {
 			notFound(w, r)
 			return
 		}
-		isAsset := strings.HasPrefix(clean, "/assets/")
+		if clean == "/api" || strings.HasPrefix(clean, "/api/") {
+			notFound(w, r)
+			return
+		}
+		isAsset := clean == "/assets" || strings.HasPrefix(clean, "/assets/")
 
 		if b, ok := readFile(assets, name); ok {
 			serve(w, r, name, b, isAsset)
@@ -47,13 +54,14 @@ func NewSPA(assets fs.FS) http.Handler {
 			return
 		}
 		index, built := readFile(assets, "index.html")
-		wantsHTML := strings.Contains(r.Header.Get("Accept"), "text/html")
+		// Tanpa ekstensi = rute SPA; berekstensi hanya bila klien meminta HTML.
+		spaRoute := path.Ext(clean) == "" || strings.Contains(r.Header.Get("Accept"), "text/html")
 		switch {
-		case !built && (clean == "/" || wantsHTML):
+		case !built && dev && spaRoute:
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-cache")
 			_, _ = w.Write([]byte(notBuiltPage))
-		case built && wantsHTML:
+		case built && spaRoute:
 			serve(w, r, "index.html", index, false)
 		default:
 			notFound(w, r)

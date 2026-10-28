@@ -118,7 +118,7 @@ func (m *Module) Register(r module.Registrar) error {
 
 Pelanggaran dikumpulkan dan dilaporkan sekaligus saat startup dengan kode problem, misalnya `permission_undeclared`, `invalid_route`, `route_conflict`, `invalid_command`, dan `command_conflict`. Tabel lengkap ada di `internal/platform/modules/registry/errors.go`.
 
-Urutan middleware pada setiap route adalah `recover`, `otel`, log, authN (kecuali `Public`), tenant context, guard status modul, permission, lalu handler. Modul tidak perlu menulis middleware sendiri.
+Urutan middleware pada setiap route adalah `otel`, `recover`, log, authN (kecuali `Public`), tenant context, guard status modul, permission, lalu handler. Modul tidak perlu menulis middleware sendiri.
 
 Catatan M2a: command tercatat di `Registry.Commands()`, tetapi belum dihubungkan ke CLI cobra. Menjalankan `erpora example:recount` belum tersedia.
 

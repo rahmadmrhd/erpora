@@ -1,6 +1,8 @@
 package archcheck
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -31,10 +33,10 @@ func repoWith(pkgs ...Package) Repo {
 		Root:     "x",
 		Packages: pkgs,
 		Mods: []GoMod{
-			{Path: root, GoVersion: "1.27", Toolchain: "go1.27.2", Requires: []string{sdk, example}},
-			{Path: sdk, GoVersion: "1.27", Toolchain: "go1.27.2"},
-			{Path: example, GoVersion: "1.27", Toolchain: "go1.27.2", Requires: []string{sdk}},
-			{Path: addon, GoVersion: "1.27", Toolchain: "go1.27.2", Requires: []string{sdk}},
+			{Path: root, GoVersion: "1.27", Toolchain: "go1.27.3", Requires: []string{sdk, example}},
+			{Path: sdk, GoVersion: "1.27", Toolchain: "go1.27.3"},
+			{Path: example, GoVersion: "1.27", Toolchain: "go1.27.3", Requires: []string{sdk}},
+			{Path: addon, GoVersion: "1.27", Toolchain: "go1.27.3", Requires: []string{sdk}},
 		},
 		Manifests: map[string]Manifest{
 			example: {Key: "acme.example", Slug: "example", Dependencies: []string{"platform.core"}},
@@ -118,7 +120,91 @@ func TestD8_ImportNotInManifestDependencies(t *testing.T) {
 	m := r.Manifests[addon]
 	m.Dependencies = append(m.Dependencies, "acme.example")
 	r.Manifests[addon] = m
+	r.Mods[3].Requires = []string{sdk, example}
 	assertNone(t, Check(r), "D8")
+}
+
+func TestD8_TestFileImportsAreChecked(t *testing.T) {
+	p := pkg(addon + "/internal/application")
+	p.TestImports = []string{example + "/contract"}
+	assertViolation(t, Check(repoWith(p)), "D8")
+	p2 := pkg(root + "/internal/platform/x")
+	p2.TestImports = []string{example}
+	assertViolation(t, Check(repoWith(p2)), "D2")
+	p3 := pkg(root + "/internal/other")
+	p3.TestImports = []string{example}
+	assertViolation(t, Check(repoWith(p3)), "D7")
+	// Aturan lain tetap hanya non-test: D3b tidak menilai impor test.
+	p4 := pkg(example + "/internal/application")
+	p4.TestImports = []string{"gorm.io/gorm"}
+	assertNone(t, Check(repoWith(p4)), "D3b")
+}
+
+func TestD8_ManifestDependencyMissingFromGoModRequire(t *testing.T) {
+	r := repoWith()
+	m := r.Manifests[addon]
+	m.Dependencies = append(m.Dependencies, "acme.example")
+	r.Manifests[addon] = m
+	assertViolation(t, Check(r), "D8") // addon tidak me-require example
+	r.Mods[3].Requires = []string{sdk, example}
+	assertNone(t, Check(r), "D8")
+}
+
+func TestD8_OptionalManifestDependencyNeedNotBeRequired(t *testing.T) {
+	r := repoWith()
+	m := r.Manifests[addon]
+	m.Dependencies = append(m.Dependencies, "acme.example")
+	m.Optional = map[string]bool{"acme.example": true}
+	r.Manifests[addon] = m
+	// Q28: dependensi optional boleh tidak di-require (go mod tidy membuangnya bila kodenya tidak diimpor).
+	assertNone(t, Check(r), "D8")
+	// Bila di-require, tetap sah.
+	r.Mods[3].Requires = []string{sdk, example}
+	assertNone(t, Check(r), "D8")
+}
+
+func TestLoadManifest_ReadsOptionalDependencies(t *testing.T) {
+	dir := t.TempDir()
+	const body = `{"key":"acme.x","slug":"x","dependencies":[` +
+		`{"module":"platform.core","version":"^0.1","optional":false},` +
+		`{"module":"acme.y","version":"^1.0","optional":true}]}`
+	if err := os.WriteFile(filepath.Join(dir, "module.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, ok, err := loadManifest(dir)
+	if err != nil || !ok {
+		t.Fatal(err, ok)
+	}
+	if !m.Optional["acme.y"] || m.Optional["platform.core"] || len(m.Dependencies) != 2 {
+		t.Fatalf("manifest = %+v", m)
+	}
+}
+
+func TestD8_IndirectRequireIgnored(t *testing.T) {
+	r := repoWith()
+	r.Mods[3].Requires = []string{sdk, example}
+	r.Mods[3].Indirect = map[string]bool{example: true}
+	assertNone(t, Check(r), "D8")
+}
+
+func TestD1_ModuleMustUseOtherModuleContractOnly(t *testing.T) {
+	r := repoWith(pkg(addon+"/internal/application", example))
+	m := r.Manifests[addon]
+	m.Dependencies = append(m.Dependencies, "acme.example")
+	r.Manifests[addon] = m
+	r.Mods[3].Requires = []string{sdk, example}
+	assertViolation(t, Check(r), "D1")
+	assertViolation(t, Check(repoWith(pkg(addon+"/x", example+"/internal/domain"))), "D1")
+	r = repoWith(pkg(addon+"/internal/application", example+"/contract"))
+	assertNone(t, Check(r), "D1")
+	assertNone(t, Check(repoWith(pkg(example+"/internal/application", example+"/internal/domain"))), "D1")
+}
+
+func TestD3b_SDKDataOnlyFromModuleInfrastructure(t *testing.T) {
+	assertViolation(t, Check(repoWith(pkg(example+"/internal/application", sdk+"/data"))), "D3b")
+	assertViolation(t, Check(repoWith(pkg(example+"/internal/presentation/http", sdk+"/data"))), "D3b")
+	assertNone(t, Check(repoWith(pkg(example+"/internal/infrastructure", sdk+"/data"))), "D3b")
+	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/settings", sdk+"/data"))), "D3b")
 }
 
 func TestD8_GoModRequireNotInManifest(t *testing.T) {
@@ -156,6 +242,46 @@ func TestDBOpen_OnlyDatabasePackage(t *testing.T) {
 	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/database", "gorm.io/driver/postgres"))), "DB-OPEN")
 }
 
+func TestDBOpen_ExtendedImports(t *testing.T) {
+	for _, imp := range []string{
+		"github.com/jackc/pgx/v5", "github.com/jackc/pgx/v5/stdlib", "github.com/jackc/pgx/v5/pgxpool",
+		"gorm.io/driver/mysql", "gorm.io/driver/sqlite",
+		"github.com/jackc/pgx/v5/pgconn", "github.com/jackc/pgx/v5/pgtype", "github.com/jackc/pgx/v4", "github.com/lib/pq",
+	} {
+		assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/settings", imp))), "DB-OPEN")
+		assertNone(t, Check(repoWith(pkg(root+"/internal/platform/database", imp))), "DB-OPEN")
+	}
+	// database/sql: allowlist eksplisit internal/platform/database dan internal/platform/migrate (FR-21).
+	for _, p := range []string{
+		example + "/internal/infrastructure", root + "/internal/platform/settings", root + "/internal/platform/modules/store",
+		sdk + "/data", root + "/internal/app",
+	} {
+		assertViolation(t, Check(repoWith(pkg(p, "database/sql"))), "DB-OPEN")
+	}
+	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/settings", "database/sql/driver"))), "DB-OPEN")
+	for _, p := range []string{root + "/internal/platform/migrate", root + "/internal/platform/database"} {
+		assertNone(t, Check(repoWith(pkg(p, "database/sql"))), "DB-OPEN")
+	}
+	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/database", "github.com/jackc/pgx/v5/pgconn"))), "DB-OPEN")
+}
+
+func TestD10_ExtendedRouterList(t *testing.T) {
+	for _, imp := range []string{
+		"github.com/uptrace/bunrouter", "github.com/dimfeld/httptreemux/v5", "goji.io/pat",
+		"github.com/go-zoo/bone", "github.com/bmizerany/pat", "github.com/beego/beego/v2",
+		"github.com/gofiber/fiber/v2", "github.com/go-martini/martini", "github.com/julienschmidt/httprouter",
+		"github.com/gorilla/mux", "github.com/go-chi/chi/v5", "github.com/labstack/echo/v4", "github.com/gin-gonic/gin",
+	} {
+		assertViolation(t, Check(repoWith(pkg(example+"/internal/presentation/http", imp))), "D10")
+	}
+}
+
+func TestAutoMigrate_MethodValueDetected(t *testing.T) {
+	bad := pkg(root + "/internal/platform/x")
+	bad.Dir, bad.GoFiles = "testdata/automigrate_methodvalue", []string{"bad.go"}
+	assertViolation(t, Check(repoWith(bad)), "AUTOMIGRATE")
+}
+
 func TestAutoMigrate_InNonTestFile(t *testing.T) {
 	bad := pkg(root + "/internal/platform/x")
 	bad.Dir, bad.GoFiles = "testdata/automigrate_bad", []string{"bad.go"}
@@ -173,6 +299,91 @@ func TestGoVersion_Mismatch(t *testing.T) {
 	r = repoWith()
 	r.Mods[1].Toolchain = "go1.26.0"
 	assertViolation(t, Check(r), "GOVERSION")
+}
+
+func TestGoVersion_ExactValues(t *testing.T) {
+	r := repoWith()
+	for i := range r.Mods {
+		r.Mods[i].GoVersion, r.Mods[i].Toolchain = "1.28", "go1.28.0" // seragam tetapi bukan nilai wajib
+	}
+	assertViolation(t, Check(r), "GOVERSION")
+	r = repoWith()
+	r.Work = &Work{Enabled: true, GoVersion: "1.27", Toolchain: "go1.27.2"}
+	assertViolation(t, Check(r), "GOVERSION")
+	r.Work = &Work{Enabled: true, GoVersion: "1.26", Toolchain: "go1.27.3"}
+	assertViolation(t, Check(r), "GOVERSION")
+	r.Work = &Work{Enabled: true, GoVersion: "1.27", Toolchain: "go1.27.3"}
+	assertNone(t, Check(r), "GOVERSION")
+}
+
+func TestGoWork_CompletenessAndEnabled(t *testing.T) {
+	r := repoWith()
+	r.Work = &Work{Enabled: true, GoVersion: "1.27", Toolchain: "go1.27.3",
+		Use: []string{"/r", "/r/sdk"}, ModDirs: []string{"/r/sdk", "/r/modules/baru"}}
+	vs := Check(r)
+	assertViolation(t, vs, "GOWORK")
+	if !strings.Contains(vs[0].Detail+vs[0].Package, "baru") {
+		t.Fatalf("pesan harus menyebut modul yang hilang: %+v", vs)
+	}
+	r.Work.Use = append(r.Work.Use, "/r/modules/baru")
+	assertNone(t, Check(r), "GOWORK")
+
+	r.Work = &Work{Enabled: false}
+	vs = Check(r)
+	assertViolation(t, vs, "GOWORK")
+	if !strings.Contains(vs[0].Detail, "workspace") {
+		t.Fatalf("pesan kurang jelas: %+v", vs)
+	}
+}
+
+func TestF2_WebDependenciesMustBeSubsetOfManifest(t *testing.T) {
+	r := repoWith()
+	m := r.Manifests[addon]
+	m.Dependencies = append(m.Dependencies, "acme.example")
+	r.Manifests[addon] = m
+	r.Mods[3].Requires = []string{sdk, example}
+
+	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: []string{"@erpora/module-example"}}}
+	assertNone(t, Check(r), "F2")
+
+	// dependency package.json yang tidak ada di manifest
+	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: []string{"@erpora/module-example", "@erpora/module-lain"}}}
+	assertViolation(t, Check(r), "F2")
+	// dependency manifest yang tidak dipakai frontend (mis. modul backend-only) boleh absen dari package.json (Q27)
+	r.Web = map[string]WebPackage{addon: {Name: "@erpora/module-exampleaddon", ModuleDeps: nil}}
+	assertNone(t, Check(r), "F2")
+	// nama package tidak sesuai nama direktori modul (kosong atau salah)
+	for _, name := range []string{"", "@erpora/module-example-addon", "@erpora/other", "@erpora/module-example"} {
+		r.Web = map[string]WebPackage{addon: {Name: name, ModuleDeps: []string{"@erpora/module-example"}}}
+		vs := Check(r)
+		assertViolation(t, vs, "F2")
+		if !strings.Contains(vs[0].Detail, "nama package") {
+			t.Errorf("name=%q: pesan = %+v", name, vs)
+		}
+	}
+}
+
+func TestParseWebPackage_Fixture(t *testing.T) {
+	data, err := os.ReadFile("testdata/web_f2/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wp, ok, err := parseWebPackage(data)
+	if err != nil || !ok {
+		t.Fatal(err, ok)
+	}
+	want := []string{"@erpora/module-example", "@erpora/module-lain"}
+	if strings.Join(wp.ModuleDeps, ",") != strings.Join(want, ",") {
+		t.Fatalf("ModuleDeps = %v, want %v", wp.ModuleDeps, want)
+	}
+	// Fixture ini melanggar F2 terhadap manifest exampleaddon yang hanya bergantung pada acme.example.
+	r := repoWith()
+	m := r.Manifests[addon]
+	m.Dependencies = append(m.Dependencies, "acme.example")
+	r.Manifests[addon] = m
+	r.Mods[3].Requires = []string{sdk, example}
+	r.Web = map[string]WebPackage{addon: wp}
+	assertViolation(t, Check(r), "F2")
 }
 
 func TestCheck_CleanRepoHasNoViolations(t *testing.T) {

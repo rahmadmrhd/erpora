@@ -37,9 +37,15 @@ type ExitError struct {
 func (e *ExitError) Error() string { return e.Err.Error() }
 func (e *ExitError) Unwrap() error { return e.Err }
 
+// NewLogger membuat logger proses (trace-aware) sesuai konfigurasi. Perintah serve memakainya,
+// memasangnya sebagai slog.Default() (agar log handler modul seragam), lalu meneruskannya ke Run.
+func NewLogger(cfg config.Config, w io.Writer) *slog.Logger {
+	return observability.NewLogger(w, cfg.LogFormat, slog.LevelInfo)
+}
+
 // Run menjalankan server sampai ctx dibatalkan. serve tidak pernah menulis platform_state.
-func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
-	log := observability.NewLogger(stdout, cfg.LogFormat, slog.LevelInfo)
+// Run tidak mengubah slog.Default(); pemanggil (perintah serve) yang memasangnya.
+func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	// Katalog modul divalidasi sebelum DB dibuka; katalog rusak adalah bug build (exit 2).
 	reg, err := BuildRegistry()
@@ -96,6 +102,7 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		Readiness:  dbReadiness{db: db},
 		Assets:     web.Dist(),
 		AppVersion: buildinfo.Version,
+		Dev:        cfg.Env == config.EnvDevelopment,
 		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
 		Authenticate: func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +112,7 @@ func Run(ctx context.Context, cfg config.Config, stdout io.Writer) error {
 		},
 	})
 	// Snapshot kosong: semua modul berstatus available (404 module_not_found) sampai M2b mengisinya.
-	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.Stub{Mode: authorization.StubMode(cfg.AuthzStub), Log: log}, log)
+	runtime.Mount(router, reg, runtime.NewSnapshot(), authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log)
 	registerTestRoutes(router)
 	srv := httpserver.New(cfg.HTTPAddr, router)
 

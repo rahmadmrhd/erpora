@@ -14,7 +14,7 @@ Aplikasi ini didistribusikan sebagai **satu binary** (`erpora` / `erpora.exe`). 
 | --- | --- | --- |
 | VPS / bare metal Linux (x86_64, arm64) | ✅ Direkomendasikan | systemd + Caddy |
 | Windows Server / Windows 10+ | ✅ Didukung | Dijalankan sebagai Windows service (§5) |
-| Container (Docker/Podman) | ✅ Didukung | Image dari `infrastructure/docker/Dockerfile` |
+| Container (Docker/Podman) | ✅ Didukung 🔶 | Image dari `infrastructure/docker/Dockerfile` (🔶 belum tersedia) |
 | PaaS berbasis container (Fly.io, Railway, Render, dsb.) | ✅ Didukung | Harus menyediakan cara menjalankan perintah one-off (`erpora migrate`, `erpora modules`) |
 | **Shared hosting PHP (cPanel, DirectAdmin, Plesk shared)** | ❌ **Tidak didukung** | Lihat §1.3 |
 
@@ -71,13 +71,15 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 | Variabel | Wajib | Default | Keterangan |
 | --- | --- | --- | --- |
 | `ERP_DATABASE_URL` | ✅ | — | `postgres://erp:PASSWORD@localhost:5432/erp?sslmode=disable` (gunakan `sslmode=require`/`verify-full` untuk DB remote) |
-| `ERP_SECRET_KEY` | ✅ (sejak PRD-001) | — | 32 byte acak (base64) untuk mengenkripsi kunci JWT, secret settings, dan secret MFA. **Simpan cadangannya terpisah dari backup database**: tanpa kunci ini, data terenkripsi di backup tidak dapat dibaca. Buat dengan `openssl rand -base64 32` |
+| `ERP_DB_SLOW_QUERY_MS` | | `200` | Ambang (milidetik, bilangan bulat ≥ 0) untuk mencatat query database yang melebihi batas sebagai `slow query` (level WARN). `0` menonaktifkan pencatatan query lambat |
+| `ERP_SECRET_KEY` | ✅ (sejak PRD-001) | — | 🔶 Belum tersedia (menunggu PRD-001). 32 byte acak (base64) untuk mengenkripsi kunci JWT, secret settings, dan secret MFA. **Simpan cadangannya terpisah dari backup database**: tanpa kunci ini, data terenkripsi di backup tidak dapat dibaca. Buat dengan `openssl rand -base64 32` |
 | `ERP_ENV` | | `production` | `development` mengaktifkan API mutasi modul & log teks |
 | `ERP_HTTP_ADDR` | | `127.0.0.1:8080` | Alamat listen. Jangan pakai `0.0.0.0` kecuali ada firewall/proxy |
 | `ERP_LOG_FORMAT` | | `json` | `json` atau `text` |
 | `ERP_TENANCY_MODE` | | `single` | Satu-satunya nilai valid saat ini |
 | `ERP_DEFAULT_TENANT_ID` | | (dibuat otomatis) | UUID tenant default |
-| `ERP_MODULES_ADMIN_API` | | `false` | **Biarkan `false` di production** sampai autentikasi tersedia; kelola modul lewat CLI |
+| `ERP_AUTHZ_STUB` | | `deny` (`allow` bila `ERP_ENV=development`) | Mode stub otorisasi sampai PRD-001: `allow` atau `deny`. **`allow` ditolak saat `ERP_ENV=production`** (keputusan Q25) |
+| `ERP_MODULES_ADMIN_API` | | `false` | 🔶 Belum tersedia. **Biarkan `false` di production** sampai autentikasi tersedia; kelola modul lewat CLI |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | (kosong = telemetry nonaktif) | Endpoint OpenTelemetry Collector |
 | `OTEL_SERVICE_NAME` | | `erpora` | |
 

@@ -510,3 +510,81 @@ func TestWrongMethodOnKnownAPIPath_405WithAllow(t *testing.T) {
 		t.Fatalf("%s", rec.Body)
 	}
 }
+
+// Nilai panic (bisa memuat rahasia) tidak boleh masuk log; hanya tipe + stack.
+func TestPanic_ValueNotLogged(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewRouter(Deps{
+		Logger:    observability.NewLogger(&buf, "text", slog.LevelDebug),
+		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:    fstest.MapFS{"index.html": {Data: []byte("x")}},
+	})
+	r.Handle("GET /test/panic-secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("password=SuperRahasia123")
+	}))
+	if rec := do(r, "GET", "/test/panic-secret", nil); rec.Code != 500 {
+		t.Fatalf("code %d", rec.Code)
+	}
+	out := buf.String()
+	if strings.Contains(out, "SuperRahasia123") {
+		t.Fatalf("nilai panic bocor ke log: %s", out)
+	}
+	if !strings.Contains(out, "panic_type=string") || !strings.Contains(out, "stack=") {
+		t.Fatalf("log panic tanpa tipe/stack: %s", out)
+	}
+}
+
+func TestServer_ErrorLogRoutedToSlog(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewRouter(Deps{
+		Logger:    observability.NewLogger(&buf, "text", slog.LevelDebug),
+		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:    fstest.MapFS{"index.html": {Data: []byte("x")}},
+	})
+	s := New("127.0.0.1:0", r)
+	if s.ErrorLog == nil {
+		t.Fatal("ErrorLog harus diset ke slog")
+	}
+	s.ErrorLog.Print("x-error-internal")
+	out := buf.String()
+	if !strings.Contains(out, "x-error-internal") || !strings.Contains(out, "level=WARN") {
+		t.Fatalf("ErrorLog harus menulis WARN ke slog: %q", out)
+	}
+}
+
+type failResolver struct{}
+
+func (failResolver) Resolve(*http.Request) (tenancy.TenantID, error) {
+	return tenancy.TenantID{}, errors.New("tidak bisa menentukan tenant")
+}
+
+func TestTenantContext_ResolverErrorIs400(t *testing.T) {
+	r := NewRouter(Deps{
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:  failResolver{},
+		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:    fstest.MapFS{"index.html": {Data: []byte("x")}},
+	})
+	r.Handle("GET /test/tenant", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	rec := do(r, "GET", "/test/tenant", nil)
+	if rec.Code != 400 {
+		t.Fatalf("code %d: %s", rec.Code, rec.Body)
+	}
+	e := decode(t, rec)["error"].(map[string]any)
+	if e["code"] != "tenant_unresolved" {
+		t.Fatalf("error = %v", e)
+	}
+}
+
+func TestConnectorProvider_NonDefaultTenantErrors(t *testing.T) {
+	p := connectorProvider{conn: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}}}
+	other := tenancy.TenantID(uuid.New())
+	if _, err := p.DB(tenancy.WithTenant(context.Background(), other)); !errors.Is(err, database.ErrUnknownTenant) {
+		t.Fatalf("err = %v, want ErrUnknownTenant", err)
+	}
+	if _, err := p.DB(context.Background()); !errors.Is(err, data.ErrNoTenantContext) {
+		t.Fatalf("tanpa tenant: err = %v", err)
+	}
+}

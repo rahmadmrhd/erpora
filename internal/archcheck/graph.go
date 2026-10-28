@@ -5,23 +5,41 @@ import "strings"
 
 // Package adalah satu paket Go (hasil `go list -json`).
 type Package struct {
-	ImportPath string
-	Module     string // path Go module pemilik paket
-	Dir        string
-	Imports    []string
-	GoFiles    []string // file non-test, relatif terhadap Dir
+	ImportPath  string
+	Module      string // path Go module pemilik paket
+	Dir         string
+	Imports     []string
+	TestImports []string // impor file _test.go (internal + eksternal); hanya dipakai aturan D2, D7, D8 (Q26)
+	GoFiles     []string // file non-test, relatif terhadap Dir
 }
 
 // GoMod adalah ringkasan satu go.mod.
 type GoMod struct {
 	Path, Dir, GoVersion, Toolchain string
-	Requires                        []string
+	Requires                        []string        // semua require (langsung + indirect)
+	Indirect                        map[string]bool // require bertanda "// indirect"
+}
+
+// Work adalah ringkasan go.work. Nil pada Repo.Work = pemeriksaan workspace dilewati.
+type Work struct {
+	Enabled   bool     // mode workspace aktif (GOWORK tidak "off"/kosong)
+	GoVersion string   // direktif go di go.work
+	Toolchain string   // direktif toolchain di go.work
+	Use       []string // direktori use (absolut, bersih)
+	ModDirs   []string // direktori go.mod hasil glob sdk/go.mod dan modules/*/go.mod (absolut, bersih)
+}
+
+// WebPackage adalah ringkasan modules/<name>/web/package.json.
+type WebPackage struct {
+	Name       string
+	ModuleDeps []string // dependency @erpora/module-* (dependencies + peerDependencies), tanpa duplikat
 }
 
 // Manifest adalah ringkasan module.json.
 type Manifest struct {
 	Key, Slug    string
-	Dependencies []string // key modul dari dependencies[].module
+	Dependencies []string        // key modul dari dependencies[].module
+	Optional     map[string]bool // key modul yang dependencies[].optional = true
 }
 
 // Repo adalah seluruh data yang diperiksa.
@@ -30,6 +48,8 @@ type Repo struct {
 	Packages  []Package
 	Mods      []GoMod
 	Manifests map[string]Manifest // by module path
+	Work      *Work
+	Web       map[string]WebPackage // by module path; hanya modul yang punya web/package.json
 }
 
 // Violation adalah satu pelanggaran aturan.

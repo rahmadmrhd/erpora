@@ -1,8 +1,8 @@
 # Taskfile.yml - satu-satunya entry point perintah proyek ERPora (go-task v3).
 #
 # Instalasi & pemanggilan per OS/terminal (PRD-000 FR-01):
-#   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@latest
-#   - Tanpa install global (sudah ada Bun):  bunx @go-task/cli <task>
+#   - Semua OS (sudah ada Go):  go install github.com/go-task/task/v3/cmd/task@v3.54.0
+#   - Tanpa install global (sudah ada Bun):  bunx @go-task/cli@3.54.0 <task>
 #   - Windows:  winget install Task.Task   atau   scoop install task
 #               Pemanggilannya sama di PowerShell, cmd, dan Git Bash: task <nama>
 #   - macOS:    brew install go-task
@@ -45,8 +45,11 @@ tasks:
         msg: "golangci-lint tidak ditemukan di PATH. Jalankan `task setup` (memasang versi terpin {{.GOLANGCI_LINT_VERSION}} ke $GOPATH/bin) dan pastikan $GOPATH/bin ada di PATH."
     cmds:
       # golangci-lint dipasang oleh `task setup` (go install versi terpin) ke $GOPATH/bin.
+      # Dua putaran per modul: flavor rilis (tanpa tag) dan semua file ber-tag (integration, devtools).
       - for: { var: GO_MODULES }
         cmd: cd "{{.ITEM}}" && golangci-lint run ./...
+      - for: { var: GO_MODULES }
+        cmd: cd "{{.ITEM}}" && golangci-lint run --build-tags=integration,devtools ./...
 
   test:
     desc: Jalankan unit test di setiap Go module
@@ -79,12 +82,15 @@ tasks:
       - go test ./internal/archcheck/... ./tests/architecture/... -run 'GoVersion|RepositoryArchitecture'
 
   check:gowork-off:
-    desc: Pastikan setiap Go module ter-build dengan GOWORK=off
+    desc: Pastikan setiap Go module ter-build dan test-nya ter-compile dengan GOWORK=off
     env:
       GOWORK: "off"
     cmds:
       - for: { var: GO_MODULES }
         cmd: go -C "{{.ITEM}}" build ./...
+      # Kompilasi test tanpa menjalankannya (-run ^$): impor file _test.go ikut diverifikasi (Q26 butir 1).
+      - for: { var: GO_MODULES }
+        cmd: go -C "{{.ITEM}}" test -run "^$" ./...
 
   db:up:
     desc: Jalankan PostgreSQL lokal via Docker Compose

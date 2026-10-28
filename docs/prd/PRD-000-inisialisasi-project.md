@@ -274,7 +274,7 @@ Clean Architecture bersifat **selektif** (Blueprint §5.1). Modul CRUD sederhana
 | D10 | `modules/**` dan `sdk` tidak boleh mengimpor library router pihak ketiga                | Arch test           |
 | D11 | Dependensi antar-Go-module tidak boleh siklik (`go.mod` require graph)                  | Compiler/`go mod` + arch test |
 | F1  | `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk` tidak boleh bergantung pada `@erpora/module-*` | `package.json` (Bun workspace) + dependency-cruiser |
-| F2  | Frontend modul hanya boleh mengimpor `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, dan `@erpora/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` (deep import dilarang) | `package.json` + dependency-cruiser + arch test: dependencies `package.json` modul == `manifest.dependencies` |
+| F2  | Frontend modul hanya boleh mengimpor `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, dan `@erpora/module-<x>` yang ada di `manifest.dependencies`; antarmodul hanya lewat `index.ts` (deep import dilarang) | `package.json` + dependency-cruiser + arch test: dependencies `package.json` modul ⊆ `manifest.dependencies` (Q27) |
 | F3  | Hanya app shell `web/` yang boleh bergantung pada semua `@erpora/module-*` dan merakitnya   | `package.json` + dependency-cruiser |
 
 D8 dan D9 membuat graf dependensi kode **identik** dengan graf dependensi di manifest. Resolver (FR-18) pun bisa dipercaya: tidak ada dependensi tersembunyi yang lolos dari pemeriksaan lifecycle.
@@ -391,9 +391,9 @@ type DevSeeder      interface { SeedDev(ctx context.Context, env Env) error }
 - Permission dideklarasikan satu kali di manifest (`capabilities`), sehingga manifest menjadi satu-satunya sumber deklarasi.
 - `path` ditulis relatif terhadap prefix modul. Platform memasangnya di `/api/{slug}{path}` (`slug` dari manifest, FR-06), jadi modul tidak bisa mendaftarkan route di luar namespace-nya.
 - Saat registrasi, platform membungkus setiap handler dengan rantai middleware yang urutannya tetap:
-  `recover → otel (FR-17) → request-id/log → authN → tenant context (FR-21) → module status guard (FR-19) → permission check → handler`.
+  `otel (FR-17) → recover → request-id/log → authN → tenant context (FR-21) → module status guard (FR-19) → permission check → handler` (lihat Q26).
   Di fase ini authN dan permission check masih stub yang dapat dikonfigurasi (allow-all di dev, terlihat di log). Implementasinya menyusul di PRD masing-masing **tanpa mengubah modul**.
-- Route `Public` melewati authN dan permission, tetapi tetap melewati recover, otel, log, tenant context, dan module status guard.
+- Route `Public` melewati authN dan permission, tetapi tetap melewati otel, recover, log, tenant context, dan module status guard.
 - `platform.core` adalah pseudo-modul milik platform (slug `platform`, versi = versi platform, selalu `enabled`). Semua modul bergantung padanya, dan route manajemen modul (FR-20) berada di namespace-nya.
 
 Registry (`internal/platform/modules/registry`) memvalidasi saat startup:
@@ -410,7 +410,7 @@ Pemeriksaan dependency dan kompatibilitas ada di FR-18.
 **AC:**
 - Unit test untuk ketujuh aturan di atas.
 - Security test: setiap entri `Registry.Routes()` memiliki permission non-kosong **atau** `Public: true`. Daftar route publik dibandingkan dengan allowlist di `tests/security/public_routes.txt`, sehingga route publik baru wajib di-review.
-- Test urutan middleware: handler modul menerima context yang sudah berisi request-id, span aktif, tenant ID, dan `erp.module.id`.
+- Test urutan middleware: handler modul menerima context yang sudah berisi request-id, span aktif, tenant ID, dan `erp.module.key`.
 
 ### FR-06 — Manifest schema
 
@@ -539,7 +539,7 @@ Dua modul minimal yang membuktikan seluruh kontrak sekaligus menjadi template:
 | -------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
 | Dependency     | `platform.core ^1.0`                                    | `platform.core ^1.0`, `acme.example ^1.0`                    |
 | Endpoint       | `GET /api/example/ping` (`example.ping.read`); `GET /api/example/notes` (`example.notes.read`) | `GET /api/example-addon/summary` (`example-addon.summary.read`) yang memanggil `example/contract` |
-| Migrasi        | `0001_create_example_notes.sql` (+ seed via `Installer`) | tanpa migrasi (`strategy: none`)                             |
+| Migrasi        | `0001_create_example_notes.sql`, `0002_add_example_notes_version.sql` (Q26) (+ seed via `Installer`) | tanpa migrasi (`strategy: none`)                             |
 | Hook lifecycle | `Installer`, `HealthChecker`, `DevSeeder`               | `EnableHook`, `DisableHook` (mencatat log)                   |
 | Command CLI    | `erpora example:recount` (menghitung ulang jumlah notes)   | —                                                            |
 | Frontend       | `module.ts`, route lazy, satu item navigasi              | `module.ts`, route lazy, satu item navigasi                  |
@@ -712,7 +712,7 @@ uninstall: check dependents → status uninstalled → revision++
 | `available`, `uninstalled`, `missing`     | `404` `{"code": "module_not_found"}`              |
 | `upgrade_pending`, `failed`               | `503` `{"code": "module_unavailable"}` + `Retry-After` untuk `upgrade_pending` |
 
-- Guard juga berlaku untuk route `Public`. Modul yang tidak aktif tidak memiliki permukaan HTTP sama sekali.
+- Guard juga berlaku untuk route `Public`. Modul yang tidak aktif tidak memiliki permukaan HTTP sama sekali: route terdaftar menjawab sesuai tabel di atas, sedangkan path atau method lain di bawah `/api/{slug}` menjawab `404 module_not_found` seragam tanpa header `Allow` (Q28).
 - **Seam multi-instance**: perubahan snapshot dipublikasikan melalui interface `StateNotifier`. Implementasi fase ini in-process. Implementasi `LISTEN/NOTIFY` PostgreSQL ditambahkan saat horizontal scaling (Blueprint §15 tahap B), tanpa mengubah guard.
 
 **AC (integration test dengan PostgreSQL nyata, mengacu Blueprint §12.1):**
@@ -1023,6 +1023,9 @@ Menerapkan `docs/security/security-guidelines.md`. Prinsip penjadwalan: **setiap
 | Q23 | Temuan review akhir M1 yang butuh keputusan | ✅ (M4) kode `tenant_unresolved`, `method_not_allowed`, `not_ready` masuk katalog api-guidelines §8; (M10) workflow validasi tag rilis ditunda ke **M2**, gate `bun test` ke **M3**; (M11) FR-07 guardrail 5 diperjelas dan ditunda ke **M2**; (NV1) server memakai `otelhttp.WithPublicEndpoint()` — `traceparent`/`baggage` dari klien tidak dipercaya |
 | Q24 | Penamaan produk? | ✅ (22 Okt 2026) Produk bernama **ERPora**. (1) Path Go module tanpa domain: root `erpora`, sdk `erpora/sdk`, modul `erpora/modules/<name>`; sengaja bare untuk saat ini, tidak dapat di-`go get` pihak ketiga, dan **wajib pindah ke vanity domain (mis. `erpora.dev/...`) sebelum SDK dipublikasikan** untuk modul pihak ketiga (ADR-001). (2) CLI/binary `erp` → `erpora` (`cmd/erpora`, `task erpora -- <command>`, artefak CI `erpora-<os>-<arch>`). (3) Prefix env var tetap `ERP_` (tidak diubah). (4) Scope npm `@erp/*` → `@erpora/*` (web, `packages/*`, `modules/*/web`; aturan dependency-cruiser F1–F3). (5) `service.name` OTel default `erpora`. (6) Nama tampilan "ERPora" di web (judul/PWA), README, SECURITY.md, CLAUDE.md, dan dokumen docs/. Dokumen historis (`docs/superpowers/plans/*`, `.superpowers/**`) dan rujukan "Blueprint §x" ke commit `c42d676` tidak diubah. Nama role/database PostgreSQL dev (`erp`), skema URI kontrak `erp:`, ekstensi `x-erp-*`, atribut OTel `erp.*`, dan key modul `erp.core` tidak berubah. |
 | Q25 | Keamanan stub otorisasi sebelum PRD-001? | ✅ (23 Okt 2026) `ERP_AUTHZ_STUB=allow` ditolak bila `ERP_ENV=production` (fail-closed, `ValidationError`, exit code 2) sampai PRD-001; default `allow` di development, `deny` di production; helper error SDK (`sdk/httpx`) dijadwalkan di M2c. |
+| Q26 | Keputusan review menyeluruh M1+M2a (26 Okt 2026) | ✅ (1) Archcheck memeriksa impor file test (`TestImports`/`XTestImports`) hanya untuk D2, D7, D8; D3b tetap non-test; `check:gowork-off` ikut mengompilasi test. (2) `erpora/sdk/data` di `modules/**` hanya boleh diimpor dari `internal/infrastructure`; allowlist pengecualian ADR modul (FR-07 guardrail 1) dibuat saat ada kasus nyata. (3) Nama atribut telemetry modul adalah **`erp.module.key`** untuk span, metric, dan log (FR-05 diselaraskan ke FR-17.3). (4) Resource referensi `notes` menambah `version` dan `updatedAt` sekarang; `createdBy`/`updatedBy` ditambahkan di PRD-001 saat principal tersedia. (5) Tanpa endpoint OTLP, platform memakai TracerProvider SDK tanpa exporter (tanpa koneksi keluar) agar log dan amplop error tetap membawa `trace_id`/`span_id`. (6) Sinyal kedua saat graceful shutdown menghentikan proses. (7) Timeout query DB per request (`statement_timeout`) dijadwalkan ke M2c. (8) D8 mengabaikan `require … // indirect`; manifest cukup mencantumkan dependensi langsung. (9) Urutan rantai middleware: otel membungkus recover (FR-05 diselaraskan ke kode). (10) `inspect … --json` mencetak `[]` untuk daftar kosong. (11) `dependencies[].module` di schema memakai pola key yang sama dengan `key`; dependensi ganda ditolak (`duplicate_dependency`). (12) `migrations.strategy` diperiksa terhadap kode modul (`migrations_mismatch`). (13) SDK menyediakan recorder test `sdk/module/moduletest`; perluasan opsi per-route di M2c memakai parameter variadik agar tidak breaking. |
+| Q27 | F2 untuk dependensi modul tanpa frontend? | ✅ (27 Okt 2026) Penegak F2 memeriksa **subset**: `@erpora/module-*` di `package.json` frontend modul ⊆ `manifest.dependencies`. Dependensi manifest yang tidak dipakai frontend (mis. modul backend-only tanpa `web/`) tidak wajib tercantum, karena package-nya bisa tidak ada. Sesuai kalimat aturan F2 ("hanya boleh mengimpor"); nama package tetap wajib `@erpora/module-<dir>` |
+| Q28 | Sisa keputusan review akhir branch perbaikan M1+M2a? | ✅ (27 Okt 2026) (1) **D8 arah manifest → `go.mod`**: dependensi manifest dengan `optional: true` tidak wajib ada di `require`, karena `go mod tidy` membuangnya bila kodenya tidak diimpor; dependensi wajib tetap harus di-require. (2) **Permukaan HTTP modul tidak aktif**: route terdaftar tetap menjawab sesuai tabel FR-19.7 (403/404/503); path atau method lain di bawah `/api/{slug}` menjawab `404 module_not_found` seragam tanpa `Allow`. Perbedaan 403 vs 404 diterima karena katalog route tidak rahasia. (3) **Driver DB di `go.mod` modul `example`**: `gorm.io/driver/postgres` diterima sementara, hanya untuk integration test repository; di M2b diganti test yang menjalankan migrasi modul lewat platform (`goose_module_<slug>`), lalu driver dihapus dari `go.mod` modul agar tidak tersalin ke template `make:module` |
 | Q15 | Struktur Go module (`go.mod`) untuk SDK & modul? | ✅ **Multi-module + `go.work`**: root (platform), `sdk`, dan setiap `modules/<name>` adalah Go module sendiri dengan tag versi independen (§4, D5/D8/D9). Dicatat di ADR-006 |
 
 ## 10. Definition of Done

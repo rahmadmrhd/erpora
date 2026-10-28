@@ -14,6 +14,11 @@ type TraceHandler struct{ inner slog.Handler }
 func (h TraceHandler) Enabled(ctx context.Context, l slog.Level) bool { return h.inner.Enabled(ctx, l) }
 
 func (h TraceHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Sumber tunggal atribut modul (Q26 butir 3): erp.module.key dari context, kecuali pemanggil
+	// sudah menyertakannya sendiri (mis. access log yang membacanya dari meta request).
+	if m := ModuleFromContext(ctx); m != "" && !hasAttr(r, moduleKeyAttr) {
+		r.AddAttrs(slog.String(moduleKeyAttr, m))
+	}
 	if id, ok := RequestIDFromContext(ctx); ok {
 		r.AddAttrs(slog.String("request_id", id))
 	}
@@ -21,6 +26,19 @@ func (h TraceHandler) Handle(ctx context.Context, r slog.Record) error {
 		r.AddAttrs(slog.String("trace_id", sc.TraceID().String()), slog.String("span_id", sc.SpanID().String()))
 	}
 	return h.inner.Handle(ctx, r)
+}
+
+const moduleKeyAttr = "erp.module.key"
+
+func hasAttr(r slog.Record, key string) bool {
+	found := false
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == key {
+			found = true
+		}
+		return !found
+	})
+	return found
 }
 
 func (h TraceHandler) WithAttrs(a []slog.Attr) slog.Handler {

@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"erpora/internal/platform/buildinfo"
+	"erpora/internal/platform/modules/registry"
+	"erpora/sdk/module"
 )
 
 var update = flag.Bool("update", false, "perbarui berkas golden")
@@ -113,5 +117,27 @@ func TestList_ShowsInspectAliasesInReleaseFlavor(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("list tanpa %q:\n%s", want, out)
 		}
+	}
+}
+
+// Q26 butir 10: --json mencetak [] (bukan null) untuk daftar kosong.
+func TestInspectViews_EmptyListsAreJSONArrays(t *testing.T) {
+	reg, err := registry.Build(registry.Options{PlatformVersion: buildinfo.PlatformVersion, SDKVersion: module.SDKVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, v := range map[string]any{"routes": routeViews(reg), "permissions": permissionViews(reg), "modules-nonnil": moduleViews(reg)} {
+		var sb strings.Builder
+		if err := writeJSON(&sb, v); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(sb.String(), "null") {
+			t.Errorf("%s: JSON memuat null: %s", name, sb.String())
+		}
+	}
+	var sb strings.Builder
+	_ = writeJSON(&sb, routeViews(reg))
+	if strings.TrimSpace(sb.String()) != "[]" {
+		t.Errorf("routes kosong = %q, want []", sb.String())
 	}
 }

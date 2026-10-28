@@ -41,13 +41,13 @@ func (m *Module) Register(r module.Registrar) error {
 
 // OnEnable mencatat log saat modul diaktifkan (idempoten: hanya log).
 func (m *Module) OnEnable(ctx context.Context, env module.Env) error {
-	logger(env).InfoContext(ctx, "modul diaktifkan", "module", m.manifest.Key)
+	logger(env).InfoContext(ctx, "modul diaktifkan", "erp.module.key", m.manifest.Key)
 	return nil
 }
 
 // OnDisable mencatat log saat modul dinonaktifkan (idempoten: hanya log).
 func (m *Module) OnDisable(ctx context.Context, env module.Env) error {
-	logger(env).InfoContext(ctx, "modul dinonaktifkan", "module", m.manifest.Key)
+	logger(env).InfoContext(ctx, "modul dinonaktifkan", "erp.module.key", m.manifest.Key)
 	return nil
 }
 

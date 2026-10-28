@@ -75,6 +75,7 @@ func migrateUp(t *testing.T, dsn string) {
 type proc struct {
 	cmd    *exec.Cmd
 	stderr *bytes.Buffer
+	stdout *bytes.Buffer // serve menulis log ke stdout; kebocoran rahasia harus diperiksa di KEDUA aliran
 	done   chan error
 }
 
@@ -87,8 +88,9 @@ func startServeBin(t *testing.T, bin, dsn, addr string) *proc {
 	t.Helper()
 	cmd := exec.Command(bin, "serve")
 	cmd.Env = baseEnv(dsn, addr)
-	p := &proc{cmd: cmd, stderr: &bytes.Buffer{}, done: make(chan error, 1)}
+	p := &proc{cmd: cmd, stderr: &bytes.Buffer{}, stdout: &bytes.Buffer{}, done: make(chan error, 1)}
 	cmd.Stderr = p.stderr
+	cmd.Stdout = p.stdout
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -114,6 +116,26 @@ func (p *proc) waitExit(t *testing.T, d time.Duration) error {
 		t.Fatalf("proses tidak keluar dalam %v; stderr:\n%s", d, p.stderr)
 		return nil
 	}
+}
+
+// getWith melakukan GET dengan header tertentu dan mengembalikan respons + body.
+func getWith(t *testing.T, url string, hdr map[string]string) (*http.Response, string) {
+	t.Helper()
+	c := http.Client{Timeout: 3 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range hdr {
+		req.Header.Set(k, v)
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp, string(b)
 }
 
 func get(url string) (int, string, error) {
@@ -182,8 +204,12 @@ func TestServe_DatabaseUnreachable(t *testing.T) {
 		t.Fatal("too slow")
 	}
 	s := p.stderr.String()
-	if !strings.Contains(s, "host=") || strings.Contains(s, "rahasia") {
+	if !strings.Contains(s, "host=") {
 		t.Fatalf("stderr = %s", s)
+	}
+	// Password tidak boleh muncul di stderr maupun stdout (log proses ke stdout).
+	if strings.Contains(s, "rahasia") || strings.Contains(p.stdout.String(), "rahasia") {
+		t.Fatalf("password bocor; stderr = %s\nstdout = %s", s, p.stdout)
 	}
 }
 
@@ -243,4 +269,52 @@ func TestServe_NormalBinaryHasNoTestRoute(t *testing.T) {
 	if strings.Contains(body, "slow-done") {
 		t.Fatalf("biner normal memuat route uji: %s", body)
 	}
+}
+
+// Kontrak HTTP dasar pada biner nyata: ETag bootstrap, 404 JSON untuk /api/*, cache sw.js, fallback SPA.
+func TestServe_HTTPContract(t *testing.T) {
+	dsn := pgtest.Start(t)
+	migrateUp(t, dsn)
+	addr := freeAddr(t)
+	startServe(t, dsn, addr)
+	base := "http://" + addr
+	waitStatus(t, base+"/readyz", 200, 20*time.Second)
+
+	t.Run("bootstrap ETag -> 304", func(t *testing.T) {
+		resp, _ := getWith(t, base+"/api/bootstrap", nil)
+		etag := resp.Header.Get("ETag")
+		if resp.StatusCode != 200 || etag == "" {
+			t.Fatalf("status=%d etag=%q", resp.StatusCode, etag)
+		}
+		resp, body := getWith(t, base+"/api/bootstrap", map[string]string{"If-None-Match": etag})
+		if resp.StatusCode != 304 || body != "" {
+			t.Fatalf("status=%d body=%q", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("api tidak dikenal -> 404 JSON", func(t *testing.T) {
+		resp, body := getWith(t, base+"/api/unknown", map[string]string{"Accept": "text/html"})
+		if resp.StatusCode != 404 || !strings.Contains(resp.Header.Get("Content-Type"), "application/json") ||
+			!strings.Contains(body, `"not_found"`) || strings.Contains(strings.ToLower(body), "<html") {
+			t.Fatalf("status=%d ct=%q body=%s", resp.StatusCode, resp.Header.Get("Content-Type"), body)
+		}
+	})
+
+	t.Run("sw.js no-cache", func(t *testing.T) {
+		resp, _ := getWith(t, base+"/sw.js", nil)
+		if resp.StatusCode == 404 {
+			t.Skip("web/dist yang ter-embed belum memuat sw.js (service worker PWA belum dibangun)")
+		}
+		if cc := resp.Header.Get("Cache-Control"); resp.StatusCode != 200 || cc != "no-cache" {
+			t.Fatalf("status=%d Cache-Control=%q", resp.StatusCode, cc)
+		}
+	})
+
+	t.Run("rute SPA tanpa ekstensi dengan Accept */* -> HTML", func(t *testing.T) {
+		// Pada mode development tanpa build frontend, yang disajikan adalah halaman "belum di-build" (juga HTML).
+		resp, body := getWith(t, base+"/inventory/products", map[string]string{"Accept": "*/*"})
+		if resp.StatusCode != 200 || !strings.Contains(strings.ToLower(body), "<html") {
+			t.Fatalf("status=%d body=%s", resp.StatusCode, body)
+		}
+	})
 }

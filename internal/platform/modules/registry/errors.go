@@ -61,4 +61,5 @@ const (
 	CodeRouteConflict        = "route_conflict"
 	CodeInvalidCommand       = "invalid_command"
 	CodeCommandConflict      = "command_conflict"
+	CodeMigrationsMismatch   = "migrations_mismatch"
 )

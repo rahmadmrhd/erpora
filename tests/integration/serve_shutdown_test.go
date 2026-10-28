@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -73,5 +74,45 @@ func TestServe_GracefulShutdown(t *testing.T) {
 	}
 	if d := time.Since(sent); d > 25*time.Second {
 		t.Fatalf("shutdown melewati batas 25 detik: %v", d)
+	}
+}
+
+// Sinyal kedua saat graceful shutdown tertahan (request lambat) harus mengakhiri proses segera,
+// jauh sebelum timeout graceful 25 detik (Q26 butir 6).
+func TestServe_SecondSignalTerminatesDuringShutdown(t *testing.T) {
+	dsn := pgtest.Start(t)
+	migrateUp(t, dsn)
+	addr := freeAddr(t)
+	p := startServe(t, dsn, addr)
+	base := "http://" + addr
+	waitStatus(t, base+"/readyz", 200, 20*time.Second)
+
+	go func() { // request lambat menahan shutdown; hasilnya tidak relevan (koneksi diputus saat proses mati)
+		c := http.Client{Timeout: 30 * time.Second}
+		if resp, err := c.Get(base + "/__test/slow?ms=20000"); err == nil {
+			resp.Body.Close()
+		}
+	}()
+	time.Sleep(700 * time.Millisecond) // pastikan handler sudah berjalan
+
+	start := time.Now()
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(700 * time.Millisecond) // shutdown anggun sudah dimulai dan tertahan
+	select {
+	case <-p.done:
+		t.Fatal("proses berhenti sebelum sinyal kedua padahal request lambat masih berjalan")
+	default:
+	}
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	// Berakhir karena sinyal (handler default), bukan keluar bersih; harus jauh di bawah 25 detik.
+	if err := p.waitExit(t, 5*time.Second); err == nil {
+		t.Fatal("proses seharusnya berakhir karena sinyal kedua (exit non-nol)")
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("sinyal kedua tidak segera mengakhiri proses: %v", d)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -20,7 +21,12 @@ func Load(root string) (Repo, error) {
 	if err != nil {
 		return Repo{}, err
 	}
-	repo := Repo{Root: abs, Manifests: map[string]Manifest{}}
+	repo := Repo{Root: abs, Manifests: map[string]Manifest{}, Web: map[string]WebPackage{}}
+	work, err := loadWork(abs)
+	if err != nil {
+		return repo, err
+	}
+	repo.Work = work
 	out, err := run(abs, "go", "list", "-m", "-f", "{{.Dir}}")
 	if err != nil {
 		return repo, err
@@ -42,6 +48,16 @@ func Load(root string) (Repo, error) {
 		}
 		if ok {
 			repo.Manifests[gm.Path] = mf
+		}
+		// Hanya modul bisnis (modules/*) yang punya modules/<x>/web; web/ di root adalah app shell (F3).
+		if strings.HasPrefix(gm.Path, modulesBase) {
+			wp, ok, err := loadWebPackage(dir)
+			if err != nil {
+				return repo, err
+			}
+			if ok {
+				repo.Web[gm.Path] = wp
+			}
 		}
 		pkgs, err := listPackages(dir, gm.Path)
 		if err != nil {
@@ -90,8 +106,95 @@ func loadGoMod(dir string) (GoMod, error) {
 	}
 	for _, r := range f.Require {
 		gm.Requires = append(gm.Requires, r.Mod.Path)
+		if r.Indirect {
+			if gm.Indirect == nil {
+				gm.Indirect = map[string]bool{}
+			}
+			gm.Indirect[r.Mod.Path] = true
+		}
 	}
 	return gm, nil
+}
+
+// loadWork membaca go.work aktif (go env GOWORK) dan menemukan semua go.mod repo lewat glob
+// sdk/go.mod dan modules/*/go.mod. Mode workspace nonaktif ditandai Enabled=false (dilaporkan oleh Check).
+func loadWork(root string) (*Work, error) {
+	w := &Work{}
+	out, err := run(root, "go", "env", "GOWORK")
+	if err != nil {
+		return nil, err
+	}
+	path := strings.TrimSpace(string(out))
+	if path != "" && path != "off" {
+		data, err := os.ReadFile(path) //nolint:gosec // path dari `go env GOWORK`
+		if err != nil {
+			return nil, err
+		}
+		wf, err := modfile.ParseWork("go.work", data, nil)
+		if err != nil {
+			return nil, err
+		}
+		w.Enabled = true
+		if wf.Go != nil {
+			w.GoVersion = wf.Go.Version
+		}
+		if wf.Toolchain != nil {
+			w.Toolchain = wf.Toolchain.Name
+		}
+		base := filepath.Dir(path)
+		for _, u := range wf.Use {
+			d := u.Path
+			if !filepath.IsAbs(d) {
+				d = filepath.Join(base, d)
+			}
+			w.Use = append(w.Use, filepath.Clean(d))
+		}
+	}
+	for _, pattern := range []string{filepath.Join(root, "sdk", "go.mod"), filepath.Join(root, "modules", "*", "go.mod")} {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range matches {
+			w.ModDirs = append(w.ModDirs, filepath.Clean(filepath.Dir(m)))
+		}
+	}
+	return w, nil
+}
+
+// loadWebPackage membaca web/package.json modul (bila ada) dan mengumpulkan dependency @erpora/module-*.
+func loadWebPackage(dir string) (WebPackage, bool, error) {
+	data, err := os.ReadFile(filepath.Join(dir, "web", "package.json")) //nolint:gosec // dir berasal dari `go list -m`
+	if os.IsNotExist(err) {
+		return WebPackage{}, false, nil
+	}
+	if err != nil {
+		return WebPackage{}, false, err
+	}
+	return parseWebPackage(data)
+}
+
+func parseWebPackage(data []byte) (WebPackage, bool, error) {
+	var raw struct {
+		Name             string            `json:"name"`
+		Dependencies     map[string]string `json:"dependencies"`
+		PeerDependencies map[string]string `json:"peerDependencies"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return WebPackage{}, false, fmt.Errorf("web/package.json: %w", err)
+	}
+	wp := WebPackage{Name: raw.Name}
+	seen := map[string]bool{}
+	for _, deps := range []map[string]string{raw.Dependencies, raw.PeerDependencies} {
+		for name := range deps {
+			if strings.HasPrefix(name, "@erpora/module-") && !seen[name] {
+				seen[name] = true
+				wp.ModuleDeps = append(wp.ModuleDeps, name)
+			}
+		}
+	}
+	sort.Strings(wp.ModuleDeps)
+	return wp, true, nil
 }
 
 func loadManifest(dir string) (Manifest, bool, error) {
@@ -106,7 +209,8 @@ func loadManifest(dir string) (Manifest, bool, error) {
 		Key          string `json:"key"`
 		Slug         string `json:"slug"`
 		Dependencies []struct {
-			Module string `json:"module"`
+			Module   string `json:"module"`
+			Optional bool   `json:"optional"`
 		} `json:"dependencies"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -115,6 +219,12 @@ func loadManifest(dir string) (Manifest, bool, error) {
 	m := Manifest{Key: raw.Key, Slug: raw.Slug}
 	for _, d := range raw.Dependencies {
 		m.Dependencies = append(m.Dependencies, d.Module)
+		if d.Optional {
+			if m.Optional == nil {
+				m.Optional = map[string]bool{}
+			}
+			m.Optional[d.Module] = true
+		}
 	}
 	return m, true, nil
 }
@@ -142,11 +252,13 @@ func makeBuildVariants() []buildVariant {
 }
 
 type listedPackage struct {
-	ImportPath string
-	Dir        string
-	Imports    []string
-	GoFiles    []string
-	Module     *struct{ Path string }
+	ImportPath   string
+	Dir          string
+	Imports      []string
+	TestImports  []string
+	XTestImports []string
+	GoFiles      []string
+	Module       *struct{ Path string }
 }
 
 // listPackages menjalankan `go list -json ./...` per varian build dan menggabungkan hasilnya
@@ -162,7 +274,7 @@ func listPackages(dir, defaultModule string) ([]Package, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			args := []string{"list", "-json=ImportPath,Dir,Imports,GoFiles,Module"}
+			args := []string{"list", "-json=ImportPath,Dir,Imports,TestImports,XTestImports,GoFiles,Module"}
 			if v.tags != "" {
 				args = append(args, "-tags", v.tags)
 			}
@@ -211,6 +323,7 @@ func listPackages(dir, defaultModule string) ([]Package, error) {
 				order = append(order, p.ImportPath)
 			}
 			cur.Imports = unionStrings(cur.Imports, p.Imports)
+			cur.TestImports = unionStrings(cur.TestImports, unionStrings(append([]string{}, p.TestImports...), p.XTestImports))
 			cur.GoFiles = unionStrings(cur.GoFiles, p.GoFiles)
 		}
 	}

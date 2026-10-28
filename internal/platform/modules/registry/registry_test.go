@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"testing"
+	"testing/fstest"
 
 	"erpora/sdk/module"
 )
@@ -37,10 +39,14 @@ type manifestSpec struct {
 	key, slug, version string
 	caps               []string
 	deps               []module.Dependency
+	strategy           string // default "none"
 }
 
 // newFake membuat fakeModule dari manifest JSON inline yang valid terhadap schema.
 func newFake(s manifestSpec, register func(r module.Registrar) error) fakeModule {
+	if s.strategy == "" {
+		s.strategy = "none"
+	}
 	if s.version == "" {
 		s.version = "1.0.0"
 	}
@@ -57,7 +63,7 @@ func newFake(s manifestSpec, register func(r module.Registrar) error) fakeModule
 		"compatibility": map[string]string{"platform": "^0.1", "sdk": "^0.1"},
 		"dependencies":  s.deps,
 		"capabilities":  s.caps,
-		"migrations":    map[string]string{"strategy": "none"},
+		"migrations":    map[string]string{"strategy": s.strategy},
 		"offline":       map[string]string{"mode": "online-only"},
 	}
 	b, err := json.Marshal(doc)
@@ -166,4 +172,29 @@ func findProblem(ps []Problem, code string) (Problem, bool) {
 		}
 	}
 	return Problem{}, false
+}
+
+// migratingModule menambahkan module.MigrationSource pada fakeModule.
+type migratingModule struct{ fakeModule }
+
+func (migratingModule) Migrations() fs.FS { return fstest.MapFS{} }
+
+func TestBuild_MigrationsStrategyMustMatchCode(t *testing.T) {
+	versioned := newFake(manifestSpec{key: "acme.a", slug: "a", strategy: "versioned"}, nil)
+	none := newFake(manifestSpec{key: "acme.a", slug: "a"}, nil)
+
+	_, err := Build(testOpts(), versioned) // versioned tetapi tanpa MigrationSource
+	p := expect(t, problemsOf(t, err), "migrations_mismatch", "acme.a")
+	if p.Field != "/migrations/strategy" {
+		t.Errorf("Field = %q", p.Field)
+	}
+	_, err = Build(testOpts(), migratingModule{none}) // none tetapi punya MigrationSource
+	expect(t, problemsOf(t, err), "migrations_mismatch", "acme.a")
+
+	if _, err := Build(testOpts(), migratingModule{versioned}); err != nil {
+		t.Fatalf("versioned + MigrationSource harus valid: %v", err)
+	}
+	if _, err := Build(testOpts(), none); err != nil {
+		t.Fatalf("none tanpa MigrationSource harus valid: %v", err)
+	}
 }

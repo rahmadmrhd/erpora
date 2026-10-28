@@ -7,7 +7,7 @@ Platform ERP modular monolith dalam satu binary `erpora`, dengan modul bisnis se
 - **Go 1.27.3** (toolchain dipin di `go.mod`; Go akan mengunduhnya sendiri bila perlu)
 - **Bun 1.4.2** (dipin di `package.json` dan `.bun-version`)
 - **Docker** untuk PostgreSQL 18 lokal
-- **go-task v3** sebagai entry point perintah. Pasang dengan `go install github.com/go-task/task/v3/cmd/task@latest`. Untuk OS lain lihat komentar di bagian atas `Taskfile.yml`.
+- **go-task v3** sebagai entry point perintah. Pasang dengan `go install github.com/go-task/task/v3/cmd/task@v3.54.0`. Untuk OS lain lihat komentar di bagian atas `Taskfile.yml`.
 - **golangci-lint v2.15.0** (versi terpin) untuk `task lint`. Dipasang otomatis oleh `task setup` ke `$(go env GOPATH)/bin`; pastikan folder itu ada di `PATH`. Di CI dipasang oleh `golangci-lint-action` dengan versi yang sama.
 
 ## Quick start
@@ -42,7 +42,7 @@ Daftar perintah lengkap: `task --list`.
 | `internal/app` | Composition root: merakit platform dan modul |
 | `internal/archcheck`, `tests/architecture` | Pemeriksaan aturan dependensi D1–D11 |
 | `sdk/` | SDK publik Go (`module`, `data`), Go module tersendiri |
-| `modules/<name>/` | Modul ERP, setiap folder adalah Go module sendiri. Saat ini ada `example` |
+| `modules/<name>/` | Modul ERP, setiap folder adalah Go module sendiri. Saat ini ada dua modul referensi: `example` dan `exampleaddon` |
 | `web/` | App shell frontend (Bun workspace `@erpora/web`) |
 | `packages/` | Paket TypeScript bersama |
 | `contracts/` | Kontrak OpenAPI dan JSON Schema milik platform |

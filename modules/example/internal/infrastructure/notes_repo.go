@@ -17,13 +17,18 @@ import (
 type noteRow struct {
 	ID        uuid.UUID `gorm:"column:id;primaryKey"`
 	Title     string    `gorm:"column:title"`
+	Version   int64     `gorm:"column:version"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (noteRow) TableName() string { return "example_notes" }
 
 func (r noteRow) toDomain() domain.Note {
-	return domain.Note{ID: r.ID.String(), Title: r.Title, CreatedAt: r.CreatedAt.UTC()}
+	return domain.Note{
+		ID: r.ID.String(), Title: r.Title, Version: r.Version,
+		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
+	}
 }
 
 // NotesRepo adalah repository notes; koneksi diambil per panggilan dari context (tenant aktif).
@@ -62,22 +67,6 @@ func (NotesRepo) Count(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
-// Add menyimpan note baru dengan ID UUIDv7.
-func (NotesRepo) Add(ctx context.Context, n domain.Note) error {
-	db, err := data.DB(ctx)
-	if err != nil {
-		return err
-	}
-	id, err := uuid.NewV7()
-	if err != nil {
-		return fmt.Errorf("buat id: %w", err)
-	}
-	if err := db.WithContext(ctx).Create(&noteRow{ID: id, Title: n.Title}).Error; err != nil {
-		return fmt.Errorf("simpan note: %w", err)
-	}
-	return nil
-}
-
 // AddMany menyimpan semua note dalam satu transaksi.
 func (NotesRepo) AddMany(ctx context.Context, notes []domain.Note) error {
 	db, err := data.DB(ctx)
@@ -90,7 +79,7 @@ func (NotesRepo) AddMany(ctx context.Context, notes []domain.Note) error {
 		if err != nil {
 			return fmt.Errorf("buat id: %w", err)
 		}
-		rows[i] = noteRow{ID: id, Title: n.Title}
+		rows[i] = noteRow{ID: id, Title: n.Title, Version: 1}
 	}
 	if len(rows) == 0 {
 		return nil

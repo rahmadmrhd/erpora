@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "key": "acme.example",
+  "slug": "example",
+  "name": "Acme Example",
+  "version": "1.0.0",
+  "publisher": { "id": "acme", "name": "Acme Inc" },
+  "trust": "builtin",
+  "compatibility": { "platform": "^0.1", "sdk": "^0.1" },
+  "dependencies": [
+    { "module": "Platform_Core", "version": "^0.1", "optional": false }
+  ],
+  "capabilities": ["example.items.read"],
+  "migrations": { "strategy": "versioned" },
+  "offline": { "mode": "online-only" }
+}

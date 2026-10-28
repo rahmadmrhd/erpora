@@ -2,8 +2,8 @@ version: "2"
 
 run:
   timeout: 5m
-  build-tags:
-    - integration
+  # Build tag sengaja tidak diset di sini: `task lint` menjalankan dua putaran (tanpa tag, lalu
+  # --build-tags=integration,devtools) agar flavor rilis dan file ber-tag sama-sama terlint.
 
 linters:
   default: none

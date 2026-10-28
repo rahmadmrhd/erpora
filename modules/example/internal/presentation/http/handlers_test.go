@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -52,7 +54,7 @@ func TestNotes_InvalidParams(t *testing.T) {
 
 func TestNotes_DefaultsAndEnvelope(t *testing.T) {
 	ts := time.Date(2026, 10, 22, 7, 0, 0, 0, time.FixedZone("x", 7*3600))
-	lister := &fakeLister{items: []domain.Note{{ID: "0193a6c2-0000-7000-8000-000000000001", Title: "Halo", CreatedAt: ts}}, total: 60}
+	lister := &fakeLister{items: []domain.Note{{ID: "0193a6c2-0000-7000-8000-000000000001", Title: "Halo", Version: 3, CreatedAt: ts, UpdatedAt: ts.Add(time.Hour)}}, total: 60}
 	rec := serve(New(lister).ListNotes, "/notes")
 	if rec.Code != 200 {
 		t.Fatalf("status = %d", rec.Code)
@@ -67,7 +69,8 @@ func TestNotes_DefaultsAndEnvelope(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Data) != 1 || body.Data[0]["title"] != "Halo" || body.Data[0]["createdAt"] != "2026-10-22T00:00:00Z" {
+	if len(body.Data) != 1 || body.Data[0]["title"] != "Halo" || body.Data[0]["createdAt"] != "2026-10-22T00:00:00Z" ||
+		body.Data[0]["updatedAt"] != "2026-10-22T01:00:00Z" || body.Data[0]["version"] != float64(3) {
 		t.Errorf("data = %+v", body.Data)
 	}
 	if body.Page["page"] != float64(1) || body.Page["pageSize"] != float64(25) || body.Page["total"] != float64(60) || body.Page["hasMore"] != true {
@@ -98,5 +101,20 @@ func TestPing(t *testing.T) {
 	rec := serve(New(&fakeLister{}).Ping, "/ping")
 	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"data":{"pong":true}}` {
 		t.Fatalf("%d %q", rec.Code, rec.Body.String())
+	}
+}
+
+// api-guidelines §8: detail 5xx ada di log (bukan di respons).
+func TestNotes_InternalErrorIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	rec := serve(New(&fakeLister{err: errors.New("SELECT rahasia")}).ListNotes, "/notes")
+	if rec.Code != 500 || strings.Contains(rec.Body.String(), "rahasia") {
+		t.Fatalf("respons harus generik: %d %s", rec.Code, rec.Body.String())
+	}
+	if out := buf.String(); !strings.Contains(out, "level=ERROR") || !strings.Contains(out, "SELECT rahasia") {
+		t.Fatalf("error tidak tercatat di log: %q", out)
 	}
 }

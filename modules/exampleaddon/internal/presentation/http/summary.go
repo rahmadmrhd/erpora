@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"erpora/modules/example/contract"
@@ -19,6 +20,8 @@ func New(notes contract.Notes) *Handlers { return &Handlers{notes: notes} }
 func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	n, err := h.notes.Count(r.Context())
 	if err != nil {
+		// Detail 5xx hanya di log (api-guidelines §8); respons tetap generik.
+		slog.ErrorContext(r.Context(), "gagal membaca jumlah notes", "error", err)
 		body := map[string]any{"code": "internal_error", "message": "terjadi kesalahan pada server"}
 		if id := w.Header().Get("X-Request-Id"); id != "" {
 			body["requestId"] = id

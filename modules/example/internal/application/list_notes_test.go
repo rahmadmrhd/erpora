@@ -13,7 +13,6 @@ type fakeRepo struct {
 	offset, size int
 	added        []domain.Note
 	addManyCalls int
-	addCalls     int
 	err          error
 	addManyErr   error
 }
@@ -30,12 +29,6 @@ func (f *fakeRepo) AddMany(_ context.Context, ns []domain.Note) error {
 	}
 	f.added = append(f.added, ns...)
 	f.notes = append(f.notes, ns...)
-	return f.err
-}
-func (f *fakeRepo) Add(_ context.Context, n domain.Note) error {
-	f.addCalls++
-	f.added = append(f.added, n)
-	f.notes = append(f.notes, n)
 	return f.err
 }
 func (f *fakeRepo) Ping(context.Context) error { return f.err }
@@ -101,8 +94,8 @@ func TestSeedInitial_UsesSingleAtomicBatch(t *testing.T) {
 	if err := NewService(repo).SeedInitial(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if repo.addManyCalls != 1 || repo.addCalls != 0 || len(repo.added) != 3 {
-		t.Errorf("AddMany=%d Add=%d added=%d", repo.addManyCalls, repo.addCalls, len(repo.added))
+	if repo.addManyCalls != 1 || len(repo.added) != 3 {
+		t.Errorf("AddMany=%d added=%d", repo.addManyCalls, len(repo.added))
 	}
 }
 
