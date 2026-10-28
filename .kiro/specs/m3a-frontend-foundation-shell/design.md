@@ -685,6 +685,8 @@ Pemilik produk menyatakan: "jika ada hal yang butuh keputusanku, lakukan dulu se
 | `intl-messageformat` | 12.1.3 | dari spec i18n (G4) |
 | `typescript`, `@biomejs/biome`, `@types/bun` | 6.0.3, 2.6.2, 1.4.3 | **tidak diubah** (sudah terpin di repo) |
 
+**Verifikasi ulang (task 1.2, 29 Okt 2026; jam sistem 28 Okt 19:50 UTC sehingga batas 14 hari = rilis sebelum 14 Okt 19:50 UTC):** `npm view <paket> time` untuk seluruh paket di atas; **tidak ada perubahan** pada tabel. Rilis yang lebih baru tetapi belum berumur 14 hari tidak dipakai: `@tanstack/react-query` 5.104.3 (15 Okt), `@tanstack/react-db` 0.5.10-0.5.12, `@tanstack/query-db-collection` 1.4.5-1.4.8, `happy-dom` 21.0.2-21.0.4, `@tanstack/react-router` 1.170.45-46, `lucide-react` 1.58-1.63, `shadcn` 4.22-4.23, `intl-messageformat` 12.1.4.
+
 ### C. Komponen `@erpora/ui` (K-24): kartu DS, rujukan Frappe UI, pilihan, dan penyesuaian
 
 Rujukan Frappe UI dibaca dari catatan `docs/spec` Sidebar, DesktopShell, PageHeader, Breadcrumbs, `CONTEXT.md` (kosakata `open`, `dismissible`, `theme`/`variant`), dan daftar `src/components` repo `frappe/frappe-ui`; perilaku rinci komponen yang tidak dikaji ditandai "tidak dikaji rinci" (DS sudah punya kartu). Frappe UI adalah pustaka Vue dengan API berbasis props (`label`, `variant`, `theme`); DS adalah komposisi shadcn/Radix dengan token ERP. **Pilihan selalu DS** karena sudah memuat token, kepadatan, dan perilaku yang disetujui; Frappe dipakai sebagai rujukan perilaku.
