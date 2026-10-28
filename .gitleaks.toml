@@ -6,3 +6,7 @@ useDefault = true
 [[allowlists]]
 description = "Nilai contoh pengembangan lokal (bukan rahasia)"
 paths = ['''^\.env\.example$''', '''^infrastructure/docker/docker-compose\.dev\.yml$''']
+
+[[allowlists]]
+description = "Nama file migrasi goose pada kolom migration_key (bukan rahasia)"
+regexes = ['''^[0-9]{4}_[a-z0-9_]+\.sql$''']
