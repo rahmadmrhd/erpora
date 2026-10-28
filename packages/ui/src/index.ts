@@ -85,5 +85,6 @@ export {
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 export { type IconName, iconRegistry, resolveIcon } from "./icons";
 export { type UiKey, type UiLabelFn, UiLabelsProvider, uiKeys, useUiLabel } from "./labels";
+export { type CollapsedCrumbs, type CrumbSlot, collapseCrumbs } from "./lib/breadcrumb";
 export { initialsOf } from "./lib/initials";
 export { cn } from "./lib/utils";
