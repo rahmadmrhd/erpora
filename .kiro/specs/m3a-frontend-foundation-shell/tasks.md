@@ -6,46 +6,46 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
 
 ## Tasks
 
-- [ ] 1. Prasyarat dan spike (Kelas beban: Sonnet; 1.2 Haiku)
-  - [ ] 1.1 Verifikasi prasyarat spec `i18n-platform`
+- [x] 1. Prasyarat dan spike (Kelas beban: Sonnet; 1.2 Haiku)
+  - [x] 1.1 Verifikasi prasyarat spec `i18n-platform`
     - Pastikan grup 12 `.kiro/specs/i18n-platform/tasks.md` selesai: `packages/platform-web` ada dengan `I18nProvider`, `useTranslation`, `createTestI18n`, `keys.gen.ts` (platform, ui, modul); `GET /api/platform/i18n/{locale}/{namespace}` dan bidang `i18n` di bootstrap tersedia. Bila belum, **berhenti dan laporkan**.
     - Catat bentuk aktual yang dipakai M3a di bagian "Catatan integrasi" (akhir berkas ini): cara `I18nProvider` mendapat `tenantId` dan `bootstrap.i18n`, lokasi `keys.gen.ts` untuk `ui`, apakah `UiLabels` sudah ada, dan ada tidaknya `modules/example/web/src/i18n/keys.gen.ts`.
     - _Requirements: 12.5, 14.4_
-  - [ ] 1.2 Verifikasi ulang versi pustaka
+  - [x] 1.2 Verifikasi ulang versi pustaka
     - Jalankan `npm view <paket> time dist-tags --json` untuk semua paket di tabel B `design.md`; untuk tiap paket pilih rilis stabil tertinggi yang berumur ≥ 14 hari **pada hari ini**; perbarui tabel B bila ada yang berubah. `typescript`, `@biomejs/biome`, `@types/bun` tidak diubah.
     - _Requirements: 1.5, 1.6_
-  - [ ] 1.3 Spike konfigurasi `shadcn` di `packages/ui` (kode spike boleh dibuang, hasil dicatat)
+  - [x] 1.3 Spike konfigurasi `shadcn` di `packages/ui` (kode spike boleh dibuang, hasil dicatat)
     - Buat `packages/ui` sementara dengan `package.json` (`exports` seperti `design.md` §2) dan `components.json` (alias `@erpora/ui/*`). Jalankan `bun run shadcn add button --dry-run` (atau `--diff`; cek `shadcn add --help` pada versi terpin) lalu `add button` sungguhan. Verifikasi: file masuk ke `packages/ui/src/components/ui`, impor alias terbaca oleh `tsc --noEmit` dari `web`, dan `Bun.build` dari `web` membundelnya; catat dependensi yang ditulis CLI dan pin ulang ke versi pasti.
     - Bila alias self-reference gagal di salah satu (CLI, `tsc`, Bun), catat penyebab dan putuskan alternatif minimal (mis. impor relatif hasil rewrite) di `design.md` K-10 sebelum lanjut.
     - _Requirements: 3.1, 1.5_
 
-- [ ] 2. Toolchain React + Tailwind di Bun (Kelas beban: Sonnet; 2.4 sampai 2.6 Haiku)
-  - [ ] 2.1 Tulis test fungsi build murni (merah dulu)
+- [x] 2. Toolchain React + Tailwind di Bun (Kelas beban: Sonnet; 2.4 sampai 2.6 Haiku)
+  - [x] 2.1 Tulis test fungsi build murni (merah dulu)
     - `web/tools/budget.test.ts`: `initialJsGzip(metafile)` menelusuri hanya `kind: "import-statement"` (mengabaikan `dynamic-import`), menjumlah gzip tiap berkas sekali (tanpa dobel hitung chunk bersama), gagal bila > `200 * 1024`; `web/tools/fonts.test.ts`: `extractInlinedFonts` memindahkan `url(data:font/woff2;base64,…)` ke `assets/figtree-<sha8>.woff2` dan mengganti URL ke `/assets/…`, idempoten, no-op tanpa font; `web/tools/head.test.ts`: `injectHead` menyisipkan `<script src>` sinkron (tanpa `type="module"`) tepat setelah `<head>` dan preload font, idempoten; `web/tools/csp-check.test.ts`: `cssViolations` menolak `url(data:font…)` dan `url(http…)`, meloloskan CSS bersih; `cspViolations` tetap menolak skrip inline, handler inline, `javascript:`.
     - **Validates: Requirements 1.3, 1.4**
-  - [ ] 2.2 Implementasi `web/tools/{budget,fonts,head}.ts` dan `cssViolations` di `csp-check.ts`
+  - [x] 2.2 Implementasi `web/tools/{budget,fonts,head}.ts` dan `cssViolations` di `csp-check.ts`
     - Fungsi murni (masukan string/objek, tanpa I/O di dalam logika; I/O dilakukan `build.ts`). Laporan anggaran: tabel JS awal, tiap chunk lazy, CSS, font, 15 kontributor `inputs` terbesar pada chunk awal.
     - _Requirements: 1.3, 1.4_
-  - [ ] 2.3 Konfigurasi toolchain dan `web/build.ts`
+  - [x] 2.3 Konfigurasi toolchain dan `web/build.ts`
     - `web/package.json`: tambah dependensi runtime dan devDependency sesuai `design.md` §1 (versi pasti dari tabel B; `workspace:*` untuk paket repo **yang sudah ada saat ini**: `@erpora/platform-contracts`, `@erpora/module-sdk`, `@erpora/platform-web`; `@erpora/ui` ditambahkan di 4.1 dan `@erpora/module-example`/`@erpora/module-exampleaddon` di 13.2 agar `bun install --frozen-lockfile` tidak gagal); jalankan `bun install` sehingga `bun.lock` terkunci. `web/tsconfig.json`: `jsx: react-jsx`, `include` memuat `src`, `tools`, `test`. `bunfig.toml` (root: `[test] preload`), `web/bunfig.toml` (`[serve.static] plugins` dan `[test] preload`).
     - `web/src/index.html` (`<div id="root">` + `<script type="module" src="./main.tsx">`), `main.tsx` placeholder (merender "ERPora" lewat React untuk membuktikan pipeline), `styles.css` (`@import "tailwindcss" source(none)` + `@source` untuk `packages/ui`, `packages/platform-web`, `modules/*/web`; baris `@import "@erpora/ui/theme.css"` ditambahkan di 4.3), `theme-init.ts` (mandiri, ±15 baris), hapus `main.ts`.
     - Tulis ulang `web/build.ts` sesuai `design.md` §1: `plugins: [tailwind]`, `splitting: true`, `metafile: true`, `define NODE_ENV=production`, build `theme-init` terpisah, `extractInlinedFonts`, `injectHead`, `cspViolations`/`cssViolations`, `reportBudget`; pertahankan pembersihan `dist` (`.gitkeep`). `dev.ts` tetap (plugin dari bunfig).
     - **Verifikasi di repo:** `bun run build` sukses; `dist/index.html` memuat `<script src>` theme-init sebelum stylesheet; CSS tanpa `data:font`; `@source` memindai `packages/ui` dan `modules/*/web`; chunk lazy terbentuk dari `import()` percobaan. Bila `bun-plugin-tailwind` gagal, pakai cadangan `@tailwindcss/cli` (hasilkan CSS sebelum `Bun.build`) dan catat di `design.md` Risiko.
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.4_
-  - [ ] 2.4 Biome: larang `dangerouslySetInnerHTML` (test dulu)
+  - [x] 2.4 Biome: larang `dangerouslySetInnerHTML` (test dulu)
     - `biome.json`: `linter.rules.security.noDangerouslySetInnerHtml` dan `noDangerouslySetInnerHtmlWithChildren` = `error`; pastikan `includes` memuat `**/*.tsx`. `web/tools/lint-rule.test.ts`: jalankan `biome lint --stdin-file-path=x.tsx` pada kode berisi `dangerouslySetInnerHTML` dan pastikan gagal; kode bersih lolos.
     - _Requirements: 3.6_
-  - [ ] 2.5 Aturan arsitektur F4 (test dulu)
+  - [x] 2.5 Aturan arsitektur F4 (test dulu)
     - Test `web/tools/depcruise-rules.test.ts`: bangun pohon sementara (`packages/ui/src/x.ts` mengimpor `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, `@erpora/module-example`) dan jalankan `cruise` dengan konfigurasi repo; harapkan pelanggaran `F4-ui-is-a-leaf` untuk tiap impor, dan nol pelanggaran untuk impor `react`/`radix-ui`. Tambahkan aturan F4 ke `.dependency-cruiser.cjs` (komentar atas diperbarui). Aturan F1 sampai F3 tidak berubah.
     - _Requirements: 3.4, 1.5_
-  - [ ] 2.6 Taskfile dan CI
+  - [x] 2.6 Taskfile dan CI
     - `Taskfile.yml`: `web:check` ditambah `bun test --pass-with-no-tests` (dari root) dan `bun run --filter @erpora/web build`; task baru `web:test`. `.github/workflows/ci.yml` job `web-checks`: tambah langkah `bun test --pass-with-no-tests` dan `bun run --filter @erpora/web build`. Tanpa `rm`/`cp`/`sed`.
     - _Requirements: 15.1_
-  - [ ] 2.7 Setup uji komponen
+  - [x] 2.7 Setup uji komponen
     - `web/test/dom.ts` (`GlobalRegistrator.register({ url: "http://localhost/" })`, **berkas terpisah dan dimuat pertama**) dan `web/test/setup.ts` (matcher `jest-dom` + deklarasi tipe untuk `bun:test`, `cleanup` setelah tiap test, stub `ResizeObserver`, polyfill `Element.prototype.hasPointerCapture/scrollIntoView` bila perlu). Tambahkan `web/test/smoke.test.tsx` (Radix DropdownMenu terbuka lewat klik dan menutup lewat Esc, Dialog berperan `dialog`) sebagai bukti stack. Paket yang punya test (`packages/platform-web` yang sudah punya skrip `test`, lalu `packages/ui`, `packages/module-sdk`, `modules/*/web` saat dibuat) menyertakan `bunfig.toml` dengan `[test] preload` relatif ke dua berkas itu agar `bun test` di dalam paket juga bekerja.
     - _Requirements: 3.5, 3.7_
 
-- [ ] 3. Checkpoint — toolchain
+- [x] 3. Checkpoint — toolchain
   - Jalankan `bun install --frozen-lockfile`, `bun run --filter '*' typecheck`, `bun run --filter '*' lint`, `bun run --filter @erpora/web deps`, `bun test --pass-with-no-tests`, `bun run --filter @erpora/web build`; pastikan laporan build mencetak ukuran JS awal dan tidak ada pelanggaran CSP. Tanyakan ke user bila anggaran sudah mendekati batas.
 
 - [ ] 4. Fondasi `@erpora/ui`: paket, tema, font, utilitas (Kelas beban: Sonnet; 4.1 Haiku)
