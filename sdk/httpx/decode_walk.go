@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -187,6 +188,11 @@ func (w *walker) scalar(tok json.Token, t reflect.Type, quoted bool, path string
 	switch v := tok.(type) {
 	case string:
 		ok = bt.Kind() == reflect.String
+		if !ok && isByteSlice(bt) {
+			// encoding/json mendekode string base64 standar ke []byte (dan named byte slice).
+			_, derr := base64.StdEncoding.DecodeString(v)
+			ok = derr == nil
+		}
 		if !ok && quoted {
 			switch bt.Kind() {
 			case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -309,4 +315,14 @@ func hasOption(opts, want string) bool {
 		}
 	}
 	return false
+}
+
+// isByteSlice meniru aturan encoding/json: slice dengan elemen berkind uint8 yang elemennya tidak mengimplementasikan
+// json.Unmarshaler/TextUnmarshaler didekode dari string base64.
+func isByteSlice(t reflect.Type) bool {
+	if t.Kind() != reflect.Slice || t.Elem().Kind() != reflect.Uint8 {
+		return false
+	}
+	pe := reflect.PointerTo(t.Elem())
+	return !pe.Implements(jsonUnmarshalerType) && !pe.Implements(textUnmarshalerType)
 }

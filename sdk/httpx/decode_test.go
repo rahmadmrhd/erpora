@@ -199,3 +199,43 @@ func TestDecodeJSON_NonStructPanics(t *testing.T) {
 	}()
 	_, _ = DecodeJSON[map[string]any](httptest.NewRecorder(), newReq("application/json", `{}`))
 }
+
+type blobBytes []byte
+
+type bytesDTO struct {
+	Raw   []byte            `json:"raw"`
+	Named blobBytes         `json:"named"`
+	Ptr   *[]byte           `json:"ptr"`
+	List  [][]byte          `json:"list"`
+	Map   map[string][]byte `json:"map"`
+}
+
+// Codex PR#7 C7: field []byte (dan named byte slice) menerima string base64 seperti encoding/json; base64 tidak valid
+// menghasilkan 422 invalid_type.
+func TestDecodeJSON_ByteSliceBase64(t *testing.T) {
+	const js = "application/json"
+	cases := []struct {
+		name, body string
+		status     int
+		detail     string
+	}{
+		{name: "base64_ok", body: `{"raw":"aGVsbG8="}`},
+		{name: "named_ok", body: `{"named":"aGVsbG8="}`},
+		{name: "ptr_ok", body: `{"ptr":"aGVsbG8="}`},
+		{name: "nested_ok", body: `{"list":["aGVsbG8=","d29ybGQ="],"map":{"k":"aGVsbG8="}}`},
+		{name: "empty_ok", body: `{"raw":""}`},
+		{name: "null_ok", body: `{"raw":null}`},
+		{name: "number_array_ok", body: `{"raw":[1,2,3]}`},
+		{name: "invalid_base64", body: `{"raw":"!!!bukan-base64"}`, status: 422, detail: "invalid_type"},
+		{name: "named_invalid_base64", body: `{"named":"a"}`, status: 422, detail: "invalid_type"},
+		{name: "nested_invalid_base64", body: `{"list":["aGVsbG8=","@@"]}`, status: 422, detail: "invalid_type"},
+		{name: "number_not_allowed", body: `{"raw":5}`, status: 422, detail: "invalid_type"},
+		{name: "bool_not_allowed", body: `{"raw":true}`, status: 422, detail: "invalid_type"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DecodeJSON[bytesDTO](httptest.NewRecorder(), newReq(js, tc.body))
+			assertDecodeResult(t, err, tc.status, tc.detail)
+		})
+	}
+}
