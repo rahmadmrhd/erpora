@@ -37,6 +37,7 @@
     "method_not_allowed": "The method is not supported for this address.",
     "module_unavailable": "The module is temporarily unavailable.",
     "not_ready": "The service is not ready.",
-    "invalid_i18n_override": "The term override is not valid."
+    "invalid_i18n_override": "The term override is not valid.",
+    "unknown": "An unknown error occurred"
   }
 }
