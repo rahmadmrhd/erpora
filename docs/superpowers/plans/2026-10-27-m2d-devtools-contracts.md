@@ -1134,6 +1134,21 @@ Exit gate PRD-000 §11 M2, AC FR-22/FR-23/FR-24.2 (bagian linter), dan item over
 | Butir ★1–★5 | Disetujui owner 27 Okt 2026, dicatat di PRD-000 Q31 | `c49ed88` | ✅ |
 | Manual: `db:fresh --seed` dengan ketik nama DB | Tidak dijalankan manual (pengaman sesi); dibuktikan test integrasi | — | ⏳ |
 
+#### Verifikasi ulang setelah review akhir M2 (28 Okt 2026, Windows, HEAD `7973bb7`)
+
+Review akhir M2 (empat reviewer independen + review diff perbaikan) menghasilkan perbaikan yang tercatat di PRD-000 Q31 (putaran perbaikan) dan Q32 (keputusan owner 27–28 Okt 2026). Setelah semua perbaikan, gate dijalankan ulang:
+
+| Gate | Hasil |
+| --- | --- |
+| `lint` (termasuk tag `generator,integration`) | ✅ 0 issues di `7973bb7` |
+| `arch`, `check:gowork-off`, `test`, `contracts:check`, `web:check` (`ERP_REQUIRE_BUN=1`) | ✅ di `83bbb51`; commit sesudahnya (`7973bb7`) hanya mengubah `pgtest` ber-tag `integration` |
+| `test:integration` | ✅. Run penuh pertama (71 menit) gagal di `internal/app`, `modules/lifecycle` (PostgreSQL tidak siap dalam 60 dtk) dan `contracttools`, `gen`, `modcheck` (timeout 10 menit) karena memori host habis (0,3 GB bebas dari 7,7 GB), bukan assertion. Kelima paket itu dijalankan ulang dengan `go test -tags integration -p 2 -count=1` dan semuanya `ok` (314 dtk); paket lain `ok` pada run pertama |
+| `test:generator` | ✅ `TestMakeModule_PassesAllGates` 722 dtk di `7973bb7` |
+
+Run pertama menemukan kebocoran container di `pgtest` (container dari `tcpostgres.Run` yang gagal menunggu siap tidak dihentikan); diperbaiki di `7973bb7`.
+
+Exit gate M2 (PRD-000 §11) terpenuhi secara lokal. Yang tetap ⏳ hanya hal yang butuh GitHub: job CI `contracts`, `generator`, smoke artifact release, `release.yml`, serta asumsi branch protection (status `contracts` wajib di PR ke `main`) yang menjadi dasar auto-approve breaking pada push ke `main`.
+
 ---
 
 ## Di luar cakupan M2d (sengaja)
@@ -1144,4 +1159,4 @@ Exit gate PRD-000 §11 M2, AC FR-22/FR-23/FR-24.2 (bagian linter), dan item over
 - Hook pre-commit git otomatis. FR-23.3 menyebutnya opsional; `task contracts:check` sudah dapat dipakai sebagai pre-commit manual.
 - Penerbitan dokumentasi API (portal/UI) dari `contracts/dist/openapi.json` → PRD terkait integrator. M2d hanya menghasilkan artifact CI.
 - Vanity domain untuk SDK dan modul pihak ketiga (Q24), serta penandatanganan artifact → fase marketplace.
-- Task `dev:setup` (FR-13, cakupan M1) tidak ditambahkan di sini. Temuan ini dilaporkan terpisah bila memang belum ada.
+- ~~Task `dev:setup` (FR-13, cakupan M1) tidak ditambahkan di sini.~~ Ditambahkan di Task 17 (`bb5a980`) karena memang belum ada.
