@@ -21,7 +21,7 @@ Modul dapat diaktifkan dan dinonaktifkan pada runtime tanpa rebuild binary (PRD-
 | install | `available`, `uninstalled` | `installed` | `installed`, `enabled`, `disabled` |
 | enable | `installed`, `disabled` | `enabled` | `enabled` |
 | disable | `enabled` | `disabled` | `disabled` |
-| upgrade | `upgrade_pending` | status sebelumnya (`previous_status`) | `installed`/`enabled`/`disabled` dengan versi sama |
+| upgrade | `upgrade_pending` (atau `installed`/`enabled`/`disabled` dengan versi lebih lama: Execute mereconcile lebih dulu dalam lock yang sama, Q32 butir 17) | status sebelumnya (`previous_status`) | `installed`/`enabled`/`disabled` dengan versi sama |
 | uninstall | `installed`, `disabled` | `uninstalled` | `uninstalled` |
 
 Pasangan lain adalah `invalid_transition`. Operasi yang status targetnya sudah tercapai adalah **no-op sukses**: tanpa baris operasi, event, atau kenaikan revision. Ini membuat `install --all --enable` dapat diulang. Prasyarat (`Check`) dievaluasi setelah tabel transisi, sehingga no-op selalu menang.
@@ -38,13 +38,13 @@ Setiap langkah dicatat ke `module_operations.steps` sebelum dan sesudah dijalank
 | upgrade | `resolve` → `compatibility` → `migrate` → `hook:upgrade` |
 | uninstall | `dependents` |
 
-Prasyarat: dependensi minimal (install) = `installed|enabled|disabled`; enable membutuhkan dependensi wajib `enabled`; disable ditolak bila dependen wajib `enabled` (`dependents_active`); uninstall ditolak bila ada dependen wajib berstatus selain `uninstalled`; upgrade memeriksa versi ter-install dependensi terhadap constraint manifest baru. Modul `required: true` menolak `disable`/`uninstall` (`module_required`). **`uninstall` tidak pernah menghapus tabel atau data**; install ulang menjalankan hanya migrasi yang belum diterapkan.
+Prasyarat: dependensi minimal (install) = `installed|enabled|disabled`; enable membutuhkan dependensi wajib `enabled`; **upgrade yang akan mengembalikan modul ke `enabled` (previous_status `enabled`) dan retry yang akan membuat modul `enabled` juga membutuhkan semua dependensi wajib `enabled` dan ditolak sebelum operasi dimulai (`dependency_not_ready`; tidak ada baris operasi, status tidak berubah)**; disable ditolak bila dependen wajib `enabled` **atau `upgrade_pending`/`failed` dengan previous_status `enabled`** (`dependents_active`) (Q32); uninstall ditolak bila ada dependen wajib berstatus selain `uninstalled`; upgrade memeriksa versi ter-install dependensi terhadap constraint manifest baru. Modul `required: true` menolak `disable`/`uninstall` (`module_required`). **`uninstall` tidak pernah menghapus tabel atau data**; install ulang menjalankan hanya migrasi yang belum diterapkan.
 
 ### 4. Kegagalan dan retry
 
 - Kegagalan langkah yang mengubah data (`migrate`, `hook:install`, `hook:upgrade`) → modul `failed` dengan `previous_status` = status asal (untuk install dari nol dicatat sebagai teks `available`; untuk upgrade tetap status sebelum upgrade).
 - Kegagalan `hook:enable`, `health`, `hook:disable`, atau prasyarat → status modul **tidak berubah**; operasi berstatus `failed` (kecuali penolakan prasyarat, yang tidak membuat baris operasi: hanya error dan log WARN).
-- `retry` hanya untuk operasi `failed` yang menjadi `last_operation_id` modulnya dan bukan `reconcile`. Retry membuat baris operasi baru (nama operasi = asal), mencatat event `retried` dengan `details.retryOf`, dan melewati langkah yang sudah `succeeded` **kecuali `migrate`** (goose hanya menerapkan file yang belum diterapkan, sehingga migrasi ke-1 tidak diulang). Prasyarat diperiksa ulang.
+- `retry` hanya untuk operasi `failed` yang menjadi `last_operation_id` modulnya dan bukan `reconcile`. Retry membuat baris operasi baru (nama operasi = asal), mencatat event `retried` dengan `details.retryOf`, dan melewati langkah yang sudah `succeeded` **kecuali `migrate`** (goose hanya menerapkan file yang belum diterapkan, sehingga migrasi ke-1 tidak diulang). Prasyarat diperiksa ulang **sebelum operasi dimulai** (termasuk `hook:enable`, yang tidak pernah dilewati saat retry karena efeknya dibatalkan kompensasi `hook:disable`).
 - Migrasi dijalankan satu file per transaksi; file yang gagal di-rollback penuh dan dicatat `failed` di `module_migrations` (tenant DB).
 
 ### 5. Serialisasi: advisory lock
@@ -53,15 +53,15 @@ Setiap operasi lifecycle dan reconcile berjalan di bawah `pg_try_advisory_lock(h
 
 ### 6. Operasi terputus (`interrupted`)
 
-Setelah memperoleh lock, setiap operasi dan reconcile menandai semua operasi `running` tenant itu `failed` dengan `error.code = interrupted` dan langkah yang sedang berjalan. Selama lock dipegang tidak ada operasi lain yang hidup, jadi baris `running` pasti sisa proses yang mati. Modul ikut `failed` hanya bila yang terputus adalah `install` atau `upgrade`; operasi itu dapat di-`retry`.
+Setelah memperoleh lock, setiap operasi dan reconcile menandai semua operasi `running` tenant itu `failed` dengan `error.code = interrupted` dan langkah yang sedang berjalan. Selama lock dipegang tidak ada operasi lain yang hidup, jadi baris `running` pasti sisa proses yang mati. Modul ikut `failed` hanya bila yang terputus adalah `install` atau `upgrade`; operasi itu dapat di-`retry`. Event `interrupted` memakai actor pelaku penandaan (`system:reconcile` atau actor operasi berikutnya); actor operasi asal disimpan di `details.originalActor` (Q32).
 
 ### 7. Reconcile saat startup
 
-`serve` menjalankan `Reconcile` sebelum melayani request: versi binary > ter-install → `upgrade_pending` (event `reconciled`); versi binary < ter-install → operasi `reconcile` `failed` `downgrade_not_supported`, modul `failed`, `previous_status` disimpan, event `operation_failed`; binary kembali ke versi ter-install → status semula dipulihkan (`reconciled`, `version_restored`); baris tanpa modul → `missing` + WARN. Reconcile tidak pernah memigrasi, meng-install, atau meng-enable; migrasi hanya lewat `migrate up` dan operasi lifecycle.
+`serve` menjalankan `Reconcile` sebelum melayani request: versi binary > ter-install → `upgrade_pending` (event `reconciled`); versi binary < ter-install → operasi `reconcile` `failed` `downgrade_not_supported`, modul `failed`, `previous_status` disimpan, event `operation_failed`; binary kembali ke versi ter-install → status semula dipulihkan (`reconciled`, `version_restored`), baik dari `failed` (downgrade) maupun dari `upgrade_pending` (rollback binary; Q32); baris tanpa modul → `missing` + WARN. Reconcile tidak pernah memigrasi, meng-install, atau meng-enable; migrasi hanya lewat `migrate up` dan operasi lifecycle. `upgrade` (CLI/API) menjalankan langkah reconcile yang sama untuk modul terkait **di dalam lock operasinya** sebelum prasyarat (satu lock, tanpa reconcile ganda), sehingga upgrade bisa langsung dilakukan setelah binary diganti tanpa `serve`; versi binary lebih lama tetap `downgrade_not_supported` (Q32 butir 17, 28 Okt 2026).
 
 ### 8. Revision dan propagasi
 
-- `tenant_state.module_state_revision` naik pada **setiap perubahan status yang di-commit** (termasuk install dan reconcile), karena status `installed` terlihat di `/api/bootstrap` dan ETag = revision. Satu `Commit` atomik memuat installation, penutupan operasi, event (append-only, dijaga trigger), dan revision.
+- `tenant_state.module_state_revision` naik pada **setiap commit operasi** (termasuk install, reconcile, `interrupted`, dan operasi gagal yang tidak mengubah status), karena status terlihat di `/api/bootstrap` dan ETag = revision harus berubah ketika `lastOperationId` berubah (Q32). Satu `Commit` atomik memuat installation, penutupan operasi, event (append-only, dijaga trigger), dan revision.
 - Snapshot per proses memakai compare-and-set per revision (`Snapshot.Apply`). `StateNotifier` in-process memberi tahu subscriber; karena CLI adalah proses terpisah, `serve` juga **memeriksa revision DB setiap 2 detik** (`lifecycle.DefaultPollInterval`) dan mempublikasikan revision yang lebih baru ke notifier, yang memicu `Refresh`.
 
 ### 9. Modul `required`
@@ -71,6 +71,8 @@ Modul `required: true` (beserta dependensinya) di-install dan di-enable oleh `er
 ### 10. Akses API dan actor
 
 Mutasi lewat `/api/platform/modules` berjalan sinkron dengan batas tunggu 30 detik; lebih lama → `202` + `Location: …/operations/{id}` dan operasi berlanjut di server (`context.WithoutCancel`). Shutdown di tengah operasi menghasilkan `interrupted` yang dapat di-`retry`. Hanya aktif bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true` (selain itu `404`). Actor: `cli:<os-user>`, `api:dev`, `system:reconcile`, `system:migrate`. Hook dan command modul memperoleh hak sistem teraudit lewat `authz.AsSystem(ctx, "module.lifecycle:<op>" | "cli:<slug>:<name>")`.
+
+**Respons API (Q32):** mutasi wajib `Content-Type: application/json` (body kosong atau `{}` boleh; selain itu `415 unsupported_media_type`); `If-Match` dievaluasi di dalam advisory lock (RFC 9110: `*`, daftar, perbandingan kuat) sebelum simulasi; respons `200`/`202` memuat semua ID operasi rangkaian di `operationIds` (aditif; `Location` ke operasi pertama); `message` kegagalan `migration_failed` dan `internal_error` diringkas tanpa teks SQL/hook mentah (detail penuh hanya di log dengan `operation_id`/`trace_id`).
 
 ## Konsekuensi
 

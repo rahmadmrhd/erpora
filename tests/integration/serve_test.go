@@ -19,7 +19,10 @@ import (
 	"erpora/internal/platform/testsupport/pgtest"
 )
 
-var erpBin string
+var (
+	erpBin        string // flavor dev (tag devtools)
+	erpBinRelease string // flavor release (tanpa tag devtools)
+)
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "erpora-it-")
@@ -36,6 +39,15 @@ func TestMain(m *testing.M) {
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "build erp:", err)
+		os.RemoveAll(dir)
+		os.Exit(1)
+	}
+	// Binary release (tanpa tag devtools): bukti perilaku tidak terpengaruh penanda lingkungan (FR-22.5).
+	erpBinRelease = filepath.Join(dir, "erpora-release"+filepath.Ext(name))
+	buildRel := exec.Command("go", "build", "-tags", "integration", "-o", erpBinRelease, "../../cmd/erpora")
+	buildRel.Stderr = os.Stderr
+	if err := buildRel.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "build erp release:", err)
 		os.RemoveAll(dir)
 		os.Exit(1)
 	}

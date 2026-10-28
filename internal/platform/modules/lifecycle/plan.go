@@ -50,6 +50,9 @@ func (s *Service) Plan(ctx context.Context, req Request) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	if req.Op == OpUpgrade {
+		rows = s.simulateReconcile(rows) // Execute(OpUpgrade) mereconcile lebih dulu di dalam lock
+	}
 	planned, failed, perr := s.simulate(items, rows, req.All)
 	var out Plan
 	for _, p := range planned {

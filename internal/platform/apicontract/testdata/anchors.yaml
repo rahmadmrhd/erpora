@@ -1,0 +1,14 @@
+openapi: 3.1.0
+info: { title: anchors, version: 0.0.1 }
+paths:
+  /api/anchors/items:
+    get:
+      operationId: listItems
+      x-erp-permission: anchors.items.read
+      responses: &resp
+        '200': { description: ok }
+  /api/anchors/others:
+    get:
+      operationId: listOthers
+      x-erp-permission: anchors.items.read
+      responses: *resp

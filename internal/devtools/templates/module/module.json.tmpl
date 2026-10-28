@@ -1,0 +1,17 @@
+{
+  "schema_version": "1",
+  "key": "[[.Key]]",
+  "slug": "[[.Slug]]",
+  "name": "[[.Title]]",
+  "version": "0.1.0",
+  "publisher": { "id": "[[.Publisher]]", "name": "[[.PublisherName]]" },
+  "trust": "builtin",
+  "compatibility": { "platform": "^0.1", "sdk": "^0.1" },
+  "dependencies": [
+    { "module": "platform.core", "version": "^0.1", "optional": false }[[range .Dependencies]],
+    { "module": "[[.Key]]", "version": "[[.Constraint]]", "optional": false }[[end]]
+  ],
+  "capabilities": ["[[.Slug]].items.read"],
+  "migrations": { "strategy": "versioned" },
+  "offline": { "mode": "online-only" }
+}

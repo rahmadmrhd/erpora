@@ -1,0 +1,21 @@
+package application
+
+import "context"
+
+// [[.T.Pascal]]Query adalah masukan use case [[.T.Pascal]] (baca saja, tanpa efek samping). Tambahkan field dan validasi.
+type [[.T.Pascal]]Query struct{}
+
+// [[.T.Pascal]]Result adalah hasil use case [[.T.Pascal]]. Bentuk DTO respons HTTP ditentukan di presentation, bukan di sini.
+type [[.T.Pascal]]Result struct{}
+
+// [[.T.Pascal]]Handler mengorkestrasi use case [[.T.Pascal]]; dependensinya adalah port (Repository), bukan infrastructure.
+type [[.T.Pascal]]Handler struct{ repo Repository }
+
+// New[[.T.Pascal]]Handler membuat [[.T.Pascal]]Handler di atas repo.
+func New[[.T.Pascal]]Handler(repo Repository) *[[.T.Pascal]]Handler { return &[[.T.Pascal]]Handler{repo: repo} }
+
+// Handle menjalankan use case dan membungkus error dengan konteks (fmt.Errorf("...: %w", err)).
+func (h *[[.T.Pascal]]Handler) Handle(ctx context.Context, q [[.T.Pascal]]Query) ([[.T.Pascal]]Result, error) {
+	_, _, _ = h.repo, ctx, q
+	return [[.T.Pascal]]Result{}, nil
+}

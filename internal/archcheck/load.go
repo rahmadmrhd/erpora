@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -329,9 +332,31 @@ func listPackages(dir, defaultModule string) ([]Package, error) {
 	}
 	out := make([]Package, 0, len(order))
 	for _, ip := range order {
-		out = append(out, *byPath[ip])
+		p := byPath[ip]
+		p.FileImports = fileImports(p.Dir, p.GoFiles)
+		out = append(out, *p)
 	}
 	return out, nil
+}
+
+// fileImports membaca impor setiap file (parser.ImportsOnly); file yang tidak terbaca dilewati.
+func fileImports(dir string, files []string) map[string][]string {
+	out := map[string][]string{}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, f), nil, parser.ImportsOnly)
+		if err != nil {
+			continue
+		}
+		for _, imp := range file.Imports {
+			if p, err := strconv.Unquote(imp.Path.Value); err == nil {
+				out[f] = append(out[f], p)
+			}
+		}
+	}
+	return out
 }
 
 func unionStrings(a, b []string) []string {

@@ -1,0 +1,33 @@
+package domain
+
+import (
+	"errors"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+// Max[[.T.Pascal]]TitleLength adalah panjang maksimum judul [[.T.Pascal]] (karakter).
+const Max[[.T.Pascal]]TitleLength = 200
+
+// ErrInvalid[[.T.Pascal]]Title dikembalikan bila judul kosong atau terlalu panjang.
+var ErrInvalid[[.T.Pascal]]Title = errors.New("judul [[.T.Kebab]] harus 1 sampai 200 karakter")
+
+// [[.T.Pascal]] adalah entity modul [[.Mod.Slug]], tanpa I/O. ID, Version, CreatedAt, dan UpdatedAt diisi saat disimpan;
+// Version naik setiap perubahan dan mulai dari 1 (api-guidelines §4.3, optimistic concurrency).
+type [[.T.Pascal]] struct {
+	ID        string
+	Title     string
+	Version   int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// New[[.T.Pascal]] membuat [[.T.Pascal]] baru dengan judul yang tervalidasi. Tambahkan field dan aturan domain di sini.
+func New[[.T.Pascal]](title string) ([[.T.Pascal]], error) {
+	n := utf8.RuneCountInString(title)
+	if strings.TrimSpace(title) == "" || n < 1 || n > Max[[.T.Pascal]]TitleLength {
+		return [[.T.Pascal]]{}, ErrInvalid[[.T.Pascal]]Title
+	}
+	return [[.T.Pascal]]{Title: title}, nil
+}

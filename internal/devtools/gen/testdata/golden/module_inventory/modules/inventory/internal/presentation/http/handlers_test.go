@@ -1,0 +1,113 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"erpora/modules/inventory/internal/domain"
+)
+
+type fakeLister struct {
+	items []domain.Item
+	total int64
+	err   error
+	page  int
+	size  int
+}
+
+func (f *fakeLister) ListItems(_ context.Context, page, size int) ([]domain.Item, int64, error) {
+	f.page, f.size = page, size
+	return f.items, f.total, f.err
+}
+
+func serve(h http.HandlerFunc, target string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	h(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	return rec
+}
+
+func errCode(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var b struct{ Error struct{ Code string } }
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatal(err)
+	}
+	return b.Error.Code
+}
+
+func TestItems_InvalidParams(t *testing.T) {
+	for _, q := range []string{"page=0", "page=abc", "pageSize=201", "pageSize=0", "page=-1"} {
+		rec := serve(New(&fakeLister{}).ListItems, "/items?"+q)
+		if rec.Code != 400 || errCode(t, rec) != "bad_request" {
+			t.Errorf("%s: %d %s", q, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestItems_DefaultsAndEnvelope(t *testing.T) {
+	ts := time.Date(2026, 10, 22, 7, 0, 0, 0, time.FixedZone("x", 7*3600))
+	lister := &fakeLister{items: []domain.Item{{ID: "0193a6c2-0000-7000-8000-000000000001", Title: "Halo", Version: 3, CreatedAt: ts, UpdatedAt: ts.Add(time.Hour)}}, total: 60}
+	rec := serve(New(lister).ListItems, "/items")
+	if rec.Code != 200 {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if lister.page != 1 || lister.size != 25 {
+		t.Errorf("default page=%d size=%d", lister.page, lister.size)
+	}
+	var body struct {
+		Data []map[string]any `json:"data"`
+		Page map[string]any   `json:"page"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Data) != 1 || body.Data[0]["title"] != "Halo" || body.Data[0]["createdAt"] != "2026-10-22T00:00:00Z" ||
+		body.Data[0]["updatedAt"] != "2026-10-22T01:00:00Z" || body.Data[0]["version"] != float64(3) {
+		t.Errorf("data = %+v", body.Data)
+	}
+	if body.Page["page"] != float64(1) || body.Page["pageSize"] != float64(25) || body.Page["total"] != float64(60) || body.Page["hasMore"] != true {
+		t.Errorf("page = %+v", body.Page)
+	}
+}
+
+func TestItems_EmptyListIsArray(t *testing.T) {
+	rec := serve(New(&fakeLister{}).ListItems, "/items")
+	var raw map[string]json.RawMessage
+	_ = json.Unmarshal(rec.Body.Bytes(), &raw)
+	if string(raw["data"]) != "[]" {
+		t.Errorf("data = %s", raw["data"])
+	}
+}
+
+func TestItems_InternalErrorHidesDetail(t *testing.T) {
+	rec := serve(New(&fakeLister{err: errors.New("SELECT rahasia")}).ListItems, "/items")
+	if rec.Code != 500 || errCode(t, rec) != "internal_error" {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "rahasia") {
+		t.Errorf("detail internal bocor: %s", rec.Body.String())
+	}
+}
+
+// api-guidelines §8: detail 5xx ada di log (bukan di respons).
+func TestItems_InternalErrorIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	rec := serve(New(&fakeLister{err: errors.New("SELECT rahasia")}).ListItems, "/items")
+	if rec.Code != 500 || strings.Contains(rec.Body.String(), "rahasia") {
+		t.Fatalf("respons harus generik: %d %s", rec.Code, rec.Body.String())
+	}
+	if out := buf.String(); !strings.Contains(out, "level=ERROR") || !strings.Contains(out, "SELECT rahasia") {
+		t.Fatalf("error tidak tercatat di log: %q", out)
+	}
+}

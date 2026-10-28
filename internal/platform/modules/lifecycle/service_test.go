@@ -89,8 +89,8 @@ func TestExecute_HealthFailRevertsToOrigin(t *testing.T) {
 	if row := e.st.row("acme.a"); row.Status != "disabled" || row.InstalledVersion != "1.0.0" {
 		t.Errorf("row = %+v", row)
 	}
-	if c := e.st.commits[len(e.st.commits)-1]; c.BumpRevision {
-		t.Error("revision tidak boleh naik saat health gagal")
+	if c := e.st.commits[len(e.st.commits)-1]; !c.BumpRevision {
+		t.Error("revision harus naik pada setiap commit operasi, termasuk health gagal tanpa perubahan status (Q32 B-4)")
 	}
 	if !slices.Contains(e.st.eventNames("acme.a"), "operation_failed") {
 		t.Errorf("events = %v", e.st.eventNames("acme.a"))

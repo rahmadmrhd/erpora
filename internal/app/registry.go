@@ -1,6 +1,7 @@
 package app
 
 import (
+	"erpora/contracts"
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/registry"
@@ -26,6 +27,7 @@ func buildRegistry() (*registry.Registry, *admin.API, error) {
 		SDKVersion:           module.SDKVersion,
 		Platform:             api.Register,
 		PlatformCapabilities: admin.Capabilities,
+		PlatformContract:     contracts.PlatformOpenAPI,
 	}, compiledModulesFn()...)
 	return reg, api, err
 }

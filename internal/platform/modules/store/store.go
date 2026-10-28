@@ -258,6 +258,13 @@ func (s *Store) StartOperation(ctx context.Context, op Operation) error {
 			Updates(map[string]any{"last_operation_id": op.ID, "updated_at": now()}).Error; err != nil {
 			return fmt.Errorf("store: set last_operation_id: %w", err)
 		}
+		// lastOperationId berubah: ETag (= revision) harus berubah agar klien tidak menerima 304 basi (Q32 B-4/R-4).
+		var rev int64
+		if err := tx.Raw(`INSERT INTO tenant_state (tenant_id, module_state_revision) VALUES (?, 1)
+			ON CONFLICT (tenant_id) DO UPDATE SET module_state_revision = tenant_state.module_state_revision + 1, updated_at = now()
+			RETURNING module_state_revision`, tid(op.TenantID)).Scan(&rev).Error; err != nil {
+			return fmt.Errorf("store: naikkan revision: %w", err)
+		}
 		return nil
 	})
 }
@@ -486,6 +493,25 @@ func (s *Store) Events(ctx context.Context, t tenancy.TenantID, key string, page
 		out = append(out, ev)
 	}
 	return out, total, nil
+}
+
+// RecordedModuleMigrations mengembalikan himpunan migration_key yang tercatat succeeded untuk modul di tenant DB.
+func (s *Store) RecordedModuleMigrations(ctx context.Context, t tenancy.TenantID, key string) (map[string]bool, error) {
+	db, err := s.tenants.For(ctx, t)
+	if err != nil {
+		return nil, fmt.Errorf("store: tenant DB: %w", err)
+	}
+	var keys []string
+	if err := db.WithContext(ctx).Model(&moduleMigrationRow{}).
+		Where("tenant_id = ? AND module_key = ? AND execution_status = ?", tid(t), key, "succeeded").
+		Pluck("migration_key", &keys).Error; err != nil {
+		return nil, fmt.Errorf("store: baca module_migrations: %w", err)
+	}
+	out := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		out[k] = true
+	}
+	return out, nil
 }
 
 // RecordModuleMigration mencatat jejak migrasi modul ke tenant DB lewat connector.

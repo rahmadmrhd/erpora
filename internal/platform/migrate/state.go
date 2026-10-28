@@ -73,3 +73,28 @@ func DefaultTenantID(ctx context.Context, db *database.DB) (uuid.UUID, error) {
 	}
 	return uuid.Parse(v)
 }
+
+// Environment membaca platform_state.environment (read-only). ok=false bila tabel platform_state belum ada
+// atau barisnya belum ditulis. Nilai selain development|production adalah error.
+func Environment(ctx context.Context, db *database.DB) (env config.Env, ok bool, err error) {
+	var exists bool
+	if err := db.WithContext(ctx).Raw("SELECT to_regclass('platform_state') IS NOT NULL").Scan(&exists).Error; err != nil {
+		return "", false, err
+	}
+	if !exists {
+		return "", false, nil
+	}
+	var v string
+	res := db.WithContext(ctx).Raw("SELECT value FROM platform_state WHERE key = ?", keyEnvironment).Scan(&v)
+	if res.Error != nil {
+		return "", false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return "", false, nil
+	}
+	switch e := config.Env(v); e {
+	case config.EnvDevelopment, config.EnvProduction:
+		return e, true, nil
+	}
+	return "", false, fmt.Errorf("platform_state.%s bernilai tidak dikenal %q (harus %s atau %s)", keyEnvironment, v, config.EnvDevelopment, config.EnvProduction)
+}

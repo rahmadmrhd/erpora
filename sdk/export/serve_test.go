@@ -67,6 +67,28 @@ func TestServe_Headers(t *testing.T) {
 	})
 }
 
+// M-4: kegagalan sebelum byte pertama (XLSX ditulis penuh saat close) mengembalikan header ke keadaan semula;
+// no-store yang sudah dipasang platform (klasifikasi route) tidak boleh ikut terhapus.
+func TestServe_ErrorBeforeFirstBytePreservesPlatformHeaders(t *testing.T) {
+	req := httptest.NewRequest("GET", "/export", nil).WithContext(testCtx(&recAuditor{}))
+	w := &deadWriter{ResponseRecorder: httptest.NewRecorder()}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	err := Serve(w, req, serveSpec(CSV, module.ClassInternal), seq(Row{"id": "1"}))
+	if err == nil {
+		t.Fatal("Serve harus mengembalikan error (tulis pertama gagal)")
+	}
+	h := w.Header()
+	if h.Get("Cache-Control") != "no-store" || h.Get("Content-Type") != "application/json" || h.Get("Content-Disposition") != "" {
+		t.Errorf("header setelah error = %v", h)
+	}
+}
+
+// deadWriter menolak semua tulis tanpa menerima satu byte pun (klien putus sebelum byte pertama).
+type deadWriter struct{ *httptest.ResponseRecorder }
+
+func (*deadWriter) Write([]byte) (int, error) { return 0, errors.New("koneksi putus") }
+
 func TestServe_MidStreamErrorAborts(t *testing.T) {
 	aud := &recAuditor{}
 	req := httptest.NewRequest("GET", "/export", nil).WithContext(testCtx(aud))

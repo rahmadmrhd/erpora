@@ -1,0 +1,28 @@
+openapi: 3.1.0
+info: { title: beta, version: 0.0.1 }
+paths:
+  /api/beta/items:
+    get:
+      operationId: listBetaItems
+      x-erp-permission: beta.items.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Item' } }
+components:
+  schemas:
+    Item:
+      type: object
+      required: [id, sku]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        sku: { type: string }
+    Secret:
+      type: object
+      properties:
+        token: { type: string, x-erp-classification: highly_confidential }

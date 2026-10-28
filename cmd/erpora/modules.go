@@ -32,7 +32,17 @@ type modulesBackend interface {
 	Execute(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error)
 	Retry(ctx context.Context, t tenancy.TenantID, id uuid.UUID, actor string) (lifecycle.Result, error)
 	Plan(ctx context.Context, req lifecycle.Request) (lifecycle.Plan, error)
+	// GuardWrite menolak mutasi oleh binary dev terhadap DB berpenanda production (FR-22.5); dipanggil sebelum Execute/Retry.
+	GuardWrite(ctx context.Context) error
 }
+
+// guardedBackend membungkus *lifecycle.Service dengan guard penanda lingkungan.
+type guardedBackend struct {
+	*lifecycle.Service
+	guard func(ctx context.Context) error
+}
+
+func (g guardedBackend) GuardWrite(ctx context.Context) error { return g.guard(ctx) }
 
 // backendFactory membuka backend (DB) dan mengembalikan tenant default serta fungsi cleanup.
 type backendFactory func(ctx context.Context, opts *rootOpts, errOut io.Writer) (modulesBackend, tenancy.TenantID, func(), error)
@@ -43,11 +53,11 @@ func defaultBackend(ctx context.Context, opts *rootOpts, errOut io.Writer) (modu
 		return nil, tenancy.TenantID{}, nil, err
 	}
 	log := observability.NewLogger(errOut, cfg.LogFormat, slog.LevelInfo)
-	svc, tid, cleanup, err := app.NewLifecycle(ctx, cfg, log)
+	svc, tid, guard, cleanup, err := app.NewGuardedLifecycle(ctx, cfg, log)
 	if err != nil {
 		return nil, tenancy.TenantID{}, nil, err
 	}
-	return svc, tid, cleanup, nil
+	return guardedBackend{Service: svc, guard: guard}, tid, cleanup, nil
 }
 
 // cliActor adalah actor audit untuk operasi dari CLI: "cli:<os-user>".
@@ -405,6 +415,9 @@ func (mc *modulesCtx) opCmd(op lifecycle.Op, short string, allowAll, allowDeps, 
 				return err
 			}
 			defer cleanup()
+			if err := be.GuardWrite(c.Context()); err != nil {
+				return err
+			}
 			results, err := be.Execute(c.Context(), lifecycle.Request{
 				Tenant: tid, Op: op, Key: key, All: all, WithDeps: withDeps, Enable: enable, Actor: cliActor(),
 			})
@@ -447,6 +460,9 @@ func (mc *modulesCtx) retryCmd() *cobra.Command {
 				return err
 			}
 			defer cleanup()
+			if err := be.GuardWrite(c.Context()); err != nil {
+				return err
+			}
 			res, err := be.Retry(c.Context(), tid, id, cliActor())
 			if err != nil {
 				return err

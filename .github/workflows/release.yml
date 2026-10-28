@@ -1,0 +1,32 @@
+name: Release tag
+
+# Tag rilis modul dan SDK (PRD-000 FR-14): versi pada tag harus sama dengan version di module.json
+# (modules/<dir>/vX.Y.Z), SDKVersion (sdk/vX.Y.Z), atau buildinfo.PlatformVersion (tag platform vX.Y.Z; Q32 K-6).
+on:
+  push:
+    tags:
+      - "modules/*/v*"
+      - "sdk/v*"
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    name: verify-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Validasi tag terhadap versi di sumber
+        env:
+          TAG: ${{ github.ref_name }}
+        # Tag dilewatkan lewat env dan dikutip sebagai satu argumen (tanpa dirender ke shell oleh Task); format tag divalidasi
+        # ketat oleh release:verify-tag (modules/<dir>/vX.Y.Z, sdk/vX.Y.Z, atau vX.Y.Z untuk tag platform). Jalur rilis resmi adalah
+        # workflow ini (env + kutipan); task release:verify-tag untuk pemakaian lokal memakai shellQuote agar $(...) tidak dieksekusi.
+        run: go run -tags devtools ./cmd/erpora release:verify-tag "${TAG}"

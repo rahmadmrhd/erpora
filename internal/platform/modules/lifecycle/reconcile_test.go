@@ -54,6 +54,45 @@ func TestReconcile_UpgradePendingThenIdempotent(t *testing.T) {
 	}
 }
 
+// B-3 (Q32): binary kembali ke versi ter-install saat status upgrade_pending (rollback binary): status dikembalikan ke
+// previous_status dengan event reconciled (version_restored); upgrade_pending tidak boleh tertinggal tanpa alasan.
+func TestReconcile_UpgradePendingRestoredWhenBinaryVersionMatchesInstalled(t *testing.T) {
+	rec := &fxRec{}
+	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a", version: "1.0.0"}))
+	e.st.seed(tenantA, "acme.a", runtime.StatusUpgradePending, "1.0.0")
+	e.st.mu.Lock()
+	r := e.st.rows[rowKey{tenantA, "acme.a"}]
+	r.PreviousStatus = "enabled"
+	e.st.rows[rowKey{tenantA, "acme.a"}] = r
+	e.st.mu.Unlock()
+
+	rep, err := e.svc.Reconcile(context.Background(), tenantA)
+	if err != nil || !slices.Equal(rep.Restored, []string{"acme.a"}) {
+		t.Fatalf("Reconcile = %+v, %v", rep, err)
+	}
+	row := e.st.row("acme.a")
+	if row.Status != "enabled" || row.PreviousStatus != "" || row.InstalledVersion != "1.0.0" {
+		t.Errorf("row = %+v", row)
+	}
+	var found bool
+	for _, ev := range e.st.events {
+		if ev.ModuleKey == "acme.a" && ev.Event == "reconciled" && ev.Details["reason"] == "version_restored" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("event reconciled/version_restored tidak ada: %v", e.st.eventNames("acme.a"))
+	}
+	if e.snap.Status(tenantA, "acme.a") != runtime.StatusEnabled {
+		t.Error("snapshot harus enabled kembali")
+	}
+	// Idempoten.
+	before := len(e.st.commits)
+	if rep, err = e.svc.Reconcile(context.Background(), tenantA); err != nil || len(rep.Restored) != 0 || len(e.st.commits) != before {
+		t.Errorf("reconcile kedua: %+v commits %d -> %d (%v)", rep, before, len(e.st.commits), err)
+	}
+}
+
 func TestReconcile_DowngradeThenRestore(t *testing.T) {
 	rec := &fxRec{}
 	e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a", version: "1.0.0"}))
@@ -137,6 +176,52 @@ func TestReconcile_InterruptedOperationMarkedFailed(t *testing.T) {
 	if !slices.Contains(e.st.eventNames("acme.a"), "interrupted") {
 		t.Errorf("events = %v", e.st.eventNames("acme.a"))
 	}
+}
+
+// B-11 (Q32): event interrupted memakai actor pelaku penandaan (system:reconcile, atau actor operasi yang berikutnya
+// memperoleh lock); actor operasi asal disimpan di details.originalActor.
+func TestInterruptedEventActorIsMarkerWithOriginalActorInDetails(t *testing.T) {
+	interruptedEvent := func(e *env) store.Event {
+		for _, ev := range e.st.events {
+			if ev.Event == "interrupted" {
+				return ev
+			}
+		}
+		t.Fatal("event interrupted tidak ada")
+		return store.Event{}
+	}
+	seedRunning := func(e *env) {
+		id := uuid.New()
+		e.st.ops[id] = store.Operation{
+			ID: id, TenantID: tenantA, ModuleKey: "acme.a", Operation: "enable", Status: "running", Actor: "cli:pelaku-asal",
+			Steps: []store.Step{{Name: "hook:enable", Status: "running"}},
+		}
+		e.st.opOrder = append(e.st.opOrder, id)
+	}
+	t.Run("reconcile", func(t *testing.T) {
+		rec := &fxRec{}
+		e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
+		seedRunning(e)
+		if _, err := e.svc.Reconcile(context.Background(), tenantA); err != nil {
+			t.Fatal(err)
+		}
+		ev := interruptedEvent(e)
+		if ev.Actor != ReconcileActor || ev.Details["originalActor"] != "cli:pelaku-asal" {
+			t.Errorf("actor=%q details=%v", ev.Actor, ev.Details)
+		}
+	})
+	t.Run("operasi berikutnya", func(t *testing.T) {
+		rec := &fxRec{}
+		e := newEnv(t, rec, newFx(rec, fxSpec{key: "acme.a"}))
+		seedRunning(e)
+		if _, err := e.svc.Execute(context.Background(), Request{Tenant: tenantA, Op: OpInstall, Key: "acme.a", Actor: "cli:penerus"}); err != nil {
+			t.Fatal(err)
+		}
+		ev := interruptedEvent(e)
+		if ev.Actor != "cli:penerus" || ev.Details["originalActor"] != "cli:pelaku-asal" {
+			t.Errorf("actor=%q details=%v", ev.Actor, ev.Details)
+		}
+	})
 }
 
 func TestReconcile_InterruptedEnableKeepsModuleStatus(t *testing.T) {

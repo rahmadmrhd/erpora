@@ -46,25 +46,14 @@ func (s *Service) Reconcile(ctx context.Context, t tenancy.TenantID) (ReconcileR
 	var rev int64
 	bumped := false
 	err := s.d.Store.WithTenantLock(ctx, t, s.lockTimeout(), func(ctx context.Context) error {
-		ids, err := s.markInterrupted(ctx, t)
+		ids, err := s.markInterrupted(ctx, t, ReconcileActor)
 		if err != nil {
 			return err
 		}
 		rep.Interrupted = ids
-		list, err := s.d.Store.Installations(ctx, t)
-		if err != nil {
-			return err
-		}
-		for _, row := range list {
-			bump, r, err := s.reconcileRow(ctx, t, row, &rep)
-			if err != nil {
-				return err
-			}
-			if bump {
-				bumped, rev = true, r
-			}
-		}
-		return nil
+		b, r, err := s.reconcileRows(ctx, t, nil, &rep)
+		bumped, rev = b, r
+		return err
 	})
 	if errors.Is(err, store.ErrLockTimeout) {
 		rep.LockSkipped = true
@@ -81,6 +70,29 @@ func (s *Service) Reconcile(ctx context.Context, t tenancy.TenantID) (ReconcileR
 		s.d.Notifier.Publish(ctx, t, rev)
 	}
 	return rep, nil
+}
+
+// reconcileRows menyelaraskan baris tersimpan dengan binary; dipanggil di dalam advisory lock tenant (oleh Reconcile
+// dan oleh Execute untuk OpUpgrade, sehingga tidak ada lock kedua atau reconcile ganda). keys nil = semua modul.
+// bumped true bila ada commit yang menaikkan revision (rev = revision terakhir).
+func (s *Service) reconcileRows(ctx context.Context, t tenancy.TenantID, keys map[string]bool, rep *ReconcileReport) (bumped bool, rev int64, err error) {
+	list, err := s.d.Store.Installations(ctx, t)
+	if err != nil {
+		return false, 0, err
+	}
+	for _, row := range list {
+		if keys != nil && !keys[row.ModuleKey] {
+			continue
+		}
+		bump, r, err := s.reconcileRow(ctx, t, row, rep)
+		if err != nil {
+			return bumped, rev, err
+		}
+		if bump {
+			bumped, rev = true, r
+		}
+	}
+	return bumped, rev, nil
 }
 
 func (s *Service) reconcileRow(ctx context.Context, t tenancy.TenantID, row store.Installation, rep *ReconcileReport) (bool, int64, error) {
@@ -144,6 +156,20 @@ func (s *Service) reconcileRow(ctx context.Context, t tenancy.TenantID, row stor
 		s.log.WarnContext(ctx, "downgrade modul ditolak", "erp.module.key", row.ModuleKey, "message", msg)
 		return true, rev, nil
 
+	case cmp == 0 && status == runtime.StatusUpgradePending && row.PreviousStatus != "":
+		// Binary kembali ke versi ter-install (mis. rollback binary): upgrade_pending tidak lagi berlaku (Q32 B-3).
+		in.Status, in.PreviousStatus = row.PreviousStatus, ""
+		rev, err := s.d.Store.Commit(ctx, t, store.Commit{
+			Installation: &in, BumpRevision: true,
+			Events: []store.Event{{ModuleKey: row.ModuleKey, Event: "reconciled", Actor: ReconcileActor,
+				Details: map[string]any{"reason": "version_restored", "status": row.PreviousStatus, "from": string(runtime.StatusUpgradePending)}}},
+		})
+		if err != nil {
+			return false, 0, fmt.Errorf("reconcile %s: %w", row.ModuleKey, err)
+		}
+		rep.Restored = append(rep.Restored, row.ModuleKey)
+		return true, rev, nil
+
 	case cmp == 0 && status == runtime.StatusFailed && row.LastOperationID != uuid.Nil && row.PreviousStatus != "":
 		op, err := s.d.Store.Operation(ctx, t, row.LastOperationID)
 		if errors.Is(err, store.ErrNotFound) {
@@ -168,4 +194,21 @@ func (s *Service) reconcileRow(ctx context.Context, t tenancy.TenantID, row stor
 		return true, rev, nil
 	}
 	return false, 0, nil
+}
+
+// simulateReconcile mengembalikan salinan rows seolah reconcile sudah berjalan (hanya langkah versi binary lebih baru
+// menjadi upgrade_pending), untuk dry-run `plan upgrade` yang konsisten dengan Execute(OpUpgrade).
+func (s *Service) simulateReconcile(rows map[string]store.Installation) map[string]store.Installation {
+	out := make(map[string]store.Installation, len(rows))
+	for k, row := range rows {
+		if entry, ok := s.d.Registry.Entry(k); ok && k != registry.PlatformKey {
+			st := runtime.Status(row.Status)
+			if cmp, ok := compareVersions(entry.Manifest.Version, row.InstalledVersion); ok && cmp > 0 &&
+				(st == runtime.StatusInstalled || st == runtime.StatusEnabled || st == runtime.StatusDisabled) {
+				row.PreviousStatus, row.Status = row.Status, string(runtime.StatusUpgradePending)
+			}
+		}
+		out[k] = row
+	}
+	return out
 }

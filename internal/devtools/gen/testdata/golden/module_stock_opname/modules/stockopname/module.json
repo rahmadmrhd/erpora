@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "key": "acme.stock-opname",
+  "slug": "stock-opname",
+  "name": "Stock Opname",
+  "version": "0.1.0",
+  "publisher": { "id": "acme", "name": "Acme" },
+  "trust": "builtin",
+  "compatibility": { "platform": "^0.1", "sdk": "^0.1" },
+  "dependencies": [
+    { "module": "platform.core", "version": "^0.1", "optional": false }
+  ],
+  "capabilities": ["stock-opname.items.read"],
+  "migrations": { "strategy": "versioned" },
+  "offline": { "mode": "online-only" }
+}

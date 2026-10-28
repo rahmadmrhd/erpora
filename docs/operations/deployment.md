@@ -87,6 +87,13 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 
 Simpan konfigurasi di file env dengan izin terbatas, lalu muat dengan `erpora serve --env-file <path>` 🔶.
 
+### 3.1. Binary release, binary dev, dan penanda lingkungan
+
+- **Production selalu memakai binary release** (`task build`, tanpa `-tags devtools`; artifact CI `erpora-<os>-<arch>`). Binary release **tidak memuat** developer tools: `make:*`, `db:fresh`, `db:seed`, `contracts:*`, `module:check`, `doctor`, dan `release:verify-tag` menghasilkan `unknown command`, dan `erpora version` menampilkan `flavor: release`. CI membuktikannya terhadap artifact (langkah smoke) dan lewat `go list -deps`.
+- **Jangan pernah memakai binary dev di production** (`task build:dev` atau `go run -tags devtools`). Binary dev menulis banner peringatan ke stderr di setiap command.
+- **Penanda lingkungan:** `erpora migrate up` pertama kali menulis `platform_state.environment` = nilai `ERP_ENV` (`development` atau `production`) pada database baru; nilai ini tidak pernah diubah oleh CLI (hanya SQL manual yang disengaja). Binary dev menolak (exit 3) semua command yang menulis (`serve`, `migrate up`, mutasi `modules`, command modul) terhadap database berpenanda `production`, atau terhadap database tanpa penanda bila `ERP_ENV=production`. Penanda tidak bergantung pada host database. `erpora inspect config` menampilkan `database.environment` (membuka koneksi dengan batas 3 detik; `unknown (...)` bila DB tidak terjangkau, tanpa membocorkan DSN).
+- Dengan binary release, penanda tidak memengaruhi perilaku apa pun; sebab itu **set `ERP_ENV=production` sebelum `migrate up` pertama** agar database production berpenanda `production`.
+
 ---
 
 ## 4. Instalasi di Linux (systemd)
@@ -297,3 +304,4 @@ pg_restore --clean --if-exists --no-owner --dbname="$ERP_DATABASE_URL" erpora-20
 - [ ] Binary diverifikasi dengan checksum sebelum dipasang.
 - [ ] `erpora version` menampilkan flavor **`release`**. Binary flavor `dev` (berisi `make:*`, `db:fresh`) tidak boleh dipasang di server production.
 - [ ] Database production dibuat dengan `ERP_ENV=production` saat `erpora migrate up` pertama, sehingga penanda lingkungannya `production`. Cek dengan `erpora inspect config`.
+- [ ] Repositori GitHub: branch protection pada `main` mewajibkan pull request dan status check **`contracts`** (R-10, 28 Oktober 2026). Gate breaking CI menerima breaking change pada event `push` ke `main` (`ERP_API_BREAKING_APPROVED=true`) dengan asumsi perubahan itu sudah melewati PR yang statusnya `contracts` hijau dan label `api-breaking-approved`; tanpa branch protection, push langsung ke `main` melewati gate ini. Asumsi ini tidak dapat diverifikasi dari repositori dan harus dicek di pengaturan GitHub.

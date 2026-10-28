@@ -1,9 +1,16 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
   "files": {
-    "includes": ["web/**", "packages/**", "modules/*/web/**", "!**/dist", "!**/node_modules"]
+    "includes": ["web/**", "packages/**", "modules/*/web/**", "contracts/spectral-functions/**", "!**/dist", "!**/node_modules"]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": { "enabled": true },
+  "overrides": [
+    {
+      "includes": ["**/*.gen.ts"],
+      "linter": { "enabled": false },
+      "assist": { "enabled": false }
+    }
+  ],
   "assist": { "actions": { "source": { "organizeImports": "on" } } }
 }

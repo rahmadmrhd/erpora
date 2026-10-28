@@ -73,6 +73,11 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 	}()
 
+	// Binary dev menolak melayani DB berpenanda production (FR-22.5); binary release tidak terpengaruh.
+	if err := GuardDevWrite(ctx, db, cfg); err != nil {
+		return err
+	}
+
 	pending, err := migrate.Pending(ctx, db)
 	if err != nil {
 		return fmt.Errorf("periksa migrasi: %w", err)

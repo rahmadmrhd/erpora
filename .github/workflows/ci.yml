@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+    # labeled/unlabeled: menambah atau mencabut label api-breaking-approved memicu ulang gate kontrak (K-2).
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -24,6 +26,8 @@ jobs:
   go-checks:
     name: go-checks
     runs-on: ubuntu-latest
+    env:
+      ERP_REQUIRE_BUN: "1" # test lint/generate kontrak butuh Bun; tidak boleh di-skip diam-diam
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -31,6 +35,10 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
       - uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
         with:
           version: ${{ env.TASK_VERSION }}
@@ -79,6 +87,73 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: task test:integration
 
+  # Gate kontrak API (FR-14/FR-23): lint Spectral, hasil generate mutakhir, dan breaking change terhadap tag rilis terakhir.
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    env:
+      ERP_REQUIRE_BUN: "1"
+      # Perubahan breaking hanya lolos bila PR berlabel api-breaking-approved (dan major version manifest naik).
+      # Pada push ke main, breaking yang sudah melewati review PR berlabel diterima (selama MAJOR manifest naik); baseline tag
+      # baru ada saat rilis. Pada PR tanpa label, breaking yang sudah ada di cabang dasar (ERP_API_BREAKING_BASE_REF) tidak
+      # menggagalkan; breaking baru tetap butuh label (K-1).
+      # ASUMSI (R-10): penerimaan pada push ke main mensyaratkan branch protection main yang mewajibkan PR + status check "contracts"
+      # (diatur di GitHub, tidak dapat diverifikasi dari repo; lihat docs/module-sdk/contracts.md dan docs/operations/deployment.md §10).
+      ERP_API_BREAKING_APPROVED: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'api-breaking-approved') }}
+      ERP_API_BREAKING_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # tag rilis dibutuhkan contracts:breaking
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+        with:
+          version: ${{ env.TASK_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --frozen-lockfile
+      - run: task contracts:check
+      - name: Bangkitkan spec gabungan
+        run: task erpora -- contracts:generate
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openapi
+          path: contracts/dist/openapi.json
+          if-no-files-found: error
+
+  # Bukti bahwa make:module menghasilkan modul yang lolos semua gate dan dapat di-install (FR-22 AC). Lama (belasan menit).
+  generator:
+    name: generator
+    runs-on: ubuntu-latest # Docker tersedia untuk testcontainers
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+        with:
+          version: ${{ env.TASK_VERSION }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: pasang golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          install-mode: goinstall
+          install-only: true
+      - run: bun install --frozen-lockfile
+      - run: task test:generator
+
   secrets:
     name: secrets
     runs-on: ubuntu-latest
@@ -93,7 +168,7 @@ jobs:
 
   build:
     name: build (${{ matrix.goos }}/${{ matrix.goarch }})
-    needs: [go-checks, web-checks, integration, secrets]
+    needs: [go-checks, web-checks, integration, contracts, generator, secrets]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -197,6 +272,13 @@ jobs:
           name: erpora-linux-amd64
       - run: chmod +x ./erpora
       - run: ./erpora version
+      - name: Bukti binary release tanpa developer tools
+        run: |
+          ./erpora version | grep -q "flavor: release"
+          for cmd in "make:module x" "make:handler" "make:migration" "make:entity" "make:usecase" "make:contract" "make:command" "make:repository" "db:fresh" "db:seed" "contracts:lint" "contracts:generate" "contracts:breaking" "module:check" "doctor" "release:verify-tag v1"; do
+            if out="$(./erpora $cmd 2>&1)"; then echo "perintah dev '$cmd' seharusnya gagal" >&2; exit 1; fi
+            echo "$out" | grep -q "unknown command" || { echo "keluaran '$cmd' tidak memuat 'unknown command': $out" >&2; exit 1; }
+          done
       - run: ./erpora migrate up
       - name: Serve dan cek /readyz
         run: |
@@ -230,6 +312,18 @@ jobs:
         run: |
           .\erpora.exe version
           .\erpora.exe migrate up
+      - name: Bukti binary release tanpa developer tools
+        shell: pwsh
+        run: |
+          if (-not ((.\erpora.exe version) -match "flavor: release")) { throw "version harus memuat flavor: release" }
+          foreach ($cmd in @("make:module x", "make:handler", "make:migration", "make:entity", "make:usecase", "make:contract", "make:command", "make:repository", "db:fresh", "db:seed", "contracts:lint", "contracts:generate", "contracts:breaking", "module:check", "doctor", "release:verify-tag v1")) {
+            $parts = $cmd -split " "
+            $out = & .\erpora.exe @parts 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) { throw "perintah dev '$cmd' seharusnya gagal" }
+            if ($out -notmatch "unknown command") { throw "keluaran '$cmd' tidak memuat 'unknown command': $out" }
+          }
+          # Perintah dev terakhir memang gagal; tanpa ini pwsh memakai $LASTEXITCODE-nya sebagai exit code step.
+          exit 0
       - name: Serve dan cek /readyz
         shell: pwsh
         run: |

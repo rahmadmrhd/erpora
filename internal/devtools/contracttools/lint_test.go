@@ -1,0 +1,509 @@
+package contracttools
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"testing"
+)
+
+const (
+	notesPath       = "  /api/example/notes:\n"
+	notes403Then    = "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\ncomponents:\n"
+	pingThenNotes   = "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n  /api/example/notes:\n"
+	pageParamsBlock = "      parameters:\n        - { $ref: 'erp:common#/components/parameters/Page' }\n        - { $ref: 'erp:common#/components/parameters/PageSize' }\n"
+	versionProp     = "        version: { type: integer, format: int64 }\n"
+	pageSizeParam   = "        - { $ref: 'erp:common#/components/parameters/PageSize' }\n"
+)
+
+func TestLint_RepositoryContractsClean(t *testing.T) {
+	bun := requireBun(t)
+	repo, err := LoadRepo(realRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Lint(context.Background(), repo, "", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res {
+		if r.Severity == SeverityInfo {
+			continue // INFO (mis. daftar pengecualian) bukan kegagalan
+		}
+		t.Errorf("%s:%d %s %s", r.File, r.Line, r.Rule, r.Message)
+	}
+}
+
+type lintCase struct {
+	name  string
+	edits map[string][][2]string // path relatif -> pasangan {lama, baru}
+	want  []string               // rule yang harus muncul (dan hanya itu)
+	msg   string                 // potongan pesan yang harus ada pada salah satu temuan
+}
+
+func TestLint_Fixtures(t *testing.T) {
+	bun := requireBun(t)
+	ex := "modules/example/openapi.yaml"
+	cases := []lintCase{
+		{
+			name: "ref_not_dependency",
+			edits: map[string][][2]string{
+				ex: {{versionProp, versionProp + "        extra: { $ref: 'erp:example-addon#/components/schemas/Extra' }\n"}},
+				"modules/exampleaddon/openapi.yaml": {{
+					"        '500': { $ref: 'erp:common#/components/responses/InternalError' }\n",
+					"        '500': { $ref: 'erp:common#/components/responses/InternalError' }\ncomponents:\n  schemas:\n    Extra: { type: string }\n",
+				}},
+			},
+			want: []string{"erp-ref-dependency"}, msg: "FR-23.1",
+		},
+		{
+			name:  "number_total",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        total: { type: number }\n"}}},
+			want:  []string{"erp-decimal-not-number"}, msg: "api-guidelines §4.1",
+		},
+		{
+			name:  "crud_verb_path",
+			edits: map[string][][2]string{ex: {{notesPath, "  /api/example/getItems:\n"}}},
+			want:  []string{"erp-path-no-crud-verb", "erp-path-kebab-case"}, msg: "api-guidelines §2",
+		},
+		{
+			name:  "missing_permission",
+			edits: map[string][][2]string{ex: {{"      x-erp-permission: example.notes.read\n", ""}}},
+			want:  []string{"erp-operation-permission"}, msg: "api-guidelines §1",
+		},
+		{
+			name:  "password_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name: "token_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: token, in: query, x-erp-classification: highly_confidential, schema: { type: string } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url"}, msg: "FR-24.2",
+		},
+		{
+			name:  "put_without_flag",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + putBlock + notesPath}}},
+			want:  []string{"erp-no-put"}, msg: "api-guidelines §3",
+		},
+		{
+			name:  "missing_envelope",
+			edits: map[string][][2]string{ex: {{"                required: [data, page]", "                required: [page]"}}},
+			want:  []string{"erp-success-envelope"}, msg: "api-guidelines §4.2",
+		},
+		{
+			name:  "collection_without_page",
+			edits: map[string][][2]string{ex: {{pageParamsBlock, ""}}},
+			want:  []string{"erp-collection-pagination"}, msg: "api-guidelines §6",
+		},
+		{
+			name:  "post_without_idempotency",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + postBlock + "components:\n"}}},
+			want:  []string{"erp-post-idempotency-key"}, msg: "api-guidelines §7.2",
+		},
+		{
+			name:  "singular_without_flag",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + reportBlock + "components:\n"}}},
+			want:  []string{"erp-path-collection-plural"}, msg: "api-guidelines §2",
+		},
+		// K-8: fixture negatif untuk rule keamanan dan rule lain (sebelumnya hanya sebagian yang diuji menolak).
+		{
+			// Bukti AC FR-24.2 "linter menolak password di respons": klasifikasi highly_confidential di respons ditolak.
+			name:  "highly_confidential_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string, x-erp-classification: highly_confidential }\n"}}},
+			want:  []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_sibling_of_ref",
+			edits: map[string][][2]string{ex: {{versionProp,
+				versionProp + "        linkId: { $ref: 'erp:common#/components/schemas/Uuid', x-erp-classification: highly_confidential }\n"}}},
+			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_under_if_keyword",
+			edits: map[string][][2]string{ex: {{versionProp,
+				versionProp + "        conditional: { type: object, if: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } }\n"}}},
+			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_under_dependent_schemas",
+			edits: map[string][][2]string{ex: {{versionProp,
+				versionProp + "        dep: { type: object, dependentSchemas: { a: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } } }\n"}}},
+			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name:  "new_password_needs_classification",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        newPassword: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name:  "compound_secret_names_need_classification",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string }\n        apiToken: { type: string }\n        passwordHash: { type: string }\n        bankAccountNumber: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		// R-2: istilah multi-kata yang ditulis menyambung atau huruf besar semua tetap tertangkap.
+		{
+			name:  "joined_lowercase_sensitive_names_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        apikey: { type: string }\n        privatekey: { type: string }\n        bankaccount: { type: string }\n        accesstoken: { type: string }\n        refreshtoken: { type: string }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name:  "uppercase_sensitive_names_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        APIKEY: { type: string }\n        PRIVATEKEY: { type: string }\n        BANKACCOUNT: { type: string }\n"}}},
+			want:  []string{"erp-property-camel-case", "erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name: "joined_sensitive_names_in_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: apikey, in: query, schema: { type: string } }\n        - { name: accesstoken, in: query, schema: { type: string } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url", "erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name: "reset_token_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: resetToken, in: query, schema: { type: string } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url", "erp-sensitive-needs-classification"}, msg: "FR-24.2",
+		},
+		{
+			name: "highly_confidential_param_schema_in_query",
+			edits: map[string][][2]string{ex: {{pageSizeParam,
+				pageSizeParam + "        - { name: sessionRef, in: query, schema: { type: string, x-erp-classification: highly_confidential } }\n"}}},
+			want: []string{"erp-no-sensitive-in-url"}, msg: "FR-24.2",
+		},
+		// K-4 (Q32): nik, npwp, bankAccount*, dan salary (per token camelCase) wajib highly_confidential.
+		{
+			name:  "nik_needs_highly_confidential",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        nik: { type: string, x-erp-classification: confidential }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name:  "bank_account_number_needs_highly_confidential",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        bankAccountNumber: { type: string, x-erp-classification: confidential }\n"}}},
+			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+		},
+		{
+			name:  "salary_highly_without_exception_in_response",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential }\n"}}},
+			want:  []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
+		},
+		{
+			name:  "allow_highly_exception_empty_reason",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-no-highly-confidential-in-response"}, msg: "alasan",
+		},
+		{
+			name:  "allow_highly_exception_not_a_string",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: true }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-no-highly-confidential-in-response"}, msg: "alasan",
+		},
+		{
+			name:  "allow_highly_exception_without_highly_class",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        label: { type: string, x-erp-classification: internal, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "highly_confidential",
+		},
+		// R-3 (Q32 butir 14): pengecualian hanya untuk data HR (nik, npwp, bankAccount*, salary) pada properti respons 2xx.
+		{
+			name:  "allow_highly_on_password",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_api_key",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        apiKey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_joined_private_key",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        privatekey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_client_secret",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_refresh_token",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        refreshToken: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_hr_name_with_credential_token",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        bankAccountPassword: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+		},
+		{
+			name:  "allow_highly_on_name_outside_hr_group",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        fullName: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "data HR",
+		},
+		{
+			name:  "allow_highly_in_non_2xx_response",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n        '404':\n          description: Tidak ada.\n          content:\n            application/json:\n              schema:\n                type: object\n                properties:\n                  nik: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n  /api/example/notes:\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-error-standard"}, msg: "respons 2xx",
+		},
+		{
+			name:  "allow_highly_in_parameter_schema",
+			edits: map[string][][2]string{ex: {{pageSizeParam, pageSizeParam + "        - name: filter\n          in: query\n          schema:\n            type: object\n            properties:\n              nik: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "respons 2xx",
+		},
+		{
+			name:  "allow_highly_on_response_root_schema",
+			edits: map[string][][2]string{ex: {{"          description: Modul menjawab.\n          content:\n            application/json:\n              schema:\n                type: object\n", "          description: Modul menjawab.\n          content:\n            application/json:\n              schema:\n                type: object\n                x-erp-classification: highly_confidential\n                x-erp-allow-highly-confidential: 'alasan'\n"}}},
+			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "respons 2xx",
+		},
+		{
+			name:  "classification_invalid",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        flag: { type: string, x-erp-classification: top_secret }\n"}}},
+			want:  []string{"erp-classification-valid"}, msg: "security-guidelines §2",
+		},
+		{
+			name:  "error_not_standard_component",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "        '403': { description: Ditolak }\n  /api/example/notes:\n"}}},
+			want:  []string{"erp-error-standard"}, msg: "api-guidelines §8",
+		},
+		{
+			name:  "missing_error_codes",
+			edits: map[string][][2]string{ex: {{pingThenNotes, "  /api/example/notes:\n"}}},
+			want:  []string{"erp-error-codes-documented"}, msg: "api-guidelines §13",
+		},
+		{
+			name:  "missing_example",
+			edits: map[string][][2]string{ex: {{"              example: { data: { pong: true } }\n", ""}}},
+			want:  []string{"erp-examples"}, msg: "api-guidelines §13",
+		},
+		{
+			name:  "property_not_camel_case",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        Bad_Name: { type: string }\n"}}},
+			want:  []string{"erp-property-camel-case"}, msg: "api-guidelines §4.1",
+		},
+		{
+			name:  "enum_not_snake_case",
+			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        state: { type: string, enum: [CamelCase, ok_value] }\n"}}},
+			want:  []string{"erp-enum-snake-case"}, msg: "api-guidelines §4.1",
+		},
+		{
+			name:  "path_too_nested",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + nestedPathBlock + "components:\n"}}},
+			want:  []string{"erp-path-max-nesting"}, msg: "api-guidelines §2",
+		},
+		{
+			name:  "path_wrong_module_prefix",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + otherPrefixBlock + "components:\n"}}},
+			want:  []string{"erp-path-module-prefix"}, msg: "FR-23.1",
+		},
+		{
+			name:  "public_with_query_needs_4xx",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + publicWithQueryBlock + "components:\n"}}},
+			want:  []string{"erp-error-codes-documented"}, msg: "api-guidelines §13",
+		},
+		{
+			name:  "patch_without_if_match",
+			edits: map[string][][2]string{ex: {{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + patchBlock + "components:\n"}}},
+			want:  []string{"erp-if-match"}, msg: "api-guidelines §7.1",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			copyRepoSubset(t, root, "example", "exampleaddon")
+			for file, edits := range c.edits {
+				editFile(t, root, file, edits...)
+			}
+			repo, err := LoadRepo(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo.ToolsRoot = realRoot
+			res, err := Lint(context.Background(), repo, "example", bun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := map[string]bool{}
+			found := false
+			for _, r := range res {
+				if r.Severity == SeverityInfo {
+					continue
+				}
+				got[r.Rule] = true
+				if strings.Contains(r.Message, c.msg) {
+					found = true
+				}
+			}
+			var gotList []string
+			for r := range got {
+				gotList = append(gotList, r)
+			}
+			sort.Strings(gotList)
+			want := append([]string{}, c.want...)
+			sort.Strings(want)
+			if fmt.Sprint(gotList) != fmt.Sprint(want) {
+				t.Errorf("rule = %v, want %v\n%v", gotList, want, res)
+			}
+			if !found {
+				t.Errorf("tidak ada temuan yang pesannya memuat %q: %v", c.msg, res)
+			}
+		})
+	}
+}
+
+// K-4 (Q32): properti respons highly_confidential diizinkan HANYA dengan pengecualian eksplisit
+// x-erp-allow-highly-confidential (alasan string tidak kosong). Pengecualian lolos sebagai nol error tetapi tercatat
+// sebagai temuan INFO (rule erp-highly-confidential-exception) yang memuat alasan, untuk ditinjau reviewer.
+func TestLint_HighlyConfidentialExceptionAllowedAndRecorded(t *testing.T) {
+	bun := requireBun(t)
+	root := t.TempDir()
+	copyRepoSubset(t, root, "example", "exampleaddon")
+	const reason = "Modul HR menampilkan gaji kepada pengguna HR berizin"
+	editFile(t, root, "modules/example/openapi.yaml",
+		[2]string{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '" + reason + "' }\n"})
+	repo, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.ToolsRoot = realRoot
+	res, err := Lint(context.Background(), repo, "example", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var infos int
+	for _, r := range res {
+		if r.Severity != SeverityInfo {
+			t.Errorf("tidak boleh ada error/warn: %s %s", r.Rule, r.Message)
+			continue
+		}
+		if r.Rule != "erp-highly-confidential-exception" || !strings.Contains(r.Message, reason) || !strings.Contains(r.Message, "monthlySalary") {
+			t.Errorf("INFO tidak sesuai: %+v", r)
+		}
+		infos++
+	}
+	if infos != 1 {
+		t.Errorf("INFO pengecualian = %d, want 1 (daftar untuk reviewer): %+v", infos, res)
+	}
+	if LintFailed(res) {
+		t.Error("INFO tidak boleh menggagalkan lint")
+	}
+}
+
+// K-7 (Q32): operasi publik tanpa parameter non-header dan tanpa requestBody tidak wajib mendokumentasikan 4xx/403.
+func TestLint_PublicOperationWithoutInputMayOmit4xx(t *testing.T) {
+	bun := requireBun(t)
+	root := t.TempDir()
+	copyRepoSubset(t, root, "example", "exampleaddon")
+	editFile(t, root, "modules/example/openapi.yaml",
+		[2]string{notes403Then, "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n" + publicNoInputBlock + "components:\n"})
+	repo, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.ToolsRoot = realRoot
+	res, err := Lint(context.Background(), repo, "example", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res {
+		t.Errorf("tidak boleh ada temuan: %s %s", r.Rule, r.Message)
+	}
+}
+
+func TestLint_UnknownTarget(t *testing.T) {
+	bun := requireBun(t)
+	repo, err := LoadRepo(realRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Lint(context.Background(), repo, "tidak-ada", bun); err == nil {
+		t.Error("modul tidak dikenal harus error")
+	}
+}
+
+const putBlock = `    put:
+      operationId: putExamplePing
+      summary: Ganti ping
+      description: Ganti ping.
+      x-erp-permission: example.ping.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { pong: { type: boolean } } }
+            example: { pong: true }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, properties: { pong: { type: boolean } } } } }
+              example: { data: { pong: true } }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
+`
+
+const postBlock = `    post:
+      operationId: createExampleNote
+      summary: Buat note
+      description: Buat note.
+      x-erp-permission: example.notes.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [title], properties: { title: { type: string, x-erp-classification: internal } } }
+            example: { title: a }
+      responses:
+        '201':
+          description: dibuat
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Note' } } }
+              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 1, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z' } }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
+`
+
+const reportBlock = `  /api/example/report:
+    get:
+      operationId: getExampleReport
+      summary: Laporan
+      description: Laporan.
+      x-erp-permission: example.ping.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, properties: { total: { $ref: 'erp:common#/components/schemas/Decimal' } } } } }
+              example: { data: { total: '1.00' } }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+`
+
+// R-3 (Q32 butir 14): pengecualian sah untuk setiap nama kelompok data HR pada properti respons 200.
+func TestLint_HighlyConfidentialExceptionAllowedForHRNames(t *testing.T) {
+	bun := requireBun(t)
+	for _, name := range []string{"nik", "npwp", "bankAccountNumber", "monthlySalary", "bankaccount"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			copyRepoSubset(t, root, "example", "exampleaddon")
+			editFile(t, root, "modules/example/openapi.yaml",
+				[2]string{versionProp, versionProp + "        " + name + ": { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'Modul HR menampilkan data kepada HR berizin' }\n"})
+			repo, err := LoadRepo(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo.ToolsRoot = realRoot
+			res, err := Lint(context.Background(), repo, "example", bun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range res {
+				if r.Severity != SeverityInfo {
+					t.Errorf("tidak boleh ada error/warn: %s %s", r.Rule, r.Message)
+				}
+			}
+		})
+	}
+}

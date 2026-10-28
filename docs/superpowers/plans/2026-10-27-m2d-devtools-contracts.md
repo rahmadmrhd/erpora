@@ -14,6 +14,8 @@
 
 ## Keputusan rencana (perlu disetujui pada review rencana)
 
+> **Status (27 Okt 2026): kelima butir ★ disetujui owner** sesuai rekomendasi masing-masing; dicatat di PRD-000 Q31 beserta keputusan saat eksekusi dan deviasi.
+
 Butir bertanda ★ **(perlu konfirmasi owner)** menyangkut ambiguitas atau kontradiksi spec, atau perilaku di luar teks spec. Butir lain adalah pilihan implementasi yang mengikat rencana ini.
 
 1. **★ Generator frontend di M2d dibuat minimal; `make:page` ditunda ke M3 (perlu konfirmasi owner).** FR-22 AC dan exit gate M2 memakai `make:module … --frontend`, padahal shell, registry TS, `defineModule`, dan TanStack Router baru dibangun di M3 (FR-08/FR-09, overview M2). M2d mengerjakan hal berikut:
@@ -1093,6 +1095,60 @@ Exit gate PRD-000 §11 M2, AC FR-22/FR-23/FR-24.2 (bagian linter), dan item over
 - [ ] **Step 4:** Tabel di atas disalin ke ledger `.superpowers/sdd/<tanggal>-m2d/progress.md`, setiap baris berstatus ✅ beserta hash commit. Butir ★ yang belum dijawab owner ditandai ⏳ dan tidak diklaim selesai.
 - [ ] **Step 5:** Tidak ada push atau PR tanpa permintaan user. Bila semua hijau, laporkan bahwa M2 siap untuk review menyeluruh branch (satu review akhir, lalu satu gelombang perbaikan).
 
+#### Hasil verifikasi exit gate M2 (27 Okt 2026, Windows, branch `feat/m2d-devtools`)
+
+**Step 1 (`ERP_REQUIRE_BUN=1`, setiap task dijalankan terpisah; semuanya exit 0):** `lint` 42 dtk, `arch` 103 dtk, `check:gowork-off` 23 dtk, `test` 82 dtk, `test:integration` 173 dtk, `test:generator` 521 dtk, `vuln` 53 dtk, `web:check` 8 dtk, `contracts:check` 11 dtk, `build` 11 dtk. `contracts:check` ditambahkan ke `task ci` (sebelumnya tidak ada).
+
+**Step 2:** `go list -deps ./cmd/erpora` (tanpa tag) memuat 0 paket `erpora/internal/devtools`; `bin/erpora make:module x` → `unknown command "make:module"`; `bin/erpora version` → `flavor: release`.
+
+**Step 3 (manual, PostgreSQL dari `task db:up`, tanpa file .env permanen):** (1) `task db:up` lalu `task erpora -- doctor`: go/bun/task/docker/postgres `ok`, `.env` `warn` (tidak ada), tanpa `fail` ✅. (2) `task dev:setup` (migrate up + `modules install --all --enable`): kedua modul referensi `enabled` ✅. `db:fresh --seed` dengan mengetik nama DB **tidak dijalankan manual** (aksi destruktif ditolak oleh pengaman sesi); perilakunya dibuktikan `TestDBFresh_ConfirmAndRebuild` dan `TestDBFresh_RefusedWithoutTouchingDB` ⏳ (manual menunggu owner). (3) `task erpora -- make:module demo --frontend --dry-run`: daftar file tercetak, `git status` tetap bersih ✅. (4) `task erpora -- contracts:lint` → `kontrak OK`, exit 0 ✅. (5) `task erpora -- serve --env-file .env` lalu `curl /api/example/notes` → 200 dengan amplop `data` ✅. Lingkungan dibersihkan (`task db:down`, `.env` sementara dihapus).
+
+| Kriteria | Bukti | Commit | Status |
+| --- | --- | --- | --- |
+| §11: AC FR-18/FR-19 lulus di integration test | `task test:integration` hijau (`TestService_*`, `TestExample_*`, `TestCLI_*`, `TestAssemble_*`, `TestResolve_*`) | M2b | ✅ |
+| §11: kedua modul referensi dikelola penuh lewat CLI | `TestCLI_ManageBothModules`, `TestCLI_ExitCodes`, `TestCLI_CrashAfterMigrateThenRetry`, `TestCLI_ConcurrentEnableTwoProcesses` | M2b | ✅ |
+| §11: `make:module` menghasilkan modul yang lolos semua gate | `TestMakeModule_PassesAllGates` (12m20s lokal; 521 dtk di `task ci`), job CI `generator` | `7d9c0ca` | ✅ lokal Windows; ⏳ job CI `generator` di GitHub belum pernah berjalan |
+| §11: binary release tanpa developer tools | `TestReleaseFlavor_NoDevtoolsPackages`, `TestReleaseFlavor_UnknownDevCommands`, `TestDevtoolsRule_OnlyEntryFile`; Step 2; langkah smoke CI | `f2abbb5`, `bb5a980` | ✅ test lokal dan Step 2; ⏳ langkah smoke CI terhadap artifact belum pernah berjalan di GitHub |
+| FR-22 AC: golden test setiap `make:*` | `TestMakeMigration_Golden`, `TestMakeModule_Golden*`, golden T12 dan T13 (`TestMakeHandler_Golden`) | `ed2dac6`, `69f58ae`, `b7fbbb8`, `f092cb0` | ✅ |
+| FR-22 AC: `--dry-run` tidak mengubah file | `TestApply_DryRunWritesNothing`; langkah 2 `TestMakeModule_PassesAllGates`; Step 3 (3) | `ed2dac6`, `7d9c0ca` | ✅ |
+| FR-22 AC: `db:fresh` ditolak (`ERP_ENV=production` / penanda `production`) | `TestDBFresh_RefusedWithoutTouchingDB` (dibuktikan juga lewat mutasi) | `af1fec7` | ✅ |
+| FR-22 AC: binary dev vs DB `production` | `TestDevBinary_ProductionMarker` | `6a1c395` | ✅ |
+| FR-22 AC: `example:recount` enabled/disabled | `TestRunModuleCommand_EnabledRuns`, `TestRunModuleCommand_NotEnabledExit3` | M2b | ✅ |
+| FR-22 AC: `erpora list` dikelompokkan | `TestDevFlavor_ListGroups` | `f2abbb5`..`bb5a980` | ✅ |
+| FR-22.1: `version` menampilkan flavor, banner dev | `TestReleaseFlavor_VersionNoBanner`, `TestDevFlavor_BannerAndVersion` | `f2abbb5` | ✅ |
+| FR-03: `inspect config` menampilkan penanda | `TestInspectConfig_ShowsDatabaseEnvironment` | `6a1c395` | ✅ |
+| FR-23 AC: kontrak `example`/`exampleaddon` lolos; `erp:example` dari addon lolos | `TestLint_RepositoryContractsClean`; Step 3 (4) | `ca6e312` | ✅ |
+| FR-23 AC: `erp:exampleaddon` dari `example` ditolak | `TestLint_Fixtures/ref_not_dependency` | `ca6e312` | ✅ |
+| FR-23 AC: `total: number`, `/getItems`, operasi tanpa permission ditolak dengan pasal | `TestLint_Fixtures` | `ca6e312` | ✅ |
+| FR-23 AC: `Handle` tanpa operasi (atau sebaliknya) gagal | `TestContracts_RoutesMatchOperations/extra_*`, `TestCheckConformance_Table` | `292dee8`, `4e94c67` | ✅ |
+| FR-23 AC: dua modul `Item` digabung tanpa bentrok | `TestMerge_SameSchemaNameTwoModules` | `4e94c67` | ✅ |
+| FR-23 AC: kontrak berubah tanpa generate → CI gagal | `TestCheckGenerated_DetectsStale`, `task contracts:check`, job CI `contracts` | `9c8b041`, `bb5a980` | ✅ lokal (`TestCheckGenerated_DetectsStale`, `task contracts:check`); ⏳ job CI `contracts` belum pernah berjalan di GitHub |
+| FR-23 AC: hapus field dari kontrak bertag gagal; field opsional lolos | `TestCheckBreaking_RemovedFieldFails`, `TestCheckBreaking_OptionalFieldPasses` | `83c5020` | ✅ |
+| FR-23.2: test kontrak respons | `TestContractResponses_ReferenceModules` | `1206787` | ✅ |
+| FR-23.3: metrik deprecated | `TestMount_Deprecated*` (operasi dan parameter query; properti body dan klien ditunda, Q31 ★5) | `d73e2b4` | ✅ (cakupan sesuai ★5) |
+| FR-24.2 AC: linter menolak `password` di respons dan token di query | `TestLint_Fixtures/highly_confidential_in_response` (penolakan `highly_confidential` di respons), `/password_response` (wajib klasifikasi), `/new_password_needs_classification`, `/token_query`, `/reset_token_query` | `ca6e312` | ✅ |
+| M2c ★3: klasifikasi route = kontrak (bersarang) | `TestContracts_ClassificationMatchesRoute`, `TestResponseClassification_Nested` | `292dee8`, `4e94c67` | ✅ |
+| FR-06 AC: tipe TS `packages/module-sdk` dari schema | `manifest.gen.ts` + `manifest.check.ts` (typecheck) + `contracts:generate --check` | `9c8b041` | ✅ |
+| FR-14: workflow validasi tag rilis | `TestVerifyTag_Table`, `.github/workflows/release.yml`, `task release:verify-tag` | `bb5a980` | ⏳ test lokal hijau (`TestVerifyTag_Table`); workflow belum pernah berjalan di GitHub (sintaks YAML diperiksa dengan parser) |
+| FR-14: gate kontrak di CI | job `contracts` di `ci.yml` | `bb5a980` | ⏳ job `contracts` belum pernah berjalan di GitHub; `task contracts:check` hijau lokal |
+| Butir ★1–★5 | Disetujui owner 27 Okt 2026, dicatat di PRD-000 Q31 | `c49ed88` | ✅ |
+| Manual: `db:fresh --seed` dengan ketik nama DB | Tidak dijalankan manual (pengaman sesi); dibuktikan test integrasi | — | ⏳ |
+
+#### Verifikasi ulang setelah review akhir M2 (28 Okt 2026, Windows, HEAD `7973bb7`)
+
+Review akhir M2 (empat reviewer independen + review diff perbaikan) menghasilkan perbaikan yang tercatat di PRD-000 Q31 (putaran perbaikan) dan Q32 (keputusan owner 27–28 Okt 2026). Setelah semua perbaikan, gate dijalankan ulang:
+
+| Gate | Hasil |
+| --- | --- |
+| `lint` (termasuk tag `generator,integration`) | ✅ 0 issues di `7973bb7` |
+| `arch`, `check:gowork-off`, `test`, `contracts:check`, `web:check` (`ERP_REQUIRE_BUN=1`) | ✅ di `83bbb51`; commit sesudahnya (`7973bb7`) hanya mengubah `pgtest` ber-tag `integration` |
+| `test:integration` | ✅. Run penuh pertama (71 menit) gagal di `internal/app`, `modules/lifecycle` (PostgreSQL tidak siap dalam 60 dtk) dan `contracttools`, `gen`, `modcheck` (timeout 10 menit) karena memori host habis (0,3 GB bebas dari 7,7 GB), bukan assertion. Kelima paket itu dijalankan ulang dengan `go test -tags integration -p 2 -count=1` dan semuanya `ok` (314 dtk); paket lain `ok` pada run pertama |
+| `test:generator` | ✅ `TestMakeModule_PassesAllGates` 722 dtk di `7973bb7` |
+
+Run pertama menemukan kebocoran container di `pgtest` (container dari `tcpostgres.Run` yang gagal menunggu siap tidak dihentikan); diperbaiki di `7973bb7`.
+
+Exit gate M2 (PRD-000 §11) terpenuhi secara lokal. Yang tetap ⏳ hanya hal yang butuh GitHub: job CI `contracts`, `generator`, smoke artifact release, `release.yml`, serta asumsi branch protection (status `contracts` wajib di PR ke `main`) yang menjadi dasar auto-approve breaking pada push ke `main`.
+
 ---
 
 ## Di luar cakupan M2d (sengaja)
@@ -1103,4 +1159,4 @@ Exit gate PRD-000 §11 M2, AC FR-22/FR-23/FR-24.2 (bagian linter), dan item over
 - Hook pre-commit git otomatis. FR-23.3 menyebutnya opsional; `task contracts:check` sudah dapat dipakai sebagai pre-commit manual.
 - Penerbitan dokumentasi API (portal/UI) dari `contracts/dist/openapi.json` → PRD terkait integrator. M2d hanya menghasilkan artifact CI.
 - Vanity domain untuk SDK dan modul pihak ketiga (Q24), serta penandatanganan artifact → fase marketplace.
-- Task `dev:setup` (FR-13, cakupan M1) tidak ditambahkan di sini. Temuan ini dilaporkan terpisah bila memang belum ada.
+- ~~Task `dev:setup` (FR-13, cakupan M1) tidak ditambahkan di sini.~~ Ditambahkan di Task 17 (`bb5a980`) karena memang belum ada.

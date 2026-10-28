@@ -399,3 +399,40 @@ func TestCheck_CleanRepoHasNoViolations(t *testing.T) {
 		t.Fatalf("expected none, got %+v", vs)
 	}
 }
+
+// Aturan DEVTOOLS (PRD-000 FR-22.1): erpora/internal/devtools hanya boleh diimpor dari devtools sendiri
+// dan dari cmd/erpora/devtools_on.go.
+func TestDevtoolsRule_OnlyEntryFile(t *testing.T) {
+	cmdPkg := pkg(root + "/cmd/erpora")
+	cmdPkg.Dir = "testdata/devtools_import/cmd_erpora"
+	cmdPkg.GoFiles = []string{"bad.go", "devtools_on.go"}
+	cmdPkg.FileImports = fileImports(cmdPkg.Dir, cmdPkg.GoFiles)
+	platPkg := pkg(root + "/internal/platform/x")
+	platPkg.Dir = "testdata/devtools_import/platform_x"
+	platPkg.GoFiles = []string{"x.go"}
+	platPkg.FileImports = fileImports(platPkg.Dir, platPkg.GoFiles)
+	own := pkg(root + "/internal/devtools/gen")
+	own.FileImports = map[string][]string{"a.go": {root + "/internal/devtools/commands"}}
+
+	var got []Violation
+	for _, v := range Check(repoWith(cmdPkg, platPkg, own)) {
+		if v.Rule == "DEVTOOLS" {
+			got = append(got, v)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 DEVTOOLS violations, got %+v", got)
+	}
+	for _, v := range got {
+		if strings.Contains(v.Detail, "devtools_on.go") && !strings.Contains(v.Detail, "hanya boleh dari") {
+			t.Errorf("devtools_on.go tidak boleh dilanggar: %+v", v)
+		}
+	}
+	joined := got[0].Package + "|" + got[1].Package
+	if !strings.Contains(joined, root+"/cmd/erpora") || !strings.Contains(joined, root+"/internal/platform/x") {
+		t.Errorf("pelanggar tidak sesuai: %+v", got)
+	}
+	if !strings.Contains(got[0].Detail+got[1].Detail, "bad.go") {
+		t.Errorf("detail harus menyebut bad.go: %+v", got)
+	}
+}

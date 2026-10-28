@@ -1,0 +1,21 @@
+package infrastructure
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// [[.T.Pascal]]Model adalah model GORM tabel [[.Mod.Snake]]_[[.T.PluralSnake]], terpisah dari entity domain. Tag gorm eksplisit.
+// Tabelnya dibuat lewat `erpora make:migration [[.Mod.Slug]] create_[[.Mod.Snake]]_[[.T.PluralSnake]]`; isolasi tenant ditangani
+// lapisan database (ADR-004), sehingga tidak ada kolom tenant_id.
+type [[.T.Pascal]]Model struct {
+	ID        uuid.UUID `gorm:"column:id;primaryKey"`
+	Title     string    `gorm:"column:title"`
+	Version   int64     `gorm:"column:version"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
+}
+
+// TableName menamai tabel dengan prefiks modul.
+func ([[.T.Pascal]]Model) TableName() string { return "[[.Mod.Snake]]_[[.T.PluralSnake]]" }

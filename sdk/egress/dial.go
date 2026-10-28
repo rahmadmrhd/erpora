@@ -7,17 +7,19 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"sync/atomic"
 )
 
 // Hook uji; hanya diisi lewat export_test.go sehingga tidak dapat dipakai dari luar paket.
+// atomic.Pointer: cleanup test menulis hook sementara goroutine dial transport HTTP masih bisa membacanya (-race).
 var (
-	testDialHook  func(ctx context.Context, network, addr string) (net.Conn, error)
-	testAllowAddr func(netip.AddrPort) bool
+	testDialHook  atomic.Pointer[func(ctx context.Context, network, addr string) (net.Conn, error)]
+	testAllowAddr atomic.Pointer[func(netip.AddrPort) bool]
 )
 
 // blockedAddr menerapkan blockedReason kecuali hook uji mengizinkan alamat itu.
 func blockedAddr(ap netip.AddrPort) (string, bool) {
-	if testAllowAddr != nil && testAllowAddr(ap) {
+	if allow := testAllowAddr.Load(); allow != nil && (*allow)(ap) {
 		return "", false
 	}
 	return blockedReason(ap.Addr())
@@ -55,8 +57,10 @@ func (c *Client) dialContext(ctx context.Context, network, addr string) (net.Con
 		}
 	}
 
-	dial := testDialHook
-	if dial == nil {
+	var dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	if hook := testDialHook.Load(); hook != nil {
+		dial = *hook
+	} else {
 		d := &net.Dialer{Timeout: c.cfg.ConnectTimeout}
 		dial = d.DialContext
 	}

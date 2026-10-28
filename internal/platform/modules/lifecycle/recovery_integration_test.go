@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,29 @@ func TestService_FailingMigrationThenRetry(t *testing.T) {
 	r := e.exec(t, OpInstall, "acme.fx-mod")
 	if r.Status != "failed" || r.Error == nil || r.Error.Code != "migration_failed" || r.Error.Step != "migrate" {
 		t.Fatalf("install = %+v (%+v)", r, r.Error)
+	}
+	// B-10 (Q32): teks SQL/SQLSTATE dari PostgreSQL tidak boleh ada di message maupun steps[].error; hanya di log.
+	leaks := func(s string) bool {
+		return strings.Contains(s, "SQLSTATE") || strings.Contains(strings.ToLower(s), "syntax")
+	}
+	if leaks(r.Error.Message) {
+		t.Errorf("message membocorkan teks SQL: %q", r.Error.Message)
+	}
+	op, err := e.st.Operation(ctx, tenantA, r.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leaks(op.Error.Message) {
+		t.Errorf("operasi tersimpan membocorkan teks SQL: %q", op.Error.Message)
+	}
+	migStep := stepByName(op.Steps, "migrate")
+	if migStep == nil || migStep.Status != "failed" || migStep.Error == "" || leaks(migStep.Error) {
+		t.Errorf("steps[migrate].error harus ada dan ringkas: %+v", migStep)
+	}
+	for _, s := range r.Steps {
+		if leaks(s.Error) {
+			t.Errorf("Result.Steps[%s].error membocorkan teks SQL: %q", s.Name, s.Error)
+		}
 	}
 	ins, _ := e.st.Installations(ctx, tenantA)
 	if len(ins) != 1 || ins[0].Status != "failed" || ins[0].PreviousStatus != "available" {
@@ -118,7 +142,7 @@ func TestService_InterruptedOperationMarkedUnderLock(t *testing.T) {
 		t.Fatalf("installations = %+v", ins)
 	}
 
-	res, err := healthy.svc.RetryModule(ctx, tenantA, "acme.fx-mod", "cli:tester", nil)
+	res, err := healthy.svc.RetryModule(ctx, tenantA, "acme.fx-mod", "cli:tester", nil, "")
 	if err != nil || res.Status != "succeeded" || res.To != rt.StatusInstalled {
 		t.Fatalf("Retry = %+v, %v", res, err)
 	}
@@ -217,5 +241,36 @@ func TestService_IncompatibleInstallRejected(t *testing.T) {
 	}
 	if n := e.count(t, "SELECT count(*) FROM module_operations"); n != 0 {
 		t.Errorf("operasi tercatat: %d", n)
+	}
+}
+
+// Codex PR#6 C6 (Q32, 28 Okt 2026): setelah binary diganti dan sebelum serve, `upgrade` langsung berhasil (reconcile di
+// dalam lock yang sama) dan modul tetap enabled di versi baru; downgrade tetap ditolak.
+func TestService_UpgradeRightAfterBinarySwap(t *testing.T) {
+	ctx := context.Background()
+	rec := &fxRec{}
+	h := newRealEnvDSN(t)
+	v10 := newRealService(t, h.dsn, h.db, 0, []*fxModule{newFx(rec, fxSpec{key: "acme.fx-mod", version: "1.0.0"})})
+	v10.exec(t, OpInstall, "acme.fx-mod")
+	v10.exec(t, OpEnable, "acme.fx-mod")
+
+	v11 := newRealService(t, h.dsn, h.db, 0, []*fxModule{newFx(rec, fxSpec{key: "acme.fx-mod", version: "1.1.0"})})
+	res, err := v11.svc.Execute(ctx, Request{Tenant: tenantA, Op: OpUpgrade, Key: "acme.fx-mod", Actor: "cli:tester"})
+	if err != nil || len(res) != 1 || res[0].Status != "succeeded" || res[0].To != rt.StatusEnabled {
+		t.Fatalf("upgrade = %+v, %v", res, err)
+	}
+	ins, _ := v11.st.Installations(ctx, tenantA)
+	if ins[0].Status != "enabled" || ins[0].PreviousStatus != "" || ins[0].InstalledVersion != "1.1.0" {
+		t.Errorf("installations = %+v", ins)
+	}
+	if v11.snap.Status(tenantA, "acme.fx-mod") != rt.StatusEnabled {
+		t.Error("snapshot harus enabled")
+	}
+
+	old := newRealService(t, h.dsn, h.db, 0, []*fxModule{newFx(rec, fxSpec{key: "acme.fx-mod", version: "1.0.0"})})
+	_, err = old.svc.Execute(ctx, Request{Tenant: tenantA, Op: OpUpgrade, Key: "acme.fx-mod", Actor: "cli:tester"})
+	var le *Error
+	if !errors.As(err, &le) || le.Code != CodeDowngradeNotSupported {
+		t.Fatalf("downgrade err = %v", err)
 	}
 }

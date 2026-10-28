@@ -15,6 +15,9 @@ import (
 
 func call(h http.Handler, method, target, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if method == http.MethodPost || method == "POST" {
+		req.Header.Set("Content-Type", "application/json") // mutasi modul wajib application/json (Q32 B-9)
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec

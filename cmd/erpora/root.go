@@ -50,7 +50,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newModulesCmd(opts, defaultBackend),
 	)
 	addModuleCommands(root, opts)
-	registerDevtools(root)
+	registerDevtools(root, opts)
 	return root
 }
 

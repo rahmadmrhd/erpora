@@ -7,7 +7,7 @@ func TestResolveRouteOptions(t *testing.T) {
 		t.Errorf("tanpa opsi = %+v", got)
 	}
 	got := ResolveRouteOptions(MaxBodyBytes(4096), Classify(ClassInternal), nil, Classify(ClassConfidential), Classify(ClassPublic))
-	want := RouteConfig{MaxBodyBytes: 4096, Classification: ClassConfidential}
+	want := RouteConfig{MaxBodyBytes: 4096, MaxBodyBytesSet: true, Classification: ClassConfidential}
 	if got != want {
 		t.Errorf("got %+v, want %+v", got, want)
 	}

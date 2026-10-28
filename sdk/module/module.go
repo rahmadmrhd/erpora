@@ -21,6 +21,13 @@ type MigrationSource interface {
 	Migrations() fs.FS
 }
 
+// ContractSource diimplementasi modul yang membawa kontrak API-nya (PRD-000 FR-23.1): isi
+// modules/<dir>/openapi.yaml yang di-embed. Registry menyimpannya di Entry.Contract dan memvalidasinya.
+type ContractSource interface {
+	// OpenAPI mengembalikan dokumen OpenAPI 3.1 (YAML) modul.
+	OpenAPI() []byte
+}
+
 // Seluruh hook lifecycle di bawah WAJIB idempoten (PRD-000 FR-19.5): platform
 // dapat memanggilnya ulang setelah kegagalan sebagian.
 

@@ -87,8 +87,16 @@ func CheckSecurity(pkgs []TypedPackage) []Violation {
 		if !strings.HasPrefix(p.Module, modulesBase) || p.Info == nil {
 			continue
 		}
+		seenEgress := map[string]bool{} // EGRESS: satu temuan per baris (ident tipe + method call pada baris sama dilaporkan sekali)
 		add := func(rule string, pos token.Pos, detail string) {
 			pp := p.Fset.Position(pos)
+			if rule == "EGRESS" {
+				key := fmt.Sprintf("%s:%d", pp.Filename, pp.Line)
+				if seenEgress[key] {
+					return
+				}
+				seenEgress[key] = true
+			}
 			out = append(out, Violation{Rule: rule, Package: p.ImportPath,
 				Detail: fmt.Sprintf("%s:%d: %s", filepath.Base(pp.Filename), pp.Line, detail)})
 		}
@@ -101,18 +109,23 @@ func CheckSecurity(pkgs []TypedPackage) []Violation {
 					if name, ok := rawHTTPUse(p.Info.Uses[x]); ok {
 						add("EGRESS", x.Pos(), "net/http."+name+" dilarang di modul; gunakan erpora/sdk/egress")
 					}
-				case *ast.CompositeLit:
-					if name, ok := rawHTTPType(p.Info.TypeOf(x)); ok {
-						add("EGRESS", x.Pos(), "net/http."+name+" dilarang di modul; gunakan erpora/sdk/egress")
+					// Setiap penyebutan nama tipe net/http.Client/Transport (var, field, parameter, return, literal,
+					// new): menangkap klien zero value (`var c http.Client; c.Get(u)`) yang lolos dari pemeriksaan literal.
+					if tn, ok := p.Info.Uses[x].(*types.TypeName); ok && tn.Pkg() != nil && tn.Pkg().Path() == "net/http" &&
+						(tn.Name() == "Client" || tn.Name() == "Transport") {
+						add("EGRESS", x.Pos(), "net/http."+tn.Name()+" dilarang di modul; gunakan erpora/sdk/egress")
 					}
-				case *ast.CallExpr:
-					if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "new" && len(x.Args) == 1 {
-						if _, isBuiltin := p.Info.Uses[id].(*types.Builtin); isBuiltin {
-							if name, ok := rawHTTPType(p.Info.TypeOf(x.Args[0])); ok {
-								add("EGRESS", x.Pos(), "net/http."+name+" dilarang di modul; gunakan erpora/sdk/egress")
+				case *ast.SelectorExpr:
+					// Pemanggilan method keluar pada klien/transport yang diperoleh dari mana pun (mis. hasil fungsi lain).
+					if sel, ok := p.Info.Selections[x]; ok && sel.Kind() == types.MethodVal {
+						if name, isRaw := rawHTTPType(sel.Recv()); isRaw {
+							switch x.Sel.Name {
+							case "Do", "Get", "Post", "Head", "PostForm", "RoundTrip":
+								add("EGRESS", x.Sel.Pos(), "(*net/http."+name+")."+x.Sel.Name+" dilarang di modul; gunakan erpora/sdk/egress")
 							}
 						}
 					}
+				case *ast.CallExpr:
 					checkDecodeCall(p, x, inInfra, add)
 				}
 				return true

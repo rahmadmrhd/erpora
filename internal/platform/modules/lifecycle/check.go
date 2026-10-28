@@ -28,6 +28,18 @@ func (v View) Stored(key string) runtime.Status {
 	return runtime.StatusAvailable
 }
 
+// effectivelyEnabled: modul enabled, atau upgrade_pending/failed yang status asalnya (previous_status) enabled; modul
+// seperti itu masih dihitung dependen aktif karena akan kembali enabled saat upgrade/retry berhasil (Q32 B-2).
+func (v View) effectivelyEnabled(key string) bool {
+	switch v.Stored(key) {
+	case runtime.StatusEnabled:
+		return true
+	case runtime.StatusUpgradePending, runtime.StatusFailed:
+		return runtime.Status(v.Rows[key].PreviousStatus) == runtime.StatusEnabled
+	}
+	return false
+}
+
 // requiredDeps mengembalikan dependensi wajib langsung (tanpa platform.core), terurut.
 func requiredDeps(reg *registry.Registry, key string) []string {
 	e, ok := reg.Entry(key)
@@ -110,7 +122,7 @@ func Check(op Op, key string, v View) error {
 	case OpDisable:
 		var active []string
 		for _, d := range requiredDependents(v.Reg, key) {
-			if v.Stored(d) == runtime.StatusEnabled {
+			if v.effectivelyEnabled(d) {
 				active = append(active, d)
 			}
 		}
@@ -130,6 +142,27 @@ func Check(op Op, key string, v View) error {
 				Message: "modul yang bergantung masih ter-install: " + strings.Join(active, ", "), Related: active}
 		}
 	case OpUpgrade:
+		// Versi binary lebih rendah daripada versi ter-install (mis. binary di-rollback sebelum reconcile): hook upgrade
+		// tidak boleh dipanggil dengan pasangan versi mundur dan installed_version tidak boleh tertimpa (FR-19.6).
+		if cur, has := v.Rows[key]; has {
+			if cmp, ok := compareVersions(e.Manifest.Version, cur.InstalledVersion); ok && cmp < 0 {
+				return &Error{Code: CodeDowngradeNotSupported, Module: key,
+					Message: fmt.Sprintf("versi binary %s lebih lama dari versi ter-install %s", e.Manifest.Version, cur.InstalledVersion)}
+			}
+		}
+		// Upgrade yang akan mengembalikan modul ke enabled (previous_status enabled) harus menjaga invarian yang sama
+		// dengan enable: semua dependensi wajib sudah enabled (Q32 B-2). Ditolak sebelum operasi dimulai.
+		if cur, has := v.Rows[key]; has && upgradeTarget(cur) == runtime.StatusEnabled {
+			var bad []string
+			for _, d := range requiredDeps(v.Reg, key) {
+				if v.Stored(d) != runtime.StatusEnabled {
+					bad = append(bad, d)
+				}
+			}
+			if len(bad) > 0 {
+				return notReady(key, "upgrade akan mengembalikan modul ke enabled, tetapi dependensi wajib belum enabled: "+strings.Join(bad, ", "), bad)
+			}
+		}
 		for _, d := range e.Manifest.Dependencies {
 			if d.Optional || d.Module == registry.PlatformKey {
 				continue

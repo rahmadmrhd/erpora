@@ -1,0 +1,203 @@
+# Ruleset linter kontrak OpenAPI ERPora (PRD-000 FR-23.3, FR-24.2).
+#
+# Dijalankan oleh `erpora contracts:lint` lewat web/contracts-lint.ts (Spectral terpin di web/package.json).
+# Nama `function` dipetakan ke fungsi bawaan @stoplight/spectral-functions atau ke ekspor
+# contracts/spectral-functions/index.ts. Semua rule erp-* berseverity error (kecuali erp-highly-confidential-exception: info) dan pesannya menyebut sumbernya.
+# Rule kustom bekerja pada dokumen mentah (`resolved: false`) dan menyelesaikan $ref (termasuk erp:) sendiri.
+extends:
+  - [spectral:oas, recommended]
+
+rules:
+  # Rule spectral:oas yang boleh dimatikan (keputusan rencana M2d). oas3-unused-component dimatikan karena komponen
+  # kontrak diekspor ke dokumen lain lewat erp:<dokumen>#/components/... (mis. erp:example NoteCount, erp:common).
+  info-contact: off
+  info-license: off
+  oas3-api-servers: off
+  operation-tags: off
+  openapi-tags: off
+  oas3-unused-component: off
+
+  erp-path-module-prefix:
+    description: Path modul diawali /api/{slug}/; path platform /api/platform/ atau /api/bootstrap (api-guidelines §2, FR-23.1).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPathModulePrefix }
+  erp-path-kebab-case:
+    description: Segmen statis kebab-case, parameter {camelCase} (api-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPathKebabCase }
+  erp-path-no-trailing-slash:
+    description: Path tidak diakhiri "/" (api-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPathNoTrailingSlash }
+  erp-path-no-crud-verb:
+    description: Segmen path bukan kata kerja CRUD (api-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPathNoCrudVerb }
+  erp-path-collection-plural:
+    description: Segmen koleksi terakhir jamak, kecuali x-erp-singleton atau segmen aksi POST (api-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPathCollectionPlural }
+  erp-path-max-nesting:
+    description: Paling banyak satu sub-koleksi setelah {id} (api-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPathMaxNesting }
+  erp-operation-permission:
+    description: Operasi punya x-erp-permission <slug>.<resource>.<action> atau x-erp-public (api-guidelines §1, §13).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpOperationPermission }
+  erp-operation-id:
+    description: operationId ada, camelCase, unik dalam dokumen (api-guidelines §13).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpOperationId }
+  erp-property-camel-case:
+    description: Nama properti skema camelCase (api-guidelines §4.1).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPropertyCamelCase }
+  erp-enum-snake-case:
+    description: Nilai enum string snake_case (api-guidelines §4.1).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpEnumSnakeCase }
+  erp-decimal-not-number:
+    description: Uang dan kuantitas string desimal, bukan number (api-guidelines §4.1).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpDecimalNotNumber }
+  erp-success-envelope:
+    description: Respons sukses JSON berbentuk {data} (api-guidelines §4.2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpSuccessEnvelope }
+  erp-error-standard:
+    description: Respons 4xx/5xx memakai komponen error erp:common (api-guidelines §8).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpErrorStandard }
+  erp-collection-pagination:
+    description: GET koleksi memakai page+pageSize atau cursor+limit (api-guidelines §6).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpCollectionPagination }
+  erp-post-idempotency-key:
+    description: POST punya header Idempotency-Key (api-guidelines §7.2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpPostIdempotencyKey }
+  erp-if-match:
+    description: PATCH, DELETE, dan aksi POST pada resource punya If-Match (api-guidelines §7.1).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpIfMatch }
+  erp-no-put:
+    description: PUT hanya dengan x-erp-allow-put (api-guidelines §3).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpNoPut }
+  erp-ref-dependency:
+    description: $ref erp:<x> hanya ke common atau dependensi manifest (PRD-000 FR-23.1).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpRefDependency }
+  erp-examples:
+    description: Respons 2xx dan requestBody JSON punya example (api-guidelines §13).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpExamples }
+  erp-error-codes-documented:
+    description: Kode error operasi terdokumentasi (api-guidelines §13).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpErrorCodesDocumented }
+  erp-classification-valid:
+    description: x-erp-classification salah satu dari empat kelas (security-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpClassificationValid }
+  erp-no-highly-confidential-in-response:
+    description: Respons tidak memuat properti highly_confidential (PRD-000 FR-24.2, security-guidelines §2, §3.4).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpNoHighlyConfidentialInResponse }
+  erp-no-sensitive-in-url:
+    description: Data sensitif tidak lewat path atau query (PRD-000 FR-24.2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpNoSensitiveInUrl }
+  erp-sensitive-needs-classification:
+    description: Properti dan parameter bernama sensitif wajib punya klasifikasi memadai (PRD-000 FR-24.2, security-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpSensitiveNeedsClassification }
+  erp-allow-highly-confidential-valid:
+    description: x-erp-allow-highly-confidential berisi alasan string tidak kosong dan menyertai x-erp-classification highly_confidential (PRD-000 FR-24.2, security-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpAllowHighlyValid }
+  # Satu-satunya rule erp-* berseverity info (keputusan Q32 K-4): tidak menggagalkan lint, tetapi setiap pengecualian
+  # highly_confidential tercatat dan dicetak agar reviewer dapat meninjaunya.
+  erp-highly-confidential-exception:
+    description: Daftar pengecualian x-erp-allow-highly-confidential untuk ditinjau reviewer (PRD-000 FR-24.2, security-guidelines §2).
+    severity: info
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpHighlyExceptions }

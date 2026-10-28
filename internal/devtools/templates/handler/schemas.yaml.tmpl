@@ -1,0 +1,29 @@
+[[.Name]]Data:
+  type: object
+  required: [id, title, version, createdAt, updatedAt]
+  properties:
+    id: { $ref: 'erp:common#/components/schemas/Uuid' }
+    title:
+      type: string
+      x-erp-classification: internal
+    version: { type: integer, format: int64 }
+    createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+    updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
+[[- if .HasBody]]
+[[.Name]]Request:
+  type: object
+  additionalProperties: false
+[[- if eq .Kind "post_create"]]
+  required: [title]
+[[- end]]
+  properties:
+[[- if eq .Kind "post_action"]]
+    reason:
+      type: string
+      x-erp-classification: internal
+[[- else]]
+    title:
+      type: string
+      x-erp-classification: internal
+[[- end]]
+[[- end]]

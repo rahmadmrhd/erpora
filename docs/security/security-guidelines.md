@@ -45,6 +45,8 @@ Setiap field group sensitif di manifest (PRD-001 FR-110) **WAJIB** menyatakan ke
 
 Manifest: `"field_groups": [{ "key": "salary", "classification": "highly_confidential", … }]`.
 
+**Kontrak OpenAPI (Q32).** Linter kontrak mencocokkan nama properti dan parameter **per token camelCase** (`newPassword`, `clientSecret`, `resetToken`, `bankAccountNumber`). Nama yang mengandung `password`, `secret`, `token`, `apiKey`, `privateKey`, **`nik`, `npwp`, `bankAccount`, atau `salary`** wajib `x-erp-classification: highly_confidential`. Properti `highly_confidential` **tidak boleh ada di respons** dan data sensitif tidak boleh lewat path/query. Satu-satunya jalan keluar adalah pengecualian eksplisit pada properti respons 2xx, `x-erp-allow-highly-confidential: "<alasan>"` (string tidak kosong, mis. modul HR yang sah menampilkan gaji kepada pengguna HR berizin), yang **dibatasi ke data HR**: hanya properti bernama `nik`, `npwp`, `bankAccount*`, atau `salary` (per token, termasuk bentuk gabungan); nama kredensial, nama lain di luar kelompok itu, dan penempatan di luar properti respons 2xx (requestBody, parameter, respons non-2xx, skema akar) adalah ERROR (Q32 butir 14, disetujui pemilik produk 28 Okt 2026): pengecualian tidak menurunkan klasifikasi (route tetap `highly_confidential`, jadi `Cache-Control: no-store` berlaku, ekspor dan offline tetap dilarang), harus melewati field group + permission yang sesuai, dan setiap pengecualian dicetak `erpora contracts:lint` sebagai temuan `INFO` (`erp-highly-confidential-exception`) agar reviewer meninjaunya. Pengecualian untuk kredensial (`password`, `secret`, `token`, `apiKey`, `privateKey`) tidak pernah diizinkan.
+
 ## 3. Katalog celah dan aturan pencegahan
 
 Setiap baris memiliki **penegak**. "CI" berarti dicek otomatis; "Review" berarti masuk checklist code review dan Kiro spec.
@@ -77,7 +79,7 @@ Setiap baris memiliki **penegak**. "CI" berarti dicek otomatis; "Review" berarti
 Setiap koneksi keluar yang tujuannya dipengaruhi data (webhook, OIDC discovery, impor dari URL, unduh gambar, integrasi) **WAJIB** melalui **egress client platform** (`sdk/egress`):
 
 - **Allowlist skema**: hanya `https` (dan `http` hanya bila dikonfigurasi eksplisit untuk host tertentu).
-- **Blokir alamat internal**: setelah DNS di-resolve, tolak loopback (`127.0.0.0/8`, `::1`), private (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`), link-local (`169.254/16` termasuk metadata cloud `169.254.169.254`, `fe80::/10`), CGNAT (`100.64/10`), `0.0.0.0/8`, multicast, dan alamat IPv4-mapped-IPv6 untuk rentang tersebut.
+- **Blokir alamat internal**: setelah DNS di-resolve, tolak loopback (`127.0.0.0/8`, `::1`), private (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`), link-local (`169.254/16` termasuk metadata cloud `169.254.169.254`, `fe80::/10`), CGNAT (`100.64/10`), `0.0.0.0/8`, multicast, dan alamat IPv4-mapped-IPv6 untuk rentang tersebut. Juga ditolak (Q32, M-1): IPv4-compatible `::/96`, SIIT `::ffff:0:0:0/96` (IPv4-mapped `::ffff:0:0/96` di-unmap lebih dulu lalu diperiksa sebagai IPv4), NAT64 `64:ff9b::/96` dan local-use `64:ff9b:1::/48` (IPv4 tertanam diperiksa), 6to4 `2002::/16` (IPv4 tertanam diperiksa), Teredo `2001::/32`, discard-only `100::/64`, serta rentang dokumentasi `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, dan `2001:db8::/32`.
 - **Anti DNS-rebinding**: koneksi dibuat ke IP yang sudah divalidasi (custom `DialContext`), bukan me-resolve ulang hostname.
 - **Redirect**: maksimal 3, dan setiap hop divalidasi ulang dengan aturan yang sama.
 - **Batas**: timeout koneksi 5 detik, total 30 detik; ukuran respons maksimal (default 10 MB); hanya content-type yang diharapkan.
@@ -200,7 +202,7 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | Kontrol | Status |
 | --- | --- |
 | Arch test D1–D11, header keamanan, request ID, DSN redaction, secret scan | **M1** (sedang dibangun) |
-| Route permission allowlist, kontrak ↔ route, linter kontrak | **M2** (PRD-000) |
+| Route permission allowlist, kontrak ↔ route, linter kontrak | **M2d ✅** (PRD-000 FR-23) |
 | Timeout query database per request (`statement_timeout`) | **M2c ✅** (PRD-000 Q26, Q30) |
 | Authz helper, test IDOR, analyzer authz, MFA, audit | **PRD-001** |
 | SBOM, `SECURITY.md`, gosec | **M1** (PRD-000 FR-24.1) |
@@ -209,7 +211,8 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | `Cache-Control: no-store` berbasis klasifikasi route (`module.Classify`) | **M2c ✅** |
 | `sdk/export` (CSV/XLSX, masking, audit) | **M2c ✅** |
 | Klasifikasi field group di manifest | **M2c ✅** |
-| Linter kontrak `x-erp-classification`; kesesuaian klasifikasi route ↔ kontrak | **M2d** (PRD-000 FR-23) |
+| Linter kontrak `x-erp-classification`; kesesuaian klasifikasi route ↔ kontrak | **M2d ✅** (PRD-000 FR-23, FR-24.2; rule `erp-*-classification`, `erp-no-highly-confidential-in-response`, `erp-no-sensitive-in-url`; `TestContracts_ClassificationMatchesRoute`) |
+| Penanda lingkungan database + guard binary dev (`production` ditolak), `db:fresh` berlapis | **M2d ✅** (PRD-000 FR-22.5) |
 | `SafeHtml`, OWASP ZAP baseline | **M3** (PRD-000 FR-24.3) |
 | Pipeline upload file | **PRD Files** (sebelum fitur upload pertama) |
 

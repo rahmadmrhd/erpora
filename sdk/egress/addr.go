@@ -32,6 +32,16 @@ var blockedPrefixes = []blockedPrefix{
 	mustPrefix("fe80::/10", "link_local"),
 	mustPrefix("fec0::/10", "reserved"),
 	mustPrefix("ff00::/8", "multicast"),
+	// Tambahan Q32 M-1 (security-guidelines §3.3): rentang yang dapat memetakan ke IPv4 internal atau tidak routable.
+	mustPrefix("::/96", "ipv4_compatible"),          // IPv4-compatible (usang)
+	mustPrefix("::ffff:0:0:0/96", "siit"),           // SIIT (RFC 2765); IPv4-mapped ::ffff:0:0/96 di-Unmap lebih dulu
+	mustPrefix("64:ff9b:1::/48", "nat64_local_use"), // NAT64 local-use (RFC 8215)
+	mustPrefix("2001::/32", "teredo"),
+	mustPrefix("100::/64", "discard_only"),
+	mustPrefix("192.0.2.0/24", "documentation"),
+	mustPrefix("198.51.100.0/24", "documentation"),
+	mustPrefix("203.0.113.0/24", "documentation"),
+	mustPrefix("2001:db8::/32", "documentation"),
 }
 
 var (
@@ -42,6 +52,10 @@ var (
 // blockedReason melaporkan apakah a (setelah Unmap) berada di rentang terblokir, termasuk IPv4 yang
 // tertanam pada NAT64 (64:ff9b::/96) dan 6to4 (2002::/16).
 func blockedReason(a netip.Addr) (reason string, blocked bool) {
+	// Alamat ber-zone (fe80::1%eth0) tidak cocok dengan Prefix.Contains dan dapat lolos; tolak di semua jalur.
+	if a.Zone() != "" {
+		return "zoned", true
+	}
 	a = a.Unmap()
 	if !a.IsValid() {
 		return "invalid", true

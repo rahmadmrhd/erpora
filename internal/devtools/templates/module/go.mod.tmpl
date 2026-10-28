@@ -1,0 +1,21 @@
+module [[.GoPath]]
+
+go 1.27
+
+toolchain go1.27.3
+
+replace (
+[[- range .Dependencies]]
+	[[.GoPath]] => ../[[.Dir]]
+[[- end]]
+	erpora/sdk => ../../sdk
+)
+
+require (
+[[- range .Dependencies]]
+	[[.GoPath]] v0.0.0
+[[- end]]
+	erpora/sdk v0.0.0
+	github.com/google/uuid v1.6.0
+	gorm.io/gorm v1.31.2
+)

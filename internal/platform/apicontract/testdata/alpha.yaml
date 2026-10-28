@@ -1,0 +1,90 @@
+openapi: 3.1.0
+info: { title: alpha, version: 0.0.1 }
+paths:
+  /api/alpha/items:
+    get:
+      operationId: listAlphaItems
+      x-erp-permission: alpha.items.read
+      deprecated: false
+      parameters:
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { name: legacy, in: query, deprecated: true, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Item' } }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+  /api/alpha/health:
+    get:
+      operationId: getAlphaHealth
+      x-erp-public: true
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+  /api/alpha/customers:
+    get:
+      operationId: listAlphaCustomers
+      x-erp-permission: alpha.items.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            customer:
+                              type: object
+                              properties:
+                                name: { type: string }
+                                address: { type: string, x-erp-classification: confidential }
+  /api/alpha/secrets:
+    get:
+      operationId: listAlphaSecrets
+      x-erp-permission: alpha.items.read
+      deprecated: true
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: 'erp:beta#/components/schemas/Secret' }
+  /api/alpha/bad-class:
+    get:
+      operationId: getAlphaBadClass
+      x-erp-permission: alpha.items.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: string, x-erp-classification: secret }
+components:
+  schemas:
+    Item:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        name: { type: string }

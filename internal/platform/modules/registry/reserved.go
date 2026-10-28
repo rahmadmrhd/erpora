@@ -35,3 +35,6 @@ func validRoutePath(p string) bool {
 	// Tanpa trailing slash (api-guidelines §2): "/" menjadi subtree ServeMux "/api/{slug}/".
 	return !strings.HasSuffix(p, "/") && path.Clean(p) == p
 }
+
+// IsReservedSlug melaporkan apakah slug dicadangkan untuk platform (dipakai generator make:module).
+func IsReservedSlug(slug string) bool { return reservedSlugs[slug] }

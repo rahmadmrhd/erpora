@@ -18,12 +18,14 @@ const (
 	CodeModuleNotFound        = "module_not_found"
 	CodeOperationNotFound     = "operation_not_found"
 	CodeInterrupted           = "interrupted"
+	CodeVersionMismatch       = "version_mismatch" // If-Match tidak cocok dengan revision tenant (RFC 9110 section 13.1.1)
 )
 
 // Error adalah error prasyarat/lock lifecycle. Related memuat key modul terkait (dependensi atau dependen),
 // Issues memuat hasil resolver untuk module_incompatible.
 type Error struct {
 	Code, Module, Message string
+	Revision              int64 // revision tenant saat ini (diisi untuk version_mismatch)
 	Related               []string
 	Issues                []resolver.Issue
 }

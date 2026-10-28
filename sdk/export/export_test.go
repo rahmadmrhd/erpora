@@ -211,6 +211,29 @@ func TestWrite_MaxRows(t *testing.T) {
 	}
 }
 
+// I-1/M-5: panic pada iterator tetap teraudit (defer + recover + re-panic) dengan jumlah baris yang sudah tertulis.
+func TestWrite_IteratorPanicStillAuditedAndRepanics(t *testing.T) {
+	aud := &recAuditor{}
+	rows := func(yield func(Row, error) bool) {
+		if !yield(Row{"id": "1"}, nil) {
+			return
+		}
+		panic("iterator meledak")
+	}
+	var buf bytes.Buffer
+	func() {
+		defer func() {
+			if p := recover(); p != "iterator meledak" {
+				t.Errorf("panic harus diteruskan apa adanya, got %v", p)
+			}
+		}()
+		_, _ = Write(testCtx(aud), &buf, Spec{Resource: "x.note", Format: CSV, Filename: "notes", Columns: internalCols()}, rows)
+	}()
+	if len(aud.events) != 1 || aud.events[0].Err == nil || aud.events[0].Rows != 1 {
+		t.Fatalf("panic harus teraudit dengan Rows=1 dan Err: %+v", aud.events)
+	}
+}
+
 func TestWrite_IteratorErrorRecorded(t *testing.T) {
 	aud := &recAuditor{}
 	boom := errors.New("boom")
@@ -225,4 +248,51 @@ func TestWrite_IteratorErrorRecorded(t *testing.T) {
 	if !errors.Is(err, boom) || len(aud.events) != 1 || !errors.Is(aud.events[0].Err, boom) {
 		t.Errorf("err=%v events=%+v", err, aud.events)
 	}
+}
+
+// Codex PR#7 C8: XLSX dibatasi dimensi lembar (1.048.576 baris termasuk header, 16.384 kolom); spec yang melampauinya
+// ditolak sebagai ErrInvalidSpec sebelum byte pertama. CSV tidak dibatasi dimensi lembar.
+func TestValidate_XLSXSheetDimensions(t *testing.T) {
+	cols := func(n int) []Column {
+		out := make([]Column, n)
+		for i := range out {
+			out[i] = Column{Key: "c" + itoaExp(i), Header: "H", Classification: module.ClassInternal}
+		}
+		return out
+	}
+	mk := func(f Format, c, maxRows int) Spec {
+		return Spec{Resource: "x.note", Format: f, Filename: "notes", Columns: cols(c), MaxRows: maxRows}
+	}
+	for name, s := range map[string]Spec{
+		"xlsx rows 1048575 ok":  mk(XLSX, 3, 1048575),
+		"xlsx columns 16384 ok": mk(XLSX, 16384, 10),
+		"csv rows beyond sheet": mk(CSV, 3, 2000000),
+		"csv columns beyond":    mk(CSV, 16385, 10),
+		"xlsx default max rows": mk(XLSX, 3, 0),
+	} {
+		if err := Validate(testCtx(&recAuditor{}), s); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, s := range map[string]Spec{
+		"xlsx rows 1048576":  mk(XLSX, 3, 1048576),
+		"xlsx rows 2000000":  mk(XLSX, 3, 2000000),
+		"xlsx columns 16385": mk(XLSX, 16385, 10),
+	} {
+		if err := Validate(testCtx(&recAuditor{}), s); !errors.Is(err, ErrInvalidSpec) {
+			t.Errorf("%s: err = %v, want ErrInvalidSpec", name, err)
+		}
+	}
+}
+
+func itoaExp(i int) string {
+	const d = "0123456789"
+	if i == 0 {
+		return "0"
+	}
+	var b []byte
+	for ; i > 0; i /= 10 {
+		b = append([]byte{d[i%10]}, b...)
+	}
+	return string(b)
 }

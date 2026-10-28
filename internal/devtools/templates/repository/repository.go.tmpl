@@ -1,0 +1,14 @@
+package domain
+
+import "context"
+
+// [[.T.Pascal]]Repository adalah port persistensi [[.T.Pascal]]; diimplementasi infrastructure. Implementasi membatasi
+// query ke scope pemanggil (tenant dari context) dan mengembalikan ErrNotFound untuk record yang tidak ada atau di luar scope.
+type [[.T.Pascal]]Repository interface {
+	// Get mengembalikan satu [[.T.Pascal]]; ErrNotFound bila tidak ada atau di luar scope.
+	Get(ctx context.Context, id string) ([[.T.Pascal]], error)
+	// List mengembalikan satu halaman (page mulai 1) beserta total.
+	List(ctx context.Context, page, size int) ([][[.T.Pascal]], int64, error)
+	// Save membuat (ID kosong) atau memperbarui dengan pemeriksaan Version (optimistic concurrency).
+	Save(ctx context.Context, e *[[.T.Pascal]]) error
+}

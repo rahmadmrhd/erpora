@@ -1,0 +1,24 @@
+// Package cli berisi command CLI modul [[.Mod.Slug]] (`erpora [[.Mod.Slug]]:<nama>`); hanya berjalan bila modul enabled.
+package cli
+
+import (
+	"context"
+	"fmt"
+
+	"erpora/sdk/module"
+)
+
+// [[.Pascal]]Command mendefinisikan command `[[.Mod.Slug]]:[[.Name]]`. Daftarkan di module.go lewat r.Command(cli.[[.Pascal]]Command()).
+func [[.Pascal]]Command() module.Command {
+	return module.Command{
+		Name:  "[[.Name]]",
+		Short: "[[.Name]] (belum diimplementasi)",
+		Run:   run[[.Pascal]],
+	}
+}
+
+// run[[.Pascal]] menulis ke inv.Out. Command berjalan dengan hak sistem teraudit; akses data lewat sdk/data di context.
+func run[[.Pascal]](_ context.Context, inv module.Invocation) error {
+	_, err := fmt.Fprintln(inv.Out, "[[.Name]]: belum diimplementasi")
+	return err
+}

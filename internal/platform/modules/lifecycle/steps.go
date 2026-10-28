@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -225,7 +226,9 @@ func (r *opRun) runSteps(ctx context.Context, specs []stepSpec) *stepFailure {
 
 // step mencatat langkah ke module_operations.steps sebelum dan sesudah dijalankan, dalam child span.
 func (r *opRun) step(ctx context.Context, sp stepSpec) *stepFailure {
-	if r.rs != nil && r.rs.skip[sp.name] && sp.name != "migrate" {
+	// migrate selalu dijalankan ulang; hook:enable juga, karena kegagalan health membatalkan efeknya lewat hook:disable
+	// walau langkah itu tercatat succeeded (hook wajib idempoten, FR-19.5).
+	if r.rs != nil && r.rs.skip[sp.name] && sp.name != "migrate" && sp.name != "hook:enable" {
 		r.steps = append(r.steps, store.Step{Name: sp.name, Status: "skipped", StartedAt: time.Now().UTC()})
 		return nil
 	}
@@ -258,6 +261,10 @@ func (r *opRun) step(ctx context.Context, sp stepSpec) *stepFailure {
 		st.Status = "failed"
 		st.Error = truncate(err.Error(), 500)
 		fail = r.classify(sp, err)
+		// Teks error langkah ikut diringkas untuk migration_failed/internal_error (Q32 B-10): steps[].error terekspos lewat API.
+		if fail.code == codeMigrationFailed || fail.code == codeInternal {
+			st.Error = summarizeFailure(fail, r.opID, traceIDOf(ctx))
+		}
 	}
 	if err := r.s.d.Store.SaveSteps(ctx, r.t, r.opID, r.steps); err != nil {
 		r.s.log.WarnContext(ctx, "simpan langkah operasi gagal", "step", sp.name, "error", err)
@@ -342,6 +349,15 @@ func (r *opRun) stepMigrate(ctx context.Context) error {
 			Checksum: a.Checksum, ExecutionStatus: "succeeded", OperationID: r.opID,
 		})
 	})
+	// Jejak module_migrations ditulis setelah goose commit dan tidak atomik dengannya (B-7): apa pun hasil Apply,
+	// selaraskan jejak dengan tabel goose agar file yang sudah diterapkan tetapi belum tercatat (crash/DB error
+	// di antara commit dan pencatatan) tidak hilang selamanya dari jejak.
+	if rerr := r.reconcileMigrationTrail(ctx, src.Migrations()); rerr != nil {
+		if err == nil {
+			return rerr
+		}
+		r.s.log.WarnContext(ctx, "selaraskan jejak migrasi gagal", "error", rerr)
+	}
 	var me *migrate.MigrationError
 	if errors.As(err, &me) {
 		rerr := r.s.d.Store.RecordModuleMigration(ctx, store.ModuleMigration{
@@ -354,6 +370,31 @@ func (r *opRun) stepMigrate(ctx context.Context) error {
 		return &stepFailure{code: codeMigrationFailed, err: err, details: map[string]any{"migration": me.Name, "version": me.Version}}
 	}
 	return err
+}
+
+// reconcileMigrationTrail mencatat sebagai succeeded setiap file yang tertera diterapkan di goose_module_<slug>
+// tetapi belum punya baris succeeded di module_migrations.
+func (r *opRun) reconcileMigrationTrail(ctx context.Context, fsys fs.FS) error {
+	applied, err := r.s.d.Migrator.Applied(ctx, r.t, r.entry.Manifest.Slug, fsys)
+	if err != nil {
+		return err
+	}
+	recorded, err := r.s.d.Store.RecordedModuleMigrations(ctx, r.t, r.key)
+	if err != nil {
+		return err
+	}
+	for _, a := range applied {
+		if recorded[a.Name] {
+			continue
+		}
+		if err := r.s.d.Store.RecordModuleMigration(ctx, store.ModuleMigration{
+			TenantID: r.t, ModuleKey: r.key, ModuleVersion: r.version(), MigrationKey: a.Name,
+			Checksum: a.Checksum, ExecutionStatus: "succeeded", OperationID: r.opID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *opRun) hook(ctx context.Context, call func(ctx context.Context, env module.Env) error, implemented bool) error {
@@ -402,6 +443,30 @@ var successEvent = map[Op]string{
 
 // finish menyusun satu Commit atomik (installation + operasi + event + revision), lalu refresh snapshot
 // dan publikasi notifikasi. Installation selalu turunan dari r.cur (read-modify-write).
+// traceIDOf mengembalikan trace_id span aktif di ctx ("" bila tidak ada).
+func traceIDOf(ctx context.Context) string {
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		return sc.TraceID().String()
+	}
+	return ""
+}
+
+// summarizeFailure meringkas kegagalan migration_failed/internal_error tanpa teks mentah; menyebut berkas migrasi
+// (bukan SQL) dan operation_id/trace_id untuk mencari detailnya di log server.
+func summarizeFailure(f *stepFailure, opID uuid.UUID, traceID string) string {
+	ref := "operation_id=" + opID.String()
+	if traceID != "" {
+		ref += ", trace_id=" + traceID
+	}
+	if f.code == codeMigrationFailed {
+		if name, ok := f.details["migration"].(string); ok && name != "" {
+			return fmt.Sprintf("migrasi modul gagal pada berkas %s; detail ada di log server (%s)", name, ref)
+		}
+		return "migrasi modul gagal; detail ada di log server (" + ref + ")"
+	}
+	return fmt.Sprintf("kesalahan internal pada langkah %s; detail ada di log server (%s)", f.step, ref)
+}
+
 func (r *opRun) finish(ctx context.Context, fail *stepFailure) (Result, error) {
 	c := store.Commit{Finish: &store.Finish{OperationID: r.opID, Status: "succeeded"}}
 	ev := func(name string, details map[string]any) store.Event {
@@ -426,11 +491,23 @@ func (r *opRun) finish(ctx context.Context, fail *stepFailure) (Result, error) {
 		c.BumpRevision = true
 		c.Events = append(c.Events, ev(successEvent[r.op], base))
 	} else {
-		opErr := &store.OpError{Code: fail.code, Message: truncate(fail.err.Error(), 500), Step: fail.step, Details: fail.details}
+		// Detail penuh (teks SQL/hook mentah) hanya ke log bersama trace_id; message di API, CLI, operasi tersimpan, dan
+		// event untuk migration_failed dan internal_error diringkas (Q32 B-10). code dan step tetap ada.
+		traceID := traceIDOf(ctx)
+		r.s.log.ErrorContext(ctx, "operasi lifecycle gagal", "operation", string(r.op), "erp.module.key", r.key,
+			"operation_id", r.opID.String(), "step", fail.step, "code", fail.code, "error", fail.err.Error(), "trace_id", traceID)
+		msg := truncate(fail.err.Error(), 500)
+		if fail.code == codeMigrationFailed || fail.code == codeInternal {
+			msg = summarizeFailure(fail, r.opID, traceID)
+		}
+		opErr := &store.OpError{Code: fail.code, Message: msg, Step: fail.step, Details: fail.details}
 		c.Finish.Status, c.Finish.Error = "failed", opErr
 		res.Status, res.Error, res.To = "failed", opErr, r.from
 		fd := map[string]any{"operation": string(r.op), "step": fail.step, "code": fail.code, "message": opErr.Message}
 		c.Events = append(c.Events, ev("operation_failed", fd))
+		// Revision naik pada SETIAP commit operasi, termasuk kegagalan yang tidak mengubah status: ETag (= revision)
+		// harus berubah ketika lastOperation berubah, agar klien tidak menerima 304 basi (Q32 B-4).
+		c.BumpRevision = true
 		if dataChanging(fail.step) {
 			in.Status = string(runtime.StatusFailed)
 			if r.op == OpInstall {

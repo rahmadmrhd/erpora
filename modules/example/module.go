@@ -20,6 +20,9 @@ import (
 //go:embed module.json
 var manifestJSON []byte
 
+//go:embed openapi.yaml
+var openAPI []byte
+
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
@@ -40,6 +43,9 @@ func New() *Module {
 	}
 }
 
+// OpenAPI mengembalikan kontrak API modul (module.ContractSource; PRD-000 FR-23.1).
+func (m *Module) OpenAPI() []byte { return openAPI }
+
 // Manifest mengembalikan manifest modul.
 func (m *Module) Manifest() module.Manifest { return m.manifest }
 
@@ -47,6 +53,7 @@ func (m *Module) Manifest() module.Manifest { return m.manifest }
 func (m *Module) Register(r module.Registrar) error {
 	r.Handle(http.MethodGet, "/ping", "example.ping.read", http.HandlerFunc(m.handlers.Ping))
 	r.Handle(http.MethodGet, "/notes", "example.notes.read", http.HandlerFunc(m.handlers.ListNotes))
+	// erp:generated:routes
 	r.Command(module.Command{
 		Name:  "recount",
 		Short: "Hitung jumlah notes",
@@ -59,6 +66,7 @@ func (m *Module) Register(r module.Registrar) error {
 			return err
 		},
 	})
+	// erp:generated:commands
 	return nil
 }
 

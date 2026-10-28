@@ -35,6 +35,9 @@ func RunModuleCommand(ctx context.Context, cfg config.Config, log *slog.Logger, 
 		return err
 	}
 	defer rt.cleanup()
+	if err := rt.guardWrite(ctx); err != nil {
+		return err
+	}
 
 	key, name := run.Command.Module, run.Command.Name
 	st, _, err := rt.svc.Module(ctx, rt.tid, key)

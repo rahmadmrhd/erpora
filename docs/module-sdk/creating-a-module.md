@@ -57,7 +57,7 @@ Aturan yang diperiksa registry:
 | --- | --- |
 | `schema_version` | Harus `"1"`. |
 | `key` | Pola `nama.modul`, huruf kecil dengan tanda hubung. Harus unik. |
-| `slug` | Pola kebab-case. Harus unik dan tidak boleh tercadang (lihat ADR-006 keputusan 7). Dipakai sebagai `/api/{slug}` dan prefix nama command. |
+| `slug` | Pola kebab-case, **maksimal 50 karakter** (tabel goose `goose_module_<slug>` harus muat di identifier PostgreSQL 63 byte; Q32). Harus unik dan tidak boleh tercadang (lihat ADR-006 keputusan 7). Dipakai sebagai `/api/{slug}` dan prefix nama command. |
 | `version` | SemVer. Harus sama dengan tag `modules/<name>/vX.Y.Z` (diperiksa CI rilis, M2d). |
 | `trust` | Hanya `builtin` yang diterima di fase ini. |
 | `compatibility.platform`, `compatibility.sdk`, `dependencies[].version` | Constraint SemVer. Selama 0.x, gunakan `^0.1`. |
@@ -209,9 +209,23 @@ Penegak aturan ini adalah `internal/archcheck` dan `task arch`. Build `GOWORK=of
 
 Selain itu, setiap route yang menerima ID wajib memiliki test IDOR (user A terhadap user B), dan record di luar scope harus mengembalikan 404.
 
-## 8. Menyalin `example` menjadi modul baru
+## 8. Membuat modul baru
 
-Contoh berikut membuat modul `inventory` dengan key `acme.inventory`.
+### 8.1. Dengan `erpora make:module` (cara yang dianjurkan)
+
+```sh
+task erpora -- make:module inventory --frontend --depends acme.example
+task erpora -- module:check inventory
+```
+
+Perintah ini menurunkan modul dari `example` (migrasi, empat lapisan, `openapi.yaml`, command `recount`, `DevSeeder`, test), mendaftarkannya di `go.work`,
+`go.mod` root, dan `internal/app/modules.go`, dan hasilnya langsung lolos `task lint arch check:gowork-off test`. Tambahkan endpoint dengan
+`make:handler`, lapisan lain dengan `make:entity|usecase|repository|contract|command`. Aturan penamaan, penanda, `--dry-run`/`--force`, dan keputusan
+yang berlaku ada di [`generators.md`](generators.md); kontrak API di [`contracts.md`](contracts.md).
+
+### 8.2. Lampiran: menyalin `example` secara manual
+
+Hanya untuk memahami apa yang dilakukan generator. Contoh berikut membuat modul `inventory` dengan key `acme.inventory`.
 
 1. **Salin folder** `modules/example` ke `modules/inventory`. Hapus `migrations/0001_create_example_notes.sql` beserta isinya, lalu tulis migrasi milik modul baru dengan format goose (`-- +goose Up` / `-- +goose Down`).
 

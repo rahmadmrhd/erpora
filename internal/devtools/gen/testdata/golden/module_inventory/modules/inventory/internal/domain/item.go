@@ -1,0 +1,33 @@
+// Package domain berisi entity dan aturan domain modul inventory, tanpa I/O.
+package domain
+
+import (
+	"errors"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+// MaxTitleLength adalah panjang maksimum judul (karakter).
+const MaxTitleLength = 200
+
+// ErrInvalidTitle dikembalikan bila judul kosong atau terlalu panjang.
+var ErrInvalidTitle = errors.New("judul harus 1 sampai 200 karakter")
+
+// Item adalah resource contoh. ID, Version, CreatedAt, dan UpdatedAt diisi saat disimpan.
+type Item struct {
+	ID        string
+	Title     string
+	Version   int64 // naik setiap perubahan; mulai dari 1 (api-guidelines §4.3)
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// NewItem membuat Item baru dengan judul yang tervalidasi.
+func NewItem(title string) (Item, error) {
+	n := utf8.RuneCountInString(title)
+	if strings.TrimSpace(title) == "" || n < 1 || n > MaxTitleLength {
+		return Item{}, ErrInvalidTitle
+	}
+	return Item{Title: title}, nil
+}

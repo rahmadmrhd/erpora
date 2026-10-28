@@ -50,17 +50,27 @@ tasks:
         cmd: cd "{{.ITEM}}" && golangci-lint run ./...
       - for: { var: GO_MODULES }
         cmd: cd "{{.ITEM}}" && golangci-lint run --build-tags=integration,devtools ./...
+      # tests/generator hanya terkompilasi dengan tag generator (+ integration untuk pgtest); satu paket, murah.
+      - golangci-lint run --build-tags=generator,integration ./tests/generator/...
 
   test:
     desc: Jalankan unit test di setiap Go module
     cmds:
       - for: { var: GO_MODULES }
         cmd: go -C "{{.ITEM}}" test {{if ne OS "windows"}}-race{{end}} ./...
+      # Flavor dev: banner, grup, dan command developer tools (cmd/erpora memakai file ber-tag devtools).
+      - go test -tags devtools ./cmd/erpora/...
 
   test:integration:
     desc: Jalankan test integrasi (tag integration) di root module
     cmds:
       - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
+
+  test:generator:
+    desc: Buktikan make:module lolos semua gate di salinan repo (lama; butuh Docker, Bun, dan jaringan Go module cache)
+    cmds:
+      # Tag integration dibutuhkan pgtest (testcontainers); tag generator memilih paket tests/generator.
+      - go test -tags generator,integration -timeout 45m -count=1 ./tests/generator/...
 
   arch:
     desc: Jalankan architecture checks (D1-D11)
@@ -106,6 +116,17 @@ tasks:
     desc: Jalankan migrasi platform (erpora migrate up)
     cmds:
       - go run -tags devtools ./cmd/erpora migrate up --env-file .env
+
+  dev:setup:
+    desc: Migrasi dan install + enable semua modul agar lingkungan dev langsung berisi modul aktif (FR-13)
+    cmds:
+      - go run -tags devtools ./cmd/erpora migrate up --env-file .env
+      - go run -tags devtools ./cmd/erpora modules install --all --enable --env-file .env
+
+  release:verify-tag:
+    desc: "Periksa tag rilis terhadap versi di sumber (task release:verify-tag -- modules/example/v1.0.0)"
+    cmds:
+      - go run -tags devtools ./cmd/erpora release:verify-tag {{shellQuote .CLI_ARGS}}
 
   build:
     desc: Build binary release bin/erpora
@@ -164,9 +185,31 @@ tasks:
     desc: Typecheck, lint, dan dependency rules frontend
     cmds:
       - bun install --frozen-lockfile
-      - bun run --filter @erpora/web typecheck
-      - bun run --filter @erpora/web lint
+      - bun run --filter '*' typecheck
+      - bun run --filter '*' lint
       - bun run --filter @erpora/web deps
+
+  contracts:lint:
+    desc: Lint kontrak OpenAPI (Spectral; api-guidelines dan klasifikasi data)
+    cmds:
+      - go run -tags devtools ./cmd/erpora contracts:lint
+
+  contracts:generate:
+    desc: Bangkitkan tipe TS dari kontrak dan manifest (hasilnya di-commit)
+    cmds:
+      - go run -tags devtools ./cmd/erpora contracts:generate
+
+  contracts:breaking:
+    desc: Deteksi breaking change kontrak terhadap tag rilis terakhir (oasdiff)
+    cmds:
+      - go run -tags devtools ./cmd/erpora contracts:breaking
+
+  contracts:check:
+    desc: Gate kontrak - lint, hasil generate mutakhir, dan breaking change
+    cmds:
+      - task: contracts:lint
+      - go run -tags devtools ./cmd/erpora contracts:generate --check
+      - task: contracts:breaking
 
   ci:
     desc: Jalankan seluruh gate CI secara lokal
@@ -176,6 +219,8 @@ tasks:
       - task: check:gowork-off
       - task: test
       - task: test:integration
+      - task: test:generator
       - task: vuln
       - task: web:check
+      - task: contracts:check
       - task: build

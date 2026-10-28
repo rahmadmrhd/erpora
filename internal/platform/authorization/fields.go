@@ -28,7 +28,10 @@ func (m *stubMasker) MaskFields(ctx context.Context, resource string, fields map
 		log = slog.Default()
 	}
 	if m.mode != "allow" {
-		log.WarnContext(ctx, "masking field stub: deny", "resource", resource, "mode", string(m.mode))
+		// WARN sekali per resource: ekspor memanggil masker per baris, jadi log per pemanggilan membanjiri keluaran.
+		if _, seen := m.seen.LoadOrStore(resource, struct{}{}); !seen {
+			log.WarnContext(ctx, "masking field stub: deny", "resource", resource, "mode", string(m.mode))
+		}
 		return map[string]any{}
 	}
 	if _, seen := m.seen.LoadOrStore(resource, struct{}{}); !seen {

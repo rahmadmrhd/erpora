@@ -11,5 +11,14 @@
     "isolatedModules": true,
     "types": ["bun"]
   },
-  "include": ["src", "build.ts", "dev.ts", "deps.ts", "csp-check.ts", "sbom.ts"]
+  "include": [
+    "src",
+    "build.ts",
+    "dev.ts",
+    "deps.ts",
+    "csp-check.ts",
+    "sbom.ts",
+    "contracts-lint.ts",
+    "../contracts/spectral-functions/**/*.ts"
+  ]
 }

@@ -16,9 +16,14 @@ func TestBuildRegistry_ReferenceModulesValid(t *testing.T) {
 	for _, e := range reg.Entries() {
 		keys = append(keys, e.Manifest.Key)
 	}
-	want := []string{"platform.core", "acme.example", "acme.example-addon"}
-	if !slices.Equal(keys, want) {
-		t.Errorf("Entries = %v, want %v", keys, want)
+	// Modul hasil `make:module` boleh menambah katalog (internal/app/modules.go); modul referensi harus ada,
+	// platform.core pertama, dan example mendahului example-addon (dependensi lebih dulu).
+	if len(keys) < 3 || keys[0] != "platform.core" {
+		t.Fatalf("Entries = %v", keys)
+	}
+	ex, addon := slices.Index(keys, "acme.example"), slices.Index(keys, "acme.example-addon")
+	if ex < 0 || addon < 0 || ex > addon {
+		t.Errorf("Entries = %v, want acme.example sebelum acme.example-addon", keys)
 	}
 
 	have := map[string]bool{}

@@ -35,12 +35,16 @@ type Store interface {
 	RunningOperations(ctx context.Context, t tenancy.TenantID) ([]store.Operation, error)
 	Events(ctx context.Context, t tenancy.TenantID, key string, page, pageSize int) ([]store.Event, int64, error)
 	RecordModuleMigration(ctx context.Context, m store.ModuleMigration) error
+	// RecordedModuleMigrations mengembalikan migration_key yang sudah tercatat succeeded untuk modul (B-7).
+	RecordedModuleMigrations(ctx context.Context, t tenancy.TenantID, key string) (map[string]bool, error)
 }
 
 // Migrator menerapkan migrasi modul pada tenant DB.
 type Migrator interface {
 	Apply(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS, after func(migrate.AppliedMigration) error) error
 	Pending(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS) ([]string, error)
+	// Applied mengembalikan file migrasi tertanam yang tercatat diterapkan di tabel goose modul (nama, versi, checksum).
+	Applied(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS) ([]migrate.AppliedMigration, error)
 }
 
 type connMigrator struct{ conn database.TenantConnector }
@@ -62,6 +66,14 @@ func (m connMigrator) Pending(ctx context.Context, t tenancy.TenantID, slug stri
 		return nil, err
 	}
 	return migrate.PendingModuleMigrations(ctx, db.DB, slug, fsys)
+}
+
+func (m connMigrator) Applied(ctx context.Context, t tenancy.TenantID, slug string, fsys fs.FS) ([]migrate.AppliedMigration, error) {
+	db, err := m.conn.For(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return migrate.AppliedModuleMigrations(ctx, db.DB, slug, fsys)
 }
 
 // DefaultLockTimeout adalah batas tunggu advisory lock lifecycle tenant.
@@ -96,6 +108,9 @@ type Request struct {
 	All, WithDeps, Enable bool
 	Actor                 string
 	OnStarted             func(opID uuid.UUID)
+	// IfMatch adalah nilai header If-Match mentah (RFC 9110); kosong = tanpa prasyarat. Dibandingkan dengan revision tenant
+	// di DALAM advisory lock, sebelum simulate (tidak ada celah TOCTOU). Tidak cocok -> *Error version_mismatch.
+	IfMatch string
 }
 
 // Result adalah hasil satu operasi; Status "succeeded", "failed", atau "noop".
@@ -286,9 +301,35 @@ func (s *Service) Execute(ctx context.Context, req Request) ([]Result, error) {
 		return nil, err
 	}
 	var results []Result
+	var reconciled bool
+	var reconciledRev int64
 	err = s.d.Store.WithTenantLock(ctx, req.Tenant, s.lockTimeout(), func(ctx context.Context) error {
-		if _, err := s.markInterrupted(ctx, req.Tenant); err != nil {
+		if _, err := s.markInterrupted(ctx, req.Tenant, req.Actor); err != nil {
 			return err
+		}
+		if err := s.checkIfMatch(ctx, req.Tenant, req.IfMatch); err != nil {
+			return err
+		}
+		if req.Op == OpUpgrade {
+			// Upgrade dapat dijalankan langsung setelah binary diganti (tanpa serve): reconcile modul terkait dulu di
+			// dalam lock yang sama, sehingga versi lama menjadi upgrade_pending dengan previous_status terisi
+			// (Q32, 28 Okt 2026; temuan Codex PR #6 C6).
+			keys := make(map[string]bool, len(items))
+			for _, it := range items {
+				keys[it.key] = true
+			}
+			var rep ReconcileReport
+			b, r, rerr := s.reconcileRows(ctx, req.Tenant, keys, &rep)
+			if b {
+				reconciled, reconciledRev = true, r
+			}
+			if rerr != nil {
+				return rerr
+			}
+			if !req.All && slices.Contains(rep.Downgraded, req.Key) {
+				return &Error{Code: CodeDowngradeNotSupported, Module: req.Key,
+					Message: "versi binary lebih lama daripada versi ter-install; downgrade tidak didukung"}
+			}
 		}
 		rows, err := s.loadRows(ctx, req.Tenant)
 		if err != nil {
@@ -311,6 +352,15 @@ func (s *Service) Execute(ctx context.Context, req Request) ([]Result, error) {
 		return nil
 	})
 	err = mapLockErr(err, req.Key)
+	if reconciled {
+		// Reconcile menaikkan revision walau operasi lalu ditolak atau gagal: snapshot dan watcher antarproses harus ikut.
+		if _, rerr := s.Refresh(ctx, req.Tenant); rerr != nil && err == nil {
+			err = rerr
+		}
+		if s.d.Notifier != nil {
+			s.d.Notifier.Publish(ctx, req.Tenant, reconciledRev)
+		}
+	}
 	if err != nil {
 		s.logRejected(ctx, req, err)
 	}

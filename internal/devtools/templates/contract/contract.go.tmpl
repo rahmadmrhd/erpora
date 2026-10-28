@@ -1,0 +1,21 @@
+package contract
+
+import "context"
+
+// [[.T.Pascal]]DTO adalah bentuk data [[.T.Pascal]] yang dibagikan ke modul lain. Hanya field yang memang perlu dibagikan;
+// jangan membocorkan entity domain atau model GORM (tidak mengimpor internal/).
+type [[.T.Pascal]]DTO struct {
+	ID      string
+	Title   string
+	Version int64
+}
+
+// [[.T.Pascal]] adalah port publik modul [[.Mod.Slug]] atas [[.T.Pascal]] untuk modul lain.
+//
+// Implementasi kontrak WAJIB menegakkan otorisasi sendiri terhadap principal di context (jangan percaya pemanggil), dan
+// record di luar scope pemanggil dilaporkan sebagai tidak ditemukan. Parameter kontrak tidak boleh membawa tenantId atau
+// userId; tenant diambil dari context. Hak sistem hanya lewat authz.AsSystem(ctx, reason).
+type [[.T.Pascal]] interface {
+	// Get mengembalikan satu [[.T.Pascal]] menurut ID.
+	Get(ctx context.Context, id string) ([[.T.Pascal]]DTO, error)
+}

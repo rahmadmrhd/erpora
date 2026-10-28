@@ -99,6 +99,10 @@ func (f *fakeBE) Operation(_ context.Context, t tenancy.TenantID, id uuid.UUID) 
 }
 
 func (f *fakeBE) Execute(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error) {
+	// Lifecycle sungguhan membandingkan If-Match di dalam lock (B-5); fake meniru kontraknya.
+	if req.IfMatch != "" && !lifecycle.MatchIfMatch(req.IfMatch, f.rev) {
+		return nil, &lifecycle.Error{Code: lifecycle.CodeVersionMismatch, Revision: f.rev}
+	}
 	f.mu.Lock()
 	f.execReqs = append(f.execReqs, req)
 	f.mu.Unlock()
@@ -108,7 +112,7 @@ func (f *fakeBE) Execute(ctx context.Context, req lifecycle.Request) ([]lifecycl
 	return []lifecycle.Result{{Module: req.Key, Op: req.Op, From: runtime.StatusInstalled, To: runtime.StatusEnabled, Status: "succeeded", OperationID: opID}}, nil
 }
 
-func (f *fakeBE) RetryModule(ctx context.Context, _ tenancy.TenantID, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error) {
+func (f *fakeBE) RetryModule(ctx context.Context, _ tenancy.TenantID, key, actor string, onStarted func(uuid.UUID), _ string) (lifecycle.Result, error) {
 	f.retried = append(f.retried, key+"|"+actor)
 	if f.retryFn != nil {
 		return f.retryFn(ctx, key, actor, onStarted)
@@ -157,8 +161,8 @@ func (f fixtureAPI) do(method, target, body string, hdr map[string]string) *http
 		rd = strings.NewReader(body)
 	}
 	req := httptest.NewRequest(method, target, rd)
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
+	if method == "POST" {
+		req.Header.Set("Content-Type", "application/json") // mutasi wajib application/json (Q32 B-9); hdr dapat menimpanya
 	}
 	for k, v := range hdr {
 		req.Header.Set(k, v)
@@ -221,6 +225,11 @@ func TestList_EnvelopeAndPagination(t *testing.T) {
 	}
 	if rec := f.do("GET", "/api/platform/modules?pageSize=500", "", nil); rec.Code != 400 || errOf(t, rec).Error.Code != "bad_request" {
 		t.Errorf("pageSize 500: %d %s", rec.Code, rec.Body)
+	}
+	for _, q := range []string{"page=9223372036854775807", "page=4611686018427387904&pageSize=200"} {
+		if rec := f.do("GET", "/api/platform/modules?"+q, "", nil); rec.Code != 400 || errOf(t, rec).Error.Code != "bad_request" {
+			t.Errorf("%s: %d %s (offset overflow harus 400)", q, rec.Code, rec.Body)
+		}
 	}
 	if rec := f.do("GET", "/api/platform/modules?page=0", "", nil); rec.Code != 400 {
 		t.Errorf("page 0: %d", rec.Code)
@@ -442,6 +451,46 @@ func TestAction_SlowOperationReturns202(t *testing.T) {
 	}
 }
 
+// B-6 (Q32): rangkaian beberapa operasi (mis. install --with-deps) melaporkan SEMUA ID operasi lewat field aditif
+// operationIds, baik pada 202 (yang sudah dimulai) maupun 200 (seluruhnya); Location tetap ke operasi pertama.
+func TestAction_MultiOperationIDs(t *testing.T) {
+	op2 := uuid.MustParse("0190a1b2-0000-7000-8000-0000000000bb")
+	t.Run("202 memuat semua ID yang sudah dimulai", func(t *testing.T) {
+		f := setup(t, allow{})
+		f.api.syncWait = 30 * time.Millisecond
+		release := make(chan struct{})
+		t.Cleanup(func() { close(release) })
+		f.be.execFn = func(_ context.Context, req lifecycle.Request) ([]lifecycle.Result, error) {
+			req.OnStarted(opID)
+			req.OnStarted(op2)
+			<-release
+			return nil, nil
+		}
+		rec := f.do("POST", "/api/platform/modules/acme.example/install", `{"withDeps":true}`, nil)
+		if rec.Code != 202 || rec.Header().Get("Location") != "/api/platform/modules/operations/"+opID.String() {
+			t.Fatalf("%d loc=%q %s", rec.Code, rec.Header().Get("Location"), rec.Body)
+		}
+		if !strings.Contains(rec.Body.String(), `"operationIds":["`+opID.String()+`","`+op2.String()+`"]`) {
+			t.Errorf("body = %s", rec.Body)
+		}
+	})
+	t.Run("200 memuat semua ID operasi", func(t *testing.T) {
+		f := setup(t, allow{})
+		f.be.ops[opID] = store.Operation{ID: opID, TenantID: testTenant, ModuleKey: "acme.example", Operation: "install", Status: "succeeded"}
+		f.be.ops[op2] = store.Operation{ID: op2, TenantID: testTenant, ModuleKey: "acme.example", Operation: "enable", Status: "succeeded"}
+		f.be.execFn = func(context.Context, lifecycle.Request) ([]lifecycle.Result, error) {
+			return []lifecycle.Result{
+				{Module: "acme.example", Op: lifecycle.OpInstall, Status: "succeeded", OperationID: opID},
+				{Module: "acme.example", Op: lifecycle.OpEnable, Status: "succeeded", OperationID: op2},
+			}, nil
+		}
+		rec := f.do("POST", "/api/platform/modules/acme.example/install", `{"withDeps":true,"enable":true}`, nil)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"operationIds":["`+opID.String()+`","`+op2.String()+`"]`) {
+			t.Fatalf("%d %s", rec.Code, rec.Body)
+		}
+	})
+}
+
 // Keputusan 7 berlaku untuk semua mutasi, termasuk retry: lewat SyncWait -> 202 + Location ke operasi retry.
 func TestAction_SlowRetryReturns202(t *testing.T) {
 	f := setup(t, allow{})
@@ -469,8 +518,15 @@ func TestAction_IfMatchMismatch412(t *testing.T) {
 	if rec.Code != 412 || errOf(t, rec).Error.Code != "version_mismatch" || len(f.be.execReqs) != 0 {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
-	if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"If-Match": `"7"`}); rec.Code != 200 {
-		t.Fatalf("If-Match cocok: %d %s", rec.Code, rec.Body)
+	// RFC 9110: "7", "*", dan daftar entity-tag yang memuat "7" cocok.
+	for _, h := range []string{`"7"`, `*`, `"5", "7"`} {
+		if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"If-Match": h}); rec.Code != 200 {
+			t.Fatalf("If-Match %q cocok: %d %s", h, rec.Code, rec.Body)
+		}
+	}
+	// Tag lemah tidak pernah cocok pada perbandingan kuat.
+	if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"If-Match": `W/"7"`}); rec.Code != 412 {
+		t.Fatalf("If-Match lemah: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -487,7 +543,9 @@ func TestAction_BodyStrict(t *testing.T) {
 	}{
 		{"field tak dikenal", `{"withDeps":true,"x":1}`, nil, 422, "validation_failed", "unknown_field", "x"},
 		{"terlalu besar", `{"withDeps":false,"x":"` + strings.Repeat("a", 5<<10) + `"}`, nil, 400, "bad_request", "body_too_large", ""},
-		{"content type salah", `{}`, map[string]string{"Content-Type": "text/plain"}, 400, "bad_request", "unsupported_media_type", ""},
+		{"content type salah", `{}`, map[string]string{"Content-Type": "text/plain"}, 415, "unsupported_media_type", "unsupported_media_type", ""},
+		{"content type hilang, body kosong", "", map[string]string{"Content-Type": ""}, 415, "unsupported_media_type", "unsupported_media_type", ""},
+		{"content type hilang, body ada", `{}`, map[string]string{"Content-Type": ""}, 415, "unsupported_media_type", "unsupported_media_type", ""},
 		{"dua objek", `{"enable":true}{"enable":false}`, nil, 400, "bad_request", "trailing_data", ""},
 		{"bukan objek", `[1]`, nil, 400, "bad_request", "expected_object", ""},
 		{"tipe salah", `{"enable":"ya"}`, nil, 422, "validation_failed", "invalid_type", "enable"},
@@ -505,7 +563,7 @@ func TestAction_BodyStrict(t *testing.T) {
 			}
 		})
 	}
-	// Body kosong tanpa Content-Type diteruskan ke backend.
+	// Body kosong dengan Content-Type application/json (dan {} ) diteruskan ke backend.
 	if rec := f.do("POST", install, "", nil); rec.Code != 200 {
 		t.Errorf("body kosong: %d %s", rec.Code, rec.Body)
 	}

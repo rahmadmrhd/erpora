@@ -1,0 +1,53 @@
+openapi: 3.1.0
+info: { title: notes, version: 0.0.1 }
+paths:
+  /api/notes/notes:
+    get:
+      operationId: listNotes
+      x-erp-permission: notes.notes.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Note' }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+        default:
+          description: error
+          content:
+            application/json:
+              schema: { $ref: 'erp:common#/components/schemas/Error' }
+  /api/notes/plain:
+    get:
+      operationId: getPlain
+      x-erp-permission: notes.notes.read
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+  /api/notes/empty:
+    get:
+      operationId: getEmpty
+      x-erp-permission: notes.notes.read
+      responses:
+        '204': { description: kosong }
+components:
+  schemas:
+    Note:
+      type: object
+      required: [id, title, version, createdAt]
+      properties:
+        id: { $ref: 'erp:common#/components/schemas/Uuid' }
+        title: { type: string }
+        version: { type: integer }
+        createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }

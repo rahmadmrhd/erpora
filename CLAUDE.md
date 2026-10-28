@@ -19,6 +19,10 @@ Rujukan "Blueprint §x" / "arsitektur §x" di PRD menunjuk dokumen awal yang sud
 
 Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** sebelum mengerjakan. Keputusan baru dicatat di tabel keputusan PRD terkait (Q-number) atau ADR.
 
+**Saat me-review kode/PR:** keputusan yang tercatat di tabel keputusan PRD (Q-number) atau ADR sebagai disetujui pemilik produk adalah perilaku yang disengaja — jangan laporkan sebagai temuan kecuali implementasinya menyimpang dari keputusan itu.
+
+`CLAUDE.md` (Claude Code) dan `AGENTS.md` (Codex) **harus identik**; ubah keduanya bersamaan (`TestAgentsMDMatchesClaudeMD` di `tests/architecture` menegakkannya).
+
 ## Alur kerja fitur baru
 
 - **Fitur yang sudah tercakup PRD** → ikuti PRD; rencana implementasi di `docs/superpowers/plans/`.
@@ -45,12 +49,16 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 
 - Ikuti `docs/architecture/api-guidelines.md`: URL kebab-case jamak + endpoint aksi (`POST …/{id}/submit`), JSON camelCase, amplop `data`/`error`, uang & kuantitas **string desimal**, record di luar scope → 404.
 - **Tidak boleh ada breaking change API** (tanpa versi di URL): hanya menambah; perubahan struktur memakai expand → migrate → contract.
-- Setiap modul punya kontrak sendiri `modules/<x>/openapi.yaml`; jalankan `erpora contracts:lint` dan `erpora contracts:generate` (tersedia mulai M2).
+- Setiap modul punya kontrak sendiri `modules/<x>/openapi.yaml`; jalankan `task contracts:check` (= `contracts:lint` + `contracts:generate --check` + `contracts:breaking`) dan `task erpora -- contracts:generate` setelah mengubah kontrak. Route, permission, dan klasifikasi harus cocok dengan kontrak (test kesesuaian). Rujukan `erp:<slug>` hanya ke dependensi manifest. Panduan: `docs/module-sdk/contracts.md`.
+- Pembuatan kode lewat generator: `task erpora -- make:module|migration|entity|usecase|repository|handler|contract|command` (panduan `docs/module-sdk/generators.md`); jangan menyalin `example` manual.
 
 ## Perintah
 
 - Semua perintah lewat **Taskfile** (`task --list`). Developer CLI: `task erpora -- <command>` (build tag `devtools`).
-- Gate lokal sebelum commit: `task lint arch check:gowork-off test` (+ `task test:integration` bila menyentuh DB, butuh Docker).
+- Gate lokal sebelum commit: `task lint arch check:gowork-off test` (+ `task test:integration` bila menyentuh DB, butuh Docker; `task contracts:check` bila menyentuh kontrak/manifest; `task web:check` bila menyentuh frontend). Set `ERP_REQUIRE_BUN=1` agar test yang butuh Bun tidak di-skip.
+- PostgreSQL eksternal untuk test integrasi (hemat RAM, tanpa Docker): set `ERP_TEST_DATABASE_URL` ke DSN admin, mis. `postgres://erp:erp@127.0.0.1:15432/postgres?sslmode=disable`; `pgtest` lalu membuat database sementara `erpora_test_<hex>` per test dan menghapusnya (`DROP DATABASE … WITH (FORCE)`). Tanpa env ini dipakai testcontainers (CI tidak berubah). Jangkau server lewat tunnel SSH `ssh -N -L 15432:127.0.0.1:5432 <host>`; server test hanya bind ke loopback dan **jangan dibuka ke publik** (kredensial test lemah, role butuh hak CREATEDB). Bila koneksi/RAM server habis, kurangi paralelisme: `go test -tags integration -p 2 ./...`.
+- `task test:generator` (lama, ±12 menit; Docker + Bun) membuktikan `make:module` lolos semua gate; jalankan bila mengubah template/generator. Path repo tidak boleh berspasi.
+- Lingkungan dev: `task db:up`, `task dev:setup` (migrate + install semua modul), `task erpora -- doctor`, `task erpora -- db:fresh --seed` (hanya development; mengetik nama DB), `task erpora -- module:check`, `task release:verify-tag -- modules/<dir>/vX.Y.Z`.
 - Di Windows, `-race` dilewati (tidak ada cgo/gcc); CI Linux tetap menjalankannya.
 - Jangan menambah perintah Taskfile yang memakai `rm`/`cp`/`sed` atau utilitas khusus Unix.
 
@@ -59,4 +67,4 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - TDD: tulis test yang gagal dulu, lalu implementasi.
 - Satu commit per unit kerja yang bisa diuji; pesan commit konvensional (`feat(scope): …`, `fix:`, `docs:`, `chore:`).
 - Jangan push atau membuat PR tanpa diminta.
-- Temuan review: kerjakan semua yang sesuai spek (termasuk Minor); yang di luar/bertentangan dengan spek ditanyakan dulu (lihat CLAUDE.md global).
+- Temuan review: kerjakan semua yang sesuai spek (termasuk Minor); yang di luar/bertentangan dengan spek ditanyakan dulu (lihat instruksi global: `~/.claude/CLAUDE.md` / `~/.codex/AGENTS.md`).

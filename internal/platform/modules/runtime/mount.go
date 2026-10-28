@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
 	"erpora/internal/platform/httpserver"
@@ -30,6 +31,7 @@ type Mounter interface {
 type mountConfig struct {
 	skip     func(registry.RouteInfo) bool
 	services Services
+	meter    metric.Meter
 }
 
 // MountOption mengubah perilaku Mount.
@@ -48,7 +50,7 @@ func SkipRoute(skip func(registry.RouteInfo) bool) MountOption {
 // guard status modul.
 // Route platform.core ikut dipasang di sini: guard selalu enabled, permission tetap berlaku.
 // Rantai penuh: otel -> recover -> requestScope -> Authenticate (kecuali Public)
-// -> tenantContext -> guard -> permission -> batas request -> handler.
+// -> tenantContext -> guard -> permission -> deprecation -> batas request -> handler.
 func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, log *slog.Logger, opts ...MountOption) {
 	var cfg mountConfig
 	for _, o := range opts {
@@ -58,6 +60,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 		log = slog.Default()
 	}
 	m.SetAPIGate(apiGate(reg, snap))
+	deprecated := newDeprecatedCounter(cfg.meter)
 	for _, rt := range reg.Routes() {
 		if cfg.skip != nil && cfg.skip(rt) {
 			m.Handle(rt.Method+" "+rt.Pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +69,7 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 			continue
 		}
 		h := requestLimitsMW(rt, cfg.services, rt.Handler)
+		h = deprecationMW(rt, deprecated, h)
 		if !rt.Public {
 			h = permissionMW(authz, rt.Permission, log, h)
 		}

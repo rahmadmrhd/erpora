@@ -6,13 +6,21 @@
     "build": "bun build.ts",
     "dev": "bun dev.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome check . ../contracts/spectral-functions",
     "deps": "bun deps.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
+    "@stoplight/spectral-core": "1.24.0",
+    "@stoplight/spectral-functions": "1.11.0",
+    "@stoplight/spectral-parsers": "1.0.5",
+    "@stoplight/spectral-ref-resolver": "1.0.5",
+    "@stoplight/spectral-rulesets": "1.23.0",
     "@types/bun": "1.4.3",
     "dependency-cruiser": "18.7.0",
-    "typescript": "6.0.3"
+    "json-schema-to-typescript": "16.0.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "6.0.3",
+    "yaml": "2.9.1"
   }
 }

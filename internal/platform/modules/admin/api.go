@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
+	"mime"
 	"net/http"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,7 +49,7 @@ type Backend interface {
 	History(ctx context.Context, t tenancy.TenantID, key string, page, pageSize int) ([]store.Event, int64, error)
 	Operation(ctx context.Context, t tenancy.TenantID, id uuid.UUID) (store.Operation, error)
 	Execute(ctx context.Context, req lifecycle.Request) ([]lifecycle.Result, error)
-	RetryModule(ctx context.Context, t tenancy.TenantID, key, actor string, onStarted func(uuid.UUID)) (lifecycle.Result, error)
+	RetryModule(ctx context.Context, t tenancy.TenantID, key, actor string, onStarted func(uuid.UUID), ifMatch string) (lifecycle.Result, error)
 }
 
 // API adalah handler /api/platform/modules. Backend di-bind setelah perakitan (route didaftarkan lebih dulu
@@ -130,6 +133,10 @@ func pageParams(w http.ResponseWriter, r *http.Request) (page, size int, ok bool
 			return 0, 0, false
 		}
 		size = n
+	}
+	if page-1 > math.MaxInt/size {
+		badRequest(w, r, "page", "page terlalu besar untuk pageSize ini")
+		return 0, 0, false
 	}
 	return page, size, true
 }
@@ -225,6 +232,15 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 		httpserver.WriteError(w, r, http.StatusNotFound, "not_found", "endpoint tidak ditemukan", nil)
 		return
 	}
+	// Mutasi WAJIB ber Content-Type application/json (body kosong atau {} boleh): request lintas-origin tanpa Content-Type
+	// JSON tidak lolos sebagai "simple request" CORS dan memaksa preflight (Q32 B-9). Tanpa itu: 415.
+	if mt, params, perr := mime.ParseMediaType(r.Header.Get("Content-Type")); perr != nil || mt != "application/json" ||
+		(params["charset"] != "" && !strings.EqualFold(params["charset"], "utf-8")) {
+		httpserver.WriteError(w, r, http.StatusUnsupportedMediaType, "unsupported_media_type",
+			"Content-Type harus application/json (charset utf-8); body kosong atau {} diperbolehkan.",
+			[]map[string]string{{"code": "unsupported_media_type", "message": "Content-Type harus application/json (charset utf-8)."}})
+		return
+	}
 	body, err := httpx.DecodeJSON[actionBody](w, r, httpx.AllowEmptyBody())
 	if err != nil {
 		httpx.RespondError(w, r, err)
@@ -234,21 +250,13 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 		badRequest(w, r, "body", "withDeps dan enable hanya berlaku untuk install")
 		return
 	}
-	if v := r.Header.Get("If-Match"); v != "" {
-		_, rev, err := be.Module(r.Context(), t, key)
-		if err != nil {
-			a.writeError(w, r, err)
-			return
-		}
-		if strings.Trim(strings.TrimPrefix(strings.TrimSpace(v), "W/"), `"`) != strconv.FormatInt(rev, 10) {
-			httpserver.WriteError(w, r, http.StatusPreconditionFailed, "version_mismatch",
-				"If-Match tidak cocok dengan revision status modul saat ini", map[string]any{"revision": rev})
-			return
-		}
-	}
+	// If-Match dievaluasi oleh lifecycle di dalam advisory lock (RFC 9110: "*", daftar, perbandingan kuat), bukan di sini.
+	ifMatch := strings.TrimSpace(r.Header.Get("If-Match"))
 	// Idempotency-Key diterima tetapi tidak disimpan: setiap operasi idempoten lewat aturan no-op (keputusan 19).
 
 	started := make(chan uuid.UUID, 1)
+	var idsMu sync.Mutex
+	var startedIDs []uuid.UUID // semua operasi yang sudah dimulai (rangkaian beberapa operasi), urut
 	done := make(chan outcome, 1)
 	// Operasi berjalan lepas dari pembatalan request (klien putus tidak menghentikannya) tetapi tetap membawa nilai context.
 	ctx := context.WithoutCancel(r.Context())
@@ -262,18 +270,21 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 			done <- o
 		}()
 		onStarted := func(id uuid.UUID) {
+			idsMu.Lock()
+			startedIDs = append(startedIDs, id)
+			idsMu.Unlock()
 			select {
 			case started <- id:
 			default:
 			}
 		}
 		if op == lifecycle.OpRetry {
-			res, err := be.RetryModule(ctx, t, key, APIActor, onStarted)
+			res, err := be.RetryModule(ctx, t, key, APIActor, onStarted, ifMatch)
 			o = outcome{results: []lifecycle.Result{res}, err: err}
 			return
 		}
 		res, err := be.Execute(ctx, lifecycle.Request{
-			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor, OnStarted: onStarted,
+			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor, OnStarted: onStarted, IfMatch: ifMatch,
 		})
 		o = outcome{results: res, err: err}
 	}()
@@ -290,7 +301,14 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 	select {
 	case id := <-started:
 		w.Header().Set("Location", "/api/platform/modules/operations/"+id.String())
-		httpserver.WriteData(w, http.StatusAccepted, map[string]string{"operationId": id.String(), "status": "running"})
+		idsMu.Lock()
+		all := make([]string, 0, len(startedIDs))
+		for _, sid := range startedIDs {
+			all = append(all, sid.String())
+		}
+		idsMu.Unlock()
+		// operationId (dan Location) = operasi pertama; operationIds = semua yang sudah dimulai (aditif, Q32 B-6).
+		httpserver.WriteData(w, http.StatusAccepted, map[string]any{"operationId": id.String(), "operationIds": all, "status": "running"})
 	case o := <-done:
 		a.respond(w, r, be, t, key, o)
 	}
@@ -302,6 +320,7 @@ func (a *API) respond(w http.ResponseWriter, r *http.Request, be Backend, t tena
 		return
 	}
 	ops := make([]OperationView, 0, len(o.results))
+	ids := make([]string, 0, len(o.results))
 	for _, res := range o.results {
 		if res.Status == "noop" || res.OperationID == uuid.Nil {
 			continue
@@ -312,11 +331,12 @@ func (a *API) respond(w http.ResponseWriter, r *http.Request, be Backend, t tena
 			return
 		}
 		ops = append(ops, toOperationView(op))
+		ids = append(ids, res.OperationID.String())
 	}
 	m, _, err := be.Module(r.Context(), t, key)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
 	}
-	httpserver.WriteData(w, http.StatusOK, map[string]any{"module": toModuleView(m), "operations": ops})
+	httpserver.WriteData(w, http.StatusOK, map[string]any{"module": toModuleView(m), "operations": ops, "operationIds": ids})
 }

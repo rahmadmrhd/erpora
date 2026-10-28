@@ -1,0 +1,19 @@
+package application
+
+import "context"
+
+// [[.T.Pascal]]Command adalah masukan use case [[.T.Pascal]] (perintah yang mengubah state). Tambahkan field dan validasi.
+type [[.T.Pascal]]Command struct{}
+
+// [[.T.Pascal]]Handler mengorkestrasi use case [[.T.Pascal]]; dependensinya adalah port (Repository), bukan infrastructure.
+type [[.T.Pascal]]Handler struct{ repo Repository }
+
+// New[[.T.Pascal]]Handler membuat [[.T.Pascal]]Handler di atas repo.
+func New[[.T.Pascal]]Handler(repo Repository) *[[.T.Pascal]]Handler { return &[[.T.Pascal]]Handler{repo: repo} }
+
+// Handle menjalankan use case. Validasi masukan dan aturan bisnis berada di domain; handler hanya mengorkestrasi dan
+// membungkus error dengan konteks (fmt.Errorf("...: %w", err)).
+func (h *[[.T.Pascal]]Handler) Handle(ctx context.Context, cmd [[.T.Pascal]]Command) error {
+	_, _, _ = h.repo, ctx, cmd
+	return nil
+}

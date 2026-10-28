@@ -222,8 +222,8 @@ func TestService_ConcurrentEnableTwoStores(t *testing.T) {
 	if n := e1.count(t, "SELECT count(*) FROM module_lifecycle_events WHERE module_key = 'acme.fx-mod' AND event = 'enabled'"); n != 1 {
 		t.Errorf("event enabled = %d, want 1", n)
 	}
-	if revAfter, _ := e1.st.Revision(ctx, tenantA); revAfter != revBefore+1 {
-		t.Errorf("revision %d -> %d, want +1", revBefore, revAfter)
+	if revAfter, _ := e1.st.Revision(ctx, tenantA); revAfter != revBefore+2 {
+		t.Errorf("revision %d -> %d, want +2 (StartOperation + Commit)", revBefore, revAfter)
 	}
 }
 

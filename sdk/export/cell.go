@@ -54,9 +54,16 @@ func isPlainDecimal(s string) bool {
 // formatCell mengubah nilai skalar menjadi teks sel. Nilai bersarang (map/slice/array/struct) ditolak
 // tanpa menyebut isinya agar field bersarang tidak bocor di bawah klasifikasi kolom yang lebih rendah.
 func formatCell(key string, v any) (string, error) {
+	// Pointer nil dicek lebih dulu: *T nil tetap memenuhi fmt.Stringer bila T punya method nilai (mis. *time.Time),
+	// dan memanggil String() padanya panic.
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer && rv.IsNil() {
+		return "", nil
+	}
 	switch x := v.(type) {
 	case nil:
 		return "", nil
+	case *time.Time:
+		return x.UTC().Format(time.RFC3339), nil
 	case string:
 		return x, nil
 	case bool:

@@ -8,6 +8,8 @@ Status tersimpan per tenant: `installed`, `enabled`, `disabled`, `upgrade_pendin
 
 Operasi dijalankan lewat CLI `erpora modules …` atau API `/api/platform/modules`. Operasi yang status targetnya sudah tercapai adalah no-op sukses (tanpa event, tanpa kenaikan revision), jadi aman diulang dari skrip.
 
+Setiap commit operasi menaikkan `revision` (ETag API), termasuk operasi gagal yang tidak mengubah status. Respons API mutasi memuat semua ID operasi rangkaian di `operationIds` (aditif; `operationId` dan `Location` menunjuk operasi pertama) dan mensyaratkan `Content-Type: application/json` (body kosong atau `{}` boleh; selain itu `415`). `If-Match` mengikuti RFC 9110 (`*`, daftar entity-tag, perbandingan kuat) dan dievaluasi di dalam lock.
+
 ## 2. Urutan hook per operasi
 
 | Operasi | Langkah (dicatat di `module_operations.steps`) | Hook yang dipanggil |
@@ -61,12 +63,13 @@ Migrasi modul (`migrations/*.sql`, goose, diekspos lewat `module.MigrationSource
 
 ## 6. Upgrade dan downgrade
 
-Saat binary membawa versi lebih baru dari yang ter-install, `serve` (reconcile) menandai modul `upgrade_pending` dan routenya `503` (`Retry-After: 30`) sampai `erpora modules upgrade <key>` dijalankan. Upgrade memanggil `Upgrade(ctx, env, from, to)` setelah migrasi baru diterapkan; status sebelumnya (mis. `enabled`) dipulihkan bila sukses. `from` adalah versi ter-install, `to` versi binary. Downgrade ditolak: modul `failed` dengan `downgrade_not_supported`, dan pulih otomatis bila binary kembali ke versi ter-install.
+Saat binary membawa versi lebih baru dari yang ter-install, `serve` (reconcile) menandai modul `upgrade_pending` dan routenya `503` (`Retry-After: 30`) sampai `erpora modules upgrade <key>` dijalankan. `erpora modules upgrade <key>` (dan API upgrade) tidak perlu menunggu `serve`: operasi itu menjalankan reconcile modul terkait lebih dulu di dalam lock yang sama, jadi upgrade langsung setelah penggantian binary berhasil dan status sebelumnya dipulihkan (Q32 butir 17, 28 Okt 2026). Upgrade memanggil `Upgrade(ctx, env, from, to)` setelah migrasi baru diterapkan; status sebelumnya (mis. `enabled`) dipulihkan bila sukses. Upgrade yang akan mengembalikan modul ke `enabled` mensyaratkan semua dependensi wajib `enabled` (ditolak sebelum dimulai bila tidak). Bila binary kembali ke versi ter-install saat status `upgrade_pending` (rollback binary), reconcile mengembalikan status sebelumnya dengan event `reconciled` (`version_restored`). `from` adalah versi ter-install, `to` versi binary. Downgrade ditolak: modul `failed` dengan `downgrade_not_supported`, dan pulih otomatis bila binary kembali ke versi ter-install.
 
 ## 7. Kegagalan dan `retry`
 
 - Langkah yang mengubah data (`migrate`, `hook:install`, `hook:upgrade`) gagal → modul `failed`. Langkah lain (`hook:enable`, `health`, `hook:disable`) gagal → status modul tidak berubah, operasi `failed`.
-- `erpora modules retry <operation-id>` (atau `POST /api/platform/modules/{key}/retry`) mengulang operasi `failed` terakhir modul: langkah yang sudah `succeeded` dilewati kecuali `migrate`. Proses yang mati di tengah operasi meninggalkan operasi `running`; startup/operasi berikutnya menandainya `failed` dengan alasan `interrupted`, lalu dapat di-retry.
+- Kegagalan `migration_failed` dan `internal_error` dilaporkan dengan `message` ringkas (nama berkas migrasi, `operation_id`, `trace_id`) tanpa teks SQL atau hook mentah; detail penuh ada di log server. `code` dan `step` tetap. Event `interrupted` mencatat actor pelaku penandaan dan actor asal di `details.originalActor`.
+- `erpora modules retry <operation-id>` (atau `POST /api/platform/modules/{key}/retry`) mengulang operasi `failed` terakhir modul: langkah yang sudah `succeeded` dilewati kecuali `migrate` dan `hook:enable` (efek `hook:enable` dibatalkan kompensasi `hook:disable` saat health gagal, jadi hook itu selalu dijalankan ulang; hook wajib idempoten). Prasyarat diperiksa ulang sebelum operasi dimulai: retry atau upgrade yang akan membuat modul `enabled` ditolak (`dependency_not_ready`) bila ada dependensi wajib yang tidak `enabled`, dan `disable` menolak (`dependents_active`) selama masih ada dependen `enabled` atau `upgrade_pending`/`failed` yang sebelumnya `enabled`. Proses yang mati di tengah operasi meninggalkan operasi `running`; startup/operasi berikutnya menandainya `failed` dengan alasan `interrupted`, lalu dapat di-retry.
 
 ## 8. Perilaku `--all`
 
