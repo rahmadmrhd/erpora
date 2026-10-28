@@ -153,9 +153,9 @@ modules/example/web/  modules/exampleaddon/web/             # BARU
 @import "tailwindcss" source(none);
 @import "@erpora/ui/theme.css";           /* token, @theme inline, lapisan dasar */
 @source "./";
-@source "../../../packages/ui/src";
-@source "../../../packages/platform-web/src";
-@source "../../../modules/*/web/src";
+@source "../../packages/ui/src";
+@source "../../packages/platform-web/src";
+@source "../../modules/*/web/src";
 ```
 
 `@erpora/ui/theme.css` diekspor lewat `exports` package.json (`"./theme.css": "./src/styles/theme.css"`). Impor CSS lewat `@import` (bukan `import "…css"` di TS) agar aturan F2 (deep import ke `packages/*`) tidak terpicu. `bun-plugin-tailwind` dipasang di `Bun.build` (`web/build.ts`) dan di dev server lewat `web/bunfig.toml`:
@@ -754,6 +754,7 @@ Bila PK-1 ditolak, task 14.3 diganti menjadi: tambahkan endpoint `GET /api/platf
 - **Anggaran bundle sempit** (≈ 190 KB dari 200 KB): mitigasi berurutan di K-12; build gagal otomatis bila terlampaui, sehingga regresi tertangkap saat PR.
 - **TanStack DB pra-1.0** (0.5.x): API dapat berubah; diisolasi di `platform-web/db` dan satu koleksi contoh; versi dipin.
 - **`bun-plugin-tailwind` 0.1.2 sudah lama (Okt 2025)**: terverifikasi berhasil dengan Tailwind 4.3.3, tetapi tidak dipelihara aktif; cadangan: Tailwind CLI (`@tailwindcss/cli`) menghasilkan CSS sebelum `Bun.build` (task 2.3 menyertakan langkah verifikasi di repo).
+- **Mesin Tailwind `bun-plugin-tailwind` 0.1.2 adalah v4.1.14 (terverifikasi di task 2.3, 29 Okt 2026)**: plugin membawa mesin dan biner oxide sendiri (banner CSS `tailwindcss v4.1.14`), sedangkan `@import "tailwindcss"` terselesaikan ke CSS paket `tailwindcss` 4.3.3 yang terpasang (tema dan preflight). Build, `@source` (`packages/ui`, `packages/platform-web`, `modules/*/web`), dan dev server berhasil, tetapi utilitas yang baru ada di Tailwind > 4.1.14 akan diam-diam tidak dihasilkan. Mitigasi: periksa kelas komponen shadcn saat tiap komponen dipasang (task 5/6); cadangan tetap `@tailwindcss/cli` 4.3.3 sebelum `Bun.build`. Biome memerlukan `css.parser.tailwindDirectives: true` (ditambahkan di `biome.json`).
 - **Perilaku Bun HTML bundler** (font `data:`, penggabungan skrip, URL absolut) memaksa langkah pasca-build; dijaga test fungsi murni dan `csp-check`. Bila Bun memperbaikinya, langkah ini dapat dihapus.
 - **Integrasi dengan `i18n-platform`**: bentuk akhir `I18nProvider`/`keys.gen.ts` dapat berbeda dari asumsi (mis. cara membaca bootstrap); task 1.1 mencatat bentuk aktual dan task 9.4 menyelaraskannya sebelum pekerjaan shell.
 - **Tipe route modul (`ModuleBaseRoute`)** bergantung pada generik TanStack Router yang rumit; task 8.3 memverifikasi lewat fixture tipe (positif dan negatif) sebelum modul referensi ditulis.
