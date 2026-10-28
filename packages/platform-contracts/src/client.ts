@@ -18,6 +18,8 @@ export interface ClientOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: () => Record<string, string>;
+  /** Bahasa aktif untuk header `Accept-Language` (dibaca ulang tiap request); kosong atau undefined = tidak dikirim. */
+  getLocale?: () => string | undefined;
 }
 
 type Method = "get" | "post" | "patch" | "delete";
@@ -110,8 +112,10 @@ export function createClient<Paths>(opts: ClientOptions = {}): TypedClient<Paths
     init: RawInit = {},
   ): Promise<ApiResult<unknown>> => {
     const doFetch = opts.fetch ?? globalThis.fetch;
+    const locale = opts.getLocale?.();
     const headers: Record<string, string> = {
       Accept: "application/json",
+      ...(locale ? { "Accept-Language": locale } : {}),
       ...opts.headers?.(),
       ...init.headers,
     };

@@ -118,3 +118,52 @@ describe("client: header permintaan dan body (M3a 9.3)", () => {
     expect(seen[0]?.url).toBe("http://api.test/api/platform/modules/a%2Fb%20c");
   });
 });
+
+describe("client: getLocale dan Accept-Language (i18n 12.6)", () => {
+  function localeClient(
+    getLocale: () => string | undefined,
+    headers?: () => Record<string, string>,
+  ) {
+    const seen: Headers[] = [];
+    const client = createClient<paths>({
+      baseUrl: "http://api.test",
+      getLocale,
+      headers,
+      fetch: (async (_u: unknown, init?: RequestInit) => {
+        seen.push(new Headers(init?.headers));
+        return new Response(null, { status: 204 });
+      }) as unknown as typeof fetch,
+    });
+    return { client, seen };
+  }
+
+  test("menyisipkan Accept-Language dari getLocale pada setiap request (dibaca ulang tiap kali)", async () => {
+    let locale: string | undefined = "id";
+    const { client, seen } = localeClient(() => locale);
+    await client.get("/api/bootstrap");
+    locale = "en";
+    await client.get("/api/bootstrap");
+    expect(seen.map((h) => h.get("Accept-Language"))).toEqual(["id", "en"]);
+  });
+
+  test("getLocale mengembalikan undefined atau kosong: header tidak dikirim", async () => {
+    const { client, seen } = localeClient(() => undefined);
+    await client.get("/api/bootstrap");
+    const empty = localeClient(() => "");
+    await empty.client.get("/api/bootstrap");
+    expect(seen[0]?.get("Accept-Language")).toBeNull();
+    expect(empty.seen[0]?.get("Accept-Language")).toBeNull();
+  });
+
+  test("header eksplisit pada init atau headers() menang atas getLocale", async () => {
+    const a = localeClient(
+      () => "id",
+      () => ({ "Accept-Language": "fr" }),
+    );
+    await a.client.get("/api/bootstrap");
+    expect(a.seen[0]?.get("Accept-Language")).toBe("fr");
+    const b = localeClient(() => "id");
+    await b.client.get("/api/bootstrap", { headers: { "Accept-Language": "en" } });
+    expect(b.seen[0]?.get("Accept-Language")).toBe("en");
+  });
+});
