@@ -243,3 +243,34 @@ func TestService_IncompatibleInstallRejected(t *testing.T) {
 		t.Errorf("operasi tercatat: %d", n)
 	}
 }
+
+// Codex PR#6 C6 (Q32, 28 Okt 2026): setelah binary diganti dan sebelum serve, `upgrade` langsung berhasil (reconcile di
+// dalam lock yang sama) dan modul tetap enabled di versi baru; downgrade tetap ditolak.
+func TestService_UpgradeRightAfterBinarySwap(t *testing.T) {
+	ctx := context.Background()
+	rec := &fxRec{}
+	h := newRealEnvDSN(t)
+	v10 := newRealService(t, h.dsn, h.db, 0, []*fxModule{newFx(rec, fxSpec{key: "acme.fx-mod", version: "1.0.0"})})
+	v10.exec(t, OpInstall, "acme.fx-mod")
+	v10.exec(t, OpEnable, "acme.fx-mod")
+
+	v11 := newRealService(t, h.dsn, h.db, 0, []*fxModule{newFx(rec, fxSpec{key: "acme.fx-mod", version: "1.1.0"})})
+	res, err := v11.svc.Execute(ctx, Request{Tenant: tenantA, Op: OpUpgrade, Key: "acme.fx-mod", Actor: "cli:tester"})
+	if err != nil || len(res) != 1 || res[0].Status != "succeeded" || res[0].To != rt.StatusEnabled {
+		t.Fatalf("upgrade = %+v, %v", res, err)
+	}
+	ins, _ := v11.st.Installations(ctx, tenantA)
+	if ins[0].Status != "enabled" || ins[0].PreviousStatus != "" || ins[0].InstalledVersion != "1.1.0" {
+		t.Errorf("installations = %+v", ins)
+	}
+	if v11.snap.Status(tenantA, "acme.fx-mod") != rt.StatusEnabled {
+		t.Error("snapshot harus enabled")
+	}
+
+	old := newRealService(t, h.dsn, h.db, 0, []*fxModule{newFx(rec, fxSpec{key: "acme.fx-mod", version: "1.0.0"})})
+	_, err = old.svc.Execute(ctx, Request{Tenant: tenantA, Op: OpUpgrade, Key: "acme.fx-mod", Actor: "cli:tester"})
+	var le *Error
+	if !errors.As(err, &le) || le.Code != CodeDowngradeNotSupported {
+		t.Fatalf("downgrade err = %v", err)
+	}
+}
