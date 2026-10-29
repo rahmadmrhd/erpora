@@ -182,7 +182,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - `bun run typecheck`, `lint`, `bun test`, `bun run build`; catat ukuran JS awal (anggaran 200 KB), chunk `/example` terpisah, kontributor terbesar; bila > 190 KB terapkan mitigasi K-12 berurutan dan lapor.
     - _Requirements: 1.3, 1.4, 5.4, 15.1_
 
-- [ ] 13. Modul referensi dan generator (Kelas beban: Sonnet)
+- [x] 13. Modul referensi dan generator (Kelas beban: Sonnet)
   - [x] 13.1 Tulis test modul referensi (merah dulu)
     - Untuk `example` dan `exampleaddon`: `defineModule` valid (`key`/`slug` cocok dengan `module.json`, `version` sama), `registerRoutes` mengembalikan route dengan parent yang benar, navigasi satu item, halaman dirender dengan `fetch` palsu (daftar notes; ringkasan `noteCount`), `PageActions` "Segarkan".
     - **Validates: Requirements 5.3, 6.1, 6.7**
@@ -195,7 +195,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
   - [x] 13.4 Templat generator (test dulu)
     - Perbarui golden test dulu (merah): `internal/devtools/gen/testdata/golden/module_*` memuat `src/module.ts`, `src/routes.tsx`, `src/pages/home-page.tsx`, `index.ts` yang mengekspor `frontendModule`, `web/src/app/modules.ts` dengan `import { frontendModule as <x>Module }`. Lalu ubah templat di `internal/devtools/templates/module/web/**` dan `modifyRepoFiles` (`internal/devtools/gen/module.go`) agar sesuai; jaga `moduleInfo` dan `api` tetap diekspor (aditif).
     - _Requirements: 15.4_
-  - [ ] 13.5 `task test:generator`
+  - [x] 13.5 `task test:generator`
     - Jalankan di VPS (Docker + Bun; ±12 menit): modul hasil `make:module inventory --frontend --depends acme.example` lolos semua gate termasuk `web:check` dan `i18n:check`; catat hasil.
     - _Requirements: 15.4_
 

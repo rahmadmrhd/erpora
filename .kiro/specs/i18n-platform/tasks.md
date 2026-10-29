@@ -117,7 +117,7 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - [x] 8.5 Task dan gate lokal
     - `Taskfile.yml`: `i18n:check` dan `i18n:generate` (tanpa `rm`/`cp`/`sed`); panggil `i18n:check` dari `task lint` (galat struktural menggagalkan, peringatan hanya dicetak) dan `i18n:generate -- --check` dari `task web:check`.
     - _Requirements: 8.9, 11.1_
-  - [~] 8.6 Templat `make:module` dan modul referensi
+  - [x] 8.6 Templat `make:module` dan modul referensi
     - Perbarui templat di `internal/devtools/templates` dan `internal/devtools/gen`: `i18n/id.json`, `en.json` (kunci contoh bersarang), `//go:embed i18n/*.json` + `Catalogs()`, bagian `i18n` di `module.json`, dan `web/src/i18n/keys.gen.ts`. Tambahkan katalog `id`/`en` ke `modules/example` dan `modules/exampleaddon` (termasuk satu `errors.<code>` yang dipakai API `example`); perbarui golden test generator. Jalankan `task test:generator` (lama, Docker + Bun; di VPS sesuai aturan proyek).
     - _Requirements: 1.8, 11.3_
   - [x] 8.7 Arch rule `I1` (test dulu)
