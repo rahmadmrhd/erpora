@@ -38,6 +38,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - Modul hanya boleh mengakses modul lain lewat `modules/<x>/contract` **dan** hanya bila tercantum di `dependencies` manifest + `require` go.mod (D1, D8). Modul tidak boleh mengimpor root module; akses platform hanya lewat `sdk/` (D9).
 - `internal/platform/**` tidak boleh mengimpor `modules/**` (D2); hanya `internal/app` yang merakit modul (D7).
 - Frontend modul berada di dalam modulnya: `modules/<name>/web` (package `@erpora/module-<name>`). Komponen generik dari `@erpora/ui` (`packages/ui`), layanan frontend platform dari `@erpora/platform-web` — **bukan** dari modul Core. `web/` hanya app shell yang merakit modul. Dependency `package.json` modul harus sama dengan `manifest.dependencies` (F1–F3).
+- `@erpora/ui` (`packages/ui`) adalah **daun** (F4): tidak mengimpor paket `@erpora/*` mana pun. Komponennya milik repo (shadcn disalin, bukan dependensi terpasang): tambah dengan `bun run shadcn add <komponen>` dari `packages/ui`, lalu ganti `from "cn"` menjadi `from "@erpora/ui/lib/utils"` dan hapus dependensi `cn` (lihat `packages/ui/README.md`). Dilarang nilai palet langsung (`zinc-100`, `#hex`); pakai token semantik.
 - Domain tanpa I/O (D3); GORM hanya di `*/internal/infrastructure`, `internal/platform/database`, `internal/platform/modules/store`, `sdk/data` (D3b); `AutoMigrate` dilarang — skema hanya lewat migrasi goose.
 - Router: `net/http.ServeMux`; modul mendaftarkan route lewat `Registrar.Handle(method, path, permission, h)` / `Public(...)`, tidak pernah menerima router.
 - Backend adalah otoritas: permission frontend hanya untuk UX.
@@ -60,6 +61,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - `task test:generator` (lama, ±12 menit; Docker + Bun) membuktikan `make:module` lolos semua gate; jalankan bila mengubah template/generator. Path repo tidak boleh berspasi.
 - Lingkungan dev: `task db:up`, `task dev:setup` (migrate + install semua modul), `task erpora -- doctor`, `task erpora -- db:fresh --seed` (hanya development; mengetik nama DB), `task erpora -- module:check`, `task release:verify-tag -- modules/<dir>/vX.Y.Z`.
 - Di Windows, `-race` dilewati (tidak ada cgo/gcc); CI Linux tetap menjalankannya.
+- Frontend: `bun test` dari root dan `task web:check` (typecheck, lint, deps, `i18n:generate --check`, test, build dengan anggaran bundle 200 KB gzip); `task web:test` untuk uji saja.
 - Jangan menambah perintah Taskfile yang memakai `rm`/`cp`/`sed` atau utilitas khusus Unix.
 
 ## Konvensi kerja
@@ -67,4 +69,6 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - TDD: tulis test yang gagal dulu, lalu implementasi.
 - Satu commit per unit kerja yang bisa diuji; pesan commit konvensional (`feat(scope): …`, `fix:`, `docs:`, `chore:`).
 - Jangan push atau membuat PR tanpa diminta.
+- Teks UI selalu lewat i18n (`useTranslation`, `msg()`, `crumb()`); katalog per modul di `modules/<name>/i18n/<locale>.json`; jangan menanam string UI. Periksa dengan `task i18n:check` (galat struktural menggagalkan) dan bangkitkan tipe kunci dengan `task i18n:generate`. Panduan: `docs/module-sdk/i18n.md`.
+- `dangerouslySetInnerHTML` dilarang di seluruh kode frontend (Biome `error`); tidak ada pengecualian sampai komponen `SafeHtml` (M3g).
 - Temuan review: kerjakan semua yang sesuai spek (termasuk Minor); yang di luar/bertentangan dengan spek ditanyakan dulu (lihat instruksi global: `~/.claude/CLAUDE.md` / `~/.codex/AGENTS.md`).
