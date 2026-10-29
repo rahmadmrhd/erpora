@@ -11,6 +11,7 @@ import (
 
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
+	"erpora/internal/platform/i18n"
 	i18nstore "erpora/internal/platform/i18n/store"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/lifecycle"
@@ -30,6 +31,7 @@ type cliRuntime struct {
 	conn     database.TenantConnector
 	cleanup  func()
 	services runtime.Services
+	i18n     *i18n.Service
 }
 
 // openCLI membuka DB, memastikan migrasi platform sudah diterapkan, membaca tenant default, dan membangun
@@ -79,6 +81,7 @@ func openCLI(ctx context.Context, cfg config.Config, log *slog.Logger) (*cliRunt
 		conn:     database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}},
 		cleanup:  cleanup,
 		services: services,
+		i18n:     i18nSvc,
 	}, nil
 }
 
@@ -92,6 +95,16 @@ func NewGuardedLifecycle(ctx context.Context, cfg config.Config, log *slog.Logge
 		return nil, tenancy.TenantID{}, nil, nil, err
 	}
 	return rt.svc, rt.tid, rt.guardWrite, rt.cleanup, nil
+}
+
+// NewGuardedI18n membuka i18n.Service (dengan penyimpanan override) untuk CLI `erpora i18n override`, ditambah guard
+// penanda lingkungan yang dipanggil sebelum mutasi (FR-22.5). cleanup wajib dipanggil.
+func NewGuardedI18n(ctx context.Context, cfg config.Config, log *slog.Logger) (*i18n.Service, tenancy.TenantID, func(context.Context) error, func(), error) {
+	rt, err := openCLI(ctx, cfg, log)
+	if err != nil {
+		return nil, tenancy.TenantID{}, nil, nil, err
+	}
+	return rt.i18n, rt.tid, rt.guardWrite, rt.cleanup, nil
 }
 
 // NewLifecycle dipakai CLI `erpora modules`: lihat openCLI. cleanup wajib dipanggil.

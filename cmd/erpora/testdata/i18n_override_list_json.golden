@@ -1,0 +1,18 @@
+[
+  {
+    "namespace": "example",
+    "locale": "id",
+    "key": "note.title",
+    "message": "Klien",
+    "updatedBy": "cli:budi",
+    "updatedAt": "2026-10-29T10:00:00Z"
+  },
+  {
+    "namespace": "ui",
+    "locale": "en",
+    "key": "actions.save",
+    "message": "Store \"now\"\nline2",
+    "updatedBy": "api:dev",
+    "updatedAt": "2026-10-29T11:00:00Z"
+  }
+]
