@@ -3,6 +3,7 @@
 // sama persis dengan subpohon `modules` di internal/platform/i18n/catalog/{id,en}.json.
 import { type ArgsOf, useTranslation } from "@erpora/platform-web";
 import { useCallback } from "react";
+import type { ModuleOp, ModuleStatus } from "./types";
 
 type NoArgs = Record<never, never>;
 const a = <A extends object = NoArgs>(): A => undefined as unknown as A;
@@ -78,7 +79,6 @@ export const MODULE_KEYS = {
   "modules.result.noop": a(),
   "modules.result.timeout": a(),
   "modules.result.pollError": a(),
-  "modules.result.operation": a<{ operation: string; status: string }>(),
   "modules.error.invalid_transition": a(),
   "modules.error.operation_in_progress": a(),
   "modules.error.module_required": a(),
@@ -124,6 +124,10 @@ export type ModulesCatalog = typeof MODULE_KEYS;
 export type ModulesKey = keyof ModulesCatalog;
 /** Daftar kunci eksak untuk test paritas dengan katalog JSON. */
 export const modulesKeyList = Object.keys(MODULE_KEYS) as ModulesKey[];
+
+/** Kunci dinamis terketik (template literal yang dijamin ada di `MODULE_KEYS`). */
+export const statusKey = (s: ModuleStatus) => `modules.status.${s}` as const;
+export const opKey = (op: ModuleOp) => `modules.op.${op}` as const;
 
 /** Pesan yang dapat dirender: kunci `modules.*` atau kunci galat umum `errors.*` dengan argumen opsional. */
 export interface MessageDescriptor {

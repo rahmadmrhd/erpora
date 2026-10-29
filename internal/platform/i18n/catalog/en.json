@@ -185,8 +185,7 @@
       "failed": "Failed",
       "noop": "No change: the status already matches.",
       "timeout": "Monitoring stopped after 10 minutes; follow progress in History.",
-      "pollError": "The operation status cannot be read yet; retrying.",
-      "operation": "{operation}: {status}"
+      "pollError": "The operation status cannot be read yet; retrying."
     },
     "error": {
       "invalid_transition": "The operation is not allowed for the module's current status.",
