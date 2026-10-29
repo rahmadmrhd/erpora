@@ -97,6 +97,48 @@ func TestParseCatalogFlattenCollisionNamesBothPaths(t *testing.T) {
 	}
 }
 
+// Tabrakan tiga jalur atau lebih: SATU Issue per kunci lengkap yang memuat SEMUA jalur, urut deterministik
+// (Requirement 1.6; keputusan G23).
+func TestParseCatalogFlattenCollisionThreePathsOneIssue(t *testing.T) {
+	const in = `{"b": {"c": {"b.c": "1"}}, "b.c": {"b": {"c": "2"}, "b.c": "3"}}`
+	var first string
+	for i := 0; i < 20; i++ { // urutan pelaporan tidak bergantung pada iterasi map
+		got, issues := parseStr(in, DefaultLimits())
+		if got != nil {
+			t.Fatal("Flat harus nil bila ada tabrakan")
+		}
+		if len(issues) != 1 {
+			t.Fatalf("issues = %v, want tepat satu Issue untuk satu kunci", issues)
+		}
+		is := issues[0]
+		if is.Code != CodeFlattenCollision || is.Key != "b.c.b.c" {
+			t.Fatalf("Issue = %+v", is)
+		}
+		for _, p := range []string{"/b/c/b.c", "/b.c/b/c", "/b.c/b.c"} {
+			if !strings.Contains(is.Detail, p) {
+				t.Errorf("Detail %q tidak menyebut jalur %s", is.Detail, p)
+			}
+		}
+		if first == "" {
+			first = is.Detail
+		} else if is.Detail != first {
+			t.Fatalf("Detail tidak deterministik: %q vs %q", is.Detail, first)
+		}
+	}
+	// jalur terurut leksikografis
+	if i, j, k := strings.Index(first, "/b.c/b.c"), strings.Index(first, "/b.c/b/c"), strings.Index(first, "/b/c/b.c"); !(i < j && j < k) {
+		t.Errorf("jalur harus terurut: %q", first)
+	}
+}
+
+// Dua kunci berbeda yang masing-masing bertabrakan menghasilkan dua Issue (satu per kunci), terurut menurut kunci.
+func TestParseCatalogFlattenCollisionOneIssuePerKey(t *testing.T) {
+	_, issues := parseStr(`{"a.b": {"c": "1"}, "a": {"b.c": "2"}, "x.y": {"z": "3"}, "x": {"y.z": "4"}}`, DefaultLimits())
+	if len(issues) != 2 || issues[0].Key != "a.b.c" || issues[1].Key != "x.y.z" {
+		t.Fatalf("issues = %+v", issues)
+	}
+}
+
 func TestParseCatalogDuplicateKeys(t *testing.T) {
 	cases := map[string]string{
 		"akar":      `{"a": "x", "a": "y"}`,

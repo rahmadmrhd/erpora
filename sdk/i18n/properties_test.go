@@ -80,66 +80,13 @@ func (t *tree) writeJSON(sb *strings.Builder) {
 func TestPropertyFlattenDeterministic(t *testing.T) {
 	collisions, clean := 0, 0
 	prop := func(seed int64) bool {
-		r := rand.New(rand.NewSource(seed))
-		root := genTree(r, 0)
-		if len(root.children) == 0 {
-			return true
-		}
-		ref := map[string][]string{}
-		naiveFlatten(root, nil, ref)
-		var sb strings.Builder
-		root.writeJSON(&sb)
-
-		got, issues := ParseCatalog(strings.NewReader(sb.String()), DefaultLimits())
-
-		var collided []string
-		for k, paths := range ref {
-			if len(paths) > 1 {
-				collided = append(collided, k)
-			}
-		}
-		if len(collided) > 0 {
+		ok, collided := checkFlattenSeed(t, seed)
+		if collided {
 			collisions++
-			if got != nil {
-				t.Logf("seed %d: Flat harus nil saat ada tabrakan", seed)
-				return false
-			}
-			for _, k := range collided {
-				found := false
-				for _, is := range issues {
-					if is.Code == CodeFlattenCollision && is.Key == k {
-						for _, p := range ref[k] {
-							if !strings.Contains(is.Detail, p) {
-								t.Logf("seed %d: Detail %q tidak menyebut jalur %s", seed, is.Detail, p)
-								return false
-							}
-						}
-						found = true
-					}
-				}
-				if !found {
-					t.Logf("seed %d: tabrakan %q tidak dilaporkan; json=%s issues=%v", seed, k, sb.String(), issues)
-					return false
-				}
-			}
-			return true
+		} else {
+			clean++
 		}
-		clean++
-		if len(issues) != 0 {
-			t.Logf("seed %d: issues tak terduga %v; json=%s", seed, issues, sb.String())
-			return false
-		}
-		if len(got) != len(ref) {
-			t.Logf("seed %d: len(Flat)=%d, want %d", seed, len(got), len(ref))
-			return false
-		}
-		for k := range ref {
-			if _, ok := got[k]; !ok {
-				t.Logf("seed %d: kunci %q hilang", seed, k)
-				return false
-			}
-		}
-		return true
+		return ok
 	}
 	if err := quick.Check(prop, &quick.Config{MaxCount: 3000}); err != nil {
 		t.Fatal(err)
@@ -147,6 +94,91 @@ func TestPropertyFlattenDeterministic(t *testing.T) {
 	if collisions == 0 || clean == 0 {
 		t.Errorf("generator harus menghasilkan kedua kelas (tabrakan=%d, bersih=%d)", collisions, clean)
 	}
+}
+
+// Regresi (G23): seed ini menghasilkan tabrakan TIGA jalur pada kunci b.c.b.c; satu Issue wajib memuat semua jalur.
+func TestPropertyFlattenRegressionSeeds(t *testing.T) {
+	for _, seed := range []int64{4095330077871122206} {
+		if ok, collided := checkFlattenSeed(t, seed); !ok || !collided {
+			t.Errorf("seed %d: ok=%v collided=%v, want ok dan tabrakan", seed, ok, collided)
+		}
+	}
+}
+
+// checkFlattenSeed membangkitkan pohon dari seed, memuatnya lewat ParseCatalog, dan memeriksa P1 terhadap
+// perataan acuan. collided=true bila pohon punya tabrakan perataan. Pada tabrakan: Flat nil, dan untuk SETIAP kunci
+// yang bertabrakan ada TEPAT SATU Issue flatten_collision yang menyebut SEMUA jalur penghasilnya (Requirement 1.6).
+func checkFlattenSeed(t *testing.T, seed int64) (ok, collided bool) {
+	t.Helper()
+	r := rand.New(rand.NewSource(seed))
+	root := genTree(r, 0)
+	if len(root.children) == 0 {
+		return true, false
+	}
+	ref := map[string][]string{}
+	naiveFlatten(root, nil, ref)
+	var sb strings.Builder
+	root.writeJSON(&sb)
+
+	got, issues := ParseCatalog(strings.NewReader(sb.String()), DefaultLimits())
+
+	var collidedKeys []string
+	for k, paths := range ref {
+		if len(paths) > 1 {
+			collidedKeys = append(collidedKeys, k)
+		}
+	}
+	if len(collidedKeys) > 0 {
+		if got != nil {
+			t.Logf("seed %d: Flat harus nil saat ada tabrakan", seed)
+			return false, true
+		}
+		total := 0
+		for _, is := range issues {
+			if is.Code == CodeFlattenCollision {
+				total++
+			}
+		}
+		if total != len(collidedKeys) {
+			t.Logf("seed %d: %d Issue flatten_collision untuk %d kunci bertabrakan; json=%s issues=%v", seed, total, len(collidedKeys), sb.String(), issues)
+			return false, true
+		}
+		for _, k := range collidedKeys {
+			n := 0
+			for _, is := range issues {
+				if is.Code != CodeFlattenCollision || is.Key != k {
+					continue
+				}
+				n++
+				for _, p := range ref[k] {
+					if !strings.Contains(is.Detail, p) {
+						t.Logf("seed %d: Detail %q tidak menyebut jalur %s", seed, is.Detail, p)
+						return false, true
+					}
+				}
+			}
+			if n != 1 {
+				t.Logf("seed %d: kunci %q dilaporkan %d kali, want 1; json=%s issues=%v", seed, k, n, sb.String(), issues)
+				return false, true
+			}
+		}
+		return true, true
+	}
+	if len(issues) != 0 {
+		t.Logf("seed %d: issues tak terduga %v; json=%s", seed, issues, sb.String())
+		return false, false
+	}
+	if len(got) != len(ref) {
+		t.Logf("seed %d: len(Flat)=%d, want %d", seed, len(got), len(ref))
+		return false, false
+	}
+	for k := range ref {
+		if _, present := got[k]; !present {
+			t.Logf("seed %d: kunci %q hilang", seed, k)
+			return false, false
+		}
+	}
+	return true, false
 }
 
 // P12 Namespace tertutup: dengan scope modul m, T hanya pernah meminta namespace m, ui, atau platform
