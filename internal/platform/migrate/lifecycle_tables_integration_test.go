@@ -34,8 +34,12 @@ func TestLifecycleTables_Exist(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		if s.Latest != 2 || s.Pending != 0 || s.Current != 2 {
-			t.Errorf("target %s: %+v, want Latest=2 Pending=0", s.Target, s)
+		var want int64 = 2 // tenant; control mencapai 3 sejak 0003_i18n_overrides
+		if s.Target == migrate.Control {
+			want = 3
+		}
+		if s.Latest != want || s.Pending != 0 || s.Current != want {
+			t.Errorf("target %s: %+v, want Latest=%d Pending=0", s.Target, s, want)
 		}
 	}
 }
