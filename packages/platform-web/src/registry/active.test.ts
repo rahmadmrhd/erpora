@@ -69,7 +69,7 @@ describe("activeLeaf", () => {
         const leaves = nav.flatMap((n) => (n.type === "item" ? [n] : n.children));
         const matching = leaves.filter((l) => isPathActive(pathname, l.to));
         if (matching.length === 0) expect(active).toBeUndefined();
-        else expect(matching).toContain(active);
+        else expect(matching).toContain(active as NonNullable<typeof active>);
         const g = nav[2] as Extract<NavNode, { type: "group" }>;
         expect(groupHasActive(g, pathname, nav)).toBe(
           active !== undefined && g.children.includes(active),
