@@ -24,5 +24,6 @@ func Register(root *cobra.Command, opts Options) {
 	registerModule(root)
 	registerDB(root, opts)
 	registerRelease(root)
+	registerI18n(root)
 	root.AddCommand(newDoctor(opts))
 }
