@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { compile, format, formatRich, I18nFormatError } from "./format";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { compile, format, formatRich, I18nFormatError, resetFormatWarnings } from "./format";
 
 describe("compile", () => {
   test("cache per (locale, source) mengembalikan objek yang sama", () => {
@@ -95,5 +95,42 @@ describe("argumen bool", () => {
 
   test("bool pada select memilih kunci true/false", () => {
     expect(format(compile("en", "{f, select, true {Y} other {N}}"), { f: true })).toBe("Y");
+  });
+});
+
+describe("peringatan argumen hilang (R2.3, hanya dev/test)", () => {
+  let warn: ReturnType<typeof spyOn<Console, "warn">>;
+  beforeEach(() => {
+    resetFormatWarnings();
+    warn = spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  test("tetap menampilkan {x} apa adanya dan mencatat peringatan satu kali per (bahasa, pesan, argumen)", () => {
+    const c = compile("id", "Jumlah {count}, {nama}");
+    expect(format(c, {})).toBe("Jumlah {count}, {nama}");
+    expect(format(c, {})).toBe("Jumlah {count}, {nama}");
+    expect(warn).toHaveBeenCalledTimes(2);
+    const text = warn.mock.calls.map((c2) => String(c2[0])).join(" ");
+    expect(text).toContain("count");
+    expect(text).toContain("nama");
+  });
+
+  test("formatRich juga memperingatkan; argumen lengkap tidak", () => {
+    formatRich(compile("id", "A <b>{x}</b>"), {}, { b: (c) => c.join("") });
+    expect(warn).toHaveBeenCalledTimes(1);
+    format(compile("id", "Halo {n}"), { n: "ok" });
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  test("tanpa peringatan di produksi", () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      format(compile("id", "Halo {n}"), {});
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
   });
 });

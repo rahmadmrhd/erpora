@@ -108,9 +108,30 @@ export function compile(locale: string, source: string): Compiled {
   return compiled;
 }
 
+const warnedMissing = new Set<string>();
+
+/** Mengosongkan catatan peringatan argumen hilang (untuk test). */
+export function resetFormatWarnings(): void {
+  warnedMissing.clear();
+}
+
+/** Peringatan dev (Requirement 2.3) satu kali per (bahasa, pesan, argumen); tidak ada di produksi. */
+function warnMissing(compiled: Compiled, missing: ReadonlySet<string>): void {
+  if (process.env.NODE_ENV === "production") return;
+  for (const name of missing) {
+    const id = `${compiled.locale}\u0000${compiled.source}\u0000${name}`;
+    if (warnedMissing.has(id)) continue;
+    warnedMissing.add(id);
+    console.warn(
+      `[erpora] i18n (${compiled.locale}): argumen "${name}" hilang pada pesan "${compiled.source}"; tampil sebagai {${name}}`,
+    );
+  }
+}
+
 /** Memformat menjadi teks polos. Tag rich dilucuti; argumen hilang tampil apa adanya sebagai `{nama}`. */
 export function format(compiled: Compiled, args: Args = {}): string {
   const missing = missingArgs(compiled, args);
+  warnMissing(compiled, missing);
   const mf =
     missing.size === 0
       ? compiled.plain
@@ -132,6 +153,7 @@ export function formatRich<T>(
   tags: RichTags<T>,
 ): Array<string | T> {
   const missing = missingArgs(compiled, args);
+  warnMissing(compiled, missing);
   // Bila nama tag bentrok dengan nama argumen, argumen menang dan tag dilucuti.
   const handled = (name: string): boolean =>
     Object.hasOwn(tags, name) && !compiled.argNames.has(name);
