@@ -10,6 +10,58 @@
       "label": "Language"
     }
   },
+  "nav": {
+    "home": "Home",
+    "menu": "Menu",
+    "settings": "Settings",
+    "settingsModules": "Modules",
+    "empty": "No module menus yet"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "loadError": "Notifications could not be loaded.",
+    "markAllRead": "Mark all as read",
+    "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}"
+  },
+  "user": {
+    "anonymous": "User",
+    "menu": "Account menu",
+    "manageAccount": "Manage Account",
+    "signOut": "Sign Out",
+    "unavailable": "Not available in this version"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "moduleInactive": {
+    "title": "Module Not Active",
+    "notEnabled": "This module has not been enabled.",
+    "notInstalled": "This module has not been installed.",
+    "unavailable": "This module is temporarily unavailable.",
+    "openSettings": "Open Module Settings"
+  },
+  "notFound": {
+    "title": "Page Not Found",
+    "description": "The address you opened does not exist.",
+    "backHome": "Back to Home"
+  },
+  "routeError": {
+    "title": "Something Went Wrong",
+    "description": "This page could not be displayed.",
+    "requestId": "Request ID: {requestId}",
+    "traceId": "Trace ID: {traceId}"
+  },
+  "dashboard": {
+    "title": "Dashboard Not Available Yet",
+    "description": "The dashboard will arrive in an upcoming update."
+  },
+  "pageActions": {
+    "more": "More actions"
+  },
   "errors": {
     "bad_request": "The request is not valid.",
     "invalid_filter": "The filter is not valid.",

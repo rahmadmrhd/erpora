@@ -10,6 +10,58 @@
       "label": "Bahasa"
     }
   },
+  "nav": {
+    "home": "Beranda",
+    "menu": "Menu",
+    "settings": "Pengaturan",
+    "settingsModules": "Modul",
+    "empty": "Belum ada menu modul"
+  },
+  "notifications": {
+    "title": "Notifikasi",
+    "empty": "Belum ada notifikasi",
+    "loadError": "Notifikasi gagal dimuat.",
+    "markAllRead": "Tandai semua telah dibaca",
+    "unreadLabel": "{count, plural, =0 {Notifikasi, tidak ada yang belum dibaca} other {Notifikasi, # belum dibaca}}"
+  },
+  "user": {
+    "anonymous": "Pengguna",
+    "menu": "Menu akun",
+    "manageAccount": "Kelola Akun",
+    "signOut": "Keluar",
+    "unavailable": "Belum tersedia di versi ini"
+  },
+  "theme": {
+    "label": "Tema",
+    "light": "Terang",
+    "dark": "Gelap",
+    "system": "Sistem"
+  },
+  "moduleInactive": {
+    "title": "Modul Tidak Aktif",
+    "notEnabled": "Modul ini belum diaktifkan.",
+    "notInstalled": "Modul ini belum dipasang.",
+    "unavailable": "Modul ini sementara tidak tersedia.",
+    "openSettings": "Buka Pengaturan Modul"
+  },
+  "notFound": {
+    "title": "Halaman Tidak Ditemukan",
+    "description": "Alamat yang Anda buka tidak ada.",
+    "backHome": "Kembali ke Beranda"
+  },
+  "routeError": {
+    "title": "Terjadi Kesalahan",
+    "description": "Halaman ini gagal ditampilkan.",
+    "requestId": "ID permintaan: {requestId}",
+    "traceId": "ID jejak: {traceId}"
+  },
+  "dashboard": {
+    "title": "Dashboard Belum Tersedia",
+    "description": "Dashboard akan hadir pada pembaruan berikutnya."
+  },
+  "pageActions": {
+    "more": "Aksi lainnya"
+  },
   "errors": {
     "bad_request": "Permintaan tidak valid.",
     "invalid_filter": "Filter tidak valid.",
