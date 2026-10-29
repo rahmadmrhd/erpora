@@ -359,8 +359,12 @@ func TestOverrideAPI_PutIsIdempotentAndReturnsETag(t *testing.T) {
 func TestOverrideAPI_IfMatch412(t *testing.T) {
 	e := newEnv(t, allowAll, true)
 	// If-Match pada baris yang belum ada: 412
-	if rec := e.do(http.MethodPut, putPath, body("A"), "If-Match", `"abc"`); rec.Code != http.StatusPreconditionFailed || rec.errBody(t).Error.Code != "version_mismatch" {
-		t.Fatalf("baris belum ada + If-Match: %d %s", rec.Code, rec.Body)
+	rec0 := e.do(http.MethodPut, putPath, body("A"), "If-Match", `"abc"`)
+	if rec0.Code != http.StatusPreconditionFailed || !strings.Contains(rec0.Body.String(), `"version_mismatch"`) {
+		t.Fatalf("baris belum ada + If-Match: %d %s", rec0.Code, rec0.Body)
+	}
+	if strings.Contains(rec0.Body.String(), `"current"`) {
+		t.Errorf("baris belum ada: tidak ada record terbaru untuk dikirim: %s", rec0.Body)
 	}
 	if rec := e.do(http.MethodPut, putPath, body("A"), "If-Match", "*"); rec.Code != http.StatusPreconditionFailed {
 		t.Errorf("* pada baris belum ada: %d", rec.Code)
@@ -370,9 +374,23 @@ func TestOverrideAPI_IfMatch412(t *testing.T) {
 	if rec := e.do(http.MethodPut, putPath, body("Dua"), "If-Match", etag); rec.Code != http.StatusOK {
 		t.Fatalf("If-Match cocok: %d %s", rec.Code, rec.Body)
 	}
-	// etag lama sekarang basi
-	if rec := e.do(http.MethodPut, putPath, body("Tiga"), "If-Match", etag); rec.Code != http.StatusPreconditionFailed {
-		t.Errorf("etag basi: %d", rec.Code)
+	// etag lama sekarang basi: 412 membawa record TERBARU di error.details.current (api-guidelines §5)
+	stale := e.do(http.MethodPut, putPath, body("Tiga"), "If-Match", etag)
+	if stale.Code != http.StatusPreconditionFailed {
+		t.Errorf("etag basi: %d", stale.Code)
+	}
+	var env412 struct {
+		Error struct {
+			Code    string
+			Details struct{ Current OverrideView }
+		}
+	}
+	if err := json.Unmarshal(stale.Body.Bytes(), &env412); err != nil {
+		t.Fatalf("body 412: %s", stale.Body)
+	}
+	if env412.Error.Code != "version_mismatch" || env412.Error.Details.Current.Message != "Dua" || env412.Error.Details.Current.ETag == etag ||
+		env412.Error.Details.Current.Key != "actions.save" {
+		t.Errorf("details.current = %+v (code %s); body %s", env412.Error.Details.Current, env412.Error.Code, stale.Body)
 	}
 	cur := e.do(http.MethodGet, "/api/platform/i18n/overrides?namespace=ui", "")
 	var list struct{ Data []OverrideView }
@@ -391,9 +409,9 @@ func TestOverrideAPI_IfMatch412(t *testing.T) {
 	if rec := e.do(http.MethodPut, putPath, body("Enam"), "If-Match", "*"); rec.Code != http.StatusOK {
 		t.Errorf("* pada baris ada: %d", rec.Code)
 	}
-	// DELETE dengan If-Match basi: 412, baris tetap
-	if rec := e.do(http.MethodDelete, putPath, "", "If-Match", `"basi"`); rec.Code != http.StatusPreconditionFailed {
-		t.Errorf("DELETE basi: %d", rec.Code)
+	// DELETE dengan If-Match basi: 412 (dengan record terbaru), baris tetap
+	if rec := e.do(http.MethodDelete, putPath, "", "If-Match", `"basi"`); rec.Code != http.StatusPreconditionFailed || !strings.Contains(rec.Body.String(), `"current"`) {
+		t.Errorf("DELETE basi: %d %s", rec.Code, rec.Body)
 	}
 	if rec := e.do(http.MethodDelete, putPath, ""); rec.Code != http.StatusNoContent {
 		t.Errorf("DELETE = %d", rec.Code)
