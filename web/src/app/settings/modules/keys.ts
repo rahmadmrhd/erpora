@@ -64,6 +64,7 @@ export const MODULE_KEYS = {
   "modules.impact.migrations_run": a(),
   "modules.impact.version_change": a<{ from: string; to: string }>(),
   "modules.impact.needs_dependencies": a<{ modules: string }>(),
+  "modules.impact.dependents_uncertain": a<{ modules: string }>(),
   "modules.blocker.module_required": a<{ modules: string }>(),
   "modules.blocker.dependency_not_ready": a<{ modules: string }>(),
   "modules.blocker.dependents_active": a<{ modules: string }>(),

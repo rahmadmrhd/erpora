@@ -60,6 +60,10 @@ function EffectLine({ effect, target }: { effect: Effect; target: ModuleView }) 
       return (
         <li>{t("modules.impact.version_change", { from: effect.from ?? "—", to: effect.to })}</li>
       );
+    case "dependents_uncertain":
+      return (
+        <li>{t("modules.impact.dependents_uncertain", { modules: effect.modules.join(", ") })}</li>
+      );
     case "needs_dependencies":
       return (
         <li>{t("modules.impact.needs_dependencies", { modules: effect.modules.join(", ") })}</li>

@@ -164,7 +164,8 @@
       "data_kept": "Data is kept",
       "migrations_run": "Database migrations run if any",
       "version_change": "Version {from} to {to}",
-      "needs_dependencies": "Dependencies installed too: {modules}"
+      "needs_dependencies": "Dependencies installed too: {modules}",
+      "dependents_uncertain": "Dependents that failed or await upgrade and may still be active: {modules}"
     },
     "blocker": {
       "module_required": "A required module cannot be disabled or uninstalled: {modules}",

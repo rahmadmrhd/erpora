@@ -27,7 +27,9 @@ export type Effect =
   | { kind: "data_kept" }
   | { kind: "migrations_run" }
   | { kind: "version_change"; from: string | null; to: string }
-  | { kind: "needs_dependencies"; modules: readonly string[] };
+  | { kind: "needs_dependencies"; modules: readonly string[] }
+  /** Dependen wajib `upgrade_pending`/`failed` yang mungkin berstatus tersimpan `enabled` (previous_status tak diketahui klien). */
+  | { kind: "dependents_uncertain"; modules: readonly string[] };
 
 export interface InstallOptions {
   withDeps: boolean;
@@ -82,7 +84,8 @@ function compareVersions(a: string, b: string): number {
 }
 
 const isPlatform = (key: string) => key.startsWith("platform.");
-const INSTALLED: readonly ModuleStatus[] = ["installed", "enabled", "disabled", "upgrade_pending"];
+// Prasyarat install backend (ADR-0007 butir 3): dependensi minimal installed|enabled|disabled.
+const INSTALLED: readonly ModuleStatus[] = ["installed", "enabled", "disabled"];
 
 function requiredDeps(m: ModuleView): string[] {
   return m.dependencies.filter((d) => !d.optional && !isPlatform(d.module)).map((d) => d.module);
@@ -178,12 +181,20 @@ export function computeImpact({ op, target, modules, frontend, options }: Impact
     );
   }
   if (op === "disable") {
+    // Backend memakai status TERSIMPAN: dependen yang dilaporkan `incompatible` bisa tersimpan `enabled`, jadi dianggap aktif.
+    const dependents = requiredDependents(target, byKey);
     block(
       "dependents_active",
-      requiredDependents(target, byKey)
-        .filter((m) => m.status === "enabled")
+      dependents
+        .filter((m) => m.status === "enabled" || m.status === "incompatible")
         .map((m) => m.key),
     );
+    const uncertain = dependents.filter(
+      (m) => m.status === "upgrade_pending" || m.status === "failed",
+    );
+    if (uncertain.length > 0) {
+      effects.push({ kind: "dependents_uncertain", modules: uncertain.map((m) => m.key) });
+    }
   }
   if (op === "uninstall") {
     block(

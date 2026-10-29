@@ -164,7 +164,8 @@
       "data_kept": "Data tidak dihapus",
       "migrations_run": "Migrasi database dijalankan bila ada",
       "version_change": "Versi {from} menjadi {to}",
-      "needs_dependencies": "Dependensi ikut dipasang: {modules}"
+      "needs_dependencies": "Dependensi ikut dipasang: {modules}",
+      "dependents_uncertain": "Dependen berstatus gagal/menunggu upgrade yang mungkin masih aktif: {modules}"
     },
     "blocker": {
       "module_required": "Modul wajib tidak boleh dinonaktifkan atau di-uninstall: {modules}",

@@ -136,6 +136,60 @@ describe("computeImpact: blocker", () => {
     expect(without.blockers).toEqual([{ code: "dependency_not_ready", modules: ["a.low"] }]);
   });
 
+  test("M-4: install menolak dependensi upgrade_pending/failed/missing/incompatible (backend hanya menerima installed|enabled|disabled)", () => {
+    for (const status of ["upgrade_pending", "failed", "missing", "incompatible"] as const) {
+      const t = mod("a.top", {
+        status: "available",
+        installedVersion: null,
+        dependencies: [dep("a.low")],
+      });
+      const low = mod("a.low", { status });
+      expect(
+        computeImpact({
+          op: "install",
+          target: t,
+          modules: [t, low],
+          frontend: [],
+          options: { withDeps: true, enable: false },
+        }).blockers,
+      ).toEqual([{ code: "dependency_not_ready", modules: ["a.low"] }]);
+    }
+    const t = mod("a.top", {
+      status: "available",
+      installedVersion: null,
+      dependencies: [dep("a.low")],
+    });
+    for (const status of ["installed", "enabled", "disabled"] as const) {
+      expect(
+        computeImpact({
+          op: "install",
+          target: t,
+          modules: [t, mod("a.low", { status })],
+          frontend: [],
+        }).blockers,
+      ).toEqual([]);
+    }
+  });
+
+  test("M-4: disable memakai status tersimpan: dependen incompatible dianggap mungkin aktif (blocker); upgrade_pending/failed memberi peringatan", () => {
+    const t = mod("a.base", { dependents: ["a.inc", "a.up", "a.fail"] });
+    const rd = (key: string, status: ModuleStatus) =>
+      mod(key, { status, dependencies: [dep("a.base")] });
+    const r = computeImpact({
+      op: "disable",
+      target: t,
+      modules: [
+        t,
+        rd("a.inc", "incompatible"),
+        rd("a.up", "upgrade_pending"),
+        rd("a.fail", "failed"),
+      ],
+      frontend: [],
+    });
+    expect(r.blockers).toEqual([{ code: "dependents_active", modules: ["a.inc"] }]);
+    expect(r.effects).toContainEqual({ kind: "dependents_uncertain", modules: ["a.up", "a.fail"] });
+  });
+
   test("module_incompatible untuk install/enable/upgrade pada modul tidak kompatibel, tidak untuk disable", () => {
     const t = mod("a.bad", { status: "incompatible", compatible: false });
     expect(
@@ -358,11 +412,21 @@ describe("P7: dampak tidak melanggar transisi (properti)", () => {
         byKey.get(key)?.dependencies.some((x) => x.module === target.key && !x.optional),
       );
       if (op === "disable") {
-        for (const key of requiredDependents) expect(byKey.get(key)?.status).not.toBe("enabled");
+        for (const key of requiredDependents) {
+          expect(["enabled", "incompatible"]).not.toContain(byKey.get(key)?.status as string);
+        }
       }
       if (op === "uninstall") {
         for (const key of requiredDependents)
           expect(["uninstalled", "available"]).toContain(byKey.get(key)?.status as string);
+      }
+      if (op === "install") {
+        for (const k of requiredDeps) {
+          const st = byKey.get(k.module)?.status;
+          expect(["installed", "enabled", "disabled", "available", "uninstalled"]).toContain(
+            st as string,
+          );
+        }
       }
       if (op === "disable" || op === "uninstall") expect(target.required).toBe(false);
     });
