@@ -117,14 +117,17 @@ function PollingResult({ ids, onFinished }: { ids: readonly string[]; onFinished
   if (polling.phase === "finished") return <OperationResults operations={polling.operations} />;
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <p className="flex items-center gap-2">
-        <LoadingIcon aria-label={t("modules.result.running")} />
-        {t("modules.result.running")}
-      </p>
+      {polling.phase === "running" || polling.phase === "idle" ? (
+        <p className="flex items-center gap-2">
+          <LoadingIcon aria-label={t("modules.result.running")} />
+          {t("modules.result.running")}
+        </p>
+      ) : null}
       {polling.pollError ? (
         <p className="text-muted-foreground">{t("modules.result.pollError")}</p>
       ) : null}
       {polling.phase === "timeout" ? <p>{t("modules.result.timeout")}</p> : null}
+      {polling.phase === "stopped" ? <p>{t("modules.result.pollStopped")}</p> : null}
       {polling.operations.length > 0 ? <OperationResults operations={polling.operations} /> : null}
     </div>
   );

@@ -65,6 +65,7 @@ function harness(script: (call: number) => readonly OperationView[] | Error) {
     finished: undefined as readonly OperationView[] | undefined,
     timeout: false,
     errors: 0,
+    fatal: 0,
   };
   let calls = 0;
   const deps: PollerDeps = {
@@ -85,6 +86,10 @@ function harness(script: (call: number) => readonly OperationView[] | Error) {
     },
     onError: () => {
       log.errors += 1;
+    },
+    isPermanent: (e) => e instanceof Error && e.message === "permanen",
+    onFatal: () => {
+      log.fatal += 1;
     },
     now: clock.now,
     setTimer: clock.setTimer,
@@ -167,6 +172,25 @@ describe("startPolling (P12)", () => {
     startPolling(h.deps);
     await h.clock.advance(60_000);
     expect(h.log.errors).toBe(2);
+    expect(h.log.finished?.[0]?.status).toBe("succeeded");
+  });
+
+  test("M-7: galat permanen (404/403/401) menghentikan polling segera tanpa mencoba lagi", async () => {
+    const h = harness((n) => (n < 1 ? [op("a", "running")] : new Error("permanen")));
+    startPolling(h.deps);
+    await h.clock.advance(POLL_TIMEOUT_MS);
+    expect(h.log.fetches).toHaveLength(2);
+    expect(h.log.fatal).toBe(1);
+    expect(h.log.finished).toBeUndefined();
+    expect(h.log.timeout).toBe(false);
+    expect(h.clock.pending()).toBe(0);
+  });
+
+  test("M-7: galat sementara tetap dicoba lagi (bukan permanen)", async () => {
+    const h = harness((n) => (n < 3 ? new Error("jaringan putus") : [op("a", "succeeded")]));
+    startPolling(h.deps);
+    await h.clock.advance(60_000);
+    expect(h.log.fatal).toBe(0);
     expect(h.log.finished?.[0]?.status).toBe("succeeded");
   });
 

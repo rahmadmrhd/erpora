@@ -98,6 +98,8 @@ export interface ServerOptions {
   /** Hasil operasi pada mode done; bawaan succeeded. */
   failure?: { code: string; message: string };
   listStatus?: number;
+  /** Status HTTP GET operations/{id} (bawaan 200); selain 200 membalas galat. */
+  operationStatus?: number;
   postStatus?: number;
   postError?: { code: string; details?: unknown[]; message?: string; requestId?: string };
   events?: EventView[];
@@ -182,6 +184,9 @@ export function createModulesServer(
       if (method === "GET" && m) {
         const id = decodeURIComponent(m[1] ?? "");
         s.opFetches[id] = (s.opFetches[id] ?? 0) + 1;
+        if (s.options.operationStatus && s.options.operationStatus !== 200) {
+          return json({ error: { code: "not_found", message: "x" } }, s.options.operationStatus);
+        }
         const op = s.options.operations?.[id] ?? operation({ id });
         return json({ data: op });
       }

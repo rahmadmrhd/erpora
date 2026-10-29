@@ -80,6 +80,7 @@ export const MODULE_KEYS = {
   "modules.result.noop": a(),
   "modules.result.timeout": a(),
   "modules.result.pollError": a(),
+  "modules.result.pollStopped": a(),
   "modules.error.invalid_transition": a(),
   "modules.error.operation_in_progress": a(),
   "modules.error.module_required": a(),

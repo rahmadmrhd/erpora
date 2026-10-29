@@ -344,6 +344,19 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     expect(await screen.findByText("Berhasil")).toBeInTheDocument();
     expect(server.opFetches["op-1"]).toBeGreaterThanOrEqual(1);
   });
+  test("M-7: galat permanen saat polling (404) menghentikan polling dan menampilkan pesan, bukan percobaan terus-menerus", async () => {
+    const user = userEvent.setup();
+    const { server } = await open([shop()], { mode: "accepted", operationStatus: 404 });
+    await pickMenu(user, "Shop", "Nonaktifkan");
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
+    );
+    expect(await screen.findByText(/Pemantauan operasi dihentikan/)).toBeInTheDocument();
+    const n = server.opFetches["op-1"];
+    expect(n).toBe(1);
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(server.opFetches["op-1"]).toBe(n);
+  }, 15_000);
 });
 
 describe("riwayat (R13.4)", () => {

@@ -187,7 +187,8 @@
       "failed": "Gagal",
       "noop": "Tidak ada perubahan: status sudah sesuai.",
       "timeout": "Pemantauan dihentikan setelah 10 menit; pantau lewat Riwayat.",
-      "pollError": "Status operasi belum dapat dibaca; mencoba lagi."
+      "pollError": "Status operasi belum dapat dibaca; mencoba lagi.",
+      "pollStopped": "Pemantauan operasi dihentikan karena status operasi tidak dapat dibaca; periksa lewat Riwayat."
     },
     "error": {
       "invalid_transition": "Operasi tidak diizinkan untuk status modul saat ini.",

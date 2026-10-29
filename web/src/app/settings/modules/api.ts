@@ -26,6 +26,14 @@ export class ModulesApiError extends Error {
   }
 }
 
+/** 401/403/404 tidak akan membaik dengan percobaan ulang (sesi habis, hak dicabut, operasi hilang). */
+export function isPermanentApiError(error: unknown): boolean {
+  return (
+    error instanceof ModulesApiError &&
+    (error.status === 401 || error.status === 403 || error.status === 404)
+  );
+}
+
 const hasMoreOf = (page: unknown): boolean =>
   typeof page === "object" && page !== null && (page as { hasMore?: unknown }).hasMore === true;
 
@@ -154,7 +162,7 @@ export function useOperation(id: string, enabled: boolean) {
 
 export interface OperationPolling {
   operations: readonly OperationView[];
-  phase: "idle" | "running" | "finished" | "timeout";
+  phase: "idle" | "running" | "finished" | "timeout" | "stopped";
   /** Pembacaan status terakhir gagal (polling terus dicoba lagi). */
   pollError: boolean;
 }
@@ -192,6 +200,8 @@ export function useOperationPolling(
       },
       onTimeout: () => setState((s) => ({ ...s, phase: "timeout" })),
       onError: () => setState((s) => ({ ...s, pollError: true })),
+      isPermanent: isPermanentApiError,
+      onFatal: () => setState((s) => ({ ...s, phase: "stopped", pollError: false })),
       now: () => Date.now(),
       setTimer: (fn, ms) => setTimeout(fn, ms),
       clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),

@@ -21,6 +21,10 @@ export interface PollerDeps {
   onTimeout(): void;
   /** Galat jaringan/server saat membaca status; polling dicoba lagi. */
   onError?(error: unknown): void;
+  /** Galat permanen (mis. 401/403/404): mencoba lagi tidak akan membantu, polling dihentikan segera. */
+  isPermanent?(error: unknown): boolean;
+  /** Dipanggil sekali bila polling dihentikan karena galat permanen. */
+  onFatal?(error: unknown): void;
   now(): number;
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(handle: unknown): void;
@@ -72,6 +76,11 @@ export function startPolling(deps: PollerDeps): { stop(): void } {
       }
     } catch (error) {
       if (stopped) return;
+      if (deps.isPermanent?.(error)) {
+        stopped = true;
+        deps.onFatal?.(error);
+        return;
+      }
       deps.onError?.(error);
     }
     schedule();
