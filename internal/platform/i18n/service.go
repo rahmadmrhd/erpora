@@ -16,6 +16,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"erpora/internal/platform/tenancy"
 	sdki18n "erpora/sdk/i18n"
 )
@@ -87,6 +90,8 @@ type Options struct {
 	OverrideTTL time.Duration
 	// Now adalah jam; default time.Now (untuk test).
 	Now func() time.Time
+	// Meter (opsional) menghitung pemakaian fallback sebagai metrik erp.i18n.fallback (Requirement 3.7).
+	Meter metric.Meter
 }
 
 // CatalogError adalah galat struktural katalog saat New; Service tidak dibuat (Requirement 8.1).
@@ -150,6 +155,7 @@ type Service struct {
 	ovMu          sync.Mutex
 	ov            map[tenancy.TenantID]*tenantOv
 	lastWarnStore atomic.Int64
+	fallbackCtr   metric.Int64Counter // nil bila tanpa Meter
 
 	warned     sync.Map
 	warnedSize atomic.Int64
@@ -196,6 +202,13 @@ func New(opts Options) (*Service, error) {
 	}
 	s := &Service{active: opts.Active, dev: opts.Dev, log: log, views: map[string]*View{},
 		ovs: opts.Overrides, ttl: opts.OverrideTTL, now: opts.Now, ov: map[tenancy.TenantID]*tenantOv{}}
+	if opts.Meter != nil { // metrik tidak boleh menjatuhkan layanan: kegagalan membuat counter diabaikan
+		if c, err := opts.Meter.Int64Counter(FallbackMetric,
+			metric.WithUnit("{message}"),
+			metric.WithDescription("Pemakaian pesan terjemahan dari bahasa fallback (bukan bahasa yang diminta)")); err == nil {
+			s.fallbackCtr = c
+		}
+	}
 	if s.ttl <= 0 {
 		s.ttl = DefaultOverrideTTL
 	}
@@ -400,8 +413,15 @@ func (s *Service) Resolve(ctx context.Context, t tenancy.TenantID, ns, key strin
 
 const warnedMax = 4096
 
-// warnFallback mencatat peringatan satu kali per (bahasa, namespace, kunci) di mode development/test.
+// FallbackMetric adalah nama counter pemakaian fallback (atribut: locale, namespace; tanpa kunci).
+const FallbackMetric = "erp.i18n.fallback"
+
+// warnFallback menghitung metrik di semua lingkungan dan mencatat peringatan satu kali per (bahasa, namespace,
+// kunci) hanya di mode development/test (Requirement 3.7).
 func (s *Service) warnFallback(loc, ns, key string) {
+	if s.fallbackCtr != nil {
+		s.fallbackCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("locale", loc), attribute.String("namespace", ns)))
+	}
 	if !s.dev || s.warnedSize.Load() >= warnedMax {
 		return
 	}

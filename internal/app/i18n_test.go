@@ -68,7 +68,7 @@ func TestNewI18nService_IncludesPlatformUIAndModuleCatalogs(t *testing.T) {
 	})
 	enabled := map[string]bool{"notes": true}
 	svc, err := newI18nService(slog.Default(), true, buildTestRegistry(t, mod),
-		func(_ tenancy.TenantID, ns string) bool { return enabled[ns] }, nil)
+		func(_ tenancy.TenantID, ns string) bool { return enabled[ns] }, nil, nil)
 	if err != nil {
 		t.Fatalf("newI18nService: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestNewI18nService_RejectsStructurallyBrokenModuleCatalog(t *testing.T) {
 	mod := newCatalogModule(t, map[string]string{
 		"id.json": `{"note": {"title": "Halo {nama"}}`, "en.json": `{}`,
 	})
-	_, err := newI18nService(slog.Default(), false, buildTestRegistry(t, mod), nil, nil)
+	_, err := newI18nService(slog.Default(), false, buildTestRegistry(t, mod), nil, nil, nil)
 	var ce *i18n.CatalogError
 	if !errors.As(err, &ce) {
 		t.Fatalf("err = %v, want *i18n.CatalogError", err)
@@ -104,7 +104,7 @@ func TestNewI18nService_RejectsStructurallyBrokenModuleCatalog(t *testing.T) {
 }
 
 func TestNewI18nService_NoModuleCatalogsStillServesPlatformAndUI(t *testing.T) {
-	svc, err := newI18nService(slog.Default(), false, buildTestRegistry(t), nil, nil)
+	svc, err := newI18nService(slog.Default(), false, buildTestRegistry(t), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestI18nHookInstallsLocaleResolverAndScope(t *testing.T) {
 		"id.json": `{"note": {"title": "Catatan"}}`, "en.json": `{"note": {"title": "Note"}}`,
 	})
 	reg := buildTestRegistry(t, mod)
-	svc, err := newI18nService(slog.Default(), false, reg, nil, nil)
+	svc, err := newI18nService(slog.Default(), false, reg, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestI18nHookInstallsLocaleResolverAndScope(t *testing.T) {
 // mengubah tanda tangan Build (PRD-000 Q36 PK-2).
 func TestBootstrapFrom_FeaturesModulesAdminAPI(t *testing.T) {
 	reg := buildTestRegistry(t)
-	svc, err := newI18nService(slog.Default(), false, reg, nil, nil)
+	svc, err := newI18nService(slog.Default(), false, reg, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

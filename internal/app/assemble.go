@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"go.opentelemetry.io/otel/metric"
 	"log/slog"
 	"net/http"
 
@@ -81,7 +82,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	// Katalog terjemahan divalidasi sebelum apa pun dilayani: galat struktural menggagalkan startup (exit 2).
 	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, moduleActive(reg, func(t tenancy.TenantID, key string) bool {
 		return snap.Status(t, key) == runtime.StatusEnabled
-	}), i18nstore.New(database.ControlDB{DB: db}))
+	}), i18nstore.New(database.ControlDB{DB: db}), i18nMeter(prov))
 	if err != nil {
 		return nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}
 	}
@@ -187,4 +188,12 @@ func platformServices(cfg config.Config, log *slog.Logger) runtime.Services {
 		Masker:  authorization.NewStubFieldMasker(authorization.StubMode(cfg.AuthzStub), log),
 		Auditor: audit.NewExportLog(log),
 	}
+}
+
+// i18nMeter mengembalikan meter metrik i18n dari provider observability; nil bila tidak ada.
+func i18nMeter(prov observability.Providers) metric.Meter {
+	if prov.Meter == nil {
+		return nil
+	}
+	return prov.Meter.Meter("erpora/i18n")
 }

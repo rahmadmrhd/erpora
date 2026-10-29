@@ -65,7 +65,7 @@ func openCLI(ctx context.Context, cfg config.Config, log *slog.Logger) (*cliRunt
 		return nil, err
 	}
 	prov := observability.Providers{Tracer: tnoop.NewTracerProvider(), Meter: noop.NewMeterProvider()}
-	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, nil, i18nstore.New(database.ControlDB{DB: db}))
+	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, nil, i18nstore.New(database.ControlDB{DB: db}), nil)
 	if err != nil {
 		cleanup()
 		return nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}
