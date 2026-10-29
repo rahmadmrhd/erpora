@@ -81,8 +81,11 @@ func toView(o store.Override) OverrideView {
 	}
 }
 
-// errPrecondition menandai If-Match yang tidak terpenuhi (412 version_mismatch).
-var errPrecondition = errors.New("i18n: precondition If-Match gagal")
+// preconditionError menandai If-Match yang tidak terpenuhi (412 version_mismatch); current adalah record terbaru
+// (nil bila barisnya belum ada), dikirim di error.details.current (api-guidelines §5).
+type preconditionError struct{ current *store.Override }
+
+func (*preconditionError) Error() string { return "i18n: precondition If-Match gagal" }
 
 // ifMatchPrecondition membangun store.Precondition dari header If-Match (RFC 9110 section 13.1.1): tanpa header
 // tidak ada pemeriksaan (last-write-wins); "*" cocok bila barisnya ada; daftar entity-tag dibandingkan KUAT
@@ -94,7 +97,7 @@ func ifMatchPrecondition(header string) store.Precondition {
 	}
 	return func(cur *store.Override) error {
 		if cur == nil || !matchStrong(header, rowETag(*cur)) {
-			return errPrecondition
+			return &preconditionError{current: cur}
 		}
 		return nil
 	}
@@ -147,12 +150,17 @@ func (a *API) ready(w http.ResponseWriter, r *http.Request) (Backend, tenancy.Te
 // tidak ada 404, penyimpanan tidak terpasang 503; selain itu 500 generik tanpa detail internal.
 func writeOverrideError(w http.ResponseWriter, r *http.Request, err error) {
 	var oe *i18n.OverrideError
+	var pe *preconditionError
 	switch {
 	case errors.As(err, &oe):
 		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_i18n_override", "Override istilah tidak valid.",
 			[]httpx.Detail{{Field: oe.Field, Code: oe.Code, Message: oe.Detail}})
-	case errors.Is(err, errPrecondition):
-		httpx.WriteError(w, r, http.StatusPreconditionFailed, "version_mismatch", "Override telah berubah; muat ulang lalu coba lagi.", nil)
+	case errors.As(err, &pe):
+		var details any
+		if pe.current != nil {
+			details = map[string]any{"current": toView(*pe.current)}
+		}
+		httpx.WriteError(w, r, http.StatusPreconditionFailed, "version_mismatch", "Override telah berubah; muat ulang lalu coba lagi.", details)
 	case errors.Is(err, i18n.ErrNotFound), errors.Is(err, store.ErrNotFound):
 		httpx.WriteError(w, r, http.StatusNotFound, "not_found", "override tidak ditemukan", nil)
 	case errors.Is(err, i18n.ErrOverridesUnavailable):
