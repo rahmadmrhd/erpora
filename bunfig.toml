@@ -2,4 +2,5 @@
 [test]
 preload = ["./web/test/dom.ts", "./web/test/setup.ts"]
 # Fixture golden generator (internal/devtools/gen/testdata) memuat berkas *.test.ts hasil templat; bukan test repo ini.
-pathIgnorePatterns = ["internal/devtools/gen/testdata/**"]
+# tmp/** = salinan repo sementara dari `task test:generator` (di-gitignore); bukan test repo ini.
+pathIgnorePatterns = ["internal/devtools/gen/testdata/**", "tmp/**"]
