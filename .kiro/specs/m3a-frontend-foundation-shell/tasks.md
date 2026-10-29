@@ -199,20 +199,20 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - Jalankan di VPS (Docker + Bun; ±12 menit): modul hasil `make:module inventory --frontend --depends acme.example` lolos semua gate termasuk `web:check` dan `i18n:check`; catat hasil.
     - _Requirements: 15.4_
 
-- [ ] 14. Halaman `/settings/modules` (Kelas beban: Sonnet)
-  - [ ] 14.1 Tulis test halaman (merah dulu)
+- [x] 14. Halaman `/settings/modules` (Kelas beban: Sonnet)
+  - [x] 14.1 Tulis test halaman (merah dulu)
     - `errors.test.ts` (setiap kode `design.md` §7 terpetakan, `409/412/415/422`, kegagalan operasi); `impact.test.ts` (setiap baris tabel transisi ADR-007 untuk install/enable/disable/upgrade/uninstall/retry, blocker `module_required`/`dependency_not_ready`/`dependents_active`/`module_incompatible`, efek menu/route dari `navigation`, opsi install; **P7** property test dengan daftar modul acak); `api.test.ts` (paginasi mengikuti `hasMore`, `If-Match` dari ETag daftar, body `{}` dan `Content-Type: application/json`, **P11** dengan `fetch` perekam: tidak ada `tenantId`/`userId`); `polling.test.ts` (**P12** dengan jam palsu); komponen: tabel (kolom, nada status, versi binary vs ter-install), mode hanya-baca bila `features.modulesAdminApi` false (tanpa kolom aksi, ada `Alert`), `403` → `ErrorPage`, dialog konfirmasi (efek, blocker menonaktifkan tombol, opsi install), alur `202` + polling, sukses meng-invalidate bootstrap dan sidebar menghilangkan menu, dialog riwayat (event, langkah operasi saat dibuka).
     - **Validates: Requirements 8.2, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 7.5**
-  - [ ] 14.2 `api.ts`, `errors.ts`, `polling.ts`
+  - [x] 14.2 `api.ts`, `errors.ts`, `polling.ts`
     - Sesuai `design.md` §7: `useModules` (`pageSize=200`, ikuti `hasMore`, kembalikan `etag`), `useModuleHistory`, `useOperation` (interval 1 s → 5 s, berhenti saat selesai/unmount/10 menit), `runModuleOperation` (`kind: "done"` atau `"accepted"`), pemetaan galat ke kunci `platform:modules.error.*`/`failure.*`. Semua key lewat `scopedKey`.
     - _Requirements: 13.5, 13.6, 13.7, 7.5_
-  - [ ] 14.3 `impact.ts` (`computeImpact`)
+  - [x] 14.3 `impact.ts` (`computeImpact`)
     - Fungsi murni sesuai `design.md` §7 dengan antarmuka terisolasi sehingga dapat diganti hasil `plan` server (PK-1). Bila PK-1 ditolak: ganti task ini dengan endpoint `plan` additive di backend (lihat `design.md` Perlu konfirmasi) dan sesuaikan UI.
     - _Requirements: 13.3, 13.8_
-  - [ ] 14.4 Komponen halaman
+  - [x] 14.4 Komponen halaman
     - `page.tsx` (lazy; `usePageActions` "Segarkan"), `modules-table.tsx` (`Table`, `BadgeStatus`, menu aksi `DropdownMenu`), `action-dialog.tsx` (`AlertDialog` + `Checkbox` opsi install + hasil/polling), `history-dialog.tsx` (`Dialog` lebar + `Collapsible` langkah). Daftarkan route `/settings/modules` (lazy) di router (menggantikan placeholder 12.3).
     - _Requirements: 5.3, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6_
-  - [ ] 14.5 Katalog modul
+  - [x] 14.5 Katalog modul
     - Rekonsiliasi kunci `platform:modules.*` (kolom, `status.<9 status>`, `op.<6 operasi>`, `impact.*`, `error.*`, `failure.*`, `history.*`, `readonly.*`) id/en (ditambahkan bersama 14.2 sampai 14.4); `i18n:generate` dan `i18n:check`.
     - _Requirements: 13.7, 14.4_
 
