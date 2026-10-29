@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
 import {
   POLL_MAX_MS,
   POLL_MIN_MS,
@@ -8,6 +7,7 @@ import {
   pollDelay,
   startPolling,
 } from "./polling";
+import { forSeeds } from "./seeded";
 import type { OperationView } from "./types";
 
 const op = (id: string, status: OperationView["status"]): OperationView =>
@@ -19,6 +19,11 @@ const op = (id: string, status: OperationView["status"]): OperationView =>
     steps: [],
     failure: null,
   }) as unknown as OperationView;
+
+/** Menguras antrean microtask agar `await` bersarang di poller selesai. */
+const flush = async (): Promise<void> => {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+};
 
 /** Jam dan penjadwal palsu: `advance(ms)` menjalankan timer yang jatuh tempo berurutan. */
 function fakeClock() {
@@ -32,18 +37,20 @@ function fakeClock() {
       timers.set(id, { at: now + ms, fn });
       return id;
     },
-    clearTimer: (id: unknown) => void timers.delete(id as number),
+    clearTimer: (id: unknown) => {
+      timers.delete(id as number);
+    },
     pending: () => timers.size,
     async advance(ms: number) {
       const end = now + ms;
+      await flush();
       for (;;) {
         const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
         if (!next || next[1].at > end) break;
         now = next[1].at;
         timers.delete(next[0]);
         next[1].fn();
-        await Promise.resolve();
-        await Promise.resolve();
+        await flush();
       }
       now = end;
     },
@@ -67,10 +74,18 @@ function harness(script: (call: number) => readonly OperationView[] | Error) {
       if (r instanceof Error) throw r;
       return r;
     },
-    onUpdate: () => void log.updates++,
-    onFinish: (ops) => void (log.finished = ops),
-    onTimeout: () => void (log.timeout = true),
-    onError: () => void log.errors++,
+    onUpdate: () => {
+      log.updates += 1;
+    },
+    onFinish: (ops) => {
+      log.finished = ops;
+    },
+    onTimeout: () => {
+      log.timeout = true;
+    },
+    onError: () => {
+      log.errors += 1;
+    },
     now: clock.now,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
@@ -79,16 +94,15 @@ function harness(script: (call: number) => readonly OperationView[] | Error) {
 }
 
 describe("pollDelay", () => {
-  test("mulai 1 dtk, tidak turun, dan tidak melebihi 5 dtk", () => {
+  test("mulai 1 dtk, tidak turun, dan tidak melebihi 5 dtk", async () => {
     expect(pollDelay(0)).toBe(POLL_MIN_MS);
-    fc.assert(
-      fc.property(fc.integer({ min: 0, max: 10_000 }), (n) => {
-        const d = pollDelay(n);
-        expect(d).toBeGreaterThanOrEqual(POLL_MIN_MS);
-        expect(d).toBeLessThanOrEqual(POLL_MAX_MS);
-        expect(pollDelay(n + 1)).toBeGreaterThanOrEqual(d);
-      }),
-    );
+    await forSeeds(200, (r) => {
+      const n = r.int(0, 10_000);
+      const d = pollDelay(n);
+      expect(d).toBeGreaterThanOrEqual(POLL_MIN_MS);
+      expect(d).toBeLessThanOrEqual(POLL_MAX_MS);
+      expect(pollDelay(n + 1)).toBeGreaterThanOrEqual(d);
+    });
     expect(pollDelay(1000)).toBe(POLL_MAX_MS);
   });
 });
@@ -157,32 +171,25 @@ describe("startPolling (P12)", () => {
   });
 
   test("properti: untuk urutan status apa pun, berhenti tepat saat semuanya selesai", async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.array(
-          fc.array(fc.constantFrom("running", "succeeded", "failed"), {
-            minLength: 1,
-            maxLength: 3,
-          }),
-          { minLength: 1, maxLength: 8 },
+    await forSeeds(40, async (r) => {
+      const script = Array.from({ length: r.int(1, 8) }, () =>
+        Array.from({ length: r.int(1, 3) }, () =>
+          r.pick(["running", "succeeded", "failed"] as const),
         ),
-        async (script) => {
-          const h = harness((n) =>
-            (script[Math.min(n, script.length - 1)] ?? []).map((s, i) => op(`o${i}`, s)),
-          );
-          startPolling(h.deps);
-          await h.clock.advance(POLL_TIMEOUT_MS + 10_000);
-          const firstDone = script.findIndex((row) => row.every((s) => s !== "running"));
-          if (firstDone >= 0) {
-            expect(h.log.fetches).toHaveLength(firstDone + 1);
-            expect(h.log.finished).toBeDefined();
-          } else {
-            expect(h.log.timeout).toBe(true);
-          }
-          expect(h.clock.pending()).toBe(0);
-        },
-      ),
-      { numRuns: 40 },
-    );
+      );
+      const h = harness((n) =>
+        (script[Math.min(n, script.length - 1)] ?? []).map((st, i) => op(`o${i}`, st)),
+      );
+      startPolling(h.deps);
+      await h.clock.advance(POLL_TIMEOUT_MS + 10_000);
+      const firstDone = script.findIndex((row) => row.every((st) => st !== "running"));
+      if (firstDone >= 0) {
+        expect(h.log.fetches).toHaveLength(firstDone + 1);
+        expect(h.log.finished).toBeDefined();
+      } else {
+        expect(h.log.timeout).toBe(true);
+      }
+      expect(h.clock.pending()).toBe(0);
+    });
   });
 });

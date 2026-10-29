@@ -327,5 +327,11 @@ export async function renderWithServer({
       </QueryClientProvider>,
     );
   });
-  return { ...view, queryClient: qc, restore: () => void (globalThis.fetch = original) };
+  return {
+    ...view,
+    queryClient: qc,
+    restore: () => {
+      globalThis.fetch = original;
+    },
+  };
 }

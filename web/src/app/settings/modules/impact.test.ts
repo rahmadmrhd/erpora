@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { defaultOfflinePolicy, defineModule } from "@erpora/module-sdk";
-import fc from "fast-check";
 import { availableOps, computeImpact, type Effect } from "./impact";
+import { forSeeds, type Rng } from "./seeded";
 import type { ModuleOp, ModuleStatus, ModuleView } from "./types";
 
 const STATUSES: ModuleStatus[] = [
@@ -285,36 +285,31 @@ describe("computeImpact: efek", () => {
 });
 
 describe("P7: dampak tidak melanggar transisi (properti)", () => {
-  const status = fc.constantFrom(...STATUSES);
-  const moduleArb = fc.record({
-    n: fc.integer({ min: 0, max: 5 }),
-    status,
-    required: fc.boolean(),
-    compatible: fc.boolean(),
-    depIdx: fc.array(fc.integer({ min: 0, max: 5 }), { maxLength: 3 }),
-    optional: fc.boolean(),
-  });
-  const world = fc.array(moduleArb, { minLength: 1, maxLength: 6 }).map((rows) => {
-    const keys = rows.map((_, i) => `m.k${i}`);
-    const modules = rows.map((r, i) =>
-      mod(keys[i] as string, {
-        status: r.status,
-        required: r.required,
-        compatible: r.compatible,
-        dependencies: [...new Set(r.depIdx.filter((d) => d !== i && d < rows.length))].map((d) =>
-          dep(keys[d] as string, r.optional),
-        ),
-      }),
-    );
+  /** Dunia acak: 1-6 modul dengan status, flag, dan dependensi (wajib/opsional) acak; `dependents` konsisten. */
+  function randomWorld(r: Rng): ModuleView[] {
+    const n = r.int(1, 6);
+    const keys = Array.from({ length: n }, (_, i) => `m.k${i}`);
+    const modules = keys.map((key, i) => {
+      const optional = r.bool();
+      const picks = new Set<number>();
+      for (let c = r.int(0, 3); c > 0; c--) picks.add(r.int(0, n - 1));
+      picks.delete(i);
+      return mod(key, {
+        status: r.pick(STATUSES),
+        required: r.bool(),
+        compatible: r.bool(),
+        dependencies: [...picks].map((d) => dep(keys[d] as string, optional)),
+      });
+    });
     for (const m of modules) {
       m.dependents = modules
         .filter((o) => o.dependencies.some((d) => d.module === m.key))
         .map((o) => o.key);
     }
     return modules;
-  });
+  }
 
-  test("blocker memakai kode lifecycle yang dikenal; operasi non-tawaran selalu invalid_transition", () => {
+  test("blocker memakai kode lifecycle yang dikenal; operasi non-tawaran selalu invalid_transition", async () => {
     const codes = new Set([
       "module_required",
       "dependency_not_ready",
@@ -323,55 +318,50 @@ describe("P7: dampak tidak melanggar transisi (properti)", () => {
       "invalid_transition",
       "downgrade_not_supported",
     ]);
-    fc.assert(
-      fc.property(world, fc.constantFrom(...OPS), (modules, op) => {
-        const target = modules[0] as ModuleView;
-        const r = computeImpact({ op, target, modules, frontend: [] });
-        for (const b of r.blockers) expect(codes.has(b.code)).toBe(true);
-        const offered = availableOps(target).includes(op);
-        if (!offered) {
-          expect(r.blockers.map((b) => b.code)).toContain("invalid_transition");
-        }
-      }),
-    );
+    await forSeeds(300, (r) => {
+      const modules = randomWorld(r);
+      const op = r.pick(OPS);
+      const target = modules[0] as ModuleView;
+      const res = computeImpact({ op, target, modules, frontend: [] });
+      for (const b of res.blockers) expect(codes.has(b.code)).toBe(true);
+      if (!availableOps(target).includes(op)) {
+        expect(res.blockers.map((b) => b.code)).toContain("invalid_transition");
+      }
+    });
   });
 
-  test("blockers kosong untuk operasi yang ditawarkan berarti aturan dependensi terpenuhi", () => {
-    fc.assert(
-      fc.property(world, fc.constantFrom(...OPS), (modules, op) => {
-        const target = modules[0] as ModuleView;
-        if (!availableOps(target).includes(op)) return;
-        const r = computeImpact({
-          op,
-          target,
-          modules,
-          frontend: [],
-          options: { withDeps: true, enable: false },
-        });
-        if (r.blockers.length > 0) return;
-        const byKey = new Map(modules.map((m) => [m.key, m]));
-        const requiredDeps = target.dependencies.filter(
-          (d) => !d.optional && !d.module.startsWith("platform."),
-        );
-        if (op === "enable") {
-          for (const d of requiredDeps) expect(byKey.get(d.module)?.status).toBe("enabled");
-        }
-        if (op === "disable") {
-          for (const key of target.dependents) {
-            const o = byKey.get(key);
-            const isReq = o?.dependencies.some((x) => x.module === target.key && !x.optional);
-            if (isReq) expect(o?.status).not.toBe("enabled");
-          }
-        }
-        if (op === "uninstall") {
-          for (const key of target.dependents) {
-            const o = byKey.get(key);
-            const isReq = o?.dependencies.some((x) => x.module === target.key && !x.optional);
-            if (isReq) expect(["uninstalled", "available"]).toContain(o?.status as string);
-          }
-        }
-        if (op === "disable" || op === "uninstall") expect(target.required).toBe(false);
-      }),
-    );
+  test("blockers kosong untuk operasi yang ditawarkan berarti aturan dependensi terpenuhi", async () => {
+    await forSeeds(500, (r) => {
+      const modules = randomWorld(r);
+      const op = r.pick(OPS);
+      const target = modules[0] as ModuleView;
+      if (!availableOps(target).includes(op)) return;
+      const res = computeImpact({
+        op,
+        target,
+        modules,
+        frontend: [],
+        options: { withDeps: true, enable: false },
+      });
+      if (res.blockers.length > 0) return;
+      const byKey = new Map(modules.map((m) => [m.key, m]));
+      const requiredDeps = target.dependencies.filter(
+        (d) => !d.optional && !d.module.startsWith("platform."),
+      );
+      if (op === "enable") {
+        for (const d of requiredDeps) expect(byKey.get(d.module)?.status).toBe("enabled");
+      }
+      const requiredDependents = target.dependents.filter((key) =>
+        byKey.get(key)?.dependencies.some((x) => x.module === target.key && !x.optional),
+      );
+      if (op === "disable") {
+        for (const key of requiredDependents) expect(byKey.get(key)?.status).not.toBe("enabled");
+      }
+      if (op === "uninstall") {
+        for (const key of requiredDependents)
+          expect(["uninstalled", "available"]).toContain(byKey.get(key)?.status as string);
+      }
+      if (op === "disable" || op === "uninstall") expect(target.required).toBe(false);
+    });
   });
 });
