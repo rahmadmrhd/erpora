@@ -49,56 +49,56 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
 - [x] 3. Checkpoint — inti SDK
   - Jalankan `task lint arch check:gowork-off test` dan pastikan `sdk/i18n` hijau (termasuk fuzz singkat). Tanyakan ke user bila ada keraguan.
 
-- [ ] 4. Tahap I2 — Runtime katalog backend (tanpa override)
-  - [ ] 4.1 Registri bahasa `internal/platform/i18n/locales.json` + loader + validasi (test dulu)
+- [x] 4. Tahap I2 — Runtime katalog backend (tanpa override)
+  - [x] 4.1 Registri bahasa `internal/platform/i18n/locales.json` + loader + validasi (test dulu)
     - `locales.go`: struct `Registry{Default string; Locales []LocaleInfo{Code, Name, Fallback, Partial}}`, `Load()` dari embed, validasi: kode unik berpola `^[a-z]{2,3}(-[A-Z]{2})?$`, `fallback` menunjuk kode terdaftar, tanpa siklus, kedalaman ≤ 4, `default` tanpa `fallback`; fungsi `Chain(code) []string`. Isi awal: `id` (default), `en` (fallback `id`).
     - **Validates: Requirements 3.2, 3.5, 3.6, 3.9**
-  - [ ] 4.2 `module.CatalogSource` + properti manifest `i18n` + `module:check`
+  - [x] 4.2 `module.CatalogSource` + properti manifest `i18n` + `module:check`
     - `sdk/module/module.go`: antarmuka `CatalogSource{Catalogs() fs.FS}`. `sdk/module/manifest.go`: struct `I18n{Locales []string; DefaultLocale string}` opsional. Perbarui `contracts/module.schema.json` (properti `i18n`, tetap `schema_version: "1"`), bangkitkan ulang `packages/module-sdk/src/manifest.gen.ts`, dan perluas pemeriksaan `module:check` (`internal/devtools/modcheck`): bahasa terdaftar di registri, `defaultLocale ∈ locales`, berkas `<locale>.json` ada, modul ber-`CatalogSource` wajib punya bagian `i18n`. Registry (`internal/platform/modules/registry`) memetakan modul → `CatalogSource`.
     - _Requirements: 1.1, 1.3, 3.8_
-  - [ ] 4.3 Katalog awal `platform` dan `ui`
+  - [x] 4.3 Katalog awal `platform` dan `ui`
     - `internal/platform/i18n/catalog/{id,en}.json` + `embed.go` (subpohon `errors.<code>` untuk kode api-guidelines §8, plus kunci shell awal), dan `packages/ui/i18n/{id,en}.json` + `packages/ui/i18n/embed.go` (paket `uii18n`; mengikuti pola `web/embed.go`). Kunci dimulai kecil; blok M3 menambahkannya.
     - _Requirements: 1.1, 4.4_
-  - [ ] 4.4 Tulis test `Service` (merah dulu)
+  - [x] 4.4 Tulis test `Service` (merah dulu)
     - Resolusi rantai fallback (override belum ada: bawaan bahasa persis → fallback registri → default → `ns::key`); namespace modul nonaktif → tidak tersedia; `ui`/`platform` selalu aktif; ETag identik untuk isi sama dan berbeda bila isi berbeda; peringatan fallback sekali per (bahasa, ns, kunci) di mode dev/test.
     - **Validates: Requirements 3.2, 3.3, 3.7, 5.2, 5.7**
-  - [ ] 4.5 Implementasi `internal/platform/i18n.Service` (snapshot atomik)
+  - [x] 4.5 Implementasi `internal/platform/i18n.Service` (snapshot atomik)
     - `service.go`, `resolve.go`: bangun snapshot immutable dari katalog `platform`, `ui`, dan tiap modul terinstal; parse dengan `sdk/i18n.ParseCatalog`; **tolak start** bila ada galat struktural (pesan menyebut berkas dan kunci); `Catalog(...) View`, `Resolve(...)`, `Revisions(...)`, ETag `W/"<sha256 16 byte>"` atas peta efektif kanonik; cache pesan terkompilasi; penyuntik `Resolver` ke `sdk/i18n`. Ketidaksesuaian antar bahasa hanya `slog.Warn`.
     - _Requirements: 3.2, 3.3, 3.7, 4.2, 5.7, 8.1_
-  - [ ] 4.6 Negosiasi bahasa dan middleware locale (test dulu)
+  - [x] 4.6 Negosiasi bahasa dan middleware locale (test dulu)
     - `negotiate.go`: `Accept-Language` (maks 1 KB, lebih diabaikan) dicocokkan dengan `golang.org/x/text/language.Matcher` terhadap registri; hasil selalu anggota registri. Middleware `localeContext` di `internal/platform/httpserver/middleware.go` setelah `tenantContext`; `SetModule` juga memasang `i18n.WithScope(ctx, slug)`; hook lifecycle dan command memperoleh scope serupa dari platform.
     - **Validates: Requirements 3.1, 3.4, 4.3**
-  - [ ] 4.7 Integrasi `sdk/httpx.WriteError`
+  - [x] 4.7 Integrasi `sdk/httpx.WriteError`
     - Tambahkan antarmuka kecil di `sdk/i18n` yang dibaca `WriteError` dari ctx; aturan `errors.<code>` di scope modul → `platform::errors.<code>` → `message` dari pemanggil. `code` dan `details` tidak berubah; 5xx tetap tanpa detail internal. Tanda tangan `WriteError` tidak berubah.
     - _Requirements: 4.4_
-  - [ ] 4.8 Rangkai di `internal/app/assemble.go`
+  - [x] 4.8 Rangkai di `internal/app/assemble.go`
     - Bangun `Service`, pasang middleware, simpan di `assembly`; startup gagal bila katalog struktural rusak. Pastikan arch test D-rules tetap hijau.
     - _Requirements: 4.2, 4.3_
-  - [ ] 4.9 Tulis test properti runtime backend
+  - [x] 4.9 Tulis test properti runtime backend
     - **P2 Rantai fallback berhingga dan deterministik**, **P3 Pencarian total**, **P7 ETag mengikuti isi**, **P9 Negosiasi tertutup** (fuzz string `Accept-Language`).
     - **Validates: Requirements 3.2, 3.3, 3.4, 5.7**
 
-- [ ] 5. Checkpoint — runtime backend
+- [x] 5. Checkpoint — runtime backend
   - Jalankan `task lint arch check:gowork-off test`; pastikan test `Service`, negosiasi, dan `WriteError` hijau serta archcheck tidak melaporkan pelanggaran baru.
 
-- [ ] 6. Tahap I3 — API katalog
-  - [ ] 6.1 Kontrak OpenAPI dan pedoman API
+- [x] 6. Tahap I3 — API katalog
+  - [x] 6.1 Kontrak OpenAPI dan pedoman API
     - `contracts/openapi/platform.yaml`: path `/api/platform/i18n/{locale}/{namespace}` (`x-erp-public`, `ETag`, 200/304/404), skema `I18nCatalogEnvelope`, dan bagian `i18n` pada skema bootstrap (additive). `docs/architecture/api-guidelines.md`: catatan §8 bahwa `error.message` terlokalisasi (kode tidak berubah) dan kode baru `invalid_i18n_override` di katalog (dipakai tahap I5).
     - _Requirements: 5.1, 5.4, 5.6_
-  - [ ] 6.2 Handler katalog dan pendaftaran route
+  - [x] 6.2 Handler katalog dan pendaftaran route
     - Di `platform.core` (`internal/platform/i18n/admin` atau `internal/platform/modules/admin`): `GET /api/platform/i18n/{locale}/{namespace}` publik; validasi `locale` terhadap registri dan `namespace` terhadap `ui`/`platform`/modul aktif (selain itu `404 not_found` tanpa membedakan penyebab); `ETag`/`If-None-Match` → 304; `Cache-Control: private, no-cache`; respons `{ "data": { locale, namespace, revision, messages } }` dengan fallback sudah digabung.
     - _Requirements: 5.1, 5.2, 5.5, 5.6, 5.7_
-  - [ ] 6.3 Bootstrap memuat `i18n`
+  - [x] 6.3 Bootstrap memuat `i18n`
     - `internal/platform/bootstrap`: tambah `I18n{DefaultLocale, Locales[{Code,Name}], Revisions map[ns]string}` (additive, hanya namespace aktif); isi dari `Service` di `bootstrapFrom` (`assemble.go`); `ETag` bootstrap ikut berubah bila revisi katalog berubah.
     - _Requirements: 5.3_
-  - [ ] 6.4 Bangkitkan tipe TS dan perbarui klien
+  - [x] 6.4 Bangkitkan tipe TS dan perbarui klien
     - `task erpora -- contracts:generate` → `packages/platform-contracts`; perbarui `client.check.ts` bila perlu.
     - _Requirements: 5.4_
-  - [ ] 6.5 Tulis test API dan kesesuaian kontrak
+  - [x] 6.5 Tulis test API dan kesesuaian kontrak
     - Katalog `id`/`en`; modul nonaktif → 404; bahasa/namespace tak dikenal → 404 identik; `ETag` + `If-None-Match` → 304; bootstrap hanya memuat namespace aktif; test kesesuaian route ↔ kontrak (`internal/app/contract_conformance_test.go`) dan `task contracts:check` lolos.
     - **Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.6, 10.2**
 
-- [ ] 7. Checkpoint — API katalog
+- [x] 7. Checkpoint — API katalog
   - Jalankan `task lint arch check:gowork-off test contracts:check`; bila menyentuh DB jalankan `task test:integration` melalui PostgreSQL di VPS (tunnel + `ERP_TEST_DATABASE_URL`).
 
 - [ ] 8. Tahap I4 — Tooling pemeriksa, generator, dan templat modul
