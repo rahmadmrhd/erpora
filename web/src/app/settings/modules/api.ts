@@ -122,15 +122,13 @@ export async function runModuleOperation(client: Client, args: RunArgs): Promise
 
 // ---- Hook ----
 
-/** Query key daftar modul (berawalan tenant). */
-export function modulesKey(tenantId: string) {
-  return scopedKey(tenantId, "platform", "modules");
-}
-
 export function useModules(): UseQueryResult<{ modules: ModuleView[]; etag: string | undefined }> {
   const client = useModulesClient();
   const tenantId = useTenantId();
-  return useQuery({ queryKey: modulesKey(tenantId), queryFn: () => fetchModules(client) });
+  return useQuery({
+    queryKey: scopedKey(tenantId, "platform", "modules"),
+    queryFn: () => fetchModules(client),
+  });
 }
 
 export function useModuleHistory(key: string, page: number, enabled = true) {

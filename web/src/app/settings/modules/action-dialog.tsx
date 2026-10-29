@@ -1,5 +1,5 @@
 import type { FrontendModule, MessageRef } from "@erpora/module-sdk";
-import { BOOTSTRAP_KEY, Message, useTenantId } from "@erpora/platform-web";
+import { BOOTSTRAP_KEY, Message, scopedKey, useTenantId } from "@erpora/platform-web";
 import {
   Alert,
   AlertDescription,
@@ -18,7 +18,7 @@ import {
 } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, type ReactNode, useId, useMemo, useState } from "react";
-import { ModulesApiError, modulesKey, runModuleOperation, useOperationPolling } from "./api";
+import { ModulesApiError, runModuleOperation, useOperationPolling } from "./api";
 import { useModulesClient } from "./client";
 import { type MappedError, mapFailureCode, mapModuleError } from "./errors";
 import { computeImpact, type Effect, type InstallOptions } from "./impact";
@@ -204,7 +204,7 @@ export function ActionDialog({
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
-    void queryClient.invalidateQueries({ queryKey: modulesKey(tenantId) });
+    void queryClient.invalidateQueries({ queryKey: scopedKey(tenantId, "platform", "modules") });
   };
 
   const confirm = async () => {
@@ -228,7 +228,10 @@ export function ActionDialog({
         error instanceof ModulesApiError
           ? mapModuleError(error.status, error.apiError, "mutation")
           : mapModuleError(500, { code: "internal_error", message: "" }, "mutation");
-      if (mapped.reloadList) void queryClient.invalidateQueries({ queryKey: modulesKey(tenantId) });
+      if (mapped.reloadList)
+        void queryClient.invalidateQueries({
+          queryKey: scopedKey(tenantId, "platform", "modules"),
+        });
       if (mapped.switchToReadOnly) onReadOnly();
       setPhase({ kind: "error", mapped });
     }
