@@ -166,16 +166,16 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - [ ] 12.3 `src/i18n/format.ts`
     - Bungkus `intl-messageformat`: `compile(locale, message)` dengan cache, argumen hilang tidak melempar, tag rich → fungsi `rich`, teks polos melucuti tag; angka/tanggal diformat di kode (`Intl`) dan diteruskan sebagai teks.
     - _Requirements: 2.1, 2.3, 2.4, 2.6_
-  - [ ] 12.4 `loader.ts` dan `provider.tsx`
+  - [x] 12.4 `loader.ts` dan `provider.tsx`
     - `I18nProvider` + `useTranslation(ns)`: `useSuspenseQuery` dengan key `[tenantId, "i18n", locale, ns]`, `staleTime: Infinity`, kirim `If-None-Match`, muat ulang bila `bootstrap.i18n.revisions[ns]` berubah, tanpa kunci mentah selama memuat (Suspense). Bahasa pilihan: `localStorage["erpora.locale"]` dengan `try/catch`, divalidasi terhadap `bootstrap.i18n.locales`, lalu `navigator.languages`, lalu `defaultLocale`; perbarui `document.documentElement.lang`; ganti bahasa memuat ulang katalog tanpa reload halaman.
     - _Requirements: 6.1, 6.2, 6.3, 6.5_
-  - [ ] 12.5 Tipe `t`/`rich` dan helper uji
+  - [x] 12.5 Tipe `t`/`rich` dan helper uji
     - `I18nCatalogs` (diperluas lewat augmentasi `keys.gen.ts`), `t<K>(key, ...args)` terketik, `rich`, `createTestI18n({ ns: {...} })` untuk `bun test` tanpa jaringan; `@erpora/ui` memakai konteks tipis `UiLabels` yang diisi dari namespace `ui` (tanpa mengimpor `platform-web`).
     - _Requirements: 6.1, 6.4, 6.6, 7.1, 7.2_
-  - [ ] 12.6 Header `Accept-Language` pada klien API
+  - [x] 12.6 Header `Accept-Language` pada klien API
     - `packages/platform-contracts/src/client.ts`: terima `getLocale()` dan sisipkan `Accept-Language` pada setiap request; `client.check.ts` tetap lolos.
     - _Requirements: 6.2, 4.4_
-  - [ ] 12.7 Test komponen runtime
+  - [x] 12.7 Test komponen runtime
     - `useTranslation`: Suspense tanpa kunci mentah, ganti bahasa, `rich`, validasi bahasa pilihan, kegagalan `localStorage`, bahasa tak terdaftar, `If-None-Match`/304 (ETag disimpan); uji tipe: kunci salah ketik atau argumen salah tipe gagal pada `tsc --noEmit` (fixture negatif).
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.5, 7.2**
   - [ ]* 12.8 Test properti `fast-check` (opsional)

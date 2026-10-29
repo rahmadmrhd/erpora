@@ -107,9 +107,9 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - Perbarui `packages/module-sdk/README.md` (hapus kalimat "menyusul", jelaskan `defineModule`, `OfflinePolicy`, routing); pastikan `manifest.check.ts` tetap lolos.
     - _Requirements: 6.1_
 
-- [ ] 9. `@erpora/platform-web` lapisan layanan (Kelas beban: Sonnet; 9.10 Haiku)
+- [x] 9. `@erpora/platform-web` lapisan layanan (Kelas beban: Sonnet; 9.10 Haiku)
   - [x] 9.1 Tulis test unit dan properti (merah dulu)
-    - `prefs` (baca/tulis aman, `localStorage` melempar); `theme` (`parseThemePreference`, `resolveTheme`, `applyTheme`, `ThemeProvider` mengikuti `matchMedia` tanpa reload dan event `storage`; **P6** property test; konsistensi dengan `web/src/theme-init.ts`); `tenancy` (`scopedKey`, **P8**; pemindai: tidak ada `queryKey` selain bootstrap yang tanpa awalan tenant di `web/src` dan `packages/*/src`); `format` (`formatRelativeTime`, `formatDateTime` id/en); `sources` (`emptyNotificationSource`, `anonymousUserSource`, `safeInternalHref` **P9** property test); `api` (`describeApiError` **P10**: semua kode di `design.md` Error Handling terpetakan, kode asing → `error.unknown`, tidak ada `details` mentah); `permissions` (`usePermission` optimistis).
+    - `prefs` (baca/tulis aman, `localStorage` melempar); `theme` (`parseThemePreference`, `resolveTheme`, `applyTheme`, `ThemeProvider` mengikuti `matchMedia` tanpa reload dan event `storage`; **P6** property test; konsistensi dengan `web/src/theme-init.ts`); `tenancy` (`scopedKey`, **P8**; pemindai: tidak ada `queryKey` selain bootstrap yang tanpa awalan tenant di `web/src` dan `packages/*/src`); `format` (`formatRelativeTime`, `formatDateTime` id/en); `sources` (`emptyNotificationSource`, `anonymousUserSource`, `safeInternalHref` **P9** property test); `api` (`describeApiError` **P10**: semua kode di `design.md` Error Handling terpetakan, kode asing → `errors.unknown`, tidak ada `details` mentah); `permissions` (`usePermission` optimistis).
     - **Validates: Requirements 4.1, 4.2, 4.3, 7.1, 11.4, 12.3, 14.2, 14.3**
   - [x] 9.2 Implementasi `prefs/`, `theme/`, `tenancy/`, `format/`, `permissions/`
     - Sesuai `design.md` §5.1, 5.3, 5.6, 5.10. `ThemeProvider` memasang kelas pada `document.documentElement` dan `color-scheme`.
@@ -117,7 +117,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
   - [x] 9.3 Perluas klien `@erpora/platform-contracts` (test dulu)
     - Test: hasil sukses memuat `etag`; `304` → `{ ok: false, status: 304, error.code: "not_modified" }`; header `If-None-Match`/`If-Match` lewat `init.headers` terkirim; mutasi tanpa body tidak menyetel `Content-Type` (pemanggil wajib `body: {}`). Implementasi aditif di `client.ts`; perbarui `client.check.ts` dan `README.md`; `getLocale()` mengikuti spec i18n (12.6).
     - _Requirements: 7.2, 7.5_
-  - [ ] 9.4 Bootstrap dan keselarasan `I18nProvider` (test dulu)
+  - [x] 9.4 Bootstrap dan keselarasan `I18nProvider` (test dulu)
     - Test **P5** (`createBootstrapFetcher`: 200 menyimpan `etag`; 304 mengembalikan referensi objek sama; galat melempar), `BootstrapProvider` (memuat → ready; galat → `error` dengan `retry`; refetch saat focus lewat `QueryClient` palsu; `useFeature`, `useTenantId`). Implementasi sesuai §5.2. **Selaraskan `I18nProvider`** hasil spec i18n agar membaca `tenantId` dan `bootstrap.i18n` dari konteks `BootstrapProvider` (satu query `["bootstrap"]`), bukan query sendiri; jalankan ulang test i18n.
     - **Validates: Requirements 7.1, 7.2, 7.3, 12.5**
   - [x] 9.5 Registry modul (test dulu)
