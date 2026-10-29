@@ -92,7 +92,7 @@ export function useNotifications(opts: { enabled: boolean }): NotificationsState
 
   return {
     items: list.data ?? NO_ITEMS,
-    unreadCount: unread.data ?? 0,
+    unreadCount: unread.isError ? 0 : (unread.data ?? 0),
     status,
     refetch: () => {
       void unread.refetch();

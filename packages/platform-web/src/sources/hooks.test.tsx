@@ -155,6 +155,59 @@ describe("useNotifications", () => {
     expect(screen.getByTestId("unread").textContent).toBe("0");
   });
 
+  test("refetch gagal setelah sukses: lencana disembunyikan (jumlah 0) walau ada data lama", async () => {
+    let fail = false;
+    const source: NotificationSource = {
+      ...emptyNotificationSource,
+      unreadCount: async () => {
+        if (fail) throw new Error("gagal");
+        return 7;
+      },
+    };
+    setup(
+      <NotificationSourceProvider source={source}>
+        <NotifProbe enabled={false} />
+      </NotificationSourceProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("unread").textContent).toBe("7"));
+    fail = true;
+    act(() => screen.getByText("muat-ulang").click());
+    await waitFor(() => expect(screen.getByTestId("unread").textContent).toBe("0"));
+  });
+
+  test("markRead yang ditolak sumber: promise menolak (pemanggil menangani) dan hitungan tidak berubah", async () => {
+    const m = memorySource([mk("a")]);
+    const source: NotificationSource = {
+      ...m.source,
+      markRead: async () => {
+        throw new Error("gagal tandai");
+      },
+    };
+    let rejected = false;
+    function P() {
+      const n = useNotifications({ enabled: true });
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            n.markRead("a").catch(() => {
+              rejected = true;
+            });
+          }}
+        >
+          tandai
+        </button>
+      );
+    }
+    setup(
+      <NotificationSourceProvider source={source}>
+        <P />
+      </NotificationSourceProvider>,
+    );
+    act(() => screen.getByText("tandai").click());
+    await waitFor(() => expect(rejected).toBe(true));
+  });
+
   test("markRead dan markAllRead memperbarui hitungan dan daftar", async () => {
     const m = memorySource([mk("a"), mk("b")]);
     setup(
