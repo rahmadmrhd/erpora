@@ -1,5 +1,5 @@
 import type { Crumb } from "@erpora/module-sdk";
-import { Message, useMessage } from "@erpora/platform-web";
+import { Message, useMessage, useModuleRegistry } from "@erpora/platform-web";
 import { useMatches } from "@tanstack/react-router";
 import { useMemo } from "react";
 import type { ResolvedCrumb } from "./breadcrumbs";
@@ -9,12 +9,27 @@ const APP_NAME = { ns: "platform", key: "app.name" } as const;
 /** Menormalkan `staticData.crumb` (satu tingkat atau beberapa) dari setiap route yang cocok menjadi satu jejak. */
 export function useRouteCrumbs(): { crumbs: ResolvedCrumb[]; last: Crumb | undefined } {
   const matches = useMatches();
+  const registry = useModuleRegistry();
   return useMemo(() => {
+    // Katalog namespace modul tidak tersaji saat modul tidak `enabled` (backend 404): crumb memakai slug modul sebagai teks
+    // alih-alih memuat katalog yang tidak ada (M-1).
+    const inactiveSlugs = new Map(
+      registry.resolved
+        .filter((r) => !registry.isEnabled(r.module.key))
+        .map((r) => [r.module.slug, r.module.slug]),
+    );
+    const normalize = (crumb: Crumb): Crumb => {
+      if ("ref" in crumb) {
+        const slug = inactiveSlugs.get(crumb.ref.ns);
+        if (slug !== undefined) return { text: slug };
+      }
+      return crumb;
+    };
     const flat: { crumb: Crumb; key: string; to: string | undefined }[] = [];
     for (const m of matches) {
       const raw = m.staticData?.crumb;
       if (raw === undefined) continue;
-      const list = Array.isArray(raw) ? (raw as readonly Crumb[]) : [raw as Crumb];
+      const list = (Array.isArray(raw) ? (raw as readonly Crumb[]) : [raw as Crumb]).map(normalize);
       list.forEach((crumb, i) => {
         // Hanya tingkat terakhir sebuah route yang punya halaman sendiri; tingkat awalnya hanya teks.
         flat.push({
@@ -30,7 +45,7 @@ export function useRouteCrumbs(): { crumbs: ResolvedCrumb[]; last: Crumb | undef
       label: "ref" in crumb ? <Message message={crumb.ref} /> : crumb.text,
     }));
     return { crumbs, last: flat.at(-1)?.crumb };
-  }, [matches]);
+  }, [matches, registry]);
 }
 
 /** Judul halaman untuk `document.title` dan pengumuman rute: crumb terakhir, atau nama aplikasi. */

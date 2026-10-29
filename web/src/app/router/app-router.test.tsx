@@ -53,14 +53,50 @@ describe("route guard (P17, K-11)", () => {
     expect(within(nav).queryByRole("link", { name: "Alpha Beranda" })).toBeNull();
   });
 
-  test("tidak ada permintaan jaringan baru selain bootstrap dan katalog saat modul diaktifkan ulang", async () => {
+  test("modul diaktifkan ulang: hanya bootstrap, katalog, dan chunk halaman yang diminta (tanpa permintaan API lain)", async () => {
     const app = renderApp({ path: "/", statuses: { alpha: "disabled" } });
     await screen.findByRole("navigation", { name: "Navigasi utama" });
+    app.server.setModuleStatus("acme.alpha", "enabled");
+    await app.refreshBootstrap();
+    await waitFor(() =>
+      expect(screen.getByRole("navigation", { name: "Navigasi utama" }).textContent).toContain(
+        "Alpha Beranda",
+      ),
+    );
     expect(
       app.server.requests.every(
         (p) => p.startsWith("/api/bootstrap") || p.startsWith("/api/platform/i18n/"),
       ),
     ).toBe(true);
+    expect(app.server.requests.some((p) => p.endsWith("/alpha"))).toBe(true);
+  });
+});
+
+describe("katalog modul nonaktif tidak tersaji (M-1, G28)", () => {
+  test("reload di /alpha saat nonaktif: 'Modul Tidak Aktif' di DALAM shell (sidebar dan navbar tetap)", async () => {
+    const app = renderApp({ path: "/alpha", statuses: { alpha: "disabled" } });
+    expect(await screen.findByText("Modul Tidak Aktif")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Navigasi utama" })).toBeInTheDocument();
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+    expect(screen.queryByText("Terjadi Kesalahan")).toBeNull();
+    // Server meniru backend: tidak ada permintaan katalog untuk namespace modul nonaktif yang berakhir fatal.
+    expect(app.server.requests).not.toContain("/api/platform/i18n/id/alpha");
+  });
+
+  test("crumb modul nonaktif memakai fallback slug dan judul dokumen tidak menampilkan kunci mentah", async () => {
+    renderApp({ path: "/alpha", statuses: { alpha: "disabled" } });
+    await screen.findByText("Modul Tidak Aktif");
+    expect(document.title).not.toContain("::");
+    expect(document.title).not.toContain("nav.home");
+  });
+
+  test("diaktifkan ulang setelah reload nonaktif: halaman dan crumb pulih dengan katalog modul", async () => {
+    const app = renderApp({ path: "/alpha", statuses: { alpha: "disabled" } });
+    await screen.findByText("Modul Tidak Aktif");
+    app.server.setModuleStatus("acme.alpha", "enabled");
+    await app.refreshBootstrap();
+    expect(await screen.findByText("Isi Alpha Beranda")).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Alpha Beranda - ERPora"));
   });
 });
 

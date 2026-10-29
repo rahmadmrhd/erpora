@@ -65,7 +65,15 @@ export function AppShell() {
       </button>
       <AppSidebar />
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
-        <Navbar />
+        {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
+        <CatchBoundary
+          getResetKey={() => resetKey}
+          errorComponent={() => <header className="h-(--navbar-height) shrink-0 border-b" />}
+        >
+          <Suspense fallback={<header className="h-(--navbar-height) shrink-0 border-b" />}>
+            <Navbar />
+          </Suspense>
+        </CatchBoundary>
         <main
           id="content"
           ref={main}
@@ -86,7 +94,11 @@ export function AppShell() {
           </CatchBoundary>
         </main>
       </div>
-      <RouteAnnouncer main={main} />
+      <CatchBoundary getResetKey={() => resetKey} errorComponent={() => null}>
+        <Suspense fallback={null}>
+          <RouteAnnouncer main={main} />
+        </Suspense>
+      </CatchBoundary>
     </SidebarProvider>
   );
 }

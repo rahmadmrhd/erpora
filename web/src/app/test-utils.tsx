@@ -82,31 +82,47 @@ export interface FakeServer {
   requests: string[];
 }
 
+const CORE_NS = new Set(["platform", "ui"]);
+
+/** Meniru backend: katalog namespace modul hanya untuk modul `enabled`, dan `revisions` hanya namespace aktif. */
+function withActiveRevisions(b: Bootstrap): Bootstrap {
+  if (!b.i18n) return b;
+  const revisions: Record<string, string> = { platform: "p1", ui: "u1" };
+  for (const m of b.modules) if (m.status === "enabled") revisions[m.slug] = `${m.slug[0]}1`;
+  return { ...b, i18n: { ...b.i18n, revisions } };
+}
+
 export function createFakeServer(
   modules: BootstrapModule[],
   over: Partial<Bootstrap> = {},
 ): FakeServer {
   const server: FakeServer = {
-    bootstrap: makeBootstrap({
-      tenantId: TENANT,
-      modules,
-      revision: 1,
-      features: { modulesAdminApi: false },
-      i18n: {
-        defaultLocale: "id",
-        locales: [
-          { code: "id", name: "Indonesia" },
-          { code: "en", name: "English" },
-        ],
-        revisions: { platform: "p1", ui: "u1", alpha: "a1", beta: "b1" },
-      },
-      ...over,
-    }),
+    bootstrap: withActiveRevisions(
+      makeBootstrap({
+        tenantId: TENANT,
+        modules,
+        revision: 1,
+        features: { modulesAdminApi: false },
+        i18n: {
+          defaultLocale: "id",
+          locales: [
+            { code: "id", name: "Indonesia" },
+            { code: "en", name: "English" },
+          ],
+          revisions: { platform: "p1", ui: "u1", alpha: "a1", beta: "b1" },
+        },
+        ...over,
+      }),
+    ),
     failBootstrap: false,
     requests: [],
     update(patch) {
       const next = typeof patch === "function" ? patch(server.bootstrap) : patch;
-      server.bootstrap = { ...server.bootstrap, ...next, revision: server.bootstrap.revision + 1 };
+      server.bootstrap = withActiveRevisions({
+        ...server.bootstrap,
+        ...next,
+        revision: server.bootstrap.revision + 1,
+      });
     },
     setModuleStatus(key, status) {
       server.update((b) => ({
@@ -134,7 +150,9 @@ export function createFakeServer(
       if (m) {
         const locale = decodeURIComponent(m[1] ?? "");
         const ns = decodeURIComponent(m[2] ?? "");
-        const cat = catalogFor(locale, ns);
+        const mod = server.bootstrap.modules.find((x) => x.slug === ns);
+        const active = CORE_NS.has(ns) || mod?.status === "enabled";
+        const cat = active ? catalogFor(locale, ns) : undefined;
         if (!cat) {
           return new Response(JSON.stringify({ error: { code: "not_found", message: "x" } }), {
             status: 404,

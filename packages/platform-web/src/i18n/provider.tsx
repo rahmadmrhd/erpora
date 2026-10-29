@@ -16,7 +16,7 @@ import { useBootstrap, useTenantId } from "../bootstrap";
 import { MessageTranslatorProvider, type TranslateFn } from "../msg/message";
 import { PREF_KEYS, readPref, writePref } from "../prefs";
 import { scopedKey } from "../tenancy";
-import { type CatalogEntry, createCatalogLoader } from "./loader";
+import { type CatalogEntry, CatalogLoadError, createCatalogLoader } from "./loader";
 import { chooseLocale, getActiveLocale, setActiveLocale } from "./locale";
 import { useTranslator } from "./translate";
 import type { I18nCatalogs, Translator } from "./types";
@@ -45,6 +45,29 @@ const RemoteContext = createContext<RemoteValue | null>(null);
 
 const FALLBACK_DEFAULT_LOCALE = "id";
 
+// Namespace inti: katalognya wajib ada; 404 di sini berarti backend rusak dan tetap fatal.
+const CORE_NAMESPACES: ReadonlySet<string> = new Set(["platform", "ui"]);
+
+/**
+ * Namespace modul hanya disajikan backend bila modul `enabled` (404 `not_found` selain itu; PRD-000 Q39). Teks modul
+ * nonaktif (mis. halaman "Modul tidak aktif") tidak boleh merobohkan shell: 404 pada namespace modul menjadi katalog
+ * kosong sehingga `t` mengembalikan `ns::kunci` (dengan peringatan dev) dan dimuat ulang saat revisinya muncul.
+ */
+async function loadOrEmpty(
+  load: (locale: string, ns: string) => Promise<CatalogEntry>,
+  locale: string,
+  ns: string,
+): Promise<CatalogEntry> {
+  try {
+    return await load(locale, ns);
+  } catch (err) {
+    if (err instanceof CatalogLoadError && err.status === 404 && !CORE_NAMESPACES.has(ns)) {
+      return { locale, namespace: ns, revision: "", messages: {} };
+    }
+    throw err;
+  }
+}
+
 /** Katalog satu namespace dari API (Suspense; tanpa kunci mentah selama memuat). */
 function useRemoteCatalog(ns: string): Messages {
   const remote = useContext(RemoteContext);
@@ -55,7 +78,7 @@ function useRemoteCatalog(ns: string): Messages {
   const revision = useBootstrap().i18n?.revisions[ns];
   const { data } = useSuspenseQuery({
     queryKey: scopedKey(tenantId, "i18n", locale, ns),
-    queryFn: () => load(locale, ns),
+    queryFn: () => loadOrEmpty(load, locale, ns),
     staleTime: Number.POSITIVE_INFINITY,
   });
 

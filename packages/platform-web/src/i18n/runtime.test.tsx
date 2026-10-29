@@ -10,6 +10,7 @@ import { Message, msg } from "../msg";
 import { PREF_KEYS } from "../prefs";
 import { getActiveLocale, setActiveLocale } from "./locale";
 import { I18nProvider, useTranslation } from "./provider";
+import { resetTranslateWarnings } from "./translate";
 import type { RichTag } from "./types";
 
 // Katalog uji (augmentasi lokal; tidak memengaruhi paket lain).
@@ -149,6 +150,7 @@ const setLanguages = (langs: string[]) =>
   Object.defineProperty(navigator, "languages", { value: langs, configurable: true });
 
 beforeEach(() => {
+  resetTranslateWarnings();
   localStorage.clear();
   setLanguages([]);
   document.documentElement.lang = "";
@@ -244,7 +246,35 @@ describe("useTranslation: memuat dan menerjemahkan", () => {
       expect(query.queryKey[0]).toBe(TENANT);
   });
 
-  test("katalog tidak ditemukan (404) dilempar ke error boundary", async () => {
+  test("namespace modul yang katalognya 404 (modul nonaktif) non-fatal: ns::kunci, tanpa melempar, peringatan dev", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const data = baseCatalogs();
+      // katalog `example` tidak tersaji (modul nonaktif) sedangkan revisi bootstrap tidak memuatnya
+      mount(<Probe />, catalogServer({ id: {}, en: data.en }), bootstrapWith({}));
+      await waitFor(() =>
+        expect(screen.getByTestId("title")).toHaveTextContent("example::note.title"),
+      );
+      expect(screen.queryByText("memuat")).toBeNull();
+      expect(warn.mock.calls.some((c) => String(c[0]).includes("example::note.title"))).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("namespace modul 404 lalu diaktifkan (revisi muncul di bootstrap): katalog dimuat ulang", async () => {
+    const data = baseCatalogs();
+    const server = catalogServer({ id: {}, en: data.en });
+    const view = mount(<Probe />, server, bootstrapWith({}));
+    await waitFor(() =>
+      expect(screen.getByTestId("title")).toHaveTextContent("example::note.title"),
+    );
+    server.data.id = data.id;
+    view.rerenderWith(bootstrapWith({ example: "r1" }));
+    await waitFor(() => expect(screen.getByTestId("title")).toHaveTextContent("Judul Catatan"));
+  });
+
+  test("katalog `platform`/`ui` yang 404 tetap fatal (ke error boundary)", async () => {
     class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
       state = { failed: false };
       static getDerivedStateFromError() {
@@ -254,14 +284,17 @@ describe("useTranslation: memuat dan menerjemahkan", () => {
         return this.state.failed ? <span>gagal-muat</span> : this.props.children;
       }
     }
+    function Core() {
+      const { t } = useTranslation("platform" as never);
+      return <span>{(t as unknown as (k: string) => string)("x")}</span>;
+    }
     const err = spyOn(console, "error").mockImplementation(() => {});
     try {
-      const data = baseCatalogs();
       mount(
         <Boundary>
-          <Probe />
+          <Core />
         </Boundary>,
-        catalogServer({ id: {}, en: data.en }),
+        catalogServer({ id: {}, en: {} }),
       );
       await waitFor(() => expect(screen.getByText("gagal-muat")).toBeInTheDocument());
     } finally {
