@@ -8,6 +8,7 @@ const KNOWN_CODES = [
   "bad_request",
   "invalid_filter",
   "invalid_sort",
+  "invalid_i18n_override",
   "tenant_unresolved",
   "unauthenticated",
   "token_expired",
