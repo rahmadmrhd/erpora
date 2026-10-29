@@ -7,14 +7,14 @@ import (
 )
 
 // reservedSlugs adalah slug yang dicadangkan untuk platform (keputusan rencana 4,
-// ADR-006 keputusan 7; "ui" ditambahkan karena namespace i18n "ui" milik komponen generik, PRD-000 FR-25). Slug dipakai di /api/{slug}, basePath frontend /{slug},
+// ADR-006 keputusan 7; "ui" ditambahkan karena namespace i18n "ui" milik komponen generik, PRD-000 FR-25; "sdk" karena package @erpora/module-sdk adalah SDK frontend platform). Slug dipakai di /api/{slug}, basePath frontend /{slug},
 // dan nama command <slug>:<name>, sehingga tidak boleh bentrok dengan platform.
 var reservedSlugs = func() map[string]bool {
 	m := map[string]bool{}
 	for _, s := range []string{
 		"platform", "api", "assets", "settings", "bootstrap", "healthz", "readyz", "sw", "make", "db",
 		"module", "modules", "contracts", "route", "permission", "migrate", "serve", "inspect",
-		"version", "list", "doctor", "completion", "help", "ui",
+		"version", "list", "doctor", "completion", "help", "ui", "sdk",
 	} {
 		m[s] = true
 	}

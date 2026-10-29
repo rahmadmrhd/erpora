@@ -140,14 +140,14 @@ func TestBuild_ReportsAllProblemsAtOnce(t *testing.T) {
 }
 
 func TestRules_ReservedSlug(t *testing.T) {
-	// Daftar lengkap keputusan rencana 4 / ADR-006 keputusan 7, ditambah "ui" (namespace i18n; keputusan pemilik produk).
+	// Daftar lengkap keputusan rencana 4 / ADR-006 keputusan 7, ditambah "ui" (namespace i18n) dan "sdk" (package @erpora/module-sdk); keputusan pemilik produk.
 	slugs := []string{
 		"platform", "api", "assets", "settings", "bootstrap", "healthz", "readyz", "sw", "make", "db",
 		"module", "modules", "contracts", "route", "permission", "migrate", "serve", "inspect",
-		"version", "list", "doctor", "completion", "help", "ui",
+		"version", "list", "doctor", "completion", "help", "ui", "sdk",
 	}
-	if len(slugs) != 24 {
-		t.Fatalf("daftar uji harus 24 slug, ada %d", len(slugs))
+	if len(slugs) != 25 {
+		t.Fatalf("daftar uji harus 25 slug, ada %d", len(slugs))
 	}
 	for _, slug := range slugs {
 		t.Run(slug, func(t *testing.T) {
