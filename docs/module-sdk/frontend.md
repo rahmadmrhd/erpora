@@ -13,7 +13,7 @@ Keputusan yang melandasinya: [ADR-011](../adr/0011-kontrak-ui-extension-dan-desi
 
 ## Struktur folder
 
-Contoh dari `modules/example/web`:
+Contoh dari `modules/example/web` (templat `make:module --frontend` menghasilkan bagian inti: `bunfig.toml`, `package.json`, `tsconfig.json`, `src/index.ts`, `info.ts`, `module.ts`, `routes.tsx`, `pages/home-page.tsx`, `i18n/keys.gen.ts`, dan `module.test.ts`; lihat [`generators.md`](generators.md)):
 
 ```
 modules/example/web/
@@ -145,7 +145,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
 ## Uji
 
-- Jalankan dari root: `bun test --pass-with-no-tests` (atau `task web:test`). Setiap paket bertes punya `bunfig.toml` dengan preload `web/test/dom.ts` lalu `web/test/setup.ts`; `dom.ts` harus dimuat lebih dulu.
+- Jalankan dari root: `bun test --pass-with-no-tests` (atau `task web:test`). Setiap paket yang punya skrip `test` (`web`, `packages/ui`, `packages/platform-web`, `packages/platform-contracts`, `packages/module-sdk`, `modules/example/web`, `modules/exampleaddon/web`, dan modul baru hasil `make:module --frontend`) punya `bunfig.toml` dengan `[test] preload` ke `web/test/dom.ts` lalu `web/test/setup.ts` (path relatif terhadap paket). `dom.ts` harus dimuat lebih dulu.
 - Stack: `bun test`, `@testing-library/react`, `user-event`, `jest-dom`, dan happy-dom. Radix (DropdownMenu, Dialog) dan perilaku ARIA diuji dengan peran dan keyboard.
 - Untuk halaman yang membutuhkan bootstrap, pakai `StaticBootstrapProvider` dan `makeBootstrap` (`@erpora/platform-web`). Untuk teks, pakai `createTestI18n({ ns: { "kunci.lengkap": "pesan" } })`, atau `testing.tsx` modul yang memuat katalog JSON nyata.
 - Panggilan API di test memakai `fetch` palsu yang merekam permintaan. Test harus membuktikan bahwa body tidak memuat `tenantId` atau `userId`.
@@ -185,7 +185,6 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 ## Yang belum tersedia
 
 - **`make:page`**: ditunda ke M3d (Q36 PK-5). Halaman baru ditulis manual mengikuti `modules/example/web`.
-- **Templat `make:module --frontend`**: saat ini hanya menghasilkan `src/index.ts`, `package.json`, dan `tsconfig.json`, serta mendaftarkannya di `web/src/app/modules.ts`. Bentuk lengkap (`info.ts`, `module.ts`, `routes.tsx`, halaman lazy, `i18n/`, `keys.gen.ts`, dan test) akan diselaraskan dengan panduan ini setelah templat diperbarui (M3a task 13.4). Lihat [`generators.md`](generators.md).
 - **Kontrak UI extension**: belum diputuskan (ADR-011, fase lanjutan).
 - **Layar notifikasi dan pengguna nyata**: masih sumber sementara (`emptyNotificationSource`, `anonymousUserSource`) sampai PRD Notifications dan PRD-001.
 - **Layar bootstrap gagal** memakai kamus bawaan id/en (PK-4), bukan kunci i18n. Ini satu-satunya pengecualian aturan teks.

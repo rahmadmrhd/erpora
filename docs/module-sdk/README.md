@@ -34,4 +34,4 @@ Primitif keamanan M2c (`sdk/httpx`, `sdk/egress`, `sdk/export`, opsi route) ters
 
 Developer tools dan kontrak API per modul (M2d) tersedia; lihat `generators.md` dan `contracts.md`.
 
-Frontend (M3a) sedang dikerjakan: panduan modul frontend ada di [`frontend.md`](frontend.md). `make:page` ditunda ke M3d (Q36 PK-5). Templat `make:module --frontend` belum selaras dengan panduan itu (lihat `generators.md`).
+Frontend (M3a) sedang dikerjakan: panduan modul frontend ada di [`frontend.md`](frontend.md). `make:page` ditunda ke M3d (Q36 PK-5). Templat `make:module --frontend` menghasilkan bentuk yang sesuai dengan panduan itu (lihat `generators.md`).
