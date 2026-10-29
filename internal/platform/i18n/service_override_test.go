@@ -529,7 +529,7 @@ func TestOverridePreconditionPassesThroughAndAborts(t *testing.T) {
 func TestGetAndListOverrides(t *testing.T) {
 	s := newOverrideService(t, newFakeStore(), newClock())
 	set(t, s, tenantA, "example", "id", "a", "satu")
-	set(t, s, tenantA, "ui", "id", "hi", "Halo!")
+	set(t, s, tenantA, "ui", "id", "actions.save", "Simpan!")
 	ctx := context.Background()
 	got, err := s.GetOverride(ctx, tenantA, "example", "id", "a")
 	if err != nil || got.Message != "satu" {

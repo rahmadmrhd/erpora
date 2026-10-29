@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"erpora/internal/platform/tenancy"
 	sdki18n "erpora/sdk/i18n"
@@ -46,8 +47,10 @@ const (
 	OriginMissing Origin = iota
 	// OriginBuiltin: katalog bawaan pada bahasa yang diminta persis.
 	OriginBuiltin
-	// OriginFallback: katalog bawaan pada bahasa fallback (registri atau default).
+	// OriginFallback: bahasa fallback (registri atau default), bawaan maupun override.
 	OriginFallback
+	// OriginOverride: override tenant pada bahasa yang diminta persis.
+	OriginOverride
 )
 
 // Source adalah satu katalog namespace yang dibawa ke Service.
@@ -78,6 +81,12 @@ type Options struct {
 	Log *slog.Logger
 	// Limits default sdki18n.DefaultLimits().
 	Limits sdki18n.Limits
+	// Overrides (opsional) menyimpan override istilah per tenant; nil = tanpa override (Set/Delete menolak).
+	Overrides OverrideStore
+	// OverrideTTL adalah selang pemeriksaan revisi override ke DB; default DefaultOverrideTTL.
+	OverrideTTL time.Duration
+	// Now adalah jam; default time.Now (untuk test).
+	Now func() time.Time
 }
 
 // CatalogError adalah galat struktural katalog saat New; Service tidak dibuat (Requirement 8.1).
@@ -133,7 +142,14 @@ type Service struct {
 	log    *slog.Logger
 
 	viewsMu sync.Mutex
-	views   map[string]*View // "ns\x00locale" -> View
+	views   map[string]*View // "tenant\x00ns\x00locale\x00tanda-revisi" -> View (dibatasi)
+
+	ovs           OverrideStore
+	ttl           time.Duration
+	now           func() time.Time
+	ovMu          sync.Mutex
+	ov            map[tenancy.TenantID]*tenantOv
+	lastWarnStore atomic.Int64
 
 	warned     sync.Map
 	warnedSize atomic.Int64
@@ -178,7 +194,14 @@ func New(opts Options) (*Service, error) {
 	for _, name := range sortedKeys(snap.ns) {
 		warnParity(log, opts.Registry, snap.ns[name])
 	}
-	s := &Service{active: opts.Active, dev: opts.Dev, log: log, views: map[string]*View{}}
+	s := &Service{active: opts.Active, dev: opts.Dev, log: log, views: map[string]*View{},
+		ovs: opts.Overrides, ttl: opts.OverrideTTL, now: opts.Now, ov: map[tenancy.TenantID]*tenantOv{}}
+	if s.ttl <= 0 {
+		s.ttl = DefaultOverrideTTL
+	}
+	if s.now == nil {
+		s.now = time.Now
+	}
 	s.snap.Store(snap)
 	return s, nil
 }
@@ -342,7 +365,7 @@ func (snap *snapshot) chainFor(nd *nsData, loc string) []string {
 // Resolve mencari sumber pesan untuk (ns, key) pada bahasa loc: bahasa persis, fallback registri, lalu
 // bahasa default (Requirement 3.2); bila tidak ada, mengembalikan "ns::key" dengan OriginMissing.
 // Namespace modul nonaktif diperlakukan seperti tidak ada. Tidak pernah panik.
-func (s *Service) Resolve(_ context.Context, t tenancy.TenantID, ns, key string, loc sdki18n.Locale) (string, Origin) {
+func (s *Service) Resolve(ctx context.Context, t tenancy.TenantID, ns, key string, loc sdki18n.Locale) (string, Origin) {
 	snap := s.snap.Load()
 	missing := ns + "::" + key
 	nd := snap.ns[ns]
@@ -354,6 +377,16 @@ func (s *Service) Resolve(_ context.Context, t tenancy.TenantID, ns, key string,
 		want = snap.reg.Default
 	}
 	for _, l := range snap.chainFor(nd, want) {
+		// Pada setiap bahasa dalam rantai: override dahulu, lalu katalog bawaan (Requirement 3.2).
+		if set := s.overrideSet(ctx, t, ns, l); set != nil {
+			if src, ok := set.msgs[key]; ok {
+				if l == want {
+					return src, OriginOverride
+				}
+				s.warnFallback(want, ns, key)
+				return src, OriginFallback
+			}
+		}
 		if src, ok := nd.flats[l][key]; ok {
 			if l == want {
 				return src, OriginBuiltin
@@ -379,46 +412,86 @@ func (s *Service) warnFallback(loc, ns, key string) {
 	s.log.Warn(WarnFallbackMessage, "locale", loc, "namespace", ns, "key", key)
 }
 
-// Catalog mengembalikan katalog efektif (fallback sudah digabung) untuk ns dan loc. loc harus terdaftar di
-// registri dan ns harus dikenal serta, untuk modul, aktif; selain itu ErrNotFound.
-func (s *Service) Catalog(_ context.Context, t tenancy.TenantID, ns string, loc sdki18n.Locale) (View, error) {
+// Catalog mengembalikan katalog efektif (override di atas bawaan, fallback sudah digabung) untuk ns dan loc.
+// loc harus terdaftar di registri dan ns harus dikenal serta, untuk modul, aktif; selain itu ErrNotFound.
+func (s *Service) Catalog(ctx context.Context, t tenancy.TenantID, ns string, loc sdki18n.Locale) (View, error) {
 	snap := s.snap.Load()
 	nd := snap.ns[ns]
 	if nd == nil || !s.isActive(t, nd) || !snap.reg.Has(string(loc)) {
 		return View{}, ErrNotFound
 	}
-	k := ns + "\x00" + string(loc)
+	chain := snap.chainFor(nd, string(loc))
+	sets := make([]*ovSet, len(chain))
+	var sig strings.Builder
+	for i, l := range chain {
+		if sets[i] = s.overrideSet(ctx, t, ns, l); sets[i] != nil {
+			fmt.Fprintf(&sig, "%s=%d;", l, sets[i].rev)
+		}
+	}
+	k := t.String() + "\x00" + ns + "\x00" + string(loc) + "\x00" + sig.String()
 	s.viewsMu.Lock()
 	defer s.viewsMu.Unlock()
 	if v, ok := s.views[k]; ok {
 		return *v, nil
 	}
-	chain := snap.chainFor(nd, string(loc))
 	msgs := map[string]string{}
-	for i := len(chain) - 1; i >= 0; i-- { // dari fallback terjauh; bahasa persis menimpa
+	for i := len(chain) - 1; i >= 0; i-- { // dari fallback terjauh; bahasa yang lebih dekat menimpa
 		for key, src := range nd.flats[chain[i]] {
 			msgs[key] = src
+		}
+		if sets[i] != nil { // override menimpa bawaan pada bahasa yang sama
+			for key, src := range sets[i].msgs {
+				msgs[key] = src
+			}
 		}
 	}
 	sum := canonicalHash(msgs)
 	v := &View{
-		Locale: string(loc), Namespace: ns, Revision: nd.revision,
+		Locale: string(loc), Namespace: ns, Revision: s.namespaceRevision(ctx, t, nd),
 		ETag: `W/"` + hex.EncodeToString(sum[:16]) + `"`, Messages: msgs,
+	}
+	if len(s.views) >= maxViews {
+		s.views = map[string]*View{}
 	}
 	s.views[k] = v
 	return *v, nil
 }
 
+// maxViews membatasi cache View; saat penuh seluruh isinya dibuang.
+const maxViews = 512
+
 // Revisions mengembalikan revisi katalog namespace yang aktif untuk tenant t (ui dan platform selalu ada).
-func (s *Service) Revisions(_ context.Context, t tenancy.TenantID) map[string]string {
+// Revisi memuat revisi override tenant sehingga berubah bila override berubah.
+func (s *Service) Revisions(ctx context.Context, t tenancy.TenantID) map[string]string {
 	snap := s.snap.Load()
 	out := make(map[string]string, len(snap.ns))
 	for name, nd := range snap.ns {
 		if s.isActive(t, nd) {
-			out[name] = nd.revision
+			out[name] = s.namespaceRevision(ctx, t, nd)
 		}
 	}
 	return out
+}
+
+// namespaceRevision menggabungkan revisi katalog bawaan dengan revisi override (namespace, bahasa) tenant;
+// tanpa override sama dengan revisi bawaan.
+func (s *Service) namespaceRevision(ctx context.Context, t tenancy.TenantID, nd *nsData) string {
+	if s.ovs == nil {
+		return nd.revision
+	}
+	revs := s.overrideRevisions(ctx, t)
+	var parts []string
+	for _, l := range s.snap.Load().reg.Codes() {
+		if r := revs[nd.name+"\x00"+l]; r > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", l, r))
+		}
+	}
+	if len(parts) == 0 {
+		return nd.revision
+	}
+	h := sha256.New()
+	fmt.Fprintf(h, "%s;%s", nd.revision, strings.Join(parts, ";"))
+	return hex.EncodeToString(h.Sum(nil)[:8])
 }
 
 // tenantResolver menyesuaikan Service ke sdki18n.Resolver untuk satu tenant.
