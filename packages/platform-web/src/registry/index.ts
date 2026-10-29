@@ -1,3 +1,4 @@
+export { activeLeaf, groupHasActive, isPathActive } from "./active";
 export { type ModuleRegistry, ModuleRegistryProvider, useModuleRegistry } from "./provider";
 export {
   DuplicateModuleKeyError,
