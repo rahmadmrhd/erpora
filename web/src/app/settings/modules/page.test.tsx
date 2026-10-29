@@ -427,6 +427,52 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
 });
 
 describe("riwayat (R13.4)", () => {
+  test("M-17 (Q39 butir 2): Riwayat tetap tersedia pada mode hanya-baca; aksi mutasi tetap tersembunyi", async () => {
+    const user = userEvent.setup();
+    await open(
+      [shop()],
+      {
+        events: [
+          {
+            id: "e1",
+            moduleKey: "acme.shop",
+            event: "enabled",
+            actor: "cli:admin",
+            operationId: null,
+            details: {},
+            occurredAt: "2026-10-29T07:00:00Z",
+          },
+        ] as never,
+      },
+      { adminApi: false },
+    );
+    expect(screen.queryByRole("button", { name: /Aksi untuk/ })).toBeNull();
+    await user.click(await screen.findByRole("button", { name: "Riwayat Shop" }));
+    const dialog = await screen.findByRole("dialog", { name: "Riwayat Shop" });
+    expect(await within(dialog).findByText("Diaktifkan")).toBeInTheDocument();
+  });
+
+  const events = [
+    {
+      id: "e1",
+      moduleKey: "acme.shop",
+      event: "enabled",
+      actor: "cli:admin",
+      operationId: "op-1",
+      details: { note: "<b>tebal</b>" },
+      occurredAt: "2026-10-29T07:00:00Z",
+    },
+    {
+      id: "e2",
+      moduleKey: "acme.shop",
+      event: "reconciled",
+      actor: "system:reconcile",
+      operationId: null,
+      details: {},
+      occurredAt: "2026-10-28T07:00:00Z",
+    },
+  ];
+
   test("daftar event dengan aktor; langkah operasi dimuat saat baris dibuka; details sebagai teks", async () => {
     const user = userEvent.setup();
     const { server } = await open([shop()], {

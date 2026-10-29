@@ -42,7 +42,7 @@ function hasUpgrade(m: ModuleView): boolean {
 
 export interface ModulesTableProps {
   modules: readonly ModuleView[];
-  /** `false` menyembunyikan kolom Aksi (mode hanya-baca). */
+  /** `false` menyembunyikan kolom Aksi (mode hanya-baca); tombol Riwayat pindah ke sel nama. */
   showActions: boolean;
   onOperation(op: ModuleOp, module: ModuleView): void;
   onHistory(module: ModuleView): void;
@@ -76,6 +76,18 @@ export function ModulesTable({ modules, showActions, onOperation, onHistory }: M
                     {m.required ? <Badge variant="outline">{t("modules.required")}</Badge> : null}
                   </span>
                   <code className="font-mono text-xs text-muted-foreground">{m.key}</code>
+                  {showActions ? null : (
+                    // Mode hanya-baca: kolom Aksi hilang, tetapi Riwayat adalah aksi baca (Q39 butir 2).
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto w-fit p-0"
+                      aria-label={t("modules.history.title", { name: m.name })}
+                      onClick={() => onHistory(m)}
+                    >
+                      {t("modules.op.history")}
+                    </Button>
+                  )}
                 </div>
               </TableCell>
               <TableCell className="align-top">
