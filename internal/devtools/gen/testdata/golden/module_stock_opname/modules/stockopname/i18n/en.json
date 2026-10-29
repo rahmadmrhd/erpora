@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Stock Opname"
+  },
+  "page": {
+    "home": {
+      "title": "Stock Opname",
+      "description": "Home page of the Stock Opname module. Replace it with your own page."
+    }
+  },
+  "errors": {
+    "bad_request": "The list parameter is invalid."
+  }
+}

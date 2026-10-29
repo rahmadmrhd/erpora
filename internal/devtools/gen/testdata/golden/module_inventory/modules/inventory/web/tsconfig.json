@@ -8,7 +8,9 @@
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "types": ["bun"]
   },
-  "include": ["src", "api"]
+  "include": ["src", "api", "../../../web/test/setup.ts"]
 }

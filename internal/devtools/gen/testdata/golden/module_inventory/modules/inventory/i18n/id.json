@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Inventory"
+  },
+  "page": {
+    "home": {
+      "title": "Inventory",
+      "description": "Halaman awal modul Inventory. Ganti dengan halaman Anda."
+    }
+  },
+  "errors": {
+    "bad_request": "Parameter daftar tidak valid."
+  }
+}

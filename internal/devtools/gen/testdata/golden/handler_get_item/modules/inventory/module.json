@@ -12,5 +12,6 @@
   ],
   "capabilities": ["inventory.items.read"],
   "migrations": { "strategy": "versioned" },
+  "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" }
 }

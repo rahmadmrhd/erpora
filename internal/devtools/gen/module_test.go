@@ -168,6 +168,16 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 		"contract/notes.go":                             "contract/doc.go",
 		"migrations/0001_create_example_notes.sql":      "migrations/0001_create_inventory_items.sql",
 		"migrations/0002_add_example_notes_version.sql": "", // version/updated_at sudah ada di migrasi awal
+		// Frontend: halaman dan pendukung khusus example (notes, koleksi DB, test halaman) tidak ada di template; halaman awal
+		// generik home-page menggantikan notes-page. api/contract.gen.ts dibangkitkan oleh langkah Post contracts:generate.
+		"catalogs_test.go":                     "", // template menyertakan TestCatalogs di module_test.go
+		"web/src/pages/notes-page.tsx":         "web/src/pages/home-page.tsx",
+		"web/src/pages/notes-page.test.tsx":    "",
+		"web/src/db/notes-collection.ts":       "",
+		"web/src/db/notes-collection.test.tsx": "",
+		"web/src/notes-api.ts":                 "",
+		"web/src/testing.tsx":                  "", // dukungan test halaman example
+		"web/api/contract.gen.ts":              "",
 	}
 	exampleDir := filepath.Join("..", "..", "..", "modules", "example")
 	err = filepath.WalkDir(exampleDir, func(p string, d os.DirEntry, err error) error {
@@ -176,7 +186,7 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 		}
 		rel, _ := filepath.Rel(exampleDir, p)
 		rel = filepath.ToSlash(rel)
-		if rel == "go.sum" {
+		if rel == "go.sum" || strings.Contains("/"+rel, "/node_modules/") { // node_modules hasil bun install lokal, bukan sumber
 			return nil
 		}
 		want := rel
@@ -191,7 +201,7 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, extra := range []string{"deps.go", "README.md", "web/package.json", "web/tsconfig.json", "web/src/index.ts", "internal/domain/errors.go"} {
+	for _, extra := range []string{"deps.go", "README.md", "web/package.json", "web/tsconfig.json", "web/bunfig.toml", "web/src/index.ts", "web/src/info.ts", "web/src/module.ts", "web/src/routes.tsx", "web/src/pages/home-page.tsx", "web/src/i18n/keys.gen.ts", "web/src/module.test.ts", "i18n/id.json", "i18n/en.json", "internal/domain/errors.go"} {
 		if !have[extra] {
 			t.Errorf("file %s harus dihasilkan", extra)
 		}

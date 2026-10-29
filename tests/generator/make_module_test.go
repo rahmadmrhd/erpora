@@ -114,6 +114,9 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 	}
 	run(t, repo, env, bin, "contracts:lint")
 	run(t, repo, env, bin, "contracts:generate", "--check")
+	// i18n: katalog modul hasil generate valid (tanpa galat maupun peringatan) dan keys.gen.ts mutakhir (i18n 8.6, M3a 13.4).
+	run(t, repo, env, bin, "i18n:check", "--strict")
+	run(t, repo, env, bin, "i18n:generate", "--check")
 	run(t, repo, env, "bun", "install", "--frozen-lockfile")
 	run(t, repo, env, "bun", "run", "--filter", "*", "typecheck")
 	run(t, repo, env, "bun", "run", "--filter", "*", "lint")

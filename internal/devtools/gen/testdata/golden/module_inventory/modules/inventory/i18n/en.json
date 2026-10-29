@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Inventory"
+  },
+  "page": {
+    "home": {
+      "title": "Inventory",
+      "description": "Home page of the Inventory module. Replace it with your own page."
+    }
+  },
+  "errors": {
+    "bad_request": "The list parameter is invalid."
+  }
+}
