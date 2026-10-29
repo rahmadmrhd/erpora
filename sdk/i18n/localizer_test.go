@@ -2,6 +2,8 @@ package i18n
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -205,5 +207,126 @@ func TestCompileCacheIsBounded(t *testing.T) {
 	compileCache.mu.Unlock()
 	if n > cacheMax {
 		t.Errorf("cache = %d entri, batas %d", n, cacheMax)
+	}
+}
+
+// slogCapture memasang slog.Default ke buffer selama test dan mengembalikan pembacanya.
+func slogCapture(t *testing.T) func() string {
+	t.Helper()
+	var mu sync.Mutex
+	var sb strings.Builder
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&lockedWriter{mu: &mu, sb: &sb}, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	return func() string { mu.Lock(); defer mu.Unlock(); return sb.String() }
+}
+
+type lockedWriter struct {
+	mu *sync.Mutex
+	sb *strings.Builder
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.sb.Write(p)
+}
+
+// R-1 (Requirement 3.3): kunci yang tidak ditemukan sampai ujung rantai dicatat sebagai peringatan SATU kali per
+// kunci oleh T (bukan Lookup, yang memang opsional).
+func TestTMissingKeyWarnsOnceButLookupDoesNot(t *testing.T) {
+	logs := slogCapture(t)
+	r := &spyResolver{msgs: map[string]string{}}
+	ctx := newCtx(r, "r1mod", "id")
+	for i := 0; i < 3; i++ {
+		if got := T(ctx, "note.titel.r1"); got != "r1mod::note.titel.r1" {
+			t.Errorf("got %q", got)
+		}
+	}
+	if n := strings.Count(logs(), "r1mod::note.titel.r1"); n != 1 {
+		t.Errorf("peringatan kunci hilang dicatat %d kali, want 1:\n%s", n, logs())
+	}
+	if _, ok := Lookup(ctx, "opsional.r1"); ok {
+		t.Fatal("Lookup kunci hilang harus false")
+	}
+	if strings.Contains(logs(), "opsional.r1") {
+		t.Errorf("Lookup tidak boleh memperingatkan:\n%s", logs())
+	}
+}
+
+// fakeReporter memenuhi TestReporter dan merekam galat serta cleanup.
+type fakeReporter struct {
+	errs     []string
+	cleanups []func()
+}
+
+func (f *fakeReporter) Helper() {}
+func (f *fakeReporter) Errorf(format string, a ...any) {
+	f.errs = append(f.errs, fmt.Sprintf(format, a...))
+}
+func (f *fakeReporter) Cleanup(fn func()) { f.cleanups = append(f.cleanups, fn) }
+func (f *fakeReporter) finish() {
+	for i := len(f.cleanups) - 1; i >= 0; i-- {
+		f.cleanups[i]()
+	}
+}
+
+// R-1: StrictMissing menjadikan kunci hilang pada T sebagai galat test; Lookup dan kunci yang ada tidak.
+func TestStrictMissingFailsTestOnMissingKey(t *testing.T) {
+	_ = slogCapture(t)
+	rep := &fakeReporter{}
+	StrictMissing(rep)
+	r := &spyResolver{msgs: map[string]string{"r1b|id|ada": "ada"}}
+	ctx := newCtx(r, "r1b", "id")
+	_ = T(ctx, "ada")
+	_, _ = Lookup(ctx, "opsional")
+	if len(rep.errs) != 0 {
+		t.Fatalf("kunci ada/Lookup tidak boleh gagal: %v", rep.errs)
+	}
+	_ = T(ctx, "salah.ketik.strict")
+	_ = T(ctx, "salah.ketik.strict") // setiap kemunculan dilaporkan ke test (tidak dideduplikasi)
+	if len(rep.errs) != 2 || !strings.Contains(rep.errs[0], "r1b::salah.ketik.strict") {
+		t.Errorf("errs = %v", rep.errs)
+	}
+	rep.finish() // cleanup melepas mode strict
+	_ = T(ctx, "salah.setelah.cleanup")
+	if len(rep.errs) != 2 {
+		t.Errorf("setelah cleanup tidak ada pelaporan lagi: %v", rep.errs)
+	}
+}
+
+// R-3 (Requirement 2.3): argumen hilang tetap tampil {nama} dan dicatat sebagai peringatan sekali per (kunci, nama).
+func TestTMissingArgumentWarnsOnce(t *testing.T) {
+	logs := slogCapture(t)
+	r := &spyResolver{msgs: map[string]string{"r3m|id|count": "Ada {jumlah} dan {sisa} dan {jumlah}"}}
+	ctx := newCtx(r, "r3m", "id")
+	for i := 0; i < 3; i++ {
+		if got := T(ctx, "count", Args{"sisa": 1}); got != "Ada {jumlah} dan 1 dan {jumlah}" {
+			t.Errorf("got %q", got)
+		}
+	}
+	out := logs()
+	if strings.Count(out, "jumlah") != 1 || strings.Contains(out, "sisa") {
+		t.Errorf("hanya argumen yang hilang (jumlah) dan sekali:\n%s", out)
+	}
+}
+
+func TestFormatReportListsMissingArguments(t *testing.T) {
+	m := mustCompile(t, "{a} {n, plural, one {# {b}} other {# {c}}} {g, select, x {X} other {O}} {a}")
+	mr, ok := m.(MissingReporter)
+	if !ok {
+		t.Fatal("Message dari Compile harus MissingReporter")
+	}
+	out, missing, err := mr.FormatReport("en", Args{"n": 2})
+	if err != nil || out != "{a} 2 {c} {g} {a}" {
+		t.Fatalf("out=%q err=%v", out, err)
+	}
+	if strings.Join(missing, ",") != "a,c,g" {
+		t.Errorf("missing = %v, want a,c,g (urut kemunculan, tanpa duplikat)", missing)
+	}
+	// hanya cabang yang terpilih yang dihitung; Format biasa tetap sama
+	plain, _ := m.Format("en", Args{"n": 2})
+	if plain != out {
+		t.Errorf("Format = %q, FormatReport = %q", plain, out)
 	}
 }
