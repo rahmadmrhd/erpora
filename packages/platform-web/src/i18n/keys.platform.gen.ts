@@ -130,12 +130,14 @@ declare module "./types" {
       "modules.op.uninstall": {};
       "modules.op.upgrade": {};
       "modules.readonly.description": {};
+      "modules.readonly.noPermission": {};
       "modules.readonly.title": {};
       "modules.refresh": {};
       "modules.required": {};
       "modules.result.failed": {};
       "modules.result.noop": {};
       "modules.result.pollError": {};
+      "modules.result.pollStopped": {};
       "modules.result.running": {};
       "modules.result.succeeded": {};
       "modules.result.timeout": {};
