@@ -1,11 +1,8 @@
 import { createRoot } from "react-dom/client";
+import { frontendModules } from "./app/modules";
+import { Providers } from "./app/providers/providers";
 
-// Placeholder: membuktikan pipeline React + Tailwind. Shell sebenarnya dirakit di M3a grup 12.
 const root = document.getElementById("root");
 if (root) {
-  createRoot(root).render(
-    <main className="m-8">
-      <h1 className="text-2xl font-semibold">ERPora</h1>
-    </main>,
-  );
+  createRoot(root).render(<Providers modules={frontendModules} />);
 }

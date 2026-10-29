@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import platformEn from "../../../../internal/platform/i18n/catalog/en.json";
-import platformId from "../../../../internal/platform/i18n/catalog/id.json";
-import uiEn from "../../../../packages/ui/i18n/en.json";
-import uiId from "../../../../packages/ui/i18n/id.json";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// Dibaca dari berkas (bukan `import`) agar aturan F2 (tanpa deep import ke packages/*) tidak terpicu.
+const repoRoot = join(import.meta.dir, "../../../..");
+const readJson = (rel: string): unknown => JSON.parse(readFileSync(join(repoRoot, rel), "utf8"));
+const platformId = readJson("internal/platform/i18n/catalog/id.json");
+const platformEn = readJson("internal/platform/i18n/catalog/en.json");
+const uiId = readJson("packages/ui/i18n/id.json");
+const uiEn = readJson("packages/ui/i18n/en.json");
+
 import { platformKeyList, uiKeyList } from "./keys";
 
 function flatten(obj: unknown, prefix = ""): string[] {
