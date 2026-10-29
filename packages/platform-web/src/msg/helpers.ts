@@ -1,5 +1,5 @@
 import type { Crumb, MessageRef } from "@erpora/module-sdk";
-import type { I18nCatalogs } from "./catalogs";
+import type { I18nCatalogs } from "../i18n/types";
 
 export interface MsgHelpers<C extends object> {
   /** Rujukan pesan terketik: namespace dan kunci harus ada di katalog (`tsc` menolak salah ketik). */
