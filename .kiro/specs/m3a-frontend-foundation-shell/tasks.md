@@ -219,17 +219,17 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
 - [ ] 15. Checkpoint — shell dan halaman modul
   - Jalankan `task web:check` dan `task lint arch check:gowork-off test contracts:check`; verifikasi manual cepat dengan `erpora serve` dev: `/settings/modules` memuat daftar, disable/enable `example` mengubah sidebar tanpa reload. Tanyakan ke user bila ada temuan UX.
 
-- [ ] 16. Dokumentasi dan sinkron dokumen proyek (Kelas beban: Haiku)
-  - [ ] 16.1 PRD-000
+- [x] 16. Dokumentasi dan sinkron dokumen proyek (Kelas beban: Haiku)
+  - [x] 16.1 PRD-000
     - Tambahkan **Q36** (keputusan M3a: K-1 sampai K-34 ringkas, PK-1 sampai PK-6 dengan status konfirmasi, tanggal absolut, alasan, pemilik produk menyetujui via delegasi 29 Okt 2026); perbarui FR-08, FR-09 (field `title` opsional, helper `msg/crumb`), FR-20.3 (dialog dampak, bila PK-1 disetujui), §4.2 (aturan F4), tabel M3 (gate `bun test` lebih awal), FR-22.2 (`make:page` ke M3d bila PK-5 disetujui); ubah R14.4 di `requirements.md` agar menyebut pengecualian layar boot (bila PK-4 disetujui) dan tutup butir "TODO" yang sudah diputuskan.
     - _Requirements: 15.6_
-  - [ ] 16.2 ADR-011
+  - [x] 16.2 ADR-011
     - Isi `docs/adr/0011-kontrak-ui-extension-dan-design-system.md` (Status Accepted): keputusan design system (ERP DS + shadcn, token), batas paket (F1 sampai F4), registry/route modul, tanpa kontrak UI extension (tetap fase lanjutan).
     - _Requirements: 15.6_
-  - [ ] 16.3 Panduan modul frontend
+  - [x] 16.3 Panduan modul frontend
     - `docs/module-sdk/frontend.md` baru (struktur `modules/<x>/web`, `defineModule`, `msg()`, route lazy, `PageActions`, i18n, pemakaian `@erpora/ui`, uji komponen, kuota bundle); tautkan dari `docs/module-sdk/README.md`; perbarui `docs/module-sdk/generators.md` (templat `--frontend` baru) dan `docs/module-sdk/creating-a-module.md` bagian frontend; `packages/ui/README.md`, `packages/platform-web/README.md`.
     - _Requirements: 6.7, 15.4_
-  - [ ] 16.4 `CLAUDE.md` dan `AGENTS.md` (harus identik; `TestAgentsMDMatchesClaudeMD`)
+  - [x] 16.4 `CLAUDE.md` dan `AGENTS.md` (harus identik; `TestAgentsMDMatchesClaudeMD`)
     - Tambahkan butir frontend: `@erpora/ui` milik repo (shadcn via `bun run shadcn add`, tanpa palet langsung), ui adalah daun (F4), teks UI lewat i18n, `bun test` dari root dan `task web:check`, `dangerouslySetInnerHTML` dilarang. Jalankan `go test ./tests/architecture/...`.
     - _Requirements: 15.6_
 

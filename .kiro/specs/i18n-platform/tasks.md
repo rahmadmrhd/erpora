@@ -189,10 +189,10 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - Jalankan `task web:check` dan `ERP_REQUIRE_BUN=1 task test`; tanyakan ke user bila anggaran bundle terlampaui (keputusan D-3 cadangan).
 
 - [ ] 14. Tahap I7 — Dokumentasi dan gate akhir
-  - [ ] 14.1 `docs/module-sdk/i18n.md`
+  - [x] 14.1 `docs/module-sdk/i18n.md`
     - Tulis panduan: tata letak katalog dan namespace, sintaks ICU yang didukung (dan yang tidak), konvensi kunci (`fields.*`, `errors.*`, `status.*`), segmen bertitik dan aturan tabrakan, registri bahasa dan fallback, alur penerjemah (`i18n:add`, `check`, `status`), kustomisasi istilah (override), kunci terketik, dan catatan keamanan (tanpa HTML dan data sensitif). Tautkan dari `docs/module-sdk/README.md` dan perbarui `docs/module-sdk/generators.md`.
     - _Requirements: 11.4_
-  - [ ] 14.2 Selaraskan dokumen proyek
+  - [x] 14.2 Selaraskan dokumen proyek
     - `CLAUDE.md` dan `AGENTS.md` (harus identik, `TestAgentsMDMatchesClaudeMD`): tambahkan butir i18n (katalog per modul, `task i18n:check`, jangan menanam string UI); perbarui `docs/architecture/api-guidelines.md` bila belum (task 6.1); tandai FR-25 selesai di PRD-000 dan perbarui `Requirement 12.5` di `requirements.md` agar sama dengan penamaan CLI final (`erpora i18n override`).
     - _Requirements: 11.4, 11.5_
   - [ ] 14.3 Gate akhir lengkap

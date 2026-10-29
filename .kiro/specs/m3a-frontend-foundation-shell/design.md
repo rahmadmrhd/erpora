@@ -736,7 +736,7 @@ Rujukan Frappe UI dibaca dari catatan `docs/spec` Sidebar, DesktopShell, PageHea
 
 ### D. Perlu konfirmasi (menyimpang dari spek)
 
-Butir berikut menambah atau menyimpang dari PRD/api-guidelines atau menafsirkan spek yang ambigu. **Belum diputuskan**; implementasi sementara mengikuti rekomendasi dan dapat diubah murah.
+Butir berikut menambah atau menyimpang dari PRD/api-guidelines atau menafsirkan spek yang ambigu. **Diputuskan atas delegasi pemilik produk pada 29 Okt 2026 (sesuai rekomendasi; dicatat di PRD-000 Q36 dan Q38; dapat ditinjau dan dibatalkan)**; implementasi sementara mengikuti rekomendasi dan dapat diubah murah.
 
 | # | Butir | Menyimpang dari | Rekomendasi |
 | - | ----- | --------------- | ----------- |
