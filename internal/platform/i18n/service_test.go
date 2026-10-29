@@ -12,6 +12,8 @@ import (
 	"testing/fstest"
 
 	"github.com/google/uuid"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"erpora/internal/platform/tenancy"
 	sdki18n "erpora/sdk/i18n"
@@ -395,4 +397,53 @@ func TestPropertyResolveTotal(t *testing.T) {
 			}
 		}
 	}
+}
+
+// R-2 (Requirement 3.7): pemakaian fallback dihitung sebagai metrik OTel erp.i18n.fallback (atribut bahasa dan
+// namespace, tanpa kunci agar kardinalitas terbatas) di semua lingkungan, bukan hanya dev.
+func TestFallbackCountedAsMetric(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	s := newTestService(t, Options{Meter: mp.Meter("test"), Dev: false})
+	ctx := context.Background()
+	s.Resolve(ctx, tenantA, "example", "a", "en-GB") // persis: tidak dihitung
+	s.Resolve(ctx, tenantA, "example", "c", "en-GB") // fallback ke id
+	s.Resolve(ctx, tenantA, "example", "c", "en-GB") // dihitung lagi (metrik menghitung pemakaian)
+	s.Resolve(ctx, tenantA, "example", "b", "en-GB") // fallback ke en
+	s.Resolve(ctx, tenantA, "example", "zz", "en-GB")
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &rm); err != nil {
+		t.Fatal(err)
+	}
+	var total int64
+	attrs := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "erp.i18n.fallback" {
+				continue
+			}
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("data = %T", m.Data)
+			}
+			for _, dp := range sum.DataPoints {
+				total += dp.Value
+				loc, _ := dp.Attributes.Value("locale")
+				ns, _ := dp.Attributes.Value("namespace")
+				if _, hasKey := dp.Attributes.Value("key"); hasKey {
+					t.Error("atribut key tidak boleh ada (kardinalitas)")
+				}
+				attrs[loc.AsString()+"/"+ns.AsString()] += dp.Value
+			}
+		}
+	}
+	if total != 3 || attrs["en-GB/example"] != 3 {
+		t.Errorf("total=%d attrs=%v, want 3 dan en-GB/example=3", total, attrs)
+	}
+}
+
+func TestNoMeterIsSafe(t *testing.T) {
+	s := newTestService(t, Options{})
+	s.Resolve(context.Background(), tenantA, "example", "c", "en-GB") // tanpa Meter tidak panik
 }
