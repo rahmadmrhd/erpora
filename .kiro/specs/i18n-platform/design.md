@@ -216,7 +216,7 @@ Detail kontrak (ditulis di `contracts/openapi/platform.yaml`, tipe TS dibangkitk
 
 - **Bootstrap** ditambah (additive): `i18n: { defaultLocale, locales: [{ code, name }], revisions: { "<ns>": "<rev>" } }`, hanya namespace aktif.
 - **Validasi `PUT`** (Requirement 12.3): `locale` terdaftar; `namespace` aktif; `key` ada di katalog bawaan **bahasa default** namespace itu; `message` lolos `Compile` (batas ukuran), tanpa HTML (`<` hanya sebagai tag rich bernama valid, bukan elemen HTML), dan `Params()` sama dengan pesan bawaan. Pelanggaran → `400` kode baru `invalid_i18n_override` dengan `error.details[]` (`code`: `unknown_key`, `invalid_syntax`, `param_mismatch`, `html_not_allowed`, `too_long`). Tidak ada body > 8 KB (`MaxBodyBytes`).
-- **Mutasi** hanya aktif bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true` (flag yang sama dengan API modul; Keputusan D-5); selain itu `404` sebelum permission. Mutasi `Content-Type: application/json` wajib (`415`). `If-Match` opsional dengan semantik RFC 9110 terhadap `ETag` baris (`W/"<revisi baris>"`); tanpa `If-Match` berlaku last-write-wins.
+- **Mutasi** hanya aktif bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true` (flag yang sama dengan API modul; Keputusan D-5); selain itu `404` sebelum permission. Mutasi `Content-Type: application/json` wajib (`415`). `If-Match` opsional dengan semantik RFC 9110 (perbandingan kuat) terhadap ETag kuat baris `"<hash isi pesan>"` (G19); `412 version_mismatch` membawa record terbaru di `details`; tanpa `If-Match` berlaku last-write-wins.
 - `PUT` pada nilai yang sama tidak menaikkan revisi dan membalas `200` (idempoten); mengubah nilai menaikkan revisi namespace+bahasa dalam **satu transaksi** yang sama dengan upsert.
 - **Cache:** `Cache-Control: private, no-cache` (selalu revalidasi via ETag) pada katalog; tidak ada `Vary` karena bahasa ada di path.
 
@@ -381,7 +381,7 @@ Properti yang harus selalu benar (diuji dengan test berbasis properti/fuzz bila 
 | `PUT` override: kunci tak ada, ICU tidak valid, parameter berbeda, HTML, terlalu panjang | `400 invalid_i18n_override` + `details[].code` |
 | Mutasi saat API admin mati | `404 not_found` sebelum permission |
 | Media type bukan JSON | `415 unsupported_media_type` |
-| `If-Match` tidak cocok | `412 precondition_failed` |
+| `If-Match` tidak cocok | `412 version_mismatch` (dengan record terbaru di `details`, api-guidelines §5) |
 | DB override tak terjangkau | Katalog bawaan tetap disajikan (override dilewati), peringatan di log dan metrik; mutasi gagal `503 not_ready`; `/readyz` tidak terpengaruh |
 | Pesan memerlukan argumen yang tak diberikan | Teks dengan placeholder tak terisi apa adanya; peringatan di dev/test; tidak pernah panik |
 | Panic di formatter | Ditangkap di `T`; mengembalikan kunci; dicatat dengan tipe panic saja (tanpa nilai) |

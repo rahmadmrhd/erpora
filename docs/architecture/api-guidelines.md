@@ -225,7 +225,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | 412 | `version_mismatch` | `If-Match` tidak cocok |
 | 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak |
 | 429 | `rate_limited` | Dengan header `Retry-After` |
-| 415 | `unsupported_media_type` | Endpoint yang mewajibkan `Content-Type: application/json` walau body kosong/`{}` (mutasi `/api/platform/modules`, Q32); body JSON biasa yang salah media type tetap `400 bad_request` dengan `details[].code = unsupported_media_type` (Q30) |
+| 415 | `unsupported_media_type` | Endpoint yang mewajibkan `Content-Type: application/json` walau body kosong/`{}` (mutasi `/api/platform/modules`, Q32; mutasi `PUT`/`DELETE /api/platform/i18n/overrides/...`, Q34); body JSON biasa yang salah media type tetap `400 bad_request` dengan `details[].code = unsupported_media_type` (Q30) |
 | 500 | `internal_error` | Kesalahan server |
 | 501 | `not_implemented` | Endpoint sudah terdaftar dan terdokumentasi di kontrak tetapi belum disambungkan ke use case (kerangka hasil `make:handler`); sementara, bukan kontrak jangka panjang |
 | 405 | `method_not_allowed` | Metode HTTP tidak didukung path tersebut; respons menyertakan header `Allow` |
