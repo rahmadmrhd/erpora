@@ -37,13 +37,16 @@ describe("activeLeaf", () => {
   const nav: NavNode[] = [
     item("home", "/example"),
     item("notes", "/example/notes"),
-    group("reports", [item("sales", "/example/reports/sales"), item("stock", "/example/reports/stock")]),
+    group("reports", [
+      item("sales", "/example/reports/sales"),
+      item("stock", "/example/reports/stock"),
+    ]),
   ];
 
   test("memilih item dengan awalan terpanjang (paling spesifik)", () => {
-    expect(activeLeaf(, )?.id).toBe("home");
-    expect(activeLeaf(, )?.id).toBe("notes");
-    expect(activeLeaf(, )?.id).toBe("sales");
+    expect(activeLeaf(nav, "/example")?.id).toBe("home");
+    expect(activeLeaf(nav, "/example/notes/42")?.id).toBe("notes");
+    expect(activeLeaf(nav, "/example/reports/sales")?.id).toBe("sales");
   });
 
   test("tidak ada yang cocok: undefined", () => {
@@ -68,7 +71,9 @@ describe("activeLeaf", () => {
         if (matching.length === 0) expect(active).toBeUndefined();
         else expect(matching).toContain(active);
         const g = nav[2] as Extract<NavNode, { type: "group" }>;
-        expect(groupHasActive(g, pathname, nav)).toBe(active !== undefined && g.children.includes(active));
+        expect(groupHasActive(g, pathname, nav)).toBe(
+          active !== undefined && g.children.includes(active),
+        );
       }),
       { numRuns: 300 },
     );
