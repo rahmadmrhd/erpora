@@ -148,7 +148,7 @@ func discover(root string, reg *i18n.Registry, rep *Report) ([]namespaceInfo, er
 				Detail: "modul membawa direktori i18n/ tetapi manifest tidak punya bagian \"i18n\"; dianggap memakai bahasa registri yang berkasnya ada"})
 			info := namespaceInfo{Name: m.Slug, Kind: kindModule, Dir: catDir, ModuleDir: modDir, Default: reg.Default}
 			for _, loc := range reg.Codes() {
-				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(catDir), loc+".json")); err == nil || loc == reg.Default {
+				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(catDir), loc+".json")); err == nil || loc == reg.Default { //nolint:gosec // path dari registri tervalidasi dan direktori modul di root repo
 					info.Locales = append(info.Locales, loc)
 				}
 			}
