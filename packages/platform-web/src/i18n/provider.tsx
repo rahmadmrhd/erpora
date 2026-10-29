@@ -149,5 +149,5 @@ export function useTranslation<N extends keyof I18nCatalogs>(ns: N): Translator<
   const ctx = useContext(I18nContext);
   if (ctx === null) throw new Error("useTranslation harus dipakai di dalam I18nProvider");
   const messages = ctx.useCatalog(ns as string);
-  return useTranslator<I18nCatalogs[N]>(ctx.locale, messages, ctx.setLocale);
+  return useTranslator<I18nCatalogs[N]>(ctx.locale, ns as string, messages, ctx.setLocale);
 }

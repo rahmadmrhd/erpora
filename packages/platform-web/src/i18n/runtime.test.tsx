@@ -182,12 +182,14 @@ describe("useTranslation: memuat dan menerjemahkan", () => {
     expect(screen.getByTestId("count2")).toHaveTextContent("3 catatan");
   });
 
-  test("pesan yang gagal dikompilasi (I18nFormatError) mengembalikan kunci mentah", async () => {
+  test("pesan yang gagal dikompilasi (I18nFormatError) mengembalikan ns::kunci", async () => {
     mount(<Probe />, catalogServer(baseCatalogs()));
-    await waitFor(() => expect(screen.getByTestId("broken")).toHaveTextContent("note.broken"));
+    await waitFor(() =>
+      expect(screen.getByTestId("broken")).toHaveTextContent("example::note.broken"),
+    );
   });
 
-  test("kunci yang tidak ada di katalog mengembalikan kunci mentah (tidak melempar)", async () => {
+  test("kunci yang tidak ada di katalog mengembalikan ns::kunci (tidak melempar)", async () => {
     function Missing() {
       const { t } = useTranslation("example");
       return <span data-testid="m">{t("note.title")}</span>;
@@ -195,7 +197,7 @@ describe("useTranslation: memuat dan menerjemahkan", () => {
     const data = baseCatalogs();
     data.id.example.messages = {} as never;
     mount(<Missing />, catalogServer(data));
-    await waitFor(() => expect(screen.getByTestId("m")).toHaveTextContent("note.title"));
+    await waitFor(() => expect(screen.getByTestId("m")).toHaveTextContent("example::note.title"));
   });
 
   test("rich merender tag sebagai elemen React (anak tetap teks)", async () => {

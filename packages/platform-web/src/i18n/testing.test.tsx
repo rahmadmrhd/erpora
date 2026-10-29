@@ -52,19 +52,19 @@ describe("createTestI18n", () => {
     expect(screen.getByText("tebal").tagName).toBe("STRONG");
   });
 
-  test("kunci tidak ada mengembalikan kunci; locale bawaan id; setLocale mengganti locale", () => {
+  test("kunci tidak ada mengembalikan ns::kunci; locale bawaan id; setLocale mengganti locale", () => {
     render(
       <Provider>
         <Probe />
       </Provider>,
     );
-    expect(screen.getByTestId("absent")).toHaveTextContent("note.absent");
+    expect(screen.getByTestId("absent")).toHaveTextContent("testing::note.absent");
     expect(screen.getByTestId("locale")).toHaveTextContent("id");
     act(() => screen.getByText("ke-en").click());
     expect(screen.getByTestId("locale")).toHaveTextContent("en");
   });
 
-  test("opsi locale; namespace yang tidak diberikan menghasilkan kunci", () => {
+  test("opsi locale; namespace yang tidak diberikan menghasilkan ns::kunci", () => {
     const en = createTestI18n({ testing: { "note.title": "Title" } }, { locale: "en" });
     render(
       <en.Provider>
@@ -72,7 +72,7 @@ describe("createTestI18n", () => {
       </en.Provider>,
     );
     expect(screen.getByTestId("locale")).toHaveTextContent("en");
-    expect(screen.getByTestId("hello")).toHaveTextContent("note.hello");
+    expect(screen.getByTestId("hello")).toHaveTextContent("testing::note.hello");
   });
 
   test("<Message> memakai katalog uji", () => {
