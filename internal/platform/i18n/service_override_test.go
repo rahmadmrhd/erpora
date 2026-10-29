@@ -557,3 +557,37 @@ func TestOverrideKeyOnlyInNonDefaultLocaleIsUnknown(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// R-8: View.Revision selalu sama dengan Revisions()[ns] (kontrak: bootstrap.i18n.revisions[ns]) walau override
+// dipasang pada bahasa LAIN dari yang sedang dilayani dan View-nya sudah ter-cache.
+func TestViewRevisionConsistentWithRevisionsAcrossLocales(t *testing.T) {
+	s := newOverrideService(t, newFakeStore(), newClock())
+	ctx := context.Background()
+	v0, _ := s.Catalog(ctx, tenantA, "example", "id") // di-cache
+	set(t, s, tenantA, "example", "en", "a", "Override en")
+	v1, _ := s.Catalog(ctx, tenantA, "example", "id")
+	want := s.Revisions(ctx, tenantA)["example"]
+	if v1.Revision != want {
+		t.Errorf("View.Revision = %s, Revisions = %s; harus sama", v1.Revision, want)
+	}
+	if v1.Revision == v0.Revision {
+		t.Error("revisi namespace harus berubah walau override ada di bahasa lain")
+	}
+	// isi katalog id sendiri tidak berubah, jadi ETag-nya tetap
+	if v1.ETag != v0.ETag {
+		t.Errorf("ETag id berubah padahal isi id sama: %s -> %s", v0.ETag, v1.ETag)
+	}
+}
+
+// R-7a: afterMutation monoton: mutasi yang selesai terbalik tidak menurunkan revisi di cache.
+func TestAfterMutationIsMonotonic(t *testing.T) {
+	fs, clk := newFakeStore(), newClock()
+	s := newOverrideService(t, fs, clk)
+	set(t, s, tenantA, "example", "id", "a", "satu")
+	_ = s.overrideRevisions(context.Background(), tenantA) // muat cache
+	s.afterMutation(tenantA, "example", "id", 9)
+	s.afterMutation(tenantA, "example", "id", 5) // selesai terbalik
+	if got := s.overrideRevisions(context.Background(), tenantA)[ovKey("example", "id")]; got != 9 {
+		t.Errorf("revisi cache = %d, want 9 (tidak boleh turun)", got)
+	}
+}
