@@ -25,6 +25,9 @@ type fakeStore struct {
 	revCalls  int
 	loadCalls int
 	failAll   error
+	// gate (opsional): bila tidak nil, Revisions/ListLocale menunggu sampai ditutup (meniru DB lambat/menggantung).
+	revGate  chan struct{}
+	loadGate chan struct{}
 }
 
 func newFakeStore() *fakeStore {
@@ -33,8 +36,14 @@ func newFakeStore() *fakeStore {
 
 func (f *fakeStore) Revisions(_ context.Context, t tenancy.TenantID) ([]store.Revision, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.revCalls++
+	gate := f.revGate
+	f.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.failAll != nil {
 		return nil, f.failAll
 	}
@@ -47,8 +56,14 @@ func (f *fakeStore) Revisions(_ context.Context, t tenancy.TenantID) ([]store.Re
 
 func (f *fakeStore) ListLocale(_ context.Context, t tenancy.TenantID, ns, loc string) ([]store.Override, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.loadCalls++
+	gate := f.loadGate
+	f.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.failAll != nil {
 		return nil, f.failAll
 	}
@@ -627,4 +642,129 @@ func TestAfterMutationIsMonotonic(t *testing.T) {
 	if got := s.overrideRevisions(context.Background(), tenantA)[ovKey("example", "id")]; got != 9 {
 		t.Errorf("revisi cache = %d, want 9 (tidak boleh turun)", got)
 	}
+}
+
+// R-6: DB override lambat tidak boleh mengantrekan request lain di belakang satu kunci per tenant: selama
+// pemeriksaan revisi berlangsung, pemanggil lain memakai cache lama dan langsung kembali.
+func TestOverrideSlowRevisionRefreshDoesNotBlockOthers(t *testing.T) {
+	fs, clk := newFakeStore(), newClock()
+	s := newOverrideService(t, fs, clk)
+	set(t, s, tenantA, "example", "id", "a", "Override lama")
+	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "Override lama" {
+		t.Fatalf("awal: %q", got)
+	}
+	clk.Advance(DefaultOverrideTTL + time.Second)
+	gate := make(chan struct{})
+	fs.mu.Lock()
+	fs.revGate = gate
+	fs.mu.Unlock()
+	started := make(chan struct{})
+	done := make(chan string, 1)
+	go func() { // pemuat: menunggu DB lambat
+		close(started)
+		got, _ := resolve(s, tenantA, "example", "id", "a")
+		done <- got
+	}()
+	<-started
+	time.Sleep(50 * time.Millisecond) // beri waktu pemuat masuk ke Revisions
+	for i := 0; i < 20; i++ {
+		finished := make(chan string, 1)
+		go func() { got, _ := resolve(s, tenantA, "example", "id", "a"); finished <- got }()
+		select {
+		case got := <-finished:
+			if got != "Override lama" {
+				t.Fatalf("pemanggil lain harus memakai cache lama: %q", got)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("pemanggil lain terblokir menunggu DB lambat (mutex ditahan selama query)")
+		}
+	}
+	// katalog dan revisi juga tidak terblokir
+	if _, err := s.Catalog(context.Background(), tenantA, "example", "id"); err != nil {
+		t.Fatal(err)
+	}
+	close(gate)
+	select {
+	case got := <-done:
+		if got != "Override lama" {
+			t.Errorf("pemuat = %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("pemuat tidak selesai setelah DB pulih")
+	}
+}
+
+// R-6: saat satu pemuat isi override berlangsung (DB lambat), pemanggil lain menunggu paling lama overrideWait lalu
+// menyajikan yang ada (bawaan) alih-alih mengantre tanpa batas.
+func TestOverrideSlowContentLoadBoundedWait(t *testing.T) {
+	old := overrideWait
+	overrideWait = 80 * time.Millisecond
+	t.Cleanup(func() { overrideWait = old })
+	fs, clk := newFakeStore(), newClock()
+	s := newOverrideService(t, fs, clk)
+	fs.mu.Lock()
+	fs.rows[tenantA] = map[[3]string]store.Override{{"example", "id", "a"}: {TenantID: tenantA, Namespace: "example", Locale: "id", Key: "a", Message: "Dari DB"}}
+	fs.revs[tenantA] = map[[2]string]int64{{"example", "id"}: 1}
+	gate := make(chan struct{})
+	fs.loadGate = gate
+	fs.mu.Unlock()
+	loader := make(chan string, 1)
+	go func() { got, _ := resolve(s, tenantA, "example", "id", "a"); loader <- got }()
+	time.Sleep(50 * time.Millisecond)
+	start := time.Now()
+	got, _ := resolve(s, tenantA, "example", "id", "a")
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("menunggu %v, harus dibatasi overrideWait", d)
+	}
+	if got != "A-id" {
+		t.Errorf("selama pemuatan lambat sajikan bawaan: %q", got)
+	}
+	close(gate)
+	if v := <-loader; v != "Dari DB" {
+		t.Errorf("pemuat = %q", v)
+	}
+	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "Dari DB" {
+		t.Errorf("setelah dimuat: %q", got)
+	}
+}
+
+// R-6: bila query gagal, pengulangan mengikuti backoff (negative cache 30 detik), bukan tiap panggilan atau tiap TTL.
+func TestOverrideStoreFailureBackoff(t *testing.T) {
+	fs, clk := newFakeStore(), newClock()
+	fs.failAll = errors.New("db mati")
+	s := newOverrideService(t, fs, clk)
+	for i := 0; i < 100; i++ {
+		resolve(s, tenantA, "example", "id", "a")
+		clk.Advance(100 * time.Millisecond)
+	}
+	if fs.revCalls != 1 {
+		t.Errorf("query revisi gagal = %d dalam jendela backoff, want 1", fs.revCalls)
+	}
+	clk.Advance(overrideBackoff)
+	resolve(s, tenantA, "example", "id", "a")
+	if fs.revCalls != 2 {
+		t.Errorf("setelah backoff = %d, want 2", fs.revCalls)
+	}
+	// kegagalan muat isi: tidak diulang tiap panggilan
+	fs2, clk2 := newFakeStore(), newClock()
+	fs2.revs[tenantA] = map[[2]string]int64{{"example", "id"}: 3}
+	failing := &loadFailStore{fakeStore: fs2}
+	s3 := newTestService(t, Options{Overrides: failing, Now: clk2.Now})
+	for i := 0; i < 50; i++ {
+		resolve(s3, tenantA, "example", "id", "a")
+	}
+	if failing.loads != 1 {
+		t.Errorf("muat isi gagal = %d kali, want 1 (backoff)", failing.loads)
+	}
+}
+
+// loadFailStore menggagalkan ListLocale dan menghitung percobaannya.
+type loadFailStore struct {
+	*fakeStore
+	loads int
+}
+
+func (l *loadFailStore) ListLocale(context.Context, tenancy.TenantID, string, string) ([]store.Override, error) {
+	l.loads++
+	return nil, errors.New("muat gagal")
 }
