@@ -1,8 +1,11 @@
 import {
+  BOOTSTRAP_KEY,
+  scopedKey,
   useFeature,
   useMessage,
   useModuleRegistry,
   usePageActions,
+  useTenantId,
   useTranslation,
 } from "@erpora/platform-web";
 import {
@@ -14,9 +17,10 @@ import {
   ErrorPage,
   Skeleton,
 } from "@erpora/ui";
-import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { ActionDialog } from "./action-dialog";
-import { ModulesApiError, useModules } from "./api";
+import { ModulesApiError, useModules, useOperationPolling } from "./api";
 import { mapModuleError } from "./errors";
 import { HistoryDialog } from "./history-dialog";
 import { useDescribe, useModulesT } from "./keys";
@@ -40,6 +44,25 @@ export function ModulesPage() {
 
   const [action, setAction] = useState<{ op: ModuleOp; key: string } | null>(null);
   const [historyKey, setHistoryKey] = useState<string | null>(null);
+
+  // Pemantauan operasi 202 hidup di halaman: menutup dialog tidak boleh menghentikan invalidasi saat selesai (R13.5),
+  // dan polling berhenti otomatis saat halaman unmount.
+  const queryClient = useQueryClient();
+  const tenantId = useTenantId();
+  const [pollIds, setPollIds] = useState<readonly string[]>([]);
+  const polling = useOperationPolling(pollIds.length > 0 ? pollIds : null, () => {
+    void queryClient.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
+    void queryClient.invalidateQueries({ queryKey: scopedKey(tenantId, "platform", "modules") });
+  });
+  const pollingRef = useRef(polling);
+  pollingRef.current = polling;
+  const onAccepted = (ids: readonly string[]) => {
+    // Operasi lama yang belum selesai tetap dipantau agar invalidasinya tidak hilang; yang sudah selesai dibuang.
+    const finished = new Set(
+      pollingRef.current.operations.filter((o) => o.status !== "running").map((o) => o.id),
+    );
+    setPollIds((prev) => [...new Set([...prev.filter((id) => !finished.has(id)), ...ids])]);
+  };
 
   const refreshLabel = useMessage({ ns: "platform", key: "modules.refresh" });
   usePageActions([
@@ -141,6 +164,8 @@ export function ModulesPage() {
           frontend={frontend}
           etag={query.data?.etag}
           onClose={() => setAction(null)}
+          polling={polling}
+          onAccepted={onAccepted}
           adminApi={adminApi}
         />
       ) : null}

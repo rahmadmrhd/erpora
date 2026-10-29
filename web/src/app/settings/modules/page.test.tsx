@@ -344,6 +344,51 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     expect(await screen.findByText("Berhasil")).toBeInTheDocument();
     expect(server.opFetches["op-1"]).toBeGreaterThanOrEqual(1);
   });
+  test("M-2: menutup dialog saat polling 202 tidak menghentikan invalidasi bootstrap saat operasi selesai (R13.5)", async () => {
+    const user = userEvent.setup();
+    const ops: Record<string, ReturnType<typeof operation>> = {
+      "op-1": operation({ id: "op-1", status: "running" }),
+    };
+    const { server, queryClient } = await open([shop()], { mode: "accepted", operations: ops });
+    const invalidated: unknown[] = [];
+    const original = queryClient.invalidateQueries.bind(queryClient);
+    queryClient.invalidateQueries = ((f: { queryKey?: unknown }) => {
+      invalidated.push(f?.queryKey);
+      return original(f as never);
+    }) as typeof queryClient.invalidateQueries;
+    await pickMenu(user, "Shop", "Nonaktifkan");
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
+    );
+    await waitFor(() => expect(server.opFetches["op-1"]).toBeGreaterThanOrEqual(1));
+    await user.click(await screen.findByRole("button", { name: "Tutup" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    const before = invalidated.filter((k) => k === BOOTSTRAP_KEY).length;
+    // Operasi selesai setelah dialog ditutup: polling di level halaman tetap hidup dan menyegarkan bootstrap.
+    ops["op-1"] = operation({ id: "op-1", status: "succeeded" });
+    await waitFor(
+      () => expect(invalidated.filter((k) => k === BOOTSTRAP_KEY).length).toBeGreaterThan(before),
+      { timeout: 4500 },
+    );
+  }, 15_000);
+
+  test("M-2: polling berhenti saat halaman unmount", async () => {
+    const user = userEvent.setup();
+    const ops: Record<string, ReturnType<typeof operation>> = {
+      "op-1": operation({ id: "op-1", status: "running" }),
+    };
+    const { server, unmount } = await open([shop()], { mode: "accepted", operations: ops });
+    await pickMenu(user, "Shop", "Nonaktifkan");
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
+    );
+    await waitFor(() => expect(server.opFetches["op-1"]).toBeGreaterThanOrEqual(1));
+    unmount();
+    const n = server.opFetches["op-1"];
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(server.opFetches["op-1"]).toBe(n);
+  }, 15_000);
+
   test("M-7: galat permanen saat polling (404) menghentikan polling dan menampilkan pesan, bukan percobaan terus-menerus", async () => {
     const user = userEvent.setup();
     const { server } = await open([shop()], { mode: "accepted", operationStatus: 404 });

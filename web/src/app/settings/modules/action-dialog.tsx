@@ -18,7 +18,7 @@ import {
 } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useMemo, useState } from "react";
-import { ModulesApiError, runModuleOperation, useOperationPolling } from "./api";
+import { ModulesApiError, type OperationPolling, runModuleOperation } from "./api";
 import { useModulesClient } from "./client";
 import { type MappedError, mapFailureCode, mapModuleError } from "./errors";
 import { computeImpact, type Effect, type InstallOptions } from "./impact";
@@ -111,10 +111,15 @@ function OperationResults({ operations }: { operations: readonly OperationView[]
   );
 }
 
-function PollingResult({ ids, onFinished }: { ids: readonly string[]; onFinished: () => void }) {
+/**
+ * Tampilan pemantauan operasi 202. Polling-nya sendiri hidup di halaman (bukan di dialog) agar menutup dialog tidak
+ * menghentikan invalidasi bootstrap saat operasi selesai (R13.5); dialog hanya membaca statusnya.
+ */
+function PollingResult({ ids, polling }: { ids: readonly string[]; polling: OperationPolling }) {
   const t = useModulesT();
-  const polling = useOperationPolling(ids, onFinished);
-  if (polling.phase === "finished") return <OperationResults operations={polling.operations} />;
+  const mine = polling.operations.filter((o) => ids.includes(o.id));
+  const done = mine.length === ids.length && mine.every((o) => o.status !== "running");
+  if (done) return <OperationResults operations={mine} />;
   return (
     <div className="flex flex-col gap-2 text-sm">
       {polling.phase === "running" || polling.phase === "idle" ? (
@@ -128,7 +133,7 @@ function PollingResult({ ids, onFinished }: { ids: readonly string[]; onFinished
       ) : null}
       {polling.phase === "timeout" ? <p>{t("modules.result.timeout")}</p> : null}
       {polling.phase === "stopped" ? <p>{t("modules.result.pollStopped")}</p> : null}
-      {polling.operations.length > 0 ? <OperationResults operations={polling.operations} /> : null}
+      {mine.length > 0 ? <OperationResults operations={mine} /> : null}
     </div>
   );
 }
@@ -141,6 +146,10 @@ export interface ActionDialogProps {
   /** ETag daftar yang dipakai menghitung dampak (dikirim sebagai `If-Match`). */
   etag: string | undefined;
   onClose(): void;
+  /** Status pemantauan operasi 202 yang dimiliki halaman. */
+  polling: OperationPolling;
+  /** Operasi diterima (202): halaman mulai/meneruskan pemantauan. */
+  onAccepted(ids: readonly string[]): void;
   /** Bendera `features.modulesAdminApi` saat dialog dibuka (membedakan 404 gerbang mati dari modul tidak ditemukan). */
   adminApi: boolean;
 }
@@ -156,6 +165,8 @@ export function ActionDialog({
   frontend,
   etag,
   onClose,
+  polling,
+  onAccepted,
   adminApi,
 }: ActionDialogProps) {
   const t = useModulesT();
@@ -196,6 +207,7 @@ export function ActionDialog({
         ifMatch: etag,
       });
       refresh();
+      if (result.kind === "accepted") onAccepted(result.operationIds);
       setPhase(
         result.kind === "done"
           ? { kind: "done", operations: result.operations }
@@ -279,7 +291,7 @@ export function ActionDialog({
         ) : null}
 
         {phase.kind === "done" ? <OperationResults operations={phase.operations} /> : null}
-        {phase.kind === "polling" ? <PollingResult ids={phase.ids} onFinished={refresh} /> : null}
+        {phase.kind === "polling" ? <PollingResult ids={phase.ids} polling={polling} /> : null}
         {phase.kind === "error" ? (
           <Alert variant="destructive">
             <AlertDescription>
