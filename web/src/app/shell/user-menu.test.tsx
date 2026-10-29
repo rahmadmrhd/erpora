@@ -38,7 +38,7 @@ describe("UserMenu", () => {
     renderApp({ currentUserSource: source() });
     await screen.findByText("Rahmad Maulana");
     const button = screen.getByRole("button", { name: /^Menu akun/ });
-    expect(button.hasAttribute("aria-label")).toBe(false);
+    expect(button.getAttribute("aria-label")).toBe(null);
     expect(screen.getByRole("button", { name: /Rahmad Maulana/ })).toBe(button);
     expect(screen.getByRole("button", { name: /rahmad@erpora\.id/ })).toBe(button);
   });

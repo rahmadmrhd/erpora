@@ -90,7 +90,9 @@ export function UserMenu() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" aria-label={t("user.menu")} tooltip={name}>
+            <SidebarMenuButton size="lg" tooltip={name}>
+              {/* Nama aksesibel = teks terlihat (nama, email) berawalan "Menu akun": label tidak menimpa teks terlihat (WCAG 2.5.3). */}
+              <span className="sr-only">{t("user.menu")}</span>
               {identity}
               <Icon name="chevrons-up-down" />
             </SidebarMenuButton>
