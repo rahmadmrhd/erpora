@@ -177,7 +177,10 @@ func (s *Service) afterMutation(t tenancy.TenantID, ns, loc string, rev int64) {
 		for k, v := range to.revs {
 			revs[k] = v
 		}
-		revs[ovKey(ns, loc)] = rev
+		// Monoton: mutasi yang selesai terbalik tidak boleh menurunkan revisi (R-7a).
+		if rev > revs[ovKey(ns, loc)] {
+			revs[ovKey(ns, loc)] = rev
+		}
 		to.revs = revs
 	}
 	delete(to.sets, ovKey(ns, loc))
