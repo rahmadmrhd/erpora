@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { defaultOfflinePolicy, defineModule } from "@erpora/module-sdk";
-import { availableOps, computeImpact, type Effect } from "./impact";
+import { availableOps, computeImpact, type Effect, transitionAllowed } from "./impact";
 import { forSeeds, type Rng } from "./seeded";
 import type { ModuleOp, ModuleStatus, ModuleView } from "./types";
 
@@ -309,7 +309,7 @@ describe("P7: dampak tidak melanggar transisi (properti)", () => {
     return modules;
   }
 
-  test("blocker memakai kode lifecycle yang dikenal; operasi non-tawaran selalu invalid_transition", async () => {
+  test("blocker memakai kode lifecycle yang dikenal; di luar tabel transisi selalu invalid_transition", async () => {
     const codes = new Set([
       "module_required",
       "dependency_not_ready",
@@ -324,8 +324,11 @@ describe("P7: dampak tidak melanggar transisi (properti)", () => {
       const target = modules[0] as ModuleView;
       const res = computeImpact({ op, target, modules, frontend: [] });
       for (const b of res.blockers) expect(codes.has(b.code)).toBe(true);
-      if (!availableOps(target).includes(op)) {
+      if (!transitionAllowed(target.status, op)) {
         expect(res.blockers.map((b) => b.code)).toContain("invalid_transition");
+      }
+      if (target.required && (op === "disable" || op === "uninstall")) {
+        expect(res.blockers.map((b) => b.code)).toContain("module_required");
       }
     });
   });

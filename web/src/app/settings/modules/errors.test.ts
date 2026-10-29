@@ -25,7 +25,7 @@ describe("mapModuleError: kode detail lifecycle", () => {
     ["module_not_found", 404, "not_found"],
   ])("detail %s (%i) menjadi modules.error.%s", (detail, status, code) => {
     const r = mapModuleError(status, err(code, [{ code: detail }]), "mutation");
-    expect(keysOf(r)).toEqual([`modules.error.${detail}`]);
+    expect<string[]>(keysOf(r)).toEqual([`modules.error.${detail}`]);
   });
 
   test("422 dengan beberapa detail menghasilkan satu pesan per detail (tanpa duplikat, urutan terjaga)", () => {
@@ -38,7 +38,10 @@ describe("mapModuleError: kode detail lifecycle", () => {
       ]),
       "mutation",
     );
-    expect(keysOf(r)).toEqual(["modules.error.dependents_active", "modules.error.module_required"]);
+    expect<string[]>(keysOf(r)).toEqual([
+      "modules.error.dependents_active",
+      "modules.error.module_required",
+    ]);
   });
 
   test("detail tingkat field diabaikan (bukan galat keseluruhan)", () => {
@@ -47,7 +50,7 @@ describe("mapModuleError: kode detail lifecycle", () => {
       err("validation_failed", [{ code: "unknown_field", field: "foo" }]),
       "mutation",
     );
-    expect(keysOf(r)).toEqual(["errors.validation_failed"]);
+    expect<string[]>(keysOf(r)).toEqual(["errors.validation_failed"]);
   });
 });
 
@@ -55,32 +58,32 @@ describe("mapModuleError: status HTTP", () => {
   test("409 dan 412 memuat ulang daftar; 412 menjadi 'status modul berubah'", () => {
     expect(mapModuleError(409, err("invalid_state"), "mutation").reloadList).toBe(true);
     const r = mapModuleError(412, err("version_mismatch"), "mutation");
-    expect(keysOf(r)).toEqual(["modules.error.version_mismatch"]);
+    expect<string[]>(keysOf(r)).toEqual(["modules.error.version_mismatch"]);
     expect(r.reloadList).toBe(true);
   });
 
   test("404 pada mutasi berarti API mutasi mati: pesan khusus dan beralih ke mode hanya-baca", () => {
     const r = mapModuleError(404, err("not_found"), "mutation");
-    expect(keysOf(r)).toEqual(["modules.error.mutation_disabled"]);
+    expect<string[]>(keysOf(r)).toEqual(["modules.error.mutation_disabled"]);
     expect(r.switchToReadOnly).toBe(true);
   });
 
   test("404 pada bacaan memakai errors.not_found tanpa beralih mode", () => {
     const r = mapModuleError(404, err("not_found"), "read");
-    expect(keysOf(r)).toEqual(["errors.not_found"]);
+    expect<string[]>(keysOf(r)).toEqual(["errors.not_found"]);
     expect(r.switchToReadOnly).toBe(false);
   });
 
   test("415 dan kode tak dikenal: pesan umum + requestId, tanpa menyalin teks server", () => {
     const r = mapModuleError(415, err("kode_aneh", undefined, "req-9"), "mutation");
-    expect(keysOf(r)).toEqual(["errors.unknown", "modules.error.requestId"]);
+    expect<string[]>(keysOf(r)).toEqual(["errors.unknown", "modules.error.requestId"]);
     expect(r.messages[1]?.args).toEqual({ requestId: "req-9" });
     expect(JSON.stringify(r)).not.toContain("SQL");
     expect(JSON.stringify(r)).not.toContain("secret");
   });
 
   test("tanpa requestId tidak ada pesan requestId", () => {
-    expect(keysOf(mapModuleError(500, err("internal_error"), "mutation"))).toEqual([
+    expect<string[]>(keysOf(mapModuleError(500, err("internal_error"), "mutation"))).toEqual([
       "errors.internal_error",
     ]);
   });
