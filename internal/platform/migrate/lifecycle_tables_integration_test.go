@@ -101,8 +101,12 @@ func TestMigrateUp_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		if s.Current != 2 || s.Pending != 0 {
-			t.Errorf("target %s: %+v", s.Target, s)
+		var want int64 = 2 // tenant; control mencapai 3 sejak 0003_i18n_overrides
+		if s.Target == migrate.Control {
+			want = 3
+		}
+		if s.Current != want || s.Pending != 0 {
+			t.Errorf("target %s: %+v, want Current=%d", s.Target, s, want)
 		}
 	}
 }
