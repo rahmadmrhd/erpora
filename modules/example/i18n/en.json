@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "notes": "Notes"
+  },
+  "page": {
+    "notes": {
+      "title": "Notes",
+      "description": "Example module page: list of notes from the example API.",
+      "empty": "No notes yet.",
+      "count": "{count, plural, =0 {No notes} one {# note} other {# notes}}",
+      "error": "Notes could not be loaded.",
+      "columns": {
+        "title": "Title",
+        "version": "Version",
+        "updated": "Updated"
+      }
+    }
+  },
+  "actions": {
+    "refresh": "Refresh"
+  }
+}

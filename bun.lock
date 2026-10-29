@@ -5,6 +5,65 @@
     "": {
       "name": "erpora",
     },
+    "modules/example/web": {
+      "name": "@erpora/module-example",
+      "version": "0.1.0",
+      "dependencies": {
+        "@erpora/module-sdk": "workspace:*",
+        "@erpora/platform-contracts": "workspace:*",
+        "@erpora/platform-web": "workspace:*",
+        "@erpora/ui": "workspace:*",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "2.6.2",
+        "@tanstack/react-query": "5.104.2",
+        "@tanstack/react-router": "1.170.44",
+        "@testing-library/dom": "10.4.2",
+        "@testing-library/jest-dom": "7.0.1",
+        "@testing-library/react": "16.3.3",
+        "@testing-library/user-event": "14.6.8",
+        "@types/bun": "1.4.3",
+        "@types/react": "19.3.0",
+        "@types/react-dom": "19.3.0",
+        "react": "19.3.1",
+        "react-dom": "19.3.1",
+        "typescript": "6.0.3",
+      },
+      "peerDependencies": {
+        "@tanstack/react-query": "5.104.2",
+        "react": "19.3.1",
+      },
+    },
+    "modules/exampleaddon/web": {
+      "name": "@erpora/module-exampleaddon",
+      "version": "0.1.0",
+      "dependencies": {
+        "@erpora/module-example": "workspace:*",
+        "@erpora/module-sdk": "workspace:*",
+        "@erpora/platform-contracts": "workspace:*",
+        "@erpora/platform-web": "workspace:*",
+        "@erpora/ui": "workspace:*",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "2.6.2",
+        "@tanstack/react-query": "5.104.2",
+        "@tanstack/react-router": "1.170.44",
+        "@testing-library/dom": "10.4.2",
+        "@testing-library/jest-dom": "7.0.1",
+        "@testing-library/react": "16.3.3",
+        "@testing-library/user-event": "14.6.8",
+        "@types/bun": "1.4.3",
+        "@types/react": "19.3.0",
+        "@types/react-dom": "19.3.0",
+        "react": "19.3.1",
+        "react-dom": "19.3.1",
+        "typescript": "6.0.3",
+      },
+      "peerDependencies": {
+        "@tanstack/react-query": "5.104.2",
+        "react": "19.3.1",
+      },
+    },
     "packages/module-sdk": {
       "name": "@erpora/module-sdk",
       "version": "0.1.0",
@@ -101,6 +160,8 @@
     "web": {
       "name": "@erpora/web",
       "dependencies": {
+        "@erpora/module-example": "workspace:*",
+        "@erpora/module-exampleaddon": "workspace:*",
         "@erpora/module-sdk": "workspace:*",
         "@erpora/platform-contracts": "workspace:*",
         "@erpora/platform-web": "workspace:*",
@@ -227,6 +288,10 @@
     "@dotenvx/dotenvx": ["@dotenvx/dotenvx@1.75.1", "", { "dependencies": { "@dotenvx/primitives": "^0.8.0", "commander": "^11.1.0", "conf": "^10.2.0", "dotenv": "^17.2.1", "enquirer": "^2.4.1", "env-paths": "^2.2.1", "execa": "^5.1.1", "fdir": "^6.2.0", "ignore": "^5.3.0", "object-treeify": "1.1.33", "open": "^8.4.2", "picomatch": "^4.0.4", "systeminformation": "^5.22.11", "undici": "^7.11.0", "which": "^4.0.0", "yocto-spinner": "^1.1.0" }, "bin": { "dotenvx": "src/cli/dotenvx.js" } }, "sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ=="],
 
     "@dotenvx/primitives": ["@dotenvx/primitives@0.8.0", "", {}, "sha512-VYJy0uhFm9zTJ1TxBaW/pA8bjbOM/OttaNMwZ1RHG4JKyRG7DhSdiqD1ipQoAyoD22olUtxbP78W9xY3Wd11bg=="],
+
+    "@erpora/module-example": ["@erpora/module-example@workspace:modules/example/web"],
+
+    "@erpora/module-exampleaddon": ["@erpora/module-exampleaddon@workspace:modules/exampleaddon/web"],
 
     "@erpora/module-sdk": ["@erpora/module-sdk@workspace:packages/module-sdk"],
 

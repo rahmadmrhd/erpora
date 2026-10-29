@@ -24,10 +24,10 @@ describe("frontendModule exampleaddon", () => {
   const mod = entry.frontendModule;
 
   test("key, slug, dan version sama dengan module.json (R6.1)", () => {
-    expect(mod.key).toBe(manifest.key);
-    expect(mod.slug).toBe(manifest.slug);
+    expect<string>(mod.key).toBe(manifest.key);
+    expect<string>(mod.slug).toBe(manifest.slug);
     expect(mod.version).toBe(manifest.version);
-    expect(entry.moduleInfo).toEqual({ key: manifest.key, slug: manifest.slug });
+    expect<unknown>(entry.moduleInfo).toEqual({ key: manifest.key, slug: manifest.slug });
   });
 
   test("beku dan online-only sesuai manifest", () => {
@@ -56,7 +56,7 @@ describe("frontendModule exampleaddon", () => {
     const routes = mod.registerRoutes(base);
     expect(routes).toHaveLength(1);
     expect(routes[0]?.options.getParentRoute()).toBe(base);
-    expect(routes[0]?.options.path).toBe("/");
+    expect((routes[0]?.options as { path?: string } | undefined)?.path).toBe("/");
     expect(routes[0]?.options.staticData?.crumb).toEqual({
       ref: { ns: "example-addon", key: "page.summary.title" },
     });
@@ -76,7 +76,7 @@ describe("katalog i18n modul exampleaddon", () => {
     const id = read("id");
     const en = read("en");
     expect(Object.keys(id).sort()).toEqual(Object.keys(en).sort());
-    const params = (s: string) => [...s.matchAll(/\{(\w+)/g)].map((m) => m[1]).sort();
+    const params = (s: string) => [...s.matchAll(/\{(\w+)\s*[,}]/g)].map((m) => m[1]).sort();
     for (const [k, v] of Object.entries(id)) expect(params(en[k] as string)).toEqual(params(v));
   });
 

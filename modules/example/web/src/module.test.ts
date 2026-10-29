@@ -23,10 +23,10 @@ describe("frontendModule example", () => {
   const mod = entry.frontendModule;
 
   test("key, slug, dan version sama dengan module.json (R6.1)", () => {
-    expect(mod.key).toBe(manifest.key);
-    expect(mod.slug).toBe(manifest.slug);
+    expect<string>(mod.key).toBe(manifest.key);
+    expect<string>(mod.slug).toBe(manifest.slug);
     expect(mod.version).toBe(manifest.version);
-    expect(entry.moduleInfo).toEqual({ key: manifest.key, slug: manifest.slug });
+    expect<unknown>(entry.moduleInfo).toEqual({ key: manifest.key, slug: manifest.slug });
   });
 
   test("hasil defineModule beku dan kebijakan offline mengikuti manifest (online-only)", () => {
@@ -53,7 +53,7 @@ describe("frontendModule example", () => {
     expect(routes).toHaveLength(1);
     const [index] = routes;
     expect(index?.options.getParentRoute()).toBe(base);
-    expect(index?.options.path).toBe("/");
+    expect((index?.options as { path?: string } | undefined)?.path).toBe("/");
     expect(index?.options.staticData?.crumb).toEqual({
       ref: { ns: "example", key: "page.notes.title" },
     });
@@ -73,7 +73,7 @@ describe("katalog i18n modul example", () => {
     const id = read("id");
     const en = read("en");
     expect(Object.keys(id).sort()).toEqual(Object.keys(en).sort());
-    const params = (s: string) => [...s.matchAll(/\{(\w+)/g)].map((m) => m[1]).sort();
+    const params = (s: string) => [...s.matchAll(/\{(\w+)\s*[,}]/g)].map((m) => m[1]).sort();
     for (const [k, v] of Object.entries(id)) expect(params(en[k] as string)).toEqual(params(v));
   });
 

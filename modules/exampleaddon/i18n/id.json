@@ -1,0 +1,17 @@
+{
+  "nav": {
+    "summary": "Ringkasan"
+  },
+  "page": {
+    "summary": {
+      "title": "Ringkasan",
+      "description": "Contoh halaman modul add-on: ringkasan yang memakai kontrak publik modul example.",
+      "note_count": "{count, plural, =0 {Tidak ada catatan} other {# catatan}}",
+      "error": "Ringkasan tidak dapat dimuat.",
+      "view_notes": "Lihat catatan"
+    }
+  },
+  "actions": {
+    "refresh": "Segarkan"
+  }
+}
