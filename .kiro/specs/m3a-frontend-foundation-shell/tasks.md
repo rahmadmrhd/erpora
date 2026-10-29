@@ -192,7 +192,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
   - [x] 13.3 Koleksi TanStack DB `example` dan bukti lazy
     - `modules/example/web/src/db/notes-collection.ts` (`createCollection(queryCollectionOptions(...))` lewat `useDb()`, kunci `scopedKey(tenantId, "example", "notes")`); halaman `/example` memakainya dengan `useLiveQuery`. Verifikasi build: chunk DB terpisah dan **tidak** ada di JS awal (periksa metafile), chunk `/example` terpisah.
     - _Requirements: 5.4, 7.4_
-  - [ ] 13.4 Templat generator (test dulu)
+  - [x] 13.4 Templat generator (test dulu)
     - Perbarui golden test dulu (merah): `internal/devtools/gen/testdata/golden/module_*` memuat `src/module.ts`, `src/routes.tsx`, `src/pages/home-page.tsx`, `index.ts` yang mengekspor `frontendModule`, `web/src/app/modules.ts` dengan `import { frontendModule as <x>Module }`. Lalu ubah templat di `internal/devtools/templates/module/web/**` dan `modifyRepoFiles` (`internal/devtools/gen/module.go`) agar sesuai; jaga `moduleInfo` dan `api` tetap diekspor (aditif).
     - _Requirements: 15.4_
   - [ ] 13.5 `task test:generator`

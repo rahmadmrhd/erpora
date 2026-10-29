@@ -101,30 +101,30 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
 - [x] 7. Checkpoint — API katalog
   - Jalankan `task lint arch check:gowork-off test contracts:check`; bila menyentuh DB jalankan `task test:integration` melalui PostgreSQL di VPS (tunnel + `ERP_TEST_DATABASE_URL`).
 
-- [ ] 8. Tahap I4 — Tooling pemeriksa, generator, dan templat modul
-  - [ ] 8.1 Tulis test `i18ntools` (merah dulu)
+- [x] 8. Tahap I4 — Tooling pemeriksa, generator, dan templat modul
+  - [x] 8.1 Tulis test `i18ntools` (merah dulu)
     - Kasus galat (JSON/ICU tidak valid, kunci ganda, tabrakan, karakter terlarang, HTML, namespace salah, registri/fallback tidak valid, modul mendeklarasikan bahasa tak terdaftar) → exit code 2; peringatan (hilang/berlebih/parameter tak cocok) → exit 0; `--strict` → peringatan menjadi galat; bahasa `partial` tidak melaporkan kunci hilang tetapi tetap melaporkan berlebih; `--json`; exit code 3 untuk kegagalan konfigurasi.
     - **Validates: Requirements 8.1, 8.3, 8.4, 8.5, 8.6**
-  - [ ] 8.2 Implementasi `internal/devtools/i18ntools` (`check`, `status`)
+  - [x] 8.2 Implementasi `internal/devtools/i18ntools` (`check`, `status`)
     - Muat katalog dari filesystem (bukan embed), registri, dan manifest; pakai `sdk/i18n.ParseCatalog`/`Compile` yang sama dengan runtime; laporan teks dan `--json` (file, bahasa, kunci lengkap); `status` menampilkan persentase kelengkapan per bahasa per namespace. Daftarkan `i18n:check` dan `i18n:status` di `internal/devtools/commands`.
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
-  - [ ] 8.3 `i18n:add <locale> [module…]`
+  - [x] 8.3 `i18n:add <locale> [module…]`
     - Buat kerangka katalog dari bahasa default (nilai kosong ditandai `TODO`) dan tambahkan ke registri bila belum ada; idempotent.
     - _Requirements: 8.8_
-  - [ ] 8.4 Generator kunci terketik `i18n:generate [--check]` (test dulu)
+  - [x] 8.4 Generator kunci terketik `i18n:generate [--check]` (test dulu)
     - Dari katalog bahasa default tiap namespace tulis `keys.gen.ts` (antarmuka kunci → tipe argumen: `string | number` untuk argumen sederhana, `number` untuk `plural`, gabungan literal untuk `select`, tag rich) dengan augmentasi `declare module "@erpora/platform-web" { interface I18nCatalogs { … } }`; target: `modules/<x>/web/src/i18n/keys.gen.ts`, `packages/ui/src/i18n/keys.gen.ts`, `packages/platform-web/src/i18n/keys.platform.gen.ts`. `--check` gagal bila usang.
     - **Validates: Requirements 7.1, 7.3**
-  - [ ] 8.5 Task dan gate lokal
+  - [x] 8.5 Task dan gate lokal
     - `Taskfile.yml`: `i18n:check` dan `i18n:generate` (tanpa `rm`/`cp`/`sed`); panggil `i18n:check` dari `task lint` (galat struktural menggagalkan, peringatan hanya dicetak) dan `i18n:generate -- --check` dari `task web:check`.
     - _Requirements: 8.9, 11.1_
-  - [ ] 8.6 Templat `make:module` dan modul referensi
+  - [~] 8.6 Templat `make:module` dan modul referensi
     - Perbarui templat di `internal/devtools/templates` dan `internal/devtools/gen`: `i18n/id.json`, `en.json` (kunci contoh bersarang), `//go:embed i18n/*.json` + `Catalogs()`, bagian `i18n` di `module.json`, dan `web/src/i18n/keys.gen.ts`. Tambahkan katalog `id`/`en` ke `modules/example` dan `modules/exampleaddon` (termasuk satu `errors.<code>` yang dipakai API `example`); perbarui golden test generator. Jalankan `task test:generator` (lama, Docker + Bun; di VPS sesuai aturan proyek).
     - _Requirements: 1.8, 11.3_
-  - [ ] 8.7 Arch rule `I1` (test dulu)
+  - [x] 8.7 Arch rule `I1` (test dulu)
     - `internal/archcheck`: berkas `modules/**` tidak boleh mengimpor `internal/platform/i18n` dan tidak boleh memuat literal `"<ns>::…"` bernamespace modul lain pada argumen `i18n.T` (AST). Tambahkan fixture pelanggaran yang terbukti gagal; catat aturan `I1` di PRD-000 §4.2.
     - **Validates: Requirements 1.2**
 
-- [ ] 9. Checkpoint — tooling
+- [x] 9. Checkpoint — tooling
   - Jalankan `task lint arch check:gowork-off test web:check` dan pastikan `task erpora -- i18n:check` serta `i18n:generate --check` hijau pada repo.
 
 - [ ] 10. Tahap I5 — Override istilah
