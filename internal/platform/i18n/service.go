@@ -428,11 +428,16 @@ func (s *Service) Catalog(ctx context.Context, t tenancy.TenantID, ns string, lo
 			fmt.Fprintf(&sig, "%s=%d;", l, sets[i].rev)
 		}
 	}
+	// Revision namespace dihitung SELALU di luar cache (satu fungsi penghitung yang sama dengan Revisions), sebab
+	// View di-cache per bahasa sedangkan revisi mencakup override semua bahasa namespace (R-8).
+	rev := s.namespaceRevision(ctx, t, nd)
 	k := t.String() + "\x00" + ns + "\x00" + string(loc) + "\x00" + sig.String()
 	s.viewsMu.Lock()
 	defer s.viewsMu.Unlock()
 	if v, ok := s.views[k]; ok {
-		return *v, nil
+		out := *v
+		out.Revision = rev
+		return out, nil
 	}
 	msgs := map[string]string{}
 	for i := len(chain) - 1; i >= 0; i-- { // dari fallback terjauh; bahasa yang lebih dekat menimpa
@@ -447,7 +452,7 @@ func (s *Service) Catalog(ctx context.Context, t tenancy.TenantID, ns string, lo
 	}
 	sum := canonicalHash(msgs)
 	v := &View{
-		Locale: string(loc), Namespace: ns, Revision: s.namespaceRevision(ctx, t, nd),
+		Locale: string(loc), Namespace: ns, Revision: rev,
 		ETag: `W/"` + hex.EncodeToString(sum[:16]) + `"`, Messages: msgs,
 	}
 	if len(s.views) >= maxViews {
