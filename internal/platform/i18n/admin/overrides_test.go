@@ -425,8 +425,12 @@ func TestOverrideAPI_ValidationErrors400(t *testing.T) {
 			}
 		})
 	}
+	// R-4: argumen sederhana tidak boleh menggantikan plural (jenis harus sama persis)
+	if rec := e.do(http.MethodPut, "/api/platform/i18n/overrides/ui/en/n", body("{count} entries")); rec.Code != http.StatusBadRequest {
+		t.Errorf("arg menggantikan plural: %d, want 400", rec.Code)
+	}
 	// pesan ber-argumen yang sah diterima
-	if rec := e.do(http.MethodPut, "/api/platform/i18n/overrides/ui/en/n", body("{count} entries")); rec.Code != http.StatusOK {
+	if rec := e.do(http.MethodPut, "/api/platform/i18n/overrides/ui/en/n", body("{count, plural, one {# entry} other {# entries}}")); rec.Code != http.StatusOK {
 		t.Errorf("override sah: %d %s", rec.Code, rec.Body)
 	}
 }

@@ -238,8 +238,8 @@ func (s *Service) validateOverride(t tenancy.TenantID, o Override) *OverrideErro
 	if err != nil { // katalog bawaan sudah divalidasi saat New; tidak mungkin
 		return &OverrideError{Code: CodeInvalidSyntax, Field: "message", Detail: "pesan bawaan tidak dapat dibandingkan"}
 	}
-	if !sdki18n.SameParams(base.Params(), msg.Params()) {
-		return &OverrideError{Code: CodeParamMismatch, Field: "message", Detail: "argumen pesan harus sama dengan pesan bawaan"}
+	if !sdki18n.SameParamsStrict(base.Params(), msg.Params()) {
+		return &OverrideError{Code: CodeParamMismatch, Field: "message", Detail: "argumen pesan (nama dan jenis) harus sama dengan pesan bawaan"}
 	}
 	return nil
 }

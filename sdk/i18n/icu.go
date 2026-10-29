@@ -135,16 +135,24 @@ func ValidateMessage(src string, lim Limits) (Message, error) {
 	return m, nil
 }
 
+// SameParamsStrict seperti SameParams tetapi jenis argumen harus SAMA PERSIS: KindArg dan KindPlural tidak
+// saling menggantikan (argumen sederhana menerima string atau angka, plural hanya angka; mengubah yang pertama
+// menjadi yang kedua membuat nilai string menjadi NaN). Options select tetap tidak dibandingkan. Dipakai
+// validasi override (Requirement 12.3); SameParams longgar dipakai untuk paritas antar bahasa.
+func SameParamsStrict(a, b []Param) bool { return sameParams(a, b, false) }
+
 // SameParams melaporkan apakah dua daftar Param kompatibel: nama yang sama, dan jenis yang sama
 // dengan satu kelonggaran: KindArg dan KindPlural saling menggantikan (keduanya menerima bilangan,
 // mis. "{n} item" dan "{n, plural, ...}"). Options select tidak dibandingkan. Dipakai pemeriksa
 // katalog dan validasi override agar tidak ada dua definisi "argumen sama".
-func SameParams(a, b []Param) bool {
+func SameParams(a, b []Param) bool { return sameParams(a, b, true) }
+
+func sameParams(a, b []Param, argPluralEquivalent bool) bool {
 	norm := func(ps []Param) map[string]string {
 		m := make(map[string]string, len(ps))
 		for _, p := range ps {
 			k := p.Kind
-			if k == KindPlural {
+			if argPluralEquivalent && k == KindPlural {
 				k = KindArg
 			}
 			m[p.Name+"\x00"+k.String()] = ""
