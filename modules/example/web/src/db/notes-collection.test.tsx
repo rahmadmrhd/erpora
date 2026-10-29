@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadDb, makeBootstrap, StaticBootstrapProvider } from "@erpora/platform-web";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { type ReactNode, Suspense } from "react";
 import { installFetch, json, TENANT_ID } from "../testing";
 import { createNotesCollection, useNotesCollection } from "./notes-collection";
@@ -76,7 +76,11 @@ describe("useNotesCollection", () => {
     restore = installFetch(list).restore;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const seen: unknown[] = [];
-    const view = render(wrap(queryClient, TENANT_ID, <Probe onCollection={(c) => seen.push(c)} />));
+    let view!: ReturnType<typeof render>;
+    // Dalam act agar penangguhan Suspense (muat chunk DB lewat use()) dilanjutkan di lingkungan uji.
+    await act(async () => {
+      view = render(wrap(queryClient, TENANT_ID, <Probe onCollection={(c) => seen.push(c)} />));
+    });
     await screen.findByText("siap");
     view.rerender(wrap(queryClient, TENANT_ID, <Probe onCollection={(c) => seen.push(c)} />));
     expect(new Set(seen).size).toBe(1);

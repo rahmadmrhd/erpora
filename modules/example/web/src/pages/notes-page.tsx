@@ -5,10 +5,9 @@ import {
   Message,
   type MessageArgs,
   msg,
-  scopedKey,
+  useDb,
   useMessage,
   usePageActions,
-  useTenantId,
 } from "@erpora/platform-web";
 import {
   Alert,
@@ -24,23 +23,38 @@ import {
   TableHeader,
   TableRow,
 } from "@erpora/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useNotesCollection } from "../db/notes-collection";
 import "../i18n/keys.gen";
-import { fetchAllNotes, toApiError } from "../notes-api";
+import { toApiError } from "../notes-api";
 
 // Teks dari namespace bersama (`ui`, `platform`) dirujuk lewat MessageRef biasa: kunci `platform` untuk galat dipilih saat
 // runtime (`describeApiError`), dan katalog `ui` belum punya keys.gen.ts.
 const retryLabel = { ns: "ui", key: "actions.retry" } as const;
 
 export function NotesPage() {
-  const tenantId = useTenantId();
-  const query = useQuery({
-    queryKey: scopedKey(tenantId, "example", "notes"),
-    queryFn: fetchAllNotes,
+  // Menangguhkan (Suspense) sampai chunk TanStack DB termuat; DB tidak ada di JS awal (K-21).
+  const collection = useNotesCollection();
+  const { useLiveQuery } = useDb();
+  const { data, isLoading, isError } = useLiveQuery({
+    query: (q) => q.from({ note: collection }).orderBy(({ note }) => note.updatedAt, "desc"),
   });
+
+  const [refreshing, setRefreshing] = useState(false);
+  const refetch = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await collection.utils.refetch();
+    } catch {
+      // Galat tampil lewat status koleksi (Alert); tidak perlu dilempar ulang ke penangan klik.
+    } finally {
+      setRefreshing(false);
+    }
+  }, [collection]);
+
   const refresh = useMessage(msg("example", "actions.refresh"));
   const emptyTitle = useMessage(msg("example", "page.notes.empty"));
-  const notes = query.data ?? [];
+  const notes = data;
   const count = useMessage(msg("example", "page.notes.count"), {
     count: notes.length,
   } satisfies MessageArgs);
@@ -51,9 +65,9 @@ export function NotesPage() {
       label: refresh,
       icon: "refresh-cw",
       variant: "outline",
-      loading: query.isFetching,
+      loading: refreshing,
       onSelect: () => {
-        void query.refetch();
+        void refetch();
       },
     },
   ]);
@@ -71,12 +85,12 @@ export function NotesPage() {
         </p>
       </header>
 
-      {query.isPending ? (
+      {isLoading ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
         </div>
-      ) : query.isError ? (
+      ) : isError ? (
         <Alert variant="destructive">
           <AlertTitle>
             <Message message={msg("example", "page.notes.error")} />
@@ -84,15 +98,18 @@ export function NotesPage() {
           <AlertDescription>
             <p>
               <Message
-                message={{ ns: "platform", key: describeApiError(toApiError(query.error)).key }}
+                message={{
+                  ns: "platform",
+                  key: describeApiError(toApiError(collection.utils.lastError)).key,
+                }}
               />
             </p>
             <Button
               variant="outline"
               size="sm"
-              loading={query.isFetching}
+              loading={refreshing}
               onClick={() => {
-                void query.refetch();
+                void refetch();
               }}
             >
               <Message message={retryLabel} />

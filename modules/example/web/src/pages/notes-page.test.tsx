@@ -39,7 +39,7 @@ describe("halaman /example (daftar catatan)", () => {
   test("memuat catatan lewat API terketik dan menampilkan judul, kolom, baris, dan ringkasan jumlah", async () => {
     const f = installFetch(() => json(listBody(notes)));
     restore = f.restore;
-    open();
+    await open();
 
     expect(await screen.findByRole("heading", { level: 1, name: "Catatan" })).toBeInTheDocument();
     const table = await screen.findByRole("table");
@@ -57,7 +57,7 @@ describe("halaman /example (daftar catatan)", () => {
   test("tidak pernah mengirim tenantId atau userId (tenant dari backend; aturan IDOR)", async () => {
     const f = installFetch(() => json(listBody(notes)));
     restore = f.restore;
-    open();
+    await open();
     await screen.findByRole("table");
     for (const c of f.calls) expect(c.url).not.toMatch(/tenant|userId/i);
   });
@@ -65,7 +65,7 @@ describe("halaman /example (daftar catatan)", () => {
   test("query key berawalan tenant: [tenantId, 'example', 'notes']", async () => {
     const f = installFetch(() => json(listBody(notes)));
     restore = f.restore;
-    const { queryClient } = open();
+    const { queryClient } = await open();
     await screen.findByRole("table");
     const keys = queryClient
       .getQueryCache()
@@ -83,7 +83,7 @@ describe("halaman /example (daftar catatan)", () => {
       });
     });
     restore = f.restore;
-    open();
+    await open();
     expect(await screen.findByText("Catatan kedua")).toBeInTheDocument();
     expect(screen.getByText("Catatan pertama")).toBeInTheDocument();
     expect(f.calls.map((c) => c.url)).toEqual([
@@ -95,7 +95,7 @@ describe("halaman /example (daftar catatan)", () => {
   test("daftar kosong menampilkan keadaan kosong", async () => {
     const f = installFetch(() => json(listBody([])));
     restore = f.restore;
-    open();
+    await open();
     expect(await screen.findByText("Belum ada catatan.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -109,7 +109,7 @@ describe("halaman /example (daftar catatan)", () => {
     );
     restore = f.restore;
     const user = userEvent.setup();
-    open();
+    await open();
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Catatan tidak dapat dimuat.");
     expect(alert).toHaveTextContent("Anda tidak memiliki izin untuk aksi ini.");
@@ -124,7 +124,7 @@ describe("halaman /example (daftar catatan)", () => {
     const f = installFetch(() => json(listBody(n++ === 0 ? [notes[0]] : notes)));
     restore = f.restore;
     const user = userEvent.setup();
-    open();
+    await open();
     await screen.findByText("Catatan pertama");
     expect(screen.queryByText("Catatan kedua")).toBeNull();
 
@@ -137,7 +137,7 @@ describe("halaman /example (daftar catatan)", () => {
   test("aksi halaman dibersihkan saat halaman ditinggalkan (unmount)", async () => {
     const f = installFetch(() => json(listBody(notes)));
     restore = f.restore;
-    const { router } = open();
+    const { router } = await open();
     await screen.findByText("Catatan pertama");
     expect(within(screen.getByTestId("page-actions")).getByRole("button")).toBeInTheDocument();
     await act(async () => {

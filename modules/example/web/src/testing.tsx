@@ -21,11 +21,14 @@ import {
 } from "@erpora/platform-web";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render } from "@testing-library/react";
+import { act, configure, render } from "@testing-library/react";
 import { Suspense } from "react";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..", "..");
+
+// Muat pertama chunk TanStack DB (impor dinamis) dapat lebih dari 1 dtk di lingkungan uji; batas bawaan Testing Library 1 dtk terlalu ketat.
+configure({ asyncUtilTimeout: 5000 });
 
 export const TENANT_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 
@@ -126,7 +129,11 @@ export interface RenderOptions {
   queryClient?: QueryClient;
 }
 
-export function renderModuleRoute({ module, path, catalogs, queryClient }: RenderOptions) {
+/**
+ * Merender dalam `await act(async …)`: tanpa itu, penangguhan Suspense lewat `use()` (muat chunk TanStack DB) tidak
+ * dilanjutkan di lingkungan uji happy-dom.
+ */
+export async function renderModuleRoute({ module, path, catalogs, queryClient }: RenderOptions) {
   const client = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createAppRootRoute();
   const base = createModuleBaseRoute(root, module.slug);
@@ -137,19 +144,22 @@ export function renderModuleRoute({ module, path, catalogs, queryClient }: Rende
     context: { queryClient: client },
   });
   const translate = translatorFrom(catalogs);
-  const view = render(
-    <QueryClientProvider client={client}>
-      <StaticBootstrapProvider value={makeBootstrap({ tenantId: TENANT_ID })}>
-        <MessageTranslatorProvider useTranslate={translate}>
-          <PageChromeProvider>
-            <ChromeProbe />
-            <Suspense fallback={<p>memuat…</p>}>
-              <RouterProvider router={router} />
-            </Suspense>
-          </PageChromeProvider>
-        </MessageTranslatorProvider>
-      </StaticBootstrapProvider>
-    </QueryClientProvider>,
-  );
+  let view!: ReturnType<typeof render>;
+  await act(async () => {
+    view = render(
+      <QueryClientProvider client={client}>
+        <StaticBootstrapProvider value={makeBootstrap({ tenantId: TENANT_ID })}>
+          <MessageTranslatorProvider useTranslate={translate}>
+            <PageChromeProvider>
+              <ChromeProbe />
+              <Suspense fallback={<p>memuat…</p>}>
+                <RouterProvider router={router} />
+              </Suspense>
+            </PageChromeProvider>
+          </MessageTranslatorProvider>
+        </StaticBootstrapProvider>
+      </QueryClientProvider>,
+    );
+  });
   return { ...view, router, queryClient: client };
 }

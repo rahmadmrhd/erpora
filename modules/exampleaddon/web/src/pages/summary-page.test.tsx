@@ -17,7 +17,7 @@ describe("halaman /example-addon (ringkasan)", () => {
   test("menampilkan judul dan ringkasan noteCount dari API terketik", async () => {
     const f = installFetch(() => json({ data: { noteCount: 3 } }));
     restore = f.restore;
-    open();
+    await open();
     expect(await screen.findByRole("heading", { level: 1, name: "Ringkasan" })).toBeInTheDocument();
     expect(await screen.findByText("3 catatan")).toBeInTheDocument();
     expect(f.calls.map((c) => c.url)).toEqual(["/api/example-addon/summary"]);
@@ -26,7 +26,7 @@ describe("halaman /example-addon (ringkasan)", () => {
   test("tanpa tenantId/userId pada permintaan; query key berawalan tenant", async () => {
     const f = installFetch(() => json({ data: { noteCount: 0 } }));
     restore = f.restore;
-    const { queryClient } = open();
+    const { queryClient } = await open();
     expect(await screen.findByText("Tidak ada catatan")).toBeInTheDocument();
     for (const c of f.calls) expect(c.url).not.toMatch(/tenant|userId/i);
     expect(
@@ -40,7 +40,7 @@ describe("halaman /example-addon (ringkasan)", () => {
   test("tautan ke halaman modul example memakai slug dari paket @erpora/module-example", async () => {
     const f = installFetch(() => json({ data: { noteCount: 3 } }));
     restore = f.restore;
-    open();
+    await open();
     const link = await screen.findByRole("link", { name: "Lihat catatan" });
     expect(link).toHaveAttribute("href", "/example");
   });
@@ -50,7 +50,7 @@ describe("halaman /example-addon (ringkasan)", () => {
     const f = installFetch(() => json({ data: { noteCount: n++ === 0 ? 3 : 4 } }));
     restore = f.restore;
     const user = userEvent.setup();
-    open();
+    await open();
     await screen.findByText("3 catatan");
     const actions = await screen.findByTestId("page-actions");
     await user.click(within(actions).getByRole("button", { name: "Segarkan" }));
@@ -67,7 +67,7 @@ describe("halaman /example-addon (ringkasan)", () => {
     );
     restore = f.restore;
     const user = userEvent.setup();
-    open();
+    await open();
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Ringkasan tidak dapat dimuat.");
     expect(alert).not.toHaveTextContent("panic");
