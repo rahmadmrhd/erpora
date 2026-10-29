@@ -12,6 +12,7 @@ Dokumentasi SDK modul ERPora untuk penulis modul. SDK ada di `sdk/` (Go module `
 | [`contracts.md`](contracts.md) | Kontrak OpenAPI per modul: rujukan `erp:`, ekstensi `x-erp-*`, rule linter, klasifikasi, `contracts:generate`, breaking change, dan tag rilis. |
 | [`security-primitives.md`](security-primitives.md) | Primitif keamanan: `httpx` (respons, error, `DecodeJSON`), opsi route (`MaxBodyBytes`, `Classify`), `egress`, `export`, dan `statement_timeout`; aturan arch `EGRESS`/`DECODE`. |
 | [`frontend.md`](frontend.md) | Panduan frontend modul: struktur `modules/<x>/web`, `defineModule`, route lazy dan guard, aksi halaman, teks lewat i18n, pemakaian `@erpora/ui`, uji komponen, dan anggaran bundle. |
+| [`i18n.md`](i18n.md) | Terjemahan: tata letak katalog per namespace, sintaks ICU yang didukung dan ditolak, konvensi kunci, registri bahasa dan fallback, alur penerjemah, override istilah, dan kunci terketik. |
 | [ADR-007](../adr/0007-semantik-install-enable-disable-uninstall.md) | Semantik install, enable, disable, uninstall: tabel transisi, kegagalan, advisory lock, reconcile, revision. |
 | [ADR-006](../adr/0006-module-manifest-sdk-semver.md) | Keputusan arsitektur: manifest sebagai sumber capability, `Registrar`, SemVer, dan aturan versi multi Go module. |
 | [ADR-002](../adr/0002-clean-architecture-and-dependency-rules.md) | Aturan dependensi D1–D11 yang wajib dipatuhi modul. |
