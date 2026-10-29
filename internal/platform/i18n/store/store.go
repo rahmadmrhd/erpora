@@ -138,7 +138,7 @@ func (s *Store) Revisions(ctx context.Context, t tenancy.TenantID) ([]Revision, 
 	}
 	out := make([]Revision, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Revision{Namespace: r.Namespace, Locale: r.Locale, Revision: r.Revision})
+		out = append(out, Revision(r))
 	}
 	return out, nil
 }
