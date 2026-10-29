@@ -14,5 +14,5 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
