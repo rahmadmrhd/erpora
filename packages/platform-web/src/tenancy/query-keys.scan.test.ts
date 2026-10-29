@@ -14,6 +14,27 @@ const ALLOWED = [
   /^\[\s*\.\.\.BOOTSTRAP_KEY\b/,
 ];
 
+/**
+ * Pelanggaran dalam satu berkas: `queryKey: <ekspresi>` / `queryKey = <ekspresi>` yang tidak berawalan bentuk yang
+ * diizinkan (termasuk key dari variabel), dan `queryKey` shorthand (`{ queryKey }`, `{ queryKey, ... }`) kecuali berkas
+ * itu mendefinisikan `queryKey = scopedKey(...)` atau `useScopedKey(...)`.
+ */
+function findViolations(text: string): { line: number; expr: string }[] {
+  const bad: { line: number; expr: string }[] = [];
+  const lineOf = (index: number | undefined) => text.slice(0, index).split("\n").length;
+  for (const m of text.matchAll(/\bqueryKey\s*[:=]\s*([^\n]*)/g)) {
+    const expr = (m[1] ?? "").trim();
+    if (!ALLOWED.some((a) => a.test(expr))) bad.push({ line: lineOf(m.index), expr });
+  }
+  const definedScoped = /\bqueryKey\s*=\s*(use)?[sS]copedKey\(/.test(text);
+  if (!definedScoped) {
+    for (const m of text.matchAll(/\bqueryKey\b(?=\s*[,}])/g)) {
+      bad.push({ line: lineOf(m.index), expr: "queryKey (shorthand)" });
+    }
+  }
+  return bad;
+}
+
 async function scan(): Promise<{ file: string; line: number; expr: string }[]> {
   const globs = [
     "web/src/**/*.{ts,tsx}",
@@ -25,12 +46,8 @@ async function scan(): Promise<{ file: string; line: number; expr: string }[]> {
     for await (const rel of new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true })) {
       if (/(^|[\\/])(node_modules|dist)[\\/]/.test(rel)) continue;
       if (/\.(test|check|gen)\.tsx?$/.test(rel)) continue;
-      const text = await Bun.file(join(root, rel)).text();
-      const re = /\bqueryKey\s*[:=]\s*([^\n]*)/g;
-      for (const m of text.matchAll(re)) {
-        const expr = (m[1] ?? "").trim();
-        const line = text.slice(0, m.index).split("\n").length;
-        if (!ALLOWED.some((a) => a.test(expr))) bad.push({ file: rel, line, expr });
+      for (const v of findViolations(await Bun.file(join(root, rel)).text())) {
+        bad.push({ file: rel, ...v });
       }
     }
   }
@@ -42,10 +59,36 @@ describe("P8: query key berawalan tenant", () => {
     expect(await scan()).toEqual([]);
   });
 
-  test("pemindai mengenali pelanggaran (kontrol negatif)", () => {
-    const sample = 'const o = { queryKey: ["notes", "list"] };';
-    const m = /\bqueryKey\s*[:=]\s*([^\n]*)/.exec(sample);
-    const expr = (m?.[1] ?? "").trim();
-    expect(ALLOWED.some((a) => a.test(expr))).toBe(false);
+  test("pemindai mengenali literal tanpa awalan tenant (kontrol negatif)", () => {
+    expect(findViolations('const o = { queryKey: ["notes", "list"] };')).toHaveLength(1);
+  });
+
+  test("pemindai mengenali key dari variabel yang tidak jelas asalnya", () => {
+    expect(findViolations('const k = ["x"];\nuseQuery({ queryKey: k });')).toHaveLength(1);
+  });
+
+  test("pemindai mengenali shorthand { queryKey } tanpa definisi scopedKey", () => {
+    expect(findViolations('const queryKey = ["x"];\nuseQuery({ queryKey });')).not.toHaveLength(0);
+    expect(findViolations("useQuery({ queryKey, queryFn });")).toHaveLength(1);
+  });
+
+  test("shorthand diizinkan bila berkas mendefinisikan queryKey dari scopedKey/useScopedKey", () => {
+    expect(
+      findViolations('const queryKey = scopedKey(tenantId, "x");\nuseQuery({ queryKey });'),
+    ).toEqual([]);
+    expect(
+      findViolations('const queryKey = useScopedKey("x");\nuseQuery({ queryKey, queryFn });'),
+    ).toEqual([]);
+  });
+
+  test("bentuk yang diizinkan lolos", () => {
+    for (const ok of [
+      'useQuery({ queryKey: scopedKey(tenantId, "a") })',
+      "useQuery({ queryKey: useScopedKey('a') })",
+      "queryOptions({ queryKey: BOOTSTRAP_KEY })",
+      'useQuery({ queryKey: [tenantId, "i18n", locale] })',
+    ]) {
+      expect(findViolations(ok)).toEqual([]);
+    }
   });
 });
