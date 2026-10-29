@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -220,5 +222,71 @@ func TestListFilterAndPagination(t *testing.T) {
 	rows, err := s.ListLocale(ctx, tenantA, "example", "id")
 	if err != nil || len(rows) != 2 || rows[0].Key != "a" {
 		t.Errorf("ListLocale = %+v %v", rows, err)
+	}
+}
+
+// R-7b: banyak PUT serentak dengan nilai sama pada baris yang BELUM ada hanya boleh menaikkan revisi sekali (P8
+// konkuren): tepat satu changed=true dan revisi akhir 1.
+func TestUpsert_ConcurrentSameValueOnMissingRowBumpsRevisionOnce(t *testing.T) {
+	for round := 0; round < 5; round++ {
+		_, s := setup(t)
+		ctx := context.Background()
+		const workers = 12
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		var changedCount atomic.Int32
+		errs := make(chan error, workers)
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				changed, _, err := s.Upsert(ctx, tenantA, ov("example", "id", "note.title", "Sama"), nil)
+				if err != nil {
+					errs <- err
+					return
+				}
+				if changed {
+					changedCount.Add(1)
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			t.Fatalf("Upsert serentak: %v", err)
+		}
+		if n := changedCount.Load(); n != 1 {
+			t.Fatalf("ronde %d: changed=true sebanyak %d, want 1", round, n)
+		}
+		if rev := revOf(t, s, tenantA, "example", "id"); rev != 1 {
+			t.Fatalf("ronde %d: revisi = %d, want 1", round, rev)
+		}
+	}
+}
+
+// Delete serentak pada baris yang ada: tepat satu existed=true dan revisi naik sekali.
+func TestDelete_ConcurrentBumpsRevisionOnce(t *testing.T) {
+	_, s := setup(t)
+	ctx := context.Background()
+	if _, _, err := s.Upsert(ctx, tenantA, ov("example", "id", "k", "x"), nil); err != nil {
+		t.Fatal(err)
+	}
+	const workers = 8
+	var wg sync.WaitGroup
+	var existedCount atomic.Int32
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if existed, _, err := s.Delete(ctx, tenantA, "example", "id", "k", nil); err == nil && existed {
+				existedCount.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if existedCount.Load() != 1 || revOf(t, s, tenantA, "example", "id") != 2 {
+		t.Errorf("existed=%d revisi=%d, want 1 dan 2", existedCount.Load(), revOf(t, s, tenantA, "example", "id"))
 	}
 }
