@@ -178,3 +178,41 @@ func TestI18nAdd_CreatesIdempotentAndExitCodes(t *testing.T) {
 		t.Errorf("registri tidak ada: exit=%d", exitCodeOf(err))
 	}
 }
+
+func TestI18nGenerate_WritesAndChecksDrift(t *testing.T) {
+	dir := i18nRepo(t)
+	// --check sebelum generate: basi (exit 2), tidak menulis apa pun
+	out, err := runI18n(t, "i18n:generate", "--check")
+	if exitCodeOf(err) != 2 || !strings.Contains(out, "basi: packages/ui/src/i18n/keys.gen.ts") {
+		t.Fatalf("check awal: exit=%d err=%v out=%s", exitCodeOf(err), err, out)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "packages/ui/src/i18n/keys.gen.ts")); statErr == nil {
+		t.Fatal("--check tidak boleh menulis")
+	}
+	out, err = runI18n(t, "i18n:generate")
+	if err != nil || !strings.Contains(out, "tulis packages/platform-web/src/i18n/keys.platform.gen.ts") {
+		t.Fatalf("generate: err=%v out=%s", err, out)
+	}
+	data, readErr := os.ReadFile(filepath.Join(dir, "packages/platform-web/src/i18n/keys.platform.gen.ts"))
+	if readErr != nil || !strings.Contains(string(data), `greet: { name: string | number };`) {
+		t.Fatalf("keys.platform.gen.ts = %s err=%v", data, readErr)
+	}
+	if out, err = runI18n(t, "i18n:generate", "--check"); err != nil || !strings.Contains(out, "mutakhir") {
+		t.Fatalf("check sesudah generate: err=%v out=%s", err, out)
+	}
+	// katalog berubah -> basi lagi
+	writeIn(t, dir, i18nUI+"/id.json", `{"save":"Simpan","load":"{n} muat"}`)
+	writeIn(t, dir, i18nUI+"/en.json", `{"save":"Save","load":"{n} load"}`)
+	if _, err = runI18n(t, "i18n:generate", "--check"); exitCodeOf(err) != 2 {
+		t.Fatalf("exit=%d", exitCodeOf(err))
+	}
+	// katalog rusak -> exit 2; registri tidak ada -> exit 3
+	writeIn(t, dir, i18nUI+"/en.json", `{rusak`)
+	if _, err = runI18n(t, "i18n:generate"); exitCodeOf(err) != 2 {
+		t.Fatalf("katalog rusak: exit=%d", exitCodeOf(err))
+	}
+	inRepo(t)
+	if _, err = runI18n(t, "i18n:generate"); exitCodeOf(err) != 3 {
+		t.Fatalf("tanpa registri: exit=%d", exitCodeOf(err))
+	}
+}

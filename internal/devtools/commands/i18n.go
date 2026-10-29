@@ -21,7 +21,7 @@ const (
 )
 
 func registerI18n(root *cobra.Command) {
-	root.AddCommand(newI18nCheck(), newI18nStatus(), newI18nAdd())
+	root.AddCommand(newI18nCheck(), newI18nStatus(), newI18nAdd(), newI18nGenerate())
 }
 
 // i18nExit memetakan galat i18ntools ke exit code.
@@ -162,5 +162,53 @@ func newI18nAdd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "nama asli bahasa untuk registri bila bahasa belum terdaftar (default: kode)")
 	cmd.Flags().StringVar(&fallback, "fallback", "", "bahasa fallback untuk registri bila bahasa belum terdaftar (default: bahasa default registri)")
+	return cmd
+}
+
+func newI18nGenerate() *cobra.Command {
+	var check bool
+	cmd := &cobra.Command{
+		Use:   "i18n:generate",
+		Short: "Bangkitkan tipe kunci terketik (keys.gen.ts) dari katalog bahasa default",
+		Long: "Menulis packages/platform-web/src/i18n/keys.platform.gen.ts, packages/ui/src/i18n/keys.gen.ts, dan modules/<dir>/web/src/i18n/keys.gen.ts\n" +
+			"(modul ber-web/) berisi augmentasi I18nCatalogs: bentuk argumen tiap kunci (string | number, number untuk plural, gabungan literal untuk\n" +
+			"select, RichTag untuk tag rich). Dengan --check tidak menulis apa pun: berkas yang tidak sesuai katalog dicetak dan exit 2.\n" +
+			"Exit 2 bila katalog tidak valid atau hasil generate usang, 3 prasyarat gagal, 4 penulisan gagal.",
+		GroupID: GroupDevtools,
+		Args:    cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			root, err := repoRoot()
+			if err != nil {
+				return &app.ExitError{Code: exitI18nConfig, Err: err}
+			}
+			files, err := i18ntools.Generate(root)
+			if err != nil {
+				return i18nExit(err)
+			}
+			w := c.OutOrStdout()
+			if !check {
+				if err := i18ntools.WriteGenerated(root, files); err != nil {
+					return i18nExit(err)
+				}
+				for _, f := range files {
+					fmt.Fprintf(w, "tulis %s\n", f.Path)
+				}
+				return nil
+			}
+			stale, err := i18ntools.CheckGenerated(root, files)
+			if err != nil {
+				return i18nExit(err)
+			}
+			for _, s := range stale {
+				fmt.Fprintf(w, "basi: %s (jalankan erpora i18n:generate)\n", s)
+			}
+			if len(stale) > 0 {
+				return &app.ExitError{Code: exitI18nValidation, Err: fmt.Errorf("%d file hasil generate tidak mutakhir", len(stale))}
+			}
+			fmt.Fprintln(w, "hasil generate mutakhir")
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&check, "check", false, "hanya periksa drift; tidak menulis; exit 2 bila ada file basi")
 	return cmd
 }
