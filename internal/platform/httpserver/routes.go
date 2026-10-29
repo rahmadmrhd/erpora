@@ -76,11 +76,14 @@ func bootstrapHandler(d Deps) http.Handler {
 	})
 }
 
+// etagMatches mengevaluasi If-None-Match dengan perbandingan LEMAH (RFC 9110 section 8.8.3.2): awalan W/ di
+// kedua sisi diabaikan, sehingga "x" cocok dengan W/"x". "*" cocok dengan apa pun.
 func etagMatches(values []string, etag string) bool {
+	want := strings.TrimPrefix(etag, "W/")
 	for _, v := range values {
 		for _, part := range strings.Split(v, ",") {
 			p := strings.TrimSpace(part)
-			if p == "*" || p == etag || p == "W/"+etag {
+			if p == "*" || strings.TrimPrefix(p, "W/") == want {
 				return true
 			}
 		}
