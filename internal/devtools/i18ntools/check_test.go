@@ -187,6 +187,18 @@ func TestCheck_ModuleNamespaceAndDeclarations(t *testing.T) {
 			t.Error("peringatan tidak boleh menggagalkan")
 		}
 	})
+	t.Run("direktori i18n tanpa deklarasi tetap diperiksa dengan bahasa registri", func(t *testing.T) {
+		r := newRepo(t)
+		r.write("modules/notes/module.json", `{"schema_version":"1","key":"acme.notes","slug":"notes","name":"X","version":"1.0.0"}`)
+		r.write("modules/notes/i18n/id.json", `{"a":"A"}`)
+		r.write("modules/notes/i18n/en.json", `{"a":"A {rusak"}`)
+		rep := r.check(false)
+		wantOne(t, rep, CodeUndeclaredI18n, SeverityWarning)
+		f := wantOne(t, rep, "invalid_icu", SeverityError)
+		if f.Namespace != "notes" || f.File != "modules/notes/i18n/en.json" {
+			t.Errorf("temuan = %+v", f)
+		}
+	})
 	t.Run("modul tanpa i18n dan tanpa direktori diabaikan", func(t *testing.T) {
 		r := newRepo(t)
 		r.write("modules/plain/module.json", `{"schema_version":"1","key":"acme.plain","slug":"plain","name":"X","version":"1.0.0"}`)

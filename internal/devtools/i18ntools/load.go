@@ -128,17 +128,32 @@ func discover(root string, reg *i18n.Registry, rep *Report) ([]namespaceInfo, er
 			return nil, configErr("%s/module.json: %v", modDir, err)
 		}
 		catDir := relSlash(modDir, "i18n")
-		if m.I18n == nil {
-			if st, err := os.Stat(filepath.Join(root, filepath.FromSlash(catDir))); err == nil && st.IsDir() {
-				rep.add(Finding{Severity: SeverityWarning, Code: CodeUndeclaredI18n, Namespace: m.Slug, File: catDir,
-					Detail: "modul membawa direktori i18n/ tetapi manifest tidak punya bagian \"i18n\"; katalognya tidak diperiksa"})
-			}
+		manifestFile := relSlash(modDir, "module.json")
+		hasDir := false
+		if st, err := os.Stat(filepath.Join(root, filepath.FromSlash(catDir))); err == nil && st.IsDir() {
+			hasDir = true
+		}
+		if m.I18n == nil && !hasDir {
 			continue
 		}
-		manifestFile := relSlash(modDir, "module.json")
 		if m.Slug == sdki18n.NamespaceUI || m.Slug == sdki18n.NamespacePlatform || !namespacePattern.MatchString(m.Slug) {
 			rep.add(Finding{Severity: SeverityError, Code: CodeInvalidNamespace, Namespace: m.Slug, File: manifestFile,
 				Detail: fmt.Sprintf("slug %q tidak sah sebagai namespace i18n (pola %s; ui dan platform tercadang)", m.Slug, namespacePattern)})
+			continue
+		}
+		if m.I18n == nil {
+			// Direktori i18n/ tanpa deklarasi: module:check melaporkannya sebagai galat. Di sini katalog tetap
+			// diperiksa dan dibangkitkan tipenya memakai bahasa registri yang berkasnya ada, bahasa default = default registri.
+			rep.add(Finding{Severity: SeverityWarning, Code: CodeUndeclaredI18n, Namespace: m.Slug, File: catDir,
+				Detail: "modul membawa direktori i18n/ tetapi manifest tidak punya bagian \"i18n\"; dianggap memakai bahasa registri yang berkasnya ada"})
+			info := namespaceInfo{Name: m.Slug, Kind: kindModule, Dir: catDir, ModuleDir: modDir, Default: reg.Default}
+			for _, loc := range reg.Codes() {
+				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(catDir), loc+".json")); err == nil || loc == reg.Default {
+					info.Locales = append(info.Locales, loc)
+				}
+			}
+			out = append(out, info)
+			warnUndeclaredFiles(root, info, rep)
 			continue
 		}
 		info := namespaceInfo{Name: m.Slug, Kind: kindModule, Dir: catDir, ModuleDir: modDir, Default: m.I18n.DefaultLocale}
