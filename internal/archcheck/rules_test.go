@@ -454,3 +454,25 @@ func TestI1_ModuleMustNotImportPlatformI18n(t *testing.T) {
 	assertNone(t, Check(repoWith(pkg(root+"/internal/app", platI18n))), "I1")
 	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/httpserver", platI18n))), "I1")
 }
+
+// F2 (PRD-000 §4.2, Q27): paket platform boleh diimpor frontend modul dan tidak dihitung sebagai dependensi modul.
+// @erpora/module-sdk berawalan @erpora/module- tetapi adalah SDK platform; @erpora/module-<x> tetap dihitung.
+func TestParseWebPackage_PlatformPackagesAreNotModuleDeps(t *testing.T) {
+	data := []byte(`{"name":"@erpora/module-example","dependencies":{
+		"@erpora/module-sdk":"workspace:*","@erpora/platform-contracts":"workspace:*",
+		"@erpora/platform-web":"workspace:*","@erpora/ui":"workspace:*","@erpora/module-lain":"workspace:*"},
+		"peerDependencies":{"@erpora/module-sdk":"workspace:*","react":"19"}}`)
+	wp, ok, err := parseWebPackage(data)
+	if err != nil || !ok {
+		t.Fatal(err, ok)
+	}
+	if strings.Join(wp.ModuleDeps, ",") != "@erpora/module-lain" {
+		t.Fatalf("ModuleDeps = %v, want hanya @erpora/module-lain", wp.ModuleDeps)
+	}
+	// Modul yang memakai paket platform tidak melanggar F2; modul lain yang tidak ada di manifest tetap melanggar.
+	r := repoWith()
+	r.Web = map[string]WebPackage{example: {Name: "@erpora/module-example", ModuleDeps: nil}}
+	assertNone(t, Check(r), "F2")
+	r.Web = map[string]WebPackage{example: wp}
+	assertViolation(t, Check(r), "F2")
+}
