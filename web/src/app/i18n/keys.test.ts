@@ -28,7 +28,9 @@ describe("paritas kunci terketik dengan katalog JSON", () => {
   test.each(cases)(
     "%s: himpunan kunci sama persis (tanpa kunci yatim atau hilang)",
     (_name, json, list) => {
-      expect(flatten(json).sort()).toEqual(Object.keys(list).sort());
+      // Subpohon `modules.*` (halaman /settings/modules) dimiliki dan diuji `settings/modules/keys.test.ts`.
+      const own = flatten(json).filter((k) => !k.startsWith("modules."));
+      expect(own.sort()).toEqual(Object.keys(list).sort());
     },
   );
 });
