@@ -110,6 +110,18 @@ describe("Sidebar: tiga keadaan", () => {
     expect(root()).toHaveAttribute("data-state", "expanded");
   });
 
+  test("SidebarTrigger sudah bernama (aria-label dari UiLabels): tidak ada peringatan dev size=icon", () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      render(<App />);
+      const trigger = screen.getByRole("button", { name: "Ciutkan atau perluas sidebar" });
+      expect(trigger.getAttribute("aria-label")).toBe("Ciutkan atau perluas sidebar");
+      expect(warn.mock.calls.some((c) => String(c[0]).includes('size="icon"'))).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   test("lebar dari token: 14,25 rem diperluas dan 3,25 rem terlipat", () => {
     render(<App />);
     const html = document.body.innerHTML;
