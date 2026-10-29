@@ -126,6 +126,9 @@ func CheckSecurity(pkgs []TypedPackage) []Violation {
 			ast.Inspect(f, func(n ast.Node) bool {
 				switch x := n.(type) {
 				case *ast.Ident:
+					if fn, ok := p.Info.Uses[x].(*types.Func); ok && platformOnlyI18n(fn) {
+						add("I1", x.Pos(), "i18n."+fn.Name()+" milik platform (pemasang konteks penerjemah); modul hanya boleh memakai i18n.T dan i18n.Lookup, sebab mengubah scope atau Resolver membuka namespace modul lain")
+					}
 					if name, ok := rawHTTPUse(p.Info.Uses[x]); ok {
 						add("EGRESS", x.Pos(), "net/http."+name+" dilarang di modul; gunakan erpora/sdk/egress")
 					}
@@ -225,6 +228,17 @@ func rawHTTPType(t types.Type) (string, bool) {
 
 // i18nPath adalah paket penerjemah yang dipakai modul.
 const i18nPath = "erpora/sdk/i18n"
+
+// platformOnlyI18nFuncs adalah fungsi sdk/i18n yang hanya boleh dipanggil platform: memasang atau membaca locale,
+// scope, dan Resolver di context. Modul yang memakainya dapat menembus P12 (Requirement 1.2) tanpa menyebut literal
+// "<ns>::" apa pun (mis. WithScope(ctx, "lain") lalu T(ctx, "kunci")).
+var platformOnlyI18nFuncs = map[string]bool{"WithScope": true, "WithResolver": true, "ResolverFrom": true, "WithLocale": true}
+
+// platformOnlyI18n melaporkan apakah fn adalah salah satu fungsi di atas dari erpora/sdk/i18n (pemanggilan maupun
+// sekadar referensi/penugasan ke variabel).
+func platformOnlyI18n(fn *types.Func) bool {
+	return fn.Pkg() != nil && fn.Pkg().Path() == i18nPath && platformOnlyI18nFuncs[fn.Name()]
+}
 
 // checkI18nKey (aturan I1): argumen kunci (indeks 1) pada i18n.T dan i18n.Lookup yang bernilai konstan
 // (literal, konstanta bernama, atau lipatan konstanta) tidak boleh berbentuk "<ns>::kunci" dengan ns
