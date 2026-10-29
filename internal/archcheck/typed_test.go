@@ -52,15 +52,21 @@ func TestDecode_FixtureViolations(t *testing.T) {
 	}
 }
 
-// I1: argumen kunci i18n.T/Lookup yang konstan tidak boleh memuat "<ns>::" milik modul lain.
+// I1: argumen kunci i18n.T/Lookup yang konstan tidak boleh memuat "<ns>::" milik modul lain, dan modul tidak boleh
+// memakai pemasang konteks i18n milik platform (WithScope, WithResolver, ResolverFrom, WithLocale).
 func TestI1_FixtureViolations(t *testing.T) {
 	got := byRule(CheckSecurity(loadFixture(t)), "I1")
-	if len(got) != 5 { // 5 di i18n_bad.go
-		t.Fatalf("I1 = %d, want 5:\n%+v", len(got), got)
+	perFile := map[string]int{}
+	for _, v := range got {
+		file, _, _ := strings.Cut(v.Detail, ":")
+		perFile[file]++
+	}
+	if len(got) != 10 || perFile["i18n_bad.go"] != 5 || perFile["i18n_ctx_bad.go"] != 5 { // 5 + 5; i18n_ok.go bersih
+		t.Fatalf("I1 = %d per file %v, want 10 (5 i18n_bad.go + 5 i18n_ctx_bad.go): %+v", len(got), perFile, got)
 	}
 	for _, v := range got {
-		if !strings.HasPrefix(v.Detail, "i18n_bad.go:") {
-			t.Errorf("detail bukan dari fixture i18n_bad.go: %+v", v)
+		if strings.HasPrefix(v.Detail, "i18n_ctx_bad.go:") && !strings.Contains(v.Detail, "milik platform") {
+			t.Errorf("pesan harus menyebut bahwa API itu milik platform: %+v", v)
 		}
 	}
 }
