@@ -305,9 +305,46 @@ func TestOverrideValidation(t *testing.T) {
 			t.Error("harus tersimpan")
 		}
 	}
-	// pesan yang berbeda-beda dalam argumen "arg vs plural" yang kompatibel
-	if _, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: "n.count", Message: "{n} catatan"}, "api:dev", nil); err != nil {
-		t.Errorf("arg dan plural saling kompatibel: %v", err)
+	// R-4: untuk override, jenis argumen harus SAMA PERSIS: arg dan plural TIDAK saling menggantikan
+	_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: "n.count", Message: "{n} catatan"}, "api:dev", nil)
+	if overrideErrCode(t, err) != CodeParamMismatch {
+		t.Errorf("plural -> arg harus param_mismatch: %v", err)
+	}
+}
+
+// R-4: override {name} (argumen sederhana, tipe string|number) tidak boleh menjadi plural (angka): "Budi" menjadi NaN.
+func TestOverrideStrictParamKinds(t *testing.T) {
+	ex := exampleSource()
+	ex.FS = mapFS(map[string]string{
+		"id.json": `{"greet": "Halo {name}", "cnt": "{n, plural, other {# x}}", "g": "{s, select, a {A} other {O}}", "rich": "<b>{name}</b>"}`,
+		"en.json": `{}`, "en-GB.json": `{}`,
+	})
+	s := newTestService(t, Options{Overrides: newFakeStore(), Now: newClock().Now, Sources: []Source{platformSource(), uiSource(), ex}})
+	ctx := context.Background()
+	reject := map[string][2]string{
+		"arg -> plural":    {"greet", "{name, plural, other {# klien}}"},
+		"arg -> select":    {"greet", "{name, select, a {A} other {O}}"},
+		"plural -> arg":    {"cnt", "{n} item"},
+		"select -> arg":    {"g", "{s}"},
+		"plural -> select": {"cnt", "{n, select, a {A} other {O}}"},
+		"arg -> tag":       {"rich", "<name>x</name>"},
+	}
+	for name, c := range reject {
+		_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: c[0], Message: c[1]}, "api:dev", nil)
+		if overrideErrCode(t, err) != CodeParamMismatch {
+			t.Errorf("%s: err = %v, want param_mismatch", name, err)
+		}
+	}
+	accept := map[string][2]string{
+		"arg -> arg":       {"greet", "Selamat datang, {name}"},
+		"plural -> plural": {"cnt", "{n, plural, one {# satu} other {# banyak}}"},
+		"select -> select": {"g", "{s, select, a {Aa} b {Bb} other {Oo}}"},
+		"tag -> tag":       {"rich", "<b>Halo {name}</b>!"},
+	}
+	for name, c := range accept {
+		if _, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: c[0], Message: c[1]}, "api:dev", nil); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
 

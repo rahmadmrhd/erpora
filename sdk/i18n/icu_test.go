@@ -365,3 +365,30 @@ func Example() {
 	// Belum ada catatan
 	// 1.500 catatan
 }
+
+// SameParamsStrict (R-4): jenis argumen harus sama persis; arg dan plural TIDAK saling menggantikan; Options select
+// tidak dibandingkan. SameParams (longgar) tetap untuk paritas antar bahasa.
+func TestSameParamsStrict(t *testing.T) {
+	p := func(s string) []Param { return mustCompile(t, s).Params() }
+	if !SameParamsStrict(p("{a} {b}"), p("{b} {a}")) {
+		t.Error("urutan tidak boleh berpengaruh")
+	}
+	if SameParamsStrict(p("{n} item"), p("{n, plural, one {# item} other {# items}}")) {
+		t.Error("arg dan plural harus dibedakan pada validasi ketat")
+	}
+	if !SameParams(p("{n} item"), p("{n, plural, one {# item} other {# items}}")) {
+		t.Error("SameParams longgar tetap menyamakan arg dan plural (paritas antar bahasa)")
+	}
+	if !SameParamsStrict(p("{n, plural, other {x}}"), p("{n, plural, one {a} other {b}}")) {
+		t.Error("plural ke plural harus sama")
+	}
+	if SameParamsStrict(p("{g}"), p("{g, select, a {x} other {y}}")) || SameParamsStrict(p("{b}"), p("<b>x</b>")) {
+		t.Error("arg vs select dan arg vs tag berbeda")
+	}
+	if !SameParamsStrict(p("{g, select, a {x} other {y}}"), p("{g, select, b {x} other {y}}")) {
+		t.Error("opsi select tidak dibandingkan")
+	}
+	if SameParamsStrict(p("{a}"), p("{a} {b}")) || SameParamsStrict(p("{a}"), p("{b}")) {
+		t.Error("nama berbeda")
+	}
+}
