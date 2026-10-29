@@ -1,11 +1,14 @@
 package httpserver
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -30,7 +33,9 @@ func testI18n(t *testing.T) *i18n.Service {
 		t.Fatal(err)
 	}
 	s, err := i18n.New(i18n.Options{Registry: reg, Sources: []i18n.Source{
-		{Namespace: "platform", FS: i18nFS(map[string]string{"id.json": `{"errors":{"x":"galat id"}}`, "en.json": `{"errors":{"x":"error en"}}`})},
+		{Namespace: "platform", FS: i18nFS(map[string]string{
+			"id.json": `{"errors":{"x":"galat id","internal_error":"kesalahan server","tenant_unresolved":"tenant tidak jelas","unauthenticated":"belum masuk"}}`,
+			"en.json": `{"errors":{"x":"error en","internal_error":"server error","tenant_unresolved":"tenant unknown","unauthenticated":"not signed in"}}`})},
 		{Namespace: "ui", FS: i18nFS(map[string]string{"id.json": `{"hi":"Halo"}`, "en.json": `{"hi":"Hello"}`})},
 	}})
 	if err != nil {
@@ -104,5 +109,105 @@ func TestLocaleContext_ResolverBoundToTenant(t *testing.T) {
 	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/t", nil))
 	if !ok || tid != defaultTenant {
 		t.Errorf("tenant = %v, %v", tid, ok)
+	}
+}
+
+// R-11 (Requirement 4.4): galat yang ditulis SEBELUM rantai dalam (recover 500, tenant_unresolved, Authenticate)
+// juga mengikuti Accept-Language; jalur sebelum tenant dikenal memakai katalog bawaan.
+type errBody struct {
+	Error struct{ Code, Message string }
+}
+
+func errOf(t *testing.T, rec *httptest.ResponseRecorder) errBody {
+	t.Helper()
+	var e errBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+		t.Fatalf("body bukan galat JSON: %s", rec.Body)
+	}
+	return e
+}
+
+func doLang(r http.Handler, target, lang string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	if lang != "" {
+		req.Header.Set("Accept-Language", lang)
+	}
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestLocalizedErrors_RecoverPanic500(t *testing.T) {
+	r := newI18nRouter(t)
+	r.Handle("GET /boom", http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("rahasia") }))
+	for lang, want := range map[string]string{"en": "server error", "id": "kesalahan server", "": "kesalahan server"} {
+		rec := doLang(r, "/boom", lang)
+		e := errOf(t, rec)
+		if rec.Code != http.StatusInternalServerError || e.Error.Code != "internal_error" || e.Error.Message != want {
+			t.Errorf("lang %q: %d %+v, want 500 internal_error %q", lang, rec.Code, e.Error, want)
+		}
+		if strings.Contains(rec.Body.String(), "rahasia") {
+			t.Error("nilai panic tidak boleh bocor")
+		}
+	}
+}
+
+func TestLocalizedErrors_TenantUnresolved(t *testing.T) {
+	r := NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:   failingResolver{},
+		Connector:  database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:     fstest.MapFS{"index.html": {Data: []byte("x")}},
+		AppVersion: "1",
+		I18n:       testI18n(t),
+	})
+	r.Handle("GET /t", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	e := errOf(t, doLang(r, "/t", "en"))
+	if e.Error.Code != "tenant_unresolved" || e.Error.Message != "tenant unknown" {
+		t.Errorf("error = %+v", e.Error)
+	}
+	if e := errOf(t, doLang(r, "/t", "id")); e.Error.Message != "tenant tidak jelas" {
+		t.Errorf("id = %+v", e.Error)
+	}
+}
+
+type failingResolver struct{}
+
+func (failingResolver) Resolve(*http.Request) (tenancy.TenantID, error) {
+	return tenancy.TenantID{}, errors.New("tidak ada tenant")
+}
+
+func TestLocalizedErrors_AuthenticateRejection(t *testing.T) {
+	r := NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:   tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector:  database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:     fstest.MapFS{"index.html": {Data: []byte("x")}},
+		AppVersion: "1",
+		I18n:       testI18n(t),
+		Authenticate: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				WriteError(w, req, http.StatusUnauthorized, "unauthenticated", "asli", nil)
+			})
+		},
+	})
+	r.Handle("GET /secure", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	rec := doLang(r, "/secure", "en")
+	if e := errOf(t, rec); rec.Code != http.StatusUnauthorized || e.Error.Message != "not signed in" {
+		t.Errorf("%d %+v", rec.Code, e.Error)
+	}
+}
+
+// Jalur sebelum tenant dikenal tidak membaca override (katalog bawaan); setelah tenant dikenal Resolver terikat tenant.
+func TestLocaleResolverUsesTenantAfterTenantKnown(t *testing.T) {
+	r := newI18nRouter(t)
+	var early, late bool
+	r.Handle("GET /t", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		_, early = sdki18n.ResolverFrom(req.Context())
+		late = early && sdki18n.T(req.Context(), "ui::hi") == "Halo"
+	}))
+	doLang(r, "/t", "")
+	if !early || !late {
+		t.Errorf("resolver di handler: early=%v late=%v", early, late)
 	}
 }
