@@ -4,6 +4,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   type ErrorRouteComponent,
+  type NotFoundRouteComponent,
   type Route,
   type RouteComponent,
 } from "@tanstack/react-router";
@@ -26,9 +27,20 @@ declare module "@tanstack/react-router" {
   }
 }
 
+/** Opsi route akar; diisi shell (kerangka aplikasi, 404, galat). */
+export interface AppRootRouteOptions {
+  readonly component?: RouteComponent;
+  readonly notFoundComponent?: NotFoundRouteComponent;
+  readonly errorComponent?: ErrorRouteComponent;
+}
+
 /** Route akar aplikasi: dipakai shell; modul tidak membuatnya. */
-export function createAppRootRoute() {
-  return createRootRouteWithContext<AppRouterContext>()();
+export function createAppRootRoute(options: AppRootRouteOptions = {}) {
+  return createRootRouteWithContext<AppRouterContext>()({
+    component: options.component,
+    notFoundComponent: options.notFoundComponent,
+    errorComponent: options.errorComponent,
+  });
 }
 export type AppRootRoute = ReturnType<typeof createAppRootRoute>;
 

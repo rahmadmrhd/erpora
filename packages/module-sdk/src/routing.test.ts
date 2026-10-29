@@ -49,3 +49,15 @@ describe("route modul", () => {
     expect(router.state.matches.some((m) => m.pathname === "/lain/notes")).toBe(false);
   });
 });
+
+describe("createAppRootRoute dengan opsi", () => {
+  test("component, notFoundComponent, dan errorComponent diteruskan ke route akar", () => {
+    const component = () => null;
+    const notFoundComponent = () => null;
+    const errorComponent = () => null;
+    const root = createAppRootRoute({ component, notFoundComponent, errorComponent });
+    expect(root.options.component).toBe(component);
+    expect(root.options.notFoundComponent).toBe(notFoundComponent);
+    expect(root.options.errorComponent).toBe(errorComponent);
+  });
+});

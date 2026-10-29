@@ -10,6 +10,7 @@ export { defaultOfflinePolicy } from "./offline";
 export type {
   AnyModuleChildRoute,
   AppRootRoute,
+  AppRootRouteOptions,
   AppRouterContext,
   ModuleBaseRoute,
   ModuleBaseRouteOptions,
