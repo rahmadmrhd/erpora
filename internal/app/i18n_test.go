@@ -13,6 +13,7 @@ import (
 
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/i18n"
+	"erpora/internal/platform/modules/lifecycle"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/tenancy"
@@ -165,6 +166,23 @@ func TestModulesAdminAPIFlagMatchesConfig(t *testing.T) {
 	for _, c := range cases {
 		if got := c.cfg.ModulesAdminAPIEnabled(); got != c.want {
 			t.Errorf("%s: ModulesAdminAPIEnabled = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// R-13: CLI i18n override menolak namespace modul yang tidak aktif seperti API: hanya status efektif enabled yang aktif.
+func TestActiveFromModules(t *testing.T) {
+	mods := []lifecycle.ModuleState{
+		{Slug: "example", Status: runtime.StatusEnabled},
+		{Slug: "addon", Status: runtime.StatusDisabled},
+		{Slug: "fresh", Status: runtime.StatusAvailable},
+		{Slug: "broken", Status: runtime.StatusFailed},
+		{Slug: "installed", Status: runtime.StatusInstalled},
+	}
+	active := activeFromModules(mods)
+	for slug, want := range map[string]bool{"example": true, "addon": false, "fresh": false, "broken": false, "installed": false, "tidak-ada": false} {
+		if got := active(i18nTenant, slug); got != want {
+			t.Errorf("active(%q) = %v, want %v", slug, got, want)
 		}
 	}
 }

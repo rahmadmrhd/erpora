@@ -4,14 +4,17 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/i18n/store"
+	"erpora/internal/platform/modules/lifecycle"
 )
 
 // callJSON mengirim request dengan Content-Type application/json (PUT/DELETE override wajib; 415 bila tidak).
@@ -204,5 +207,45 @@ func TestI18nOverrideFlow_ServiceWriteVisibleThroughAPI(t *testing.T) {
 	}
 	if _, err := a.I18n.GetOverride(t.Context(), a.Tenant, "ui", "id", "actions.save"); err != store.ErrNotFound {
 		t.Errorf("setelah hapus err = %v", err)
+	}
+}
+
+// R-13: CLI (NewGuardedI18n) menolak override untuk namespace modul yang belum enabled dan menerimanya setelah enabled.
+func TestI18nCLI_RejectsInactiveModuleNamespace(t *testing.T) {
+	e := newRefEnv(t)
+	cfg := config.Config{DatabaseURL: e.dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond}
+	ctx := t.Context()
+
+	svc, tid, _, cleanup, err := NewGuardedI18n(ctx, cfg, testLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := i18n.Override{Namespace: "example", Locale: "id", Key: "nav.notes", Message: "Catatan saya"}
+	_, err = svc.SetOverride(ctx, tid, o, "cli:test", nil)
+	cleanup()
+	var oe *i18n.OverrideError
+	if !errors.As(err, &oe) || oe.Code != i18n.CodeUnknownKey || oe.Field != "namespace" {
+		t.Fatalf("modul belum enabled: err = %v, want unknown_key pada namespace", err)
+	}
+
+	lsvc, ltid, lclean, err := NewLifecycle(ctx, cfg, testLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []lifecycle.Op{lifecycle.OpInstall, lifecycle.OpEnable} {
+		if _, err := lsvc.Execute(ctx, lifecycle.Request{Tenant: ltid, Op: op, Key: "acme.example", Actor: "cli:test"}); err != nil {
+			lclean()
+			t.Fatal(err)
+		}
+	}
+	lclean()
+
+	svc, tid, _, cleanup, err = NewGuardedI18n(ctx, cfg, testLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if changed, err := svc.SetOverride(ctx, tid, o, "cli:test", nil); err != nil || !changed {
+		t.Errorf("modul enabled: changed=%v err=%v", changed, err)
 	}
 }
