@@ -53,8 +53,22 @@ func versioned(m module.Module, version string, migrations []string, rec *upgrad
 		}
 		migs = mem
 	}
-	return &versionedModule{inner: m, mf: mf, migs: migs, rec: rec}
+	vm := &versionedModule{inner: m, mf: mf, migs: migs, rec: rec}
+	// Modul referensi ber-katalog (manifest memuat bagian i18n) harus tetap memenuhi aturan registry: manifest
+	// i18n berpasangan dengan module.CatalogSource. Pembungkus hanya ber-CatalogSource bila modul aslinya begitu.
+	if cs, ok := m.(module.CatalogSource); ok {
+		return &versionedCatalogModule{versionedModule: vm, catalogs: cs}
+	}
+	return vm
 }
+
+// versionedCatalogModule menambah module.CatalogSource pada versionedModule (didelegasikan ke modul asli).
+type versionedCatalogModule struct {
+	*versionedModule
+	catalogs module.CatalogSource
+}
+
+func (v *versionedCatalogModule) Catalogs() fs.FS { return v.catalogs.Catalogs() }
 
 func (v *versionedModule) Manifest() module.Manifest         { return v.mf }
 func (v *versionedModule) Register(r module.Registrar) error { return v.inner.Register(r) }
