@@ -14,6 +14,18 @@ mengimpor dari `@erpora/ui` (barrel `src/index.ts`) dan memuat tema lewat `@impo
 - **Tanpa string tampilan tertanam.** Teks bawaan (tutup dialog, label breadcrumb, ...) memakai `useUiLabel()`; kunci ada di namespace `ui`
   (`i18n/id.json`, `i18n/en.json`).
 
+## Ekspor dan entry sekunder
+
+- Konsumen mengimpor dari barrel `@erpora/ui` (`src/index.ts`). Barrel mengekspor komponen fondasi, `cn`, `initialsOf`, `collapseCrumbs`, `resolveIcon`/`iconRegistry`, dan `UiLabelsProvider`/`useUiLabel`.
+- Komponen yang sengaja dimuat malas dipasang sebagai **entry sekunder** (Q38 butir 1): `@erpora/ui/toaster` mengekspor `Toaster` dan `toast` (sonner bergaya token). `Toaster` tidak diekspor dari barrel, sehingga entry shell tetap di bawah anggaran.
+- Entry sekunder diimpor langsung lewat `exports` paket; aturan F2 mengizinkannya, aturan lain tetap berlaku.
+
+## Kunci terjemahan
+
+- Teks bawaan komponen berasal dari namespace `ui`: `i18n/id.json` dan `i18n/en.json`. Kunci yang dibangkitkan ada di `src/i18n/keys.gen.ts` (`task i18n:generate`).
+- `uiKeys` di `src/labels.tsx` mendaftar kunci yang dibaca komponen. `labels.test.tsx` memastikan setiap kunci di sana ada di `i18n/{id,en}.json`.
+- Panduan umum ada di [`docs/module-sdk/i18n.md`](../../docs/module-sdk/i18n.md).
+
 ## Memasang komponen baru
 
 CLI `shadcn` terpin sebagai devDependency (tidak memakai `bunx`/`npx` tak terpin):

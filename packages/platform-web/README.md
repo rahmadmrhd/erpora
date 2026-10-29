@@ -46,7 +46,8 @@ Layanan frontend platform (`@erpora/platform-web`) yang dipakai bersama app shel
 1. Shell memasang `<QueryClientProvider><BootstrapProvider><I18nProvider client={...}><Suspense>...`; klien dibuat sekali dengan
    `createPlatformClient({ getLocale: getActiveLocale })`. `<Message>`/`useMessage` tersambung otomatis ke `useTranslation`.
 2. Kunci galat `errors.*` (`api/errors.ts`, `API_ERROR_KEY_PREFIX`) harus ada di katalog `platform` (termasuk `errors.unknown`).
-3. Generator `keys.gen.ts` harus menulis tag rich sebagai properti `RichTag` dan bentuk argumen sesuai `ArgsOf`.
+3. Generator `keys.gen.ts` harus menulis tag rich sebagai properti `RichTag` dan bentuk argumen sesuai `ArgsOf`. Kunci namespace `platform` dibangkitkan ke `src/i18n/keys.platform.gen.ts` (`task i18n:generate`).
+4. Pemakaian oleh modul dan shell didokumentasikan di [`docs/module-sdk/frontend.md`](../../docs/module-sdk/frontend.md) (`defineModule`, `msg`/`crumb`, `usePageActions`, route lazy) dan [`docs/module-sdk/i18n.md`](../../docs/module-sdk/i18n.md) (katalog, kunci, alur penerjemah). Paket ini tidak mengekspor komponen; komponen ada di `@erpora/ui`.
 
 ## Pengujian
 
