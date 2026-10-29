@@ -186,7 +186,7 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     await open([shop()]);
     await pickMenu(user, "Shop", "Nonaktifkan");
     const dialog = await screen.findByRole("alertdialog", { name: "Nonaktifkan: Shop" });
-    expect(dialog).toHaveTextContent("Menu disembunyikan: Beranda Toko");
+    expect(dialog).toHaveTextContent("Menu disembunyikan: Shop (acme.shop)");
     expect(dialog).toHaveTextContent("Halaman tidak aktif: /shop");
     expect(dialog).toHaveTextContent("API /api/shop menolak permintaan (module_disabled)");
     expect(dialog).toHaveTextContent("Data tidak dihapus");
@@ -194,6 +194,16 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Batal" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  });
+
+  test("M-1: Aktifkan modul nonaktif tidak memuat katalog namespace modul (404 di backend); label dari nama/key API", async () => {
+    const user = userEvent.setup();
+    await open([shop({ status: "disabled" })]);
+    await pickMenu(user, "Shop", "Aktifkan");
+    const dialog = await screen.findByRole("alertdialog", { name: "Aktifkan: Shop" });
+    expect(dialog).toHaveTextContent("Menu ditampilkan: Shop (acme.shop)");
+    expect(dialog).toHaveTextContent("Halaman aktif: /shop");
+    expect(dialog).not.toHaveTextContent("nav.home");
   });
 
   test("blocker menonaktifkan tombol konfirmasi dan menjelaskan penyebab", async () => {

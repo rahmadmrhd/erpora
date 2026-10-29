@@ -1,5 +1,5 @@
-import type { FrontendModule, MessageRef } from "@erpora/module-sdk";
-import { BOOTSTRAP_KEY, Message, scopedKey, useTenantId } from "@erpora/platform-web";
+import type { FrontendModule } from "@erpora/module-sdk";
+import { BOOTSTRAP_KEY, scopedKey, useTenantId } from "@erpora/platform-web";
 import {
   Alert,
   AlertDescription,
@@ -17,7 +17,7 @@ import {
   LoadingIcon,
 } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { Fragment, type ReactNode, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ModulesApiError, runModuleOperation, useOperationPolling } from "./api";
 import { useModulesClient } from "./client";
 import { type MappedError, mapFailureCode, mapModuleError } from "./errors";
@@ -33,46 +33,17 @@ type Phase =
   | { kind: "polling"; ids: readonly string[] }
   | { kind: "error"; mapped: MappedError };
 
-const SENTINEL = "";
-
-/** Menyisipkan simpul React di tempat argumen `{labels}`: pesan diterjemahkan dengan penanda lalu dipecah. */
-function withNode(text: string, node: ReactNode): ReactNode {
-  const [before, after] = text.split(SENTINEL);
-  return (
-    <>
-      {before}
-      {node}
-      {after}
-    </>
-  );
-}
-
-/** Daftar label menu (MessageRef lintas namespace) sebagai teks bersambung koma. */
-function LabelList({ refs }: { refs: readonly MessageRef[] }) {
-  return (
-    <>
-      {refs.map((ref, i) => (
-        <Fragment key={`${ref.ns}:${ref.key}`}>
-          {i > 0 ? ", " : null}
-          <Message message={ref} />
-        </Fragment>
-      ))}
-    </>
-  );
-}
-
-function EffectLine({ effect }: { effect: Effect }) {
+/**
+ * Satu baris dampak. Label menu memakai `name` dan `key` dari API modul, BUKAN katalog namespace modul: backend hanya
+ * menyajikan katalog modul yang `enabled` (404 untuk lainnya), jadi memuatnya untuk modul nonaktif meruntuhkan halaman.
+ */
+function EffectLine({ effect, target }: { effect: Effect; target: ModuleView }) {
   const t = useModulesT();
   switch (effect.kind) {
     case "menu_hidden":
     case "menu_shown":
       return (
-        <li>
-          {withNode(
-            t(`modules.impact.${effect.kind}`, { labels: SENTINEL }),
-            <LabelList refs={effect.labels} />,
-          )}
-        </li>
+        <li>{t(`modules.impact.${effect.kind}`, { labels: `${target.name} (${target.key})` })}</li>
       );
     case "routes_inactive":
     case "routes_active":
@@ -271,7 +242,7 @@ export function ActionDialog({
             {impact.effects.length > 0 ? (
               <ul className="list-disc pl-4">
                 {impact.effects.map((e, i) => (
-                  <EffectLine key={`${e.kind}:${i}`} effect={e} />
+                  <EffectLine key={`${e.kind}:${i}`} effect={e} target={target} />
                 ))}
               </ul>
             ) : (

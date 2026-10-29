@@ -5,11 +5,14 @@ import { join } from "node:path";
 import { defaultOfflinePolicy, defineModule, type FrontendModule } from "@erpora/module-sdk";
 import {
   createTestI18n,
+  MessageTranslatorProvider,
   ModuleRegistryProvider,
   makeBootstrap,
   PageChromeProvider,
   StaticBootstrapProvider,
+  type UseTranslate,
   usePageChrome,
+  useTranslation,
 } from "@erpora/platform-web";
 import { TooltipProvider } from "@erpora/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -272,8 +275,22 @@ export function fixtureFrontend(): FrontendModule[] {
   ];
 }
 
+/**
+ * Meniru backend nyata: katalog namespace modul hanya disajikan bila modul `enabled`, selain itu 404 sehingga memuatnya
+ * melempar. Hanya `platform` dan `ui` yang tersedia; pemakaian namespace lain (mis. label menu modul) membuat test gagal.
+ */
+const useStrictTranslate: UseTranslate = (ns) => {
+  const { t } = useTranslation(ns as never);
+  if (ns !== "platform" && ns !== "ui") {
+    throw new Error(`katalog namespace "${ns}" tidak tersedia (modul nonaktif: 404)`);
+  }
+  return t as never;
+};
+
 export interface RenderOptions {
   server: ModulesServer;
+  /** `permissions[]` bootstrap (kosong = belum ada informasi, optimistis). */
+  permissions?: string[];
   adminApi?: boolean;
   frontend?: FrontendModule[];
   queryClient?: QueryClient;
@@ -284,6 +301,7 @@ export interface RenderOptions {
 export async function renderWithServer({
   server,
   adminApi = true,
+  permissions = [],
   frontend,
   queryClient,
   children,
@@ -291,7 +309,7 @@ export async function renderWithServer({
   const original = globalThis.fetch;
   globalThis.fetch = server.fetch;
   const qc = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const i18n = createTestI18n({ ...catalogs, shop: { "nav.home": "Beranda Toko" } });
+  const i18n = createTestI18n({ ...catalogs });
   const modules = frontend ?? fixtureFrontend();
   let view!: ReturnType<typeof render>;
   await act(async () => {
@@ -300,6 +318,7 @@ export async function renderWithServer({
         <StaticBootstrapProvider
           value={makeBootstrap({
             tenantId: TENANT,
+            permissions,
             features: { modulesAdminApi: adminApi },
             modules: [
               {
@@ -316,10 +335,12 @@ export async function renderWithServer({
           <ModuleRegistryProvider modules={modules}>
             <i18n.Provider>
               <TooltipProvider>
-                <PageChromeProvider>
-                  <ChromeProbe />
-                  {children}
-                </PageChromeProvider>
+                <MessageTranslatorProvider useTranslate={useStrictTranslate}>
+                  <PageChromeProvider>
+                    <ChromeProbe />
+                    {children}
+                  </PageChromeProvider>
+                </MessageTranslatorProvider>
               </TooltipProvider>
             </i18n.Provider>
           </ModuleRegistryProvider>
