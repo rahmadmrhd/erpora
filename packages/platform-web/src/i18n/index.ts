@@ -1,3 +1,6 @@
+// Augmentasi tipe katalog `platform` dan `ui` (dibangkitkan `erpora i18n:generate`).
+import "./keys.platform.gen";
+
 export type { Args, ArgValue, RichTags } from "./format";
 export { Compiled, compile, format, formatRich, I18nFormatError } from "./format";
 export { type CatalogEntry, CatalogLoadError, createCatalogLoader } from "./loader";
