@@ -11,8 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"erpora/internal/platform/config"
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/modules/registry"
+	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/tenancy"
 	sdki18n "erpora/sdk/i18n"
 	"erpora/sdk/module"
@@ -128,5 +130,41 @@ func TestI18nHookInstallsLocaleResolverAndScope(t *testing.T) {
 	}
 	if got := sdki18n.T(hook(context.Background(), i18nTenant, "platform.core"), "errors.not_found"); got == "platform::errors.not_found" {
 		t.Errorf("scope platform harus menemukan kunci: %q", got)
+	}
+}
+
+// bootstrapFrom mengisi features.modulesAdminApi dari bendera (cfg.ModulesAdminAPIEnabled) SETELAH Build, tanpa
+// mengubah tanda tangan Build (PRD-000 Q36 PK-2).
+func TestBootstrapFrom_FeaturesModulesAdminAPI(t *testing.T) {
+	reg := buildTestRegistry(t)
+	svc, err := newI18nService(slog.Default(), false, reg, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, on := range []bool{true, false} {
+		m := bootstrapFrom(reg, runtime.NewSnapshot(), svc, on)(context.Background(), i18nTenant)
+		if m.Features == nil || m.Features.ModulesAdminAPI != on {
+			t.Errorf("modulesAdminAPI=%v: Features = %+v", on, m.Features)
+		}
+		if m.I18n == nil {
+			t.Error("bagian i18n harus tetap terisi")
+		}
+	}
+}
+
+func TestModulesAdminAPIFlagMatchesConfig(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{"development", config.Config{Env: config.EnvDevelopment}, true},
+		{"production tanpa flag", config.Config{Env: config.EnvProduction}, false},
+		{"production dengan flag", config.Config{Env: config.EnvProduction, ModulesAdminAPI: true}, true},
+	}
+	for _, c := range cases {
+		if got := c.cfg.ModulesAdminAPIEnabled(); got != c.want {
+			t.Errorf("%s: ModulesAdminAPIEnabled = %v, want %v", c.name, got, c.want)
+		}
 	}
 }

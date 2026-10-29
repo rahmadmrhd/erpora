@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -86,5 +87,30 @@ func TestManifest_ETagFollowsRevisionAndCatalogRevisions(t *testing.T) {
 	other.Revision = 8
 	if other.ETag() == a.ETag() {
 		t.Error("revision snapshot berubah, ETag harus berubah")
+	}
+}
+
+func TestManifest_FeaturesOmittedWhenNilAndSerialized(t *testing.T) {
+	raw, _ := json.Marshal(Build("v", tenancy.TenantID{}, nil, 1))
+	if strings.Contains(string(raw), "features") {
+		t.Errorf("features harus hilang saat nil (additive): %s", raw)
+	}
+	for _, on := range []bool{true, false} {
+		m := Build("v", tenancy.TenantID{}, nil, 1)
+		m.Features = &Features{ModulesAdminAPI: on}
+		raw, _ := json.Marshal(m)
+		want := `"features":{"modulesAdminApi":` + strconv.FormatBool(on) + `}`
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("json tidak memuat %s: %s", want, raw)
+		}
+	}
+}
+
+func TestManifest_FeaturesDoNotChangeETag(t *testing.T) {
+	a := Build("v", tenancy.TenantID{}, nil, 4)
+	b := a
+	b.Features = &Features{ModulesAdminAPI: true}
+	if a.ETag() != b.ETag() {
+		t.Error("features statis per proses; tidak boleh mengubah ETag")
 	}
 }
