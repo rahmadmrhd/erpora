@@ -121,6 +121,10 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 	run(t, repo, env, "bun", "run", "--filter", "*", "typecheck")
 	run(t, repo, env, "bun", "run", "--filter", "*", "lint")
 	run(t, repo, env, "bun", "run", "--filter", "@erpora/web", "deps")
+	// Test frontend dari root (seperti web:check): memuat module.test.ts modul hasil generate (M3a R15.4), lalu build
+	// shell yang kini merakit frontendModule modul baru (anggaran bundle dan csp-check).
+	run(t, repo, env, "bun", "test", "--pass-with-no-tests")
+	run(t, repo, env, "bun", "run", "--filter", "@erpora/web", "build")
 
 	// 6. Install, enable, command CLI, dan serve terhadap PostgreSQL sungguhan.
 	dsn := pgtest.Start(t)
