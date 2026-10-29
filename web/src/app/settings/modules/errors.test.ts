@@ -62,10 +62,18 @@ describe("mapModuleError: status HTTP", () => {
     expect(r.reloadList).toBe(true);
   });
 
-  test("404 pada mutasi berarti API mutasi mati: pesan khusus dan beralih ke mode hanya-baca", () => {
-    const r = mapModuleError(404, err("not_found"), "mutation");
+  test("M-3: 404 pada mutasi saat features.modulesAdminApi false = gerbang mati: pesan khusus dan hanya-baca", () => {
+    const r = mapModuleError(404, err("not_found"), "mutation", { adminApi: false });
     expect<string[]>(keysOf(r)).toEqual(["modules.error.mutation_disabled"]);
     expect(r.switchToReadOnly).toBe(true);
+  });
+
+  test("M-3: 404 pada mutasi saat API mutasi diumumkan aktif = modul/operasi tidak ditemukan: tanpa hanya-baca, muat ulang daftar dan bootstrap", () => {
+    const r = mapModuleError(404, err("not_found"), "mutation", { adminApi: true });
+    expect<string[]>(keysOf(r)).toEqual(["modules.error.module_not_found"]);
+    expect(r.switchToReadOnly).toBe(false);
+    expect(r.reloadList).toBe(true);
+    expect(r.refetchBootstrap).toBe(true);
   });
 
   test("404 pada bacaan memakai errors.not_found tanpa beralih mode", () => {

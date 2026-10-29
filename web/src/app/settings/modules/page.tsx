@@ -32,8 +32,7 @@ export function ModulesPage() {
   const describe = useDescribe();
   const { t: tui } = useTranslation("ui");
   const adminFlag = useFeature("modulesAdminApi");
-  const [forcedReadOnly, setForcedReadOnly] = useState(false);
-  const adminApi = adminFlag && !forcedReadOnly;
+  const adminApi = adminFlag;
 
   const query = useModules();
   const registry = useModuleRegistry();
@@ -142,7 +141,7 @@ export function ModulesPage() {
           frontend={frontend}
           etag={query.data?.etag}
           onClose={() => setAction(null)}
-          onReadOnly={() => setForcedReadOnly(true)}
+          adminApi={adminApi}
         />
       ) : null}
       {historyTarget ? (

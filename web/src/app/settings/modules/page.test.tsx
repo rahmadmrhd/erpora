@@ -302,19 +302,33 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     );
   });
 
-  test("404 pada mutasi: pesan 'manajemen modul tidak aktif' dan halaman beralih ke hanya-baca", async () => {
+  test("M-3: 404 pada mutasi saat API mutasi aktif = 'modul tidak ditemukan': tetap mode aksi, daftar dan bootstrap dimuat ulang", async () => {
     const user = userEvent.setup();
-    await open([shop()], { postStatus: 404, postError: { code: "not_found" } });
+    const { server, queryClient } = await open([shop()], {
+      postStatus: 404,
+      postError: { code: "not_found" },
+    });
+    const invalidated: unknown[] = [];
+    const original = queryClient.invalidateQueries.bind(queryClient);
+    queryClient.invalidateQueries = ((f: { queryKey?: unknown }) => {
+      invalidated.push(f?.queryKey);
+      return original(f as never);
+    }) as typeof queryClient.invalidateQueries;
     await pickMenu(user, "Shop", "Nonaktifkan");
     await user.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
     );
-    expect(
-      await screen.findByText(/Manajemen modul tidak aktif di lingkungan ini/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Modul tidak ditemukan/)).toBeInTheDocument();
+    expect(screen.queryByText(/Manajemen modul tidak aktif/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Tutup" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Aksi untuk/ })).toBeNull());
-    expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Mode hanya-baca");
+    expect(await screen.findByRole("button", { name: "Aksi untuk Shop" })).toBeInTheDocument();
+    expect(screen.queryByText("Mode hanya-baca")).toBeNull();
+    expect(invalidated).toContainEqual(BOOTSTRAP_KEY);
+    await waitFor(() =>
+      expect(
+        server.calls.filter((c) => c.method === "GET" && c.path === "/api/platform/modules").length,
+      ).toBeGreaterThanOrEqual(2),
+    );
   });
 
   test("202: memantau operasi lewat polling sampai selesai lalu menampilkan hasil dan invalidasi", async () => {

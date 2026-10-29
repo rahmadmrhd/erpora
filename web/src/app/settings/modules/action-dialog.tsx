@@ -138,8 +138,8 @@ export interface ActionDialogProps {
   /** ETag daftar yang dipakai menghitung dampak (dikirim sebagai `If-Match`). */
   etag: string | undefined;
   onClose(): void;
-  /** API mutasi tidak aktif (404): halaman beralih ke mode hanya-baca. */
-  onReadOnly(): void;
+  /** Bendera `features.modulesAdminApi` saat dialog dibuka (membedakan 404 gerbang mati dari modul tidak ditemukan). */
+  adminApi: boolean;
 }
 
 /**
@@ -153,7 +153,7 @@ export function ActionDialog({
   frontend,
   etag,
   onClose,
-  onReadOnly,
+  adminApi,
 }: ActionDialogProps) {
   const t = useModulesT();
   const describe = useDescribe();
@@ -201,13 +201,13 @@ export function ActionDialog({
     } catch (error) {
       const mapped =
         error instanceof ModulesApiError
-          ? mapModuleError(error.status, error.apiError, "mutation")
-          : mapModuleError(500, { code: "internal_error", message: "" }, "mutation");
+          ? mapModuleError(error.status, error.apiError, "mutation", { adminApi })
+          : mapModuleError(500, { code: "internal_error", message: "" }, "mutation", { adminApi });
       if (mapped.reloadList)
         void queryClient.invalidateQueries({
           queryKey: scopedKey(tenantId, "platform", "modules"),
         });
-      if (mapped.switchToReadOnly) onReadOnly();
+      if (mapped.refetchBootstrap) void queryClient.invalidateQueries({ queryKey: BOOTSTRAP_KEY });
       setPhase({ kind: "error", mapped });
     }
   };
