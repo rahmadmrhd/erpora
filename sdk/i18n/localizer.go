@@ -66,25 +66,54 @@ func ResolverFrom(ctx context.Context) (Resolver, bool) {
 // ditemukan atau tidak dapat diformat, T mengembalikan "namespace::kunci" (Requirement 3.3). T aman
 // dipakai banyak goroutine dan tidak pernah panik. Beberapa Args digabung; yang belakangan menang.
 func T(ctx context.Context, key string, args ...Args) string {
-	text, ok, shown := translate(ctx, key, args)
+	text, ok, shown, missingKey := translate(ctx, key, args)
+	if missingKey {
+		// Kunci tidak ada sampai ujung rantai fallback (Requirement 3.3): peringatan sekali per kunci, dan galat
+		// test bila StrictMissing aktif. Lookup (opsional) sengaja tidak melaporkan.
+		warnOnce("missing|"+shown, "i18n: kunci terjemahan tidak ditemukan", "key", shown)
+		if rep := strict.Load(); rep != nil {
+			rep.t.Helper()
+			rep.t.Errorf("i18n: kunci terjemahan tidak ditemukan: %s", shown)
+		}
+	}
 	if ok {
 		return text
 	}
 	return shown
 }
 
+// TestReporter adalah bagian *testing.T yang dibutuhkan StrictMissing (tanpa mengimpor paket testing).
+type TestReporter interface {
+	Helper()
+	Errorf(format string, args ...any)
+	Cleanup(func())
+}
+
+type strictState struct{ t TestReporter }
+
+var strict atomic.Pointer[strictState]
+
+// StrictMissing menjadikan setiap kunci yang tidak ditemukan pada T (sampai ujung rantai fallback) sebagai galat
+// test t selama t berjalan (Requirement 3.3: "galat di mode pengujian"). Dilepas otomatis lewat t.Cleanup. Mode ini
+// global proses: pakai pada test yang tidak berjalan paralel dengan test lain yang sengaja memicu kunci hilang.
+func StrictMissing(t TestReporter) {
+	prev := strict.Swap(&strictState{t: t})
+	t.Cleanup(func() { strict.Store(prev) })
+}
+
 // Lookup seperti T tetapi melaporkan apakah pesan ditemukan dan berhasil diformat; bila tidak,
 // hasilnya ("", false). Dipakai platform untuk meminjam pesan opsional, mis. errors.<code>.
 func Lookup(ctx context.Context, key string, args ...Args) (string, bool) {
-	text, ok, _ := translate(ctx, key, args)
+	text, ok, _, _ := translate(ctx, key, args)
 	if !ok {
 		return "", false
 	}
 	return text, true
 }
 
-// translate mengembalikan teks terformat dan ok; bila tidak ok, shown berisi teks pengganti.
-func translate(ctx context.Context, key string, args []Args) (text string, ok bool, shown string) {
+// translate mengembalikan teks terformat dan ok; bila tidak ok, shown berisi teks pengganti. missingKey true bila
+// Resolver tidak menemukan kunci (bukan karena namespace ditolak, Resolver tidak ada, atau pesan rusak).
+func translate(ctx context.Context, key string, args []Args) (text string, ok bool, shown string, missingKey bool) {
 	shown = key
 	defer func() {
 		if r := recover(); r != nil {
@@ -95,29 +124,38 @@ func translate(ctx context.Context, key string, args []Args) (text string, ok bo
 	ns, rel, allowed := splitKey(ctx, key)
 	if !allowed {
 		warnOnce("deny|"+key, "i18n: namespace tidak boleh dibaca dari scope ini", "key", key)
-		return "", false, key
+		return "", false, key, false
 	}
 	shown = ns + "::" + rel
 	res, found := ResolverFrom(ctx)
 	if !found {
-		return "", false, shown
+		return "", false, shown, false
 	}
 	loc, _ := LocaleFrom(ctx)
 	src, found := res.Resolve(ctx, ns, rel, loc)
 	if !found {
-		return "", false, shown
+		return "", false, shown, true
 	}
 	msg, err := cachedCompile(src)
 	if err != nil {
 		warnOnce("compile|"+shown, "i18n: pesan katalog tidak dapat dikompilasi", "key", shown)
-		return "", false, shown
+		return "", false, shown, false
 	}
-	out, err := msg.Format(loc, mergeArgs(args))
+	var out string
+	var missing []string
+	if mr, isReporter := msg.(MissingReporter); isReporter {
+		out, missing, err = mr.FormatReport(loc, mergeArgs(args))
+	} else {
+		out, err = msg.Format(loc, mergeArgs(args))
+	}
 	if err != nil {
 		warnOnce("format|"+shown, "i18n: pesan tidak dapat diformat", "key", shown, "error", err.Error())
-		return "", false, shown
+		return "", false, shown, false
 	}
-	return out, true, shown
+	for _, name := range missing { // Requirement 2.3: argumen hilang tampil {nama} dan dicatat
+		warnOnce("missingarg|"+shown+"|"+name, "i18n: argumen pesan hilang", "key", shown, "arg", name)
+	}
+	return out, true, shown, false
 }
 
 // splitKey memecah key menjadi namespace dan kunci relatif dan memeriksa bahwa namespace boleh dibaca

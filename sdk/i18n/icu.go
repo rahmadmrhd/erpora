@@ -58,6 +58,12 @@ type Message interface {
 	Params() []Param
 }
 
+// MissingReporter diimplementasi Message hasil Compile: FormatReport seperti Format tetapi juga mengembalikan nama
+// argumen yang hilang (Requirement 2.3), sehingga pemanggil dapat mencatat peringatan.
+type MissingReporter interface {
+	FormatReport(loc Locale, args Args) (out string, missing []string, err error)
+}
+
 // CompileError adalah galat Compile. Code salah satu dari CodeInvalidICU, CodeUnsupportedConstruct,
 // atau CodeTooLarge. Pos adalah indeks karakter (rune) dalam pesan.
 type CompileError struct {

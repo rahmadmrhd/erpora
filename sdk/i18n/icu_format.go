@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -14,6 +15,8 @@ type formatter struct {
 	tagSet bool
 	args   Args
 	sb     strings.Builder
+	// missing memuat nama argumen yang hilang menurut urutan kemunculan pertama, tanpa duplikat.
+	missing []string
 }
 
 func (f *formatter) langTag() language.Tag {
@@ -39,17 +42,32 @@ func (f *formatter) arg(name string) (any, bool) {
 }
 
 // Format mengimplementasi Message. Tidak pernah panik: panic internal dikembalikan sebagai galat.
-func (m *message) Format(loc Locale, args Args) (out string, err error) {
+func (m *message) Format(loc Locale, args Args) (string, error) {
+	out, _, err := m.FormatReport(loc, args)
+	return out, err
+}
+
+// FormatReport seperti Format tetapi juga mengembalikan nama argumen yang hilang pada cabang yang dirender
+// (menurut urutan kemunculan, tanpa duplikat), supaya pemanggil dapat memperingatkan (Requirement 2.3).
+func (m *message) FormatReport(loc Locale, args Args) (out string, missing []string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			out, err = "", fmt.Errorf("i18n: panic saat Format (%T)", r)
+			out, missing, err = "", nil, fmt.Errorf("i18n: panic saat Format (%T)", r)
 		}
 	}()
 	f := &formatter{loc: loc, args: args}
 	if err := f.nodes(m.nodes, ""); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return f.sb.String(), nil
+	return f.sb.String(), f.missing, nil
+}
+
+// noteMissing mencatat nama argumen yang hilang (sekali per nama) dan menulis placeholder {nama}.
+func (f *formatter) noteMissing(name string) error {
+	if !slices.Contains(f.missing, name) {
+		f.missing = append(f.missing, name)
+	}
+	return f.write("{" + name + "}")
 }
 
 // nodes menulis simpul; pound adalah teks '#' untuk plural terdekat.
@@ -67,7 +85,7 @@ func (f *formatter) nodes(ns []node, pound string) error {
 		case argNode:
 			v, ok := f.arg(x.name)
 			if !ok {
-				if err := f.write("{" + x.name + "}"); err != nil {
+				if err := f.noteMissing(x.name); err != nil {
 					return err
 				}
 				continue
@@ -95,7 +113,7 @@ func (f *formatter) nodes(ns []node, pound string) error {
 func (f *formatter) block(b blockNode) error {
 	v, ok := f.arg(b.name)
 	if !ok {
-		return f.write("{" + b.name + "}")
+		return f.noteMissing(b.name)
 	}
 	sv, err := argString(v)
 	if err != nil {
