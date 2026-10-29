@@ -156,7 +156,7 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
 - [x] 11. Checkpoint — override
   - Jalankan `task lint arch check:gowork-off test contracts:check test:integration`; tanyakan ke user bila ada temuan keamanan.
 
-- [ ] 12. Tahap I6 — Runtime frontend (`@erpora/platform-web`)
+- [x] 12. Tahap I6 — Runtime frontend (`@erpora/platform-web`)
   - [ ] 12.1 Kerangka paket `packages/platform-web`
     - Buat `package.json` (`@erpora/platform-web`, versi dependensi dipin, workspace `packages/*` sudah terdaftar), `tsconfig.json` (`strict` + `noUncheckedIndexedAccess`), `src/index.ts`, dan `src/i18n/`. Tambahkan dependensi `intl-messageformat` (versi dipin hasil spike 1.2) dan dev dependency `fast-check`; jalankan `bun install` agar `bun.lock` terkunci. Biome dan `dependency-cruiser` (F1–F3) tetap lolos. Koordinasikan dengan M3a: paket ini dipakai bersama.
     - _Requirements: 6.7, 11.1_
@@ -181,11 +181,11 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - [ ]* 12.8 Test properti `fast-check` (opsional)
     - Properti: `format` tidak melempar untuk pesan/argumen acak yang lolos kompilasi; hasil identik untuk panggilan berulang (cache aman); validasi bahasa pilihan selalu anggota daftar atau default.
     - **Validates: Requirements 2.3, 6.5, 9.3**
-  - [ ] 12.9 Gate frontend
+  - [x] 12.9 Gate frontend
     - `bun run typecheck`, `bun run lint`, `bun test`, `bun run build`; periksa ukuran entry shell ≤ 200 KB gzip (NFR-04) dan `csp-check`; `i18n:generate --check`.
     - _Requirements: 11.1_
 
-- [ ] 13. Checkpoint — runtime frontend
+- [x] 13. Checkpoint — runtime frontend
   - Jalankan `task web:check` dan `ERP_REQUIRE_BUN=1 task test`; tanyakan ke user bila anggaran bundle terlampaui (keputusan D-3 cadangan).
 
 - [ ] 14. Tahap I7 — Dokumentasi dan gate akhir
