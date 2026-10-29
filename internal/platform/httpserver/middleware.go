@@ -164,10 +164,27 @@ func setBaseHeaders(h http.Header, id string) {
 // preferensi pengguna, Accept-Language, default (Requirement 3.1) cukup mengubah titik ini.
 func localeContext(svc *i18n.Service, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		loc := svc.Registry().Negotiate(r.Header.Get("Accept-Language"))
+		loc, ok := sdki18n.LocaleFrom(r.Context())
+		if !ok {
+			loc = sdki18n.Locale(svc.Registry().Negotiate(r.Header.Get("Accept-Language")))
+		}
 		t, _ := tenancy.FromContext(r.Context())
-		ctx := sdki18n.WithLocale(r.Context(), sdki18n.Locale(loc))
+		ctx := sdki18n.WithLocale(r.Context(), loc)
 		ctx = sdki18n.WithResolver(ctx, svc.Resolver(t))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// localeEarly memasang locale hasil negosiasi dan Resolver HANYA-BAWAAN paling awal di rantai (di luar recover,
+// requestScope, Authenticate, dan tenantContext) supaya galat yang ditulis di sana (500 internal_error,
+// tenant_unresolved, penolakan Authenticate) ikut terlokalisasi (Requirement 4.4). Hanya butuh Accept-Language dan
+// registri; tidak membaca override karena tenant belum dikenal. localeContext kemudian mengganti Resolver dengan
+// yang terikat tenant.
+func localeEarly(svc *i18n.Service, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		loc := sdki18n.Locale(svc.Registry().Negotiate(r.Header.Get("Accept-Language")))
+		ctx := sdki18n.WithLocale(r.Context(), loc)
+		ctx = sdki18n.WithResolver(ctx, svc.BuiltinResolver())
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

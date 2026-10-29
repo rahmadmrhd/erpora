@@ -379,10 +379,20 @@ func (snap *snapshot) chainFor(nd *nsData, loc string) []string {
 // bahasa default (Requirement 3.2); bila tidak ada, mengembalikan "ns::key" dengan OriginMissing.
 // Namespace modul nonaktif diperlakukan seperti tidak ada. Tidak pernah panik.
 func (s *Service) Resolve(ctx context.Context, t tenancy.TenantID, ns, key string, loc sdki18n.Locale) (string, Origin) {
+	return s.resolve(ctx, t, ns, key, loc, true)
+}
+
+// ResolveBuiltin seperti Resolve tetapi hanya katalog bawaan (tanpa override dan tanpa tenant); dipakai untuk jalur
+// sebelum tenant dikenal (mis. galat recover, tenant_unresolved, Authenticate). Namespace modul dianggap aktif.
+func (s *Service) ResolveBuiltin(ctx context.Context, ns, key string, loc sdki18n.Locale) (string, Origin) {
+	return s.resolve(ctx, tenancy.TenantID{}, ns, key, loc, false)
+}
+
+func (s *Service) resolve(ctx context.Context, t tenancy.TenantID, ns, key string, loc sdki18n.Locale, withOverrides bool) (string, Origin) {
 	snap := s.snap.Load()
 	missing := ns + "::" + key
 	nd := snap.ns[ns]
-	if nd == nil || !s.isActive(t, nd) {
+	if nd == nil || (withOverrides && !s.isActive(t, nd)) {
 		return missing, OriginMissing
 	}
 	want := string(loc)
@@ -391,7 +401,11 @@ func (s *Service) Resolve(ctx context.Context, t tenancy.TenantID, ns, key strin
 	}
 	for _, l := range snap.chainFor(nd, want) {
 		// Pada setiap bahasa dalam rantai: override dahulu, lalu katalog bawaan (Requirement 3.2).
-		if set := s.overrideSet(ctx, t, ns, l); set != nil {
+		var set *ovSet
+		if withOverrides {
+			set = s.overrideSet(ctx, t, ns, l)
+		}
+		if set != nil {
 			if src, ok := set.msgs[key]; ok {
 				if l == want {
 					return src, OriginOverride
@@ -529,6 +543,18 @@ func (r tenantResolver) Resolve(ctx context.Context, ns, key string, loc sdki18n
 	src, origin := r.s.Resolve(ctx, r.t, ns, key, loc)
 	return src, origin != OriginMissing
 }
+
+// builtinResolver menyesuaikan Service ke sdki18n.Resolver hanya-bawaan (tanpa tenant dan override).
+type builtinResolver struct{ s *Service }
+
+func (r builtinResolver) Resolve(ctx context.Context, ns, key string, loc sdki18n.Locale) (string, bool) {
+	src, origin := r.s.ResolveBuiltin(ctx, ns, key, loc)
+	return src, origin != OriginMissing
+}
+
+// BuiltinResolver mengembalikan sdki18n.Resolver yang hanya memakai katalog bawaan: dipasang paling awal di rantai
+// middleware agar galat sebelum tenant dikenal ikut terlokalisasi; diganti Resolver terikat tenant sesudahnya.
+func (s *Service) BuiltinResolver() sdki18n.Resolver { return builtinResolver{s: s} }
 
 // Resolver mengembalikan sdki18n.Resolver untuk tenant t; dipasang middleware di context request.
 func (s *Service) Resolver(t tenancy.TenantID) sdki18n.Resolver { return tenantResolver{s: s, t: t} }

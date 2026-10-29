@@ -88,7 +88,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // Handle mendaftarkan pattern dengan rantai:
-// otelhttp -> recover -> requestScope -> Authenticate (kecuali Public) -> tenantContext -> localeContext -> h.
+// otelhttp -> localeEarly -> recover -> requestScope -> Authenticate (kecuali Public) -> tenantContext -> localeContext -> h.
 // recover berada di dalam span otelhttp agar panic tercatat pada span aktif (lihat recoverMW).
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	var cfg routeConfig
@@ -106,6 +106,9 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	}
 	h = requestScope(r.deps.Logger, pattern, r.nPlusOneThreshold(), h)
 	h = recoverMW(r.deps.Logger, h)
+	if r.deps.I18n != nil {
+		h = localeEarly(r.deps.I18n, h)
+	}
 	h = otelhttp.NewHandler(h, pattern,
 		otelhttp.WithTracerProvider(r.deps.Tracer),
 		// Endpoint publik: traceparent klien tidak menjadi parent (hanya link pada span root baru).
