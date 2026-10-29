@@ -29,11 +29,20 @@ function source(over: Partial<CurrentUserSource> = {}): CurrentUserSource {
 
 async function openMenu() {
   const u = userEvent.setup();
-  await u.click(await screen.findByRole("button", { name: "Menu akun" }));
+  await u.click(await screen.findByRole("button", { name: /^Menu akun/ }));
   return u;
 }
 
 describe("UserMenu", () => {
+  test("nama aksesibel tombol memuat teks yang terlihat (nama dan email), tanpa aria-label yang menimpa (WCAG 2.5.3)", async () => {
+    renderApp({ currentUserSource: source() });
+    await screen.findByText("Rahmad Maulana");
+    const button = screen.getByRole("button", { name: /^Menu akun/ });
+    expect(button.hasAttribute("aria-label")).toBe(false);
+    expect(screen.getByRole("button", { name: /Rahmad Maulana/ })).toBe(button);
+    expect(screen.getByRole("button", { name: /rahmad@erpora\.id/ })).toBe(button);
+  });
+
   test("avatar menampilkan inisial, nama, dan email di dasar sidebar", async () => {
     renderApp({ currentUserSource: source() });
     expect(await screen.findByText("Rahmad Maulana")).toBeInTheDocument();

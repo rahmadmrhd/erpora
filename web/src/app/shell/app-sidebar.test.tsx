@@ -29,7 +29,7 @@ describe("AppSidebar", () => {
     const home = within(nav).getByRole("link", { name: "Beranda" });
     expect(notif.compareDocumentPosition(home) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(nav).getByText("Menu")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Menu akun" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Menu akun/ })).toBeInTheDocument();
   });
 
   test("hanya modul enabled yang muncul di menu", async () => {
