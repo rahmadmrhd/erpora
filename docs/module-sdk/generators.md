@@ -114,6 +114,6 @@ dan `stock-opname`, lalu menjalankan seluruh gate dan memasang modul ke PostgreS
 
 ## 9. Status keputusan ★ (PRD-000 Q31)
 
-- **★1 Frontend minimal.** `--frontend` membuat package `modules/<dir>/web` (`package.json`, `tsconfig.json`, `src/index.ts`, `api/contract.gen.ts`) dan mendaftarkannya di `web/package.json` dan `web/src/app/modules.ts`. `make:page` ditunda ke M3 bersama shell dan router (ditunda ke M3d menurut PK-5 M3a, belum dikonfirmasi).
+- **★1 Frontend minimal.** `--frontend` membuat package `modules/<dir>/web` (`package.json`, `tsconfig.json`, `src/index.ts`, `api/contract.gen.ts`) dan mendaftarkannya di `web/package.json` dan `web/src/app/modules.ts`. `make:page` ditunda ke M3 bersama shell dan router (ditunda ke M3d menurut Q36 PK-5).
 Templat `--frontend` saat ini belum selaras dengan bentuk frontend referensi di [`frontend.md`](frontend.md) (`info.ts`, `module.ts`, `routes.tsx`, halaman lazy, `i18n/`, `keys.gen.ts`, dan test). Akan diselaraskan setelah templat diperbarui (M3a task 13.4). Sampai itu, lengkapi berkas tersebut dengan mengikuti `modules/example/web`.
 - **★2 Integration test repository.** `make:repository` membuat unit test mapping, bukan integration test (Q28 menghapus driver Postgres dari `go.mod` modul). Integration test repository ditulis manual; keputusan generik ditinjau di PRD-001.

@@ -184,7 +184,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
 ## Yang belum tersedia
 
-- **`make:page`**: ditunda ke M3d (PK-5, konfirmasi belum final). Halaman baru ditulis manual mengikuti `modules/example/web`.
+- **`make:page`**: ditunda ke M3d (Q36 PK-5). Halaman baru ditulis manual mengikuti `modules/example/web`.
 - **Templat `make:module --frontend`**: saat ini hanya menghasilkan `src/index.ts`, `package.json`, dan `tsconfig.json`, serta mendaftarkannya di `web/src/app/modules.ts`. Bentuk lengkap (`info.ts`, `module.ts`, `routes.tsx`, halaman lazy, `i18n/`, `keys.gen.ts`, dan test) akan diselaraskan dengan panduan ini setelah templat diperbarui (M3a task 13.4). Lihat [`generators.md`](generators.md).
 - **Kontrak UI extension**: belum diputuskan (ADR-011, fase lanjutan).
 - **Layar notifikasi dan pengguna nyata**: masih sumber sementara (`emptyNotificationSource`, `anonymousUserSource`) sampai PRD Notifications dan PRD-001.
