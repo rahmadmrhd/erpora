@@ -140,3 +140,41 @@ func TestI18nStatus_Output(t *testing.T) {
 		t.Fatalf("exit=%d err=%v", exitCodeOf(err), err)
 	}
 }
+
+func TestI18nAdd_CreatesIdempotentAndExitCodes(t *testing.T) {
+	dir := i18nRepo(t)
+	out, err := runI18n(t, "i18n:add", "ms", "--name", "Bahasa Melayu")
+	if err != nil {
+		t.Fatalf("err=%v out=%s", err, out)
+	}
+	for _, want := range []string{"registri:", "buat internal/platform/i18n/catalog/ms.json", "buat packages/ui/i18n/ms.json"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("keluaran tidak memuat %q:\n%s", want, out)
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(dir, i18nPlatform, "ms.json"))
+	if err != nil || !strings.Contains(string(data), "TODO: Halo {name}") {
+		t.Fatalf("ms.json = %s err=%v", data, err)
+	}
+	out, err = runI18n(t, "i18n:add", "ms", "--name", "Bahasa Melayu")
+	if err != nil || !strings.Contains(out, "tidak ada perubahan") {
+		t.Fatalf("jalan kedua: err=%v out=%s", err, out)
+	}
+	if out, err = runI18n(t, "i18n:check", "--strict"); err != nil {
+		t.Fatalf("check --strict setelah add: %v\n%s", err, out)
+	}
+	// galat penggunaan
+	if _, err := runI18n(t, "i18n:add"); err == nil {
+		t.Error("tanpa argumen harus galat")
+	}
+	if _, err := runI18n(t, "i18n:add", "ZZ_zz"); exitCodeOf(err) != 2 {
+		t.Errorf("kode tidak sah: exit=%d", exitCodeOf(err))
+	}
+	if _, err := runI18n(t, "i18n:add", "fr", "tidakada"); exitCodeOf(err) != 2 {
+		t.Errorf("modul tidak dikenal: exit=%d", exitCodeOf(err))
+	}
+	inRepo(t)
+	if _, err := runI18n(t, "i18n:add", "fr"); exitCodeOf(err) != 3 {
+		t.Errorf("registri tidak ada: exit=%d", exitCodeOf(err))
+	}
+}

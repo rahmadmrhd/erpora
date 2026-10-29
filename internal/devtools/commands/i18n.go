@@ -21,7 +21,7 @@ const (
 )
 
 func registerI18n(root *cobra.Command) {
-	root.AddCommand(newI18nCheck(), newI18nStatus())
+	root.AddCommand(newI18nCheck(), newI18nStatus(), newI18nAdd())
 }
 
 // i18nExit memetakan galat i18ntools ke exit code.
@@ -118,5 +118,49 @@ func newI18nStatus() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "keluaran JSON")
+	return cmd
+}
+
+func newI18nAdd() *cobra.Command {
+	var name, fallback string
+	cmd := &cobra.Command{
+		Use:   "i18n:add <locale> [module...]",
+		Short: "Buat kerangka katalog bahasa baru dari bahasa default (nilai bertanda TODO)",
+		Long: "Membuat <locale>.json untuk setiap namespace terpilih (platform, ui, dan modul; tanpa argumen modul = semua) dari katalog bahasa\n" +
+			"default: struktur dan urutan kunci sama, nilai diberi awalan \"TODO: \" (dihitung belum diterjemahkan oleh i18n:status). Bahasa ditambahkan\n" +
+			"ke registri (internal/platform/i18n/locales.json) bila belum ada (--name, --fallback) dan ke i18n.locales manifest modul. Idempoten: berkas\n" +
+			"yang sudah ada tidak ditimpa. Exit 2 galat argumen/katalog, 3 prasyarat gagal, 4 penulisan gagal.",
+		GroupID: GroupDevtools,
+		Args:    cobra.MinimumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			root, err := repoRoot()
+			if err != nil {
+				return &app.ExitError{Code: exitI18nConfig, Err: err}
+			}
+			res, err := i18ntools.Add(root, i18ntools.AddOptions{Locale: args[0], Name: name, Fallback: fallback, Modules: args[1:]})
+			if err != nil {
+				return i18nExit(err)
+			}
+			w := c.OutOrStdout()
+			if res.RegistryUpdated {
+				fmt.Fprintf(w, "registri: bahasa %s ditambahkan ke %s\n", args[0], i18ntools.RegistryPath)
+			}
+			for _, f := range res.Created {
+				fmt.Fprintf(w, "buat %s\n", f)
+			}
+			for _, f := range res.ManifestsUpdated {
+				fmt.Fprintf(w, "ubah %s (i18n.locales)\n", f)
+			}
+			for _, f := range res.Skipped {
+				fmt.Fprintf(w, "lewati %s (sudah ada)\n", f)
+			}
+			if !res.RegistryUpdated && len(res.Created) == 0 && len(res.ManifestsUpdated) == 0 {
+				fmt.Fprintln(w, "tidak ada perubahan")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "", "nama asli bahasa untuk registri bila bahasa belum terdaftar (default: kode)")
+	cmd.Flags().StringVar(&fallback, "fallback", "", "bahasa fallback untuk registri bila bahasa belum terdaftar (default: bahasa default registri)")
 	return cmd
 }
