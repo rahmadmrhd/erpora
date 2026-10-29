@@ -126,7 +126,7 @@ func TestParseCatalogFlattenCollisionThreePathsOneIssue(t *testing.T) {
 		}
 	}
 	// jalur terurut leksikografis
-	if i, j, k := strings.Index(first, "/b.c/b.c"), strings.Index(first, "/b.c/b/c"), strings.Index(first, "/b/c/b.c"); !(i < j && j < k) {
+	if i, j, k := strings.Index(first, "/b.c/b.c"), strings.Index(first, "/b.c/b/c"), strings.Index(first, "/b/c/b.c"); i >= j || j >= k {
 		t.Errorf("jalur harus terurut: %q", first)
 	}
 }

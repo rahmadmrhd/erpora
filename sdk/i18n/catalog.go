@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 )
 
 // Flat adalah katalog satu namespace dan bahasa: kunci lengkap bertitik menjadi sumber pesan.
@@ -32,7 +34,7 @@ func ParseCatalog(r io.Reader, lim Limits) (Flat, []Issue) {
 		return nil, []Issue{{Code: CodeTooLarge, Detail: fmt.Sprintf("berkas melebihi %d byte", lim.MaxFileBytes)}}
 	}
 	data = bytes.TrimPrefix(data, utf8BOM)
-	c := &catalogParser{lim: lim, flat: Flat{}, origin: map[string]string{}}
+	c := &catalogParser{lim: lim, flat: Flat{}, paths: map[string][]string{}}
 	c.run(json.NewDecoder(bytes.NewReader(data)))
 	if len(c.issues) > 0 {
 		return nil, c.issues
@@ -51,7 +53,7 @@ type frame struct {
 type catalogParser struct {
 	lim    Limits
 	flat   Flat
-	origin map[string]string // kunci lengkap -> jalur asal, untuk deteksi tabrakan
+	paths  map[string][]string // kunci lengkap -> semua jalur penghasilnya (urut penemuan), untuk deteksi tabrakan
 	issues []Issue
 }
 
@@ -115,6 +117,7 @@ func (c *catalogParser) run(dec *json.Decoder) {
 			stack = append(stack, next)
 		}
 	}
+	c.reportCollisions()
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		c.fatal(CodeInvalidJSON, "", "ada data sesudah objek akar")
 	}
@@ -170,15 +173,16 @@ func (c *catalogParser) entry(dec *json.Decoder, top *frame, seg string) (next *
 // leaf mencatat satu pesan; false berarti pembacaan harus dihentikan.
 func (c *catalogParser) leaf(flatKey string, segs []string, msg string) bool {
 	path := pathString(segs)
-	if prev, dup := c.origin[flatKey]; dup {
-		return c.add(Issue{Code: CodeFlattenCollision, Key: flatKey,
-			Detail: fmt.Sprintf("kunci %s dihasilkan oleh dua jalur: %s dan %s", flatKey, prev, path)})
+	if prev, dup := c.paths[flatKey]; dup {
+		// Tabrakan: jalur ditambahkan; Issue-nya dilaporkan SATU kali per kunci di akhir (reportCollisions).
+		c.paths[flatKey] = append(prev, path)
+		return true
 	}
-	if len(c.origin) >= c.lim.MaxKeys {
+	if len(c.paths) >= c.lim.MaxKeys {
 		c.fatal(CodeTooLarge, "", fmt.Sprintf("kunci melebihi %d per katalog", c.lim.MaxKeys))
 		return false
 	}
-	c.origin[flatKey] = path
+	c.paths[flatKey] = []string{path}
 	if _, err := ValidateMessage(msg, c.lim); err != nil {
 		var ce *CompileError
 		if errors.As(err, &ce) {
@@ -190,4 +194,30 @@ func (c *catalogParser) leaf(flatKey string, segs []string, msg string) bool {
 	}
 	c.flat[flatKey] = msg
 	return true
+}
+
+// reportCollisions melaporkan SATU Issue flatten_collision per kunci lengkap yang dihasilkan lebih dari satu jalur
+// (Requirement 1.6): Detail menyebut SEMUA jalur, terurut leksikografis, dan Issue terurut menurut kunci,
+// sehingga hasilnya deterministik dan tidak bergantung pada urutan penemuan.
+func (c *catalogParser) reportCollisions() {
+	var keys []string
+	for k, ps := range c.paths {
+		if len(ps) > 1 {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		ps := append([]string(nil), c.paths[k]...)
+		sort.Strings(ps)
+		var list string
+		if len(ps) == 2 {
+			list = "dua jalur: " + ps[0] + " dan " + ps[1]
+		} else {
+			list = fmt.Sprintf("%d jalur: %s", len(ps), strings.Join(ps, ", "))
+		}
+		if !c.add(Issue{Code: CodeFlattenCollision, Key: k, Detail: fmt.Sprintf("kunci %s dihasilkan oleh %s", k, list)}) {
+			return
+		}
+	}
 }
