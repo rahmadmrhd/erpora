@@ -38,6 +38,7 @@ paths:
                     - { key: acme.example, slug: example, version: 1.0.0, status: enabled, basePath: /example, offline: false }
                   permissions: []
                   revision: 5
+                  features: { modulesAdminApi: true }
                   i18n:
                     defaultLocale: id
                     locales: [{ code: id, name: Bahasa Indonesia }, { code: en, name: English }]
@@ -495,6 +496,12 @@ components:
                   offline: { type: boolean }
             permissions: { type: array, items: { type: string } }
             revision: { type: integer, format: int64 }
+            features:
+              type: object
+              description: Bendera kemampuan server untuk UI (additive).
+              required: [modulesAdminApi]
+              properties:
+                modulesAdminApi: { type: boolean, description: 'API mutasi /api/platform/modules aktif (ERP_ENV=development atau ERP_MODULES_ADMIN_API=true).' }
             i18n:
               type: object
               description: Bahasa yang didukung dan revisi katalog per namespace aktif (PRD-000 FR-25); frontend memuat ulang katalog bila revisinya berubah.

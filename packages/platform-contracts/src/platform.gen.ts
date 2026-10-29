@@ -198,6 +198,11 @@ export type components = {
     BootstrapEnvelope: {
       data: {
         appVersion: string;
+        /** @description Bendera kemampuan server untuk UI (additive). */
+        features?: {
+          /** @description API mutasi /api/platform/modules aktif (ERP_ENV=development atau ERP_MODULES_ADMIN_API=true). */
+          modulesAdminApi: boolean;
+        };
         /** @description Bahasa yang didukung dan revisi katalog per namespace aktif (PRD-000 FR-25); frontend memuat ulang katalog bila revisinya berubah. */
         i18n?: {
           defaultLocale: string;
@@ -482,6 +487,9 @@ export interface operations {
            * @example {
            *       "data": {
            *         "appVersion": "0.1.0",
+           *         "features": {
+           *           "modulesAdminApi": true
+           *         },
            *         "i18n": {
            *           "defaultLocale": "id",
            *           "locales": [
