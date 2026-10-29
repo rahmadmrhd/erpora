@@ -191,12 +191,23 @@ func (s *Store) Upsert(ctx context.Context, t tenancy.TenantID, o Override, pre 
 			rev, err = currentRevision(tx, t, o.Namespace, o.Locale)
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO i18n_overrides (tenant_id, namespace, locale, key, message, updated_by, updated_at)
+		// Satu pernyataan bersyarat: baris hanya ditulis (dan RETURNING hanya mengembalikan baris) bila isinya benar-benar
+		// berubah. Dua PUT serentak dengan nilai sama pada baris yang belum ada: yang kedua menunggu yang pertama
+		// commit, lalu WHERE mendapati nilai sama sehingga tidak menulis dan tidak menaikkan revisi (R-7b; FOR UPDATE
+		// saja tidak mengunci baris yang belum ada).
+		var written []int
+		if err := tx.Raw(`INSERT INTO i18n_overrides (tenant_id, namespace, locale, key, message, updated_by, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, now())
 			ON CONFLICT (tenant_id, namespace, locale, key)
-			DO UPDATE SET message = EXCLUDED.message, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-			tid(t), o.Namespace, o.Locale, o.Key, o.Message, o.UpdatedBy).Error; err != nil {
+			DO UPDATE SET message = EXCLUDED.message, updated_by = EXCLUDED.updated_by, updated_at = now()
+			WHERE i18n_overrides.message IS DISTINCT FROM EXCLUDED.message
+			RETURNING 1`,
+			tid(t), o.Namespace, o.Locale, o.Key, o.Message, o.UpdatedBy).Scan(&written).Error; err != nil {
 			return fmt.Errorf("store: simpan override: %w", err)
+		}
+		if len(written) == 0 {
+			rev, err = currentRevision(tx, t, o.Namespace, o.Locale)
+			return err
 		}
 		var revs []int64
 		if err := tx.Raw(bumpRevisionSQL, tid(t), o.Namespace, o.Locale).Scan(&revs).Error; err != nil {
