@@ -153,32 +153,32 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
 - [ ] 11. Checkpoint — SDK, layanan, dan backend
   - Jalankan `task lint arch check:gowork-off test contracts:check`, `task web:check`; bila menyentuh DB jalankan `task test:integration` lewat PostgreSQL di VPS (tunnel + `ERP_TEST_DATABASE_URL`). Tanyakan ke user bila bentuk runtime i18n memaksa perubahan desain.
 
-- [ ] 12. Shell aplikasi (Kelas beban: Sonnet; 12.8 Haiku)
-  - [ ] 12.1 Tulis test shell (merah dulu)
+- [x] 12. Shell aplikasi (Kelas beban: Sonnet; 12.8 Haiku)
+  - [x] 12.1 Tulis test shell (merah dulu)
     - `NavMenu` (urutan Beranda → modul → Pengaturan, **P3** item aktif unik, grup terbuka bila ada anak aktif, `EmptyState` bila tidak ada modul, ikon tak dikenal → lingkaran berinisial); `AppSidebar` (logo + nama, Notifikasi sebelum menu, lencana 0/5/`99+`, titik saat terlipat, avatar di dasar); `NotificationsPanel` (memuat/kosong/galat, tandai terbaca, `safeInternalHref`); `UserMenu` (isi menu, aksi nonaktif + tooltip, pilihan bahasa dan tema); `Navbar` + `Breadcrumbs` + `PageActionsView` (inline vs ⋯ di layar kecil, crumb terakhir bukan tautan); `AppRouter` dengan `fetch` palsu: **P17** guard (nonaktif → "Modul tidak aktif" dan chunk tidak dimuat; diubah ke `enabled` → pulih; disable saat halaman terbuka → konten diganti), modul frontend tak ada di bootstrap → 404, `router.invalidate()` saat `revision` berubah, error boundary menjaga sidebar/navbar, judul dokumen dan `RouteAnnouncer`; `BootErrorScreen` (kamus bawaan id/en, tombol "Coba lagi").
     - **Validates: Requirements 5.1, 5.3, 5.5, 8.1, 8.2, 9.1, 9.2, 9.6, 10.1, 10.2, 10.4, 11.1, 11.2, 11.3, 12.1, 12.2, 14.1, 14.5**
-  - [ ] 12.2 Providers dan `main.tsx`
+  - [x] 12.2 Providers dan `main.tsx`
     - `providers.tsx` (urutan `design.md` §6.1), `ui-labels-bridge.tsx`, `boot-screens.tsx` (`BootErrorScreen`, kerangka memuat), `QueryClient` tunggal (tanpa persister), `main.tsx` merender `<Providers/>`; dua `QueryClient` tidak boleh ada.
     - _Requirements: 7.1, 7.3, 4.1_
-  - [ ] 12.3 Router
+  - [x] 12.3 Router
     - `router/` sesuai §6.2: `buildRouter`, root route, base route per modul yang ada di bootstrap dengan guard (`beforeLoad` + komponen reaktif + `errorComponent`), `/`, `/settings/modules` (lazy; halaman dikerjakan di grup 14, sementara placeholder), `notFound`, `defaultErrorComponent`, `document.title`, `RouteAnnouncer`, `router.invalidate()` pada perubahan `revision`. `web/src/app/modules.ts` tetap sumber agregasi (`validateModules(frontendModules)` dipanggil saat start).
     - _Requirements: 5.1, 5.2, 5.3, 5.5, 6.3, 6.7, 8.1, 8.2_
-  - [ ] 12.4 AppShell, AppSidebar, NavMenu
+  - [x] 12.4 AppShell, AppSidebar, NavMenu
     - Sesuai §6.3 sampai 6.4: `SidebarProvider` + `SidebarInset`, tautan "Lewati ke konten", `<main id="content" tabindex="-1">` dengan Suspense dan `CatchBoundary`, header (logo "E" + `platform:app.name`), item Notifikasi, label Menu, `NavMenu` (item, grup `Collapsible`, popover grup saat terlipat, tooltip), navigasi bawaan Beranda dan Pengaturan › Modul.
     - _Requirements: 9.1, 9.2, 9.3, 9.6, 9.7, 14.1, 14.5_
-  - [ ] 12.5 NotificationsPanel dan UserMenu
+  - [x] 12.5 NotificationsPanel dan UserMenu
     - Sesuai §6.4 sampai 6.5: panel (Popover `w-96`, 460 px), lencana/titik, UserMenu (Avatar, nama, email, Kelola Akun, submenu Bahasa dan Tema, Keluar), pilihan bahasa memanggil `setLocale` runtime i18n, tema memanggil `useTheme().setPreference`.
     - _Requirements: 4.5, 11.1, 11.2, 11.3, 11.4, 12.1, 12.2, 12.3, 12.4, 12.5_
-  - [ ] 12.6 Navbar, Breadcrumbs, PageActionsView
+  - [x] 12.6 Navbar, Breadcrumbs, PageActionsView
     - Sesuai §6.6: `SidebarTrigger` + tooltip + `Kbd`, `collapseCrumbs`, `PageActionsView` responsif, area konten mengikuti `usePageChrome().scroll`.
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
-  - [ ] 12.7 Halaman bawaan
+  - [x] 12.7 Halaman bawaan
     - `DashboardPage`, `NotFoundPage`, `ModuleInactivePage` (teks per status), `RouteErrorPage` (menampilkan `requestId`/`traceId` bila galat API).
     - _Requirements: 5.3, 8.1, 14.5_
-  - [ ] 12.8 Katalog `platform` dan `ui`
+  - [x] 12.8 Katalog `platform` dan `ui`
     - Kunci **ditambahkan bersama komponen yang memakainya** (12.2 sampai 12.7, 14.4) karena `t()` terketik: kunci yang belum ada gagal `tsc`. Task ini adalah rekonsiliasi akhir: pastikan kunci shell/navigasi/notifikasi/menu avatar/tema/bahasa/galat/modul tidak aktif (`design.md` Data Models) ada di `internal/platform/i18n/catalog/{id,en}.json` dan `packages/ui/i18n/{id,en}.json` (Title Case, tanpa emoji; `id` default dan `en`), tidak ada kunci yatim, lalu `task erpora -- i18n:generate` (`--check` bersih) dan `i18n:check` (tanpa peringatan paritas).
     - _Requirements: 12.5, 14.4_
-  - [ ] 12.9 Gate frontend dan laporan bundle
+  - [x] 12.9 Gate frontend dan laporan bundle
     - `bun run typecheck`, `lint`, `bun test`, `bun run build`; catat ukuran JS awal (anggaran 200 KB), chunk `/example` terpisah, kontributor terbesar; bila > 190 KB terapkan mitigasi K-12 berurutan dan lapor.
     - _Requirements: 1.3, 1.4, 5.4, 15.1_
 
