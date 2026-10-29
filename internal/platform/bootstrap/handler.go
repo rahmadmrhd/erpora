@@ -21,6 +21,14 @@ type Manifest struct {
 	// I18n adalah bahasa yang didukung dan revisi katalog per namespace aktif (PRD-000 FR-25); nil = tanpa i18n
 	// (bidang dihilangkan; perubahan bersifat additive, api-guidelines §14.1).
 	I18n *I18n `json:"i18n,omitempty"`
+	// Features memuat bendera kemampuan server untuk UI (additive, api-guidelines §14.1); nil = tidak dinyatakan.
+	Features *Features `json:"features,omitempty"`
+}
+
+// Features adalah bendera kemampuan server. ModulesAdminAPI true bila API mutasi /api/platform/modules aktif
+// (ERP_ENV=development atau ERP_MODULES_ADMIN_API=true); UI hanya-baca bila false (PRD-000 Q36 PK-2).
+type Features struct {
+	ModulesAdminAPI bool `json:"modulesAdminApi"`
 }
 
 // I18n adalah bagian i18n manifest bootstrap. Frontend memuat ulang katalog sebuah namespace bila revisinya berubah.

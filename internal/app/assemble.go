@@ -117,7 +117,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		// Deteksi N+1 hanya di development (ERP_DB_NPLUSONE_THRESHOLD, 0 = mati).
 		NPlusOneThreshold: cfg.DBNPlusOneThreshold,
 		I18n:              i18nSvc,
-		Bootstrap:         bootstrapFrom(reg, snap, i18nSvc),
+		Bootstrap:         bootstrapFrom(reg, snap, i18nSvc, cfg.ModulesAdminAPIEnabled()),
 		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
 		Authenticate: func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +149,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 // Bagian i18n memuat bahasa terdaftar dan revisi katalog namespace aktif; ETag mengikuti revision snapshot
 // dan revisi katalog (bootstrap.Manifest.ETag). Bidang tambahan kelak (mis. features) ditambahkan sebagai
 // struct bersarang opsional pada bootstrap.Manifest seperti I18n, tanpa mengubah fungsi ini.
-func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot, i18nSvc *i18n.Service) func(context.Context, tenancy.TenantID) bootstrap.Manifest {
+func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot, i18nSvc *i18n.Service, modulesAdminAPI bool) func(context.Context, tenancy.TenantID) bootstrap.Manifest {
 	return func(ctx context.Context, t tenancy.TenantID) bootstrap.Manifest {
 		statuses, rev := snap.Statuses(t)
 		var mods []bootstrap.ModuleInput
@@ -167,6 +167,7 @@ func bootstrapFrom(reg *registry.Registry, snap *runtime.Snapshot, i18nSvc *i18n
 			})
 		}
 		m := bootstrap.Build(buildinfo.Version, t, mods, rev)
+		m.Features = &bootstrap.Features{ModulesAdminAPI: modulesAdminAPI}
 		if i18nSvc != nil {
 			lr := i18nSvc.Registry()
 			locales := make([]bootstrap.I18nLocale, 0, len(lr.Locales))
