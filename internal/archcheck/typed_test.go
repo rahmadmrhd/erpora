@@ -51,3 +51,16 @@ func TestDecode_FixtureViolations(t *testing.T) {
 		t.Errorf("per file = %v", perFile)
 	}
 }
+
+// I1: argumen kunci i18n.T/Lookup yang konstan tidak boleh memuat "<ns>::" milik modul lain.
+func TestI1_FixtureViolations(t *testing.T) {
+	got := byRule(CheckSecurity(loadFixture(t)), "I1")
+	if len(got) != 5 { // 5 di i18n_bad.go
+		t.Fatalf("I1 = %d, want 5:\n%+v", len(got), got)
+	}
+	for _, v := range got {
+		if !strings.HasPrefix(v.Detail, "i18n_bad.go:") {
+			t.Errorf("detail bukan dari fixture i18n_bad.go: %+v", v)
+		}
+	}
+}

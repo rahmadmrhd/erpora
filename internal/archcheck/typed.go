@@ -1,12 +1,15 @@
 package archcheck
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -15,10 +18,13 @@ import (
 // TypedPackage adalah satu paket dengan informasi tipe lengkap untuk aturan EGRESS dan DECODE.
 type TypedPackage struct {
 	ImportPath, Module string
-	Fset               *token.FileSet
-	Files              []*ast.File
-	Info               *types.Info
-	Types              *types.Package
+	// Slug adalah namespace i18n modul pemilik (slug di module.json; bila tidak ada, nama terakhir path
+	// Go module). Dipakai aturan I1.
+	Slug  string
+	Fset  *token.FileSet
+	Files []*ast.File
+	Info  *types.Info
+	Types *types.Package
 }
 
 // LoadTyped memuat "./..." di dir dengan informasi tipe (tanpa file test). env menambah environment
@@ -44,6 +50,7 @@ func LoadTyped(dir string, env ...string) ([]TypedPackage, error) {
 		tp := TypedPackage{ImportPath: p.PkgPath, Fset: p.Fset, Files: p.Syntax, Info: p.TypesInfo, Types: p.Types}
 		if p.Module != nil {
 			tp.Module = p.Module.Path
+			tp.Slug = moduleSlug(dir, p.Module.Path)
 		}
 		out = append(out, tp)
 	}
@@ -51,6 +58,19 @@ func LoadTyped(dir string, env ...string) ([]TypedPackage, error) {
 		return nil, fmt.Errorf("paket %s tidak dapat dikompilasi:\n%s", dir, strings.Join(errs, "\n"))
 	}
 	return out, nil
+}
+
+// moduleSlug membaca slug dari <dir>/module.json; bila tidak ada, memakai nama terakhir path Go module.
+func moduleSlug(dir, modPath string) string {
+	if data, err := os.ReadFile(filepath.Join(dir, "module.json")); err == nil { //nolint:gosec // path tetap di direktori modul
+		var m struct {
+			Slug string `json:"slug"`
+		}
+		if json.Unmarshal(data, &m) == nil && m.Slug != "" {
+			return m.Slug
+		}
+	}
+	return modPath[strings.LastIndex(modPath, "/")+1:]
 }
 
 // LoadTypedRepo memuat setiap modul bisnis (modules/*/go.mod) di bawah root dalam mode workspace.
@@ -70,7 +90,7 @@ func LoadTypedRepo(root string) ([]TypedPackage, error) {
 	return all, nil
 }
 
-// CheckSecurity menerapkan aturan EGRESS dan DECODE pada paket modul bisnis (Module berprefiks
+// CheckSecurity menerapkan aturan EGRESS, DECODE, dan I1 pada paket modul bisnis (Module berprefiks
 // "erpora/modules/"). Detail: "<file>:<line>: <uraian>".
 //
 // EGRESS: modul tidak boleh memakai HTTP client mentah net/http (DefaultClient, DefaultTransport, Get, Post,
@@ -127,6 +147,7 @@ func CheckSecurity(pkgs []TypedPackage) []Violation {
 					}
 				case *ast.CallExpr:
 					checkDecodeCall(p, x, inInfra, add)
+					checkI18nKey(p, x, add)
 				}
 				return true
 			})
@@ -200,6 +221,39 @@ func rawHTTPType(t types.Type) (string, bool) {
 		return n, true
 	}
 	return "", false
+}
+
+// i18nPath adalah paket penerjemah yang dipakai modul.
+const i18nPath = "erpora/sdk/i18n"
+
+// checkI18nKey (aturan I1): argumen kunci (indeks 1) pada i18n.T dan i18n.Lookup yang bernilai konstan
+// (literal, konstanta bernama, atau lipatan konstanta) tidak boleh berbentuk "<ns>::kunci" dengan ns
+// bukan namespace modul sendiri, "ui", atau "platform". Kunci dinamis tidak dapat diperiksa statis;
+// penegakannya di runtime (T menolak namespace modul lain).
+func checkI18nKey(p TypedPackage, call *ast.CallExpr, add func(string, token.Pos, string)) {
+	var id *ast.Ident
+	switch f := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		id = f.Sel
+	case *ast.Ident:
+		id = f
+	default:
+		return
+	}
+	fn, ok := p.Info.Uses[id].(*types.Func)
+	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != i18nPath || (fn.Name() != "T" && fn.Name() != "Lookup") || len(call.Args) < 2 {
+		return
+	}
+	tv, ok := p.Info.Types[call.Args[1]]
+	if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+		return
+	}
+	key := constant.StringVal(tv.Value)
+	ns, _, found := strings.Cut(key, "::")
+	if !found || ns == "ui" || ns == "platform" || ns == p.Slug {
+		return
+	}
+	add("I1", call.Args[1].Pos(), "kunci i18n bernamespace modul lain ("+strconv.Quote(ns)+"); modul hanya boleh memakai namespace sendiri, ui, dan platform")
 }
 
 // checkDecodeCall memeriksa json.Unmarshal dan (*json.Decoder).Decode.

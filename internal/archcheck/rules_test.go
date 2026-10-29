@@ -440,3 +440,17 @@ func TestDevtoolsRule_OnlyEntryFile(t *testing.T) {
 		t.Errorf("detail harus menyebut bad.go: %+v", got)
 	}
 }
+
+// I1 (PRD-000 §4.2, spec i18n-platform 10): modul hanya memakai sdk/i18n; runtime katalog platform tertutup.
+func TestI1_ModuleMustNotImportPlatformI18n(t *testing.T) {
+	const platI18n = root + "/internal/platform/i18n"
+	assertViolation(t, Check(repoWith(pkg(example+"/internal/application", platI18n))), "I1")
+	assertViolation(t, Check(repoWith(pkg(example+"/x", platI18n+"/store"))), "I1")
+	p := pkg(example + "/internal/application")
+	p.TestImports = []string{platI18n}
+	assertViolation(t, Check(repoWith(p)), "I1")
+	// Yang sah: sdk/i18n untuk modul; platform sendiri dan internal/app boleh memakai runtime platform.
+	assertNone(t, Check(repoWith(pkg(example+"/internal/application", sdk+"/i18n"))), "I1")
+	assertNone(t, Check(repoWith(pkg(root+"/internal/app", platI18n))), "I1")
+	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/httpserver", platI18n))), "I1")
+}

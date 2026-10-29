@@ -100,6 +100,10 @@ func Check(r Repo) []Violation {
 			if inRepo && strings.HasPrefix(imp, modulesBase) && !isPlatform && !isModulePkg && !isApp {
 				add("D7", p.ImportPath, "hanya internal/app yang boleh mengimpor modul: "+imp)
 			}
+			// I1 (spec i18n-platform 10): modul memakai erpora/sdk/i18n; runtime katalog platform tertutup.
+			if isModulePkg && underPath(imp, rootModule+"/internal/platform/i18n") {
+				add("I1", p.ImportPath, "modul hanya boleh memakai erpora/sdk/i18n, bukan runtime platform: "+imp)
+			}
 			if isModulePkg {
 				if y := owningModule(imp); y != "" && p.Module != "" && y != p.Module && !allowedByManifest(p.Module, y) {
 					add("D8", p.ImportPath, "impor modul "+y+" yang tidak ada di dependencies manifest: "+imp)
