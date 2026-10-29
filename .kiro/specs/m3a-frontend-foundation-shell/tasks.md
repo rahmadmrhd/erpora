@@ -183,13 +183,13 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - _Requirements: 1.3, 1.4, 5.4, 15.1_
 
 - [ ] 13. Modul referensi dan generator (Kelas beban: Sonnet)
-  - [ ] 13.1 Tulis test modul referensi (merah dulu)
+  - [x] 13.1 Tulis test modul referensi (merah dulu)
     - Untuk `example` dan `exampleaddon`: `defineModule` valid (`key`/`slug` cocok dengan `module.json`, `version` sama), `registerRoutes` mengembalikan route dengan parent yang benar, navigasi satu item, halaman dirender dengan `fetch` palsu (daftar notes; ringkasan `noteCount`), `PageActions` "Segarkan".
     - **Validates: Requirements 5.3, 6.1, 6.7**
-  - [ ] 13.2 Buat `modules/example/web` dan `modules/exampleaddon/web`
+  - [x] 13.2 Buat `modules/example/web` dan `modules/exampleaddon/web`
     - Sesuai `design.md` §8: `package.json` (`@erpora/module-<dir>`, dependensi paket repo; addon juga `@erpora/module-example`), `tsconfig.json`, `src/index.ts` (`moduleInfo`, `api`, `frontendModule`), `src/module.ts`, `src/routes.tsx`, halaman lazy, kunci i18n modul (`nav.*`, `page.*`) di `modules/<x>/i18n/{id,en}.json` dan `keys.gen.ts` (koordinasi dengan hasil spec i18n; bila `web/` sudah dibuat spec itu, lengkapi saja), `contracts:generate` untuk `api/contract.gen.ts`. Daftarkan di `web/package.json` dan `web/src/app/modules.ts`; `bun install`.
     - _Requirements: 5.3, 6.1, 6.7_
-  - [ ] 13.3 Koleksi TanStack DB `example` dan bukti lazy
+  - [x] 13.3 Koleksi TanStack DB `example` dan bukti lazy
     - `modules/example/web/src/db/notes-collection.ts` (`createCollection(queryCollectionOptions(...))` lewat `useDb()`, kunci `scopedKey(tenantId, "example", "notes")`); halaman `/example` memakainya dengan `useLiveQuery`. Verifikasi build: chunk DB terpisah dan **tidak** ada di JS awal (periksa metafile), chunk `/example` terpisah.
     - _Requirements: 5.4, 7.4_
   - [ ] 13.4 Templat generator (test dulu)
