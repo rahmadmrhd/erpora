@@ -91,5 +91,149 @@
     "not_ready": "Layanan belum siap.",
     "invalid_i18n_override": "Istilah pengganti tidak valid.",
     "unknown": "Terjadi kesalahan yang tidak dikenali"
+  },
+  "modules": {
+    "title": "Modul",
+    "description": "Daftar modul terkompilasi dan statusnya untuk tenant ini.",
+    "empty": "Belum ada modul.",
+    "required": "Wajib",
+    "refresh": "Segarkan",
+    "loadError": "Daftar modul tidak dapat dimuat.",
+    "forbidden": {
+      "title": "403: Tidak diizinkan",
+      "description": "Anda tidak memiliki izin untuk melihat daftar modul."
+    },
+    "readonly": {
+      "title": "Mode hanya-baca",
+      "description": "Manajemen modul di lingkungan ini dilakukan lewat CLI erpora modules (install, enable, disable, upgrade, uninstall). Halaman ini hanya menampilkan status."
+    },
+    "columns": {
+      "name": "Nama",
+      "version": "Versi",
+      "status": "Status",
+      "dependencies": "Dependensi",
+      "dependents": "Dependen",
+      "actions": "Aksi"
+    },
+    "version": {
+      "installed": "Terpasang {version}",
+      "binary": "Binary {version}",
+      "notInstalled": "Belum terpasang",
+      "upgradeAvailable": "Upgrade tersedia"
+    },
+    "dependencies": {
+      "none": "Tidak ada",
+      "optional": "{name} (opsional)"
+    },
+    "status": {
+      "available": "Tersedia",
+      "installed": "Terinstal",
+      "enabled": "Aktif",
+      "disabled": "Nonaktif",
+      "upgrade_pending": "Menunggu upgrade",
+      "failed": "Gagal",
+      "uninstalled": "Dihapus",
+      "missing": "Hilang",
+      "incompatible": "Tidak kompatibel"
+    },
+    "op": {
+      "install": "Install",
+      "enable": "Aktifkan",
+      "disable": "Nonaktifkan",
+      "upgrade": "Upgrade",
+      "uninstall": "Uninstall",
+      "retry": "Coba ulang",
+      "history": "Riwayat",
+      "menu": "Aksi untuk {name}"
+    },
+    "dialog": {
+      "title": "{operation}: {name}",
+      "confirm": "Lanjutkan",
+      "cancel": "Batal",
+      "close": "Tutup",
+      "noImpact": "Tidak ada dampak tambahan yang dapat dihitung. Server tetap memeriksa aturan dependensi."
+    },
+    "impact": {
+      "effects": "Dampak",
+      "blockers": "Tidak dapat dilanjutkan",
+      "menu_hidden": "Menu disembunyikan: {labels}",
+      "menu_shown": "Menu ditampilkan: {labels}",
+      "routes_inactive": "Halaman tidak aktif: {paths}",
+      "routes_active": "Halaman aktif: {paths}",
+      "api_closed": "API {prefix} menolak permintaan ({code})",
+      "data_kept": "Data tidak dihapus",
+      "migrations_run": "Migrasi database dijalankan bila ada",
+      "version_change": "Versi {from} menjadi {to}",
+      "needs_dependencies": "Dependensi ikut dipasang: {modules}"
+    },
+    "blocker": {
+      "module_required": "Modul wajib tidak boleh dinonaktifkan atau di-uninstall: {modules}",
+      "dependency_not_ready": "Dependensi belum siap: {modules}",
+      "dependents_active": "Modul lain masih bergantung dan aktif: {modules}",
+      "module_incompatible": "Tidak kompatibel dengan platform: {modules}",
+      "invalid_transition": "Operasi ini tidak diizinkan untuk status saat ini: {modules}",
+      "downgrade_not_supported": "Versi binary lebih lama daripada yang terpasang: {modules}"
+    },
+    "install": {
+      "withDeps": "Sertakan dependensi",
+      "enable": "Aktifkan setelah install"
+    },
+    "result": {
+      "title": "Hasil operasi",
+      "running": "Operasi berjalan…",
+      "succeeded": "Berhasil",
+      "failed": "Gagal",
+      "noop": "Tidak ada perubahan: status sudah sesuai.",
+      "timeout": "Pemantauan dihentikan setelah 10 menit; pantau lewat Riwayat.",
+      "pollError": "Status operasi belum dapat dibaca; mencoba lagi.",
+      "operation": "{operation}: {status}"
+    },
+    "error": {
+      "invalid_transition": "Operasi tidak diizinkan untuk status modul saat ini.",
+      "operation_in_progress": "Operasi modul lain sedang berjalan. Coba lagi sebentar lagi.",
+      "module_required": "Modul wajib tidak dapat dinonaktifkan.",
+      "dependency_not_ready": "Dependensi modul belum siap.",
+      "dependents_active": "Masih ada modul lain yang bergantung dan aktif.",
+      "module_incompatible": "Modul tidak kompatibel dengan platform ini.",
+      "downgrade_not_supported": "Versi binary lebih lama daripada versi terpasang; downgrade tidak didukung.",
+      "module_not_found": "Modul tidak ditemukan.",
+      "version_mismatch": "Status modul berubah. Daftar dimuat ulang; periksa dampak lalu konfirmasi lagi.",
+      "mutation_disabled": "Manajemen modul tidak aktif di lingkungan ini.",
+      "requestId": "ID permintaan: {requestId}"
+    },
+    "failure": {
+      "migration_failed": "Migrasi database gagal.",
+      "interrupted": "Operasi terputus; gunakan Coba ulang.",
+      "health_check_failed": "Pemeriksaan kesehatan modul gagal.",
+      "hook_failed": "Hook modul gagal.",
+      "dependency_not_ready": "Dependensi belum siap.",
+      "downgrade_not_supported": "Downgrade tidak didukung.",
+      "internal_error": "Terjadi kesalahan internal.",
+      "unknown": "Operasi gagal."
+    },
+    "history": {
+      "title": "Riwayat {name}",
+      "description": "Event lifecycle terbaru lebih dulu.",
+      "empty": "Belum ada riwayat.",
+      "error": "Riwayat tidak dapat dimuat.",
+      "actor": "oleh {actor}",
+      "page": "Halaman {page}",
+      "details": "Detail",
+      "operationSteps": "Langkah operasi",
+      "stepsEmpty": "Tidak ada langkah.",
+      "step": "{name}: {status} ({durationMs} ms)",
+      "event": {
+        "installed": "Diinstal",
+        "enabled": "Diaktifkan",
+        "disabled": "Dinonaktifkan",
+        "upgraded": "Di-upgrade",
+        "uninstalled": "Di-uninstall",
+        "operation_failed": "Operasi gagal",
+        "interrupted": "Terputus",
+        "retried": "Dicoba ulang",
+        "reconciled": "Direkonsiliasi",
+        "unknown": "{event}"
+      }
+    }
   }
 }

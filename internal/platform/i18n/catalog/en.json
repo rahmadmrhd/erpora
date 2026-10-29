@@ -91,5 +91,149 @@
     "not_ready": "The service is not ready.",
     "invalid_i18n_override": "The term override is not valid.",
     "unknown": "An unknown error occurred"
+  },
+  "modules": {
+    "title": "Modules",
+    "description": "Compiled modules and their status for this tenant.",
+    "empty": "No modules yet.",
+    "required": "Required",
+    "refresh": "Refresh",
+    "loadError": "The module list could not be loaded.",
+    "forbidden": {
+      "title": "403: Not allowed",
+      "description": "You do not have permission to view the module list."
+    },
+    "readonly": {
+      "title": "Read-only mode",
+      "description": "Modules are managed in this environment through the erpora modules CLI (install, enable, disable, upgrade, uninstall). This page only shows status."
+    },
+    "columns": {
+      "name": "Name",
+      "version": "Version",
+      "status": "Status",
+      "dependencies": "Dependencies",
+      "dependents": "Dependents",
+      "actions": "Actions"
+    },
+    "version": {
+      "installed": "Installed {version}",
+      "binary": "Binary {version}",
+      "notInstalled": "Not installed",
+      "upgradeAvailable": "Upgrade available"
+    },
+    "dependencies": {
+      "none": "None",
+      "optional": "{name} (optional)"
+    },
+    "status": {
+      "available": "Available",
+      "installed": "Installed",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "upgrade_pending": "Upgrade pending",
+      "failed": "Failed",
+      "uninstalled": "Uninstalled",
+      "missing": "Missing",
+      "incompatible": "Incompatible"
+    },
+    "op": {
+      "install": "Install",
+      "enable": "Enable",
+      "disable": "Disable",
+      "upgrade": "Upgrade",
+      "uninstall": "Uninstall",
+      "retry": "Retry",
+      "history": "History",
+      "menu": "Actions for {name}"
+    },
+    "dialog": {
+      "title": "{operation}: {name}",
+      "confirm": "Continue",
+      "cancel": "Cancel",
+      "close": "Close",
+      "noImpact": "No additional impact can be computed. The server still checks dependency rules."
+    },
+    "impact": {
+      "effects": "Impact",
+      "blockers": "Cannot continue",
+      "menu_hidden": "Menu hidden: {labels}",
+      "menu_shown": "Menu shown: {labels}",
+      "routes_inactive": "Pages become inactive: {paths}",
+      "routes_active": "Pages become active: {paths}",
+      "api_closed": "API {prefix} rejects requests ({code})",
+      "data_kept": "Data is kept",
+      "migrations_run": "Database migrations run if any",
+      "version_change": "Version {from} to {to}",
+      "needs_dependencies": "Dependencies installed too: {modules}"
+    },
+    "blocker": {
+      "module_required": "A required module cannot be disabled or uninstalled: {modules}",
+      "dependency_not_ready": "Dependencies not ready: {modules}",
+      "dependents_active": "Other modules still depend on it and are active: {modules}",
+      "module_incompatible": "Incompatible with the platform: {modules}",
+      "invalid_transition": "This operation is not allowed for the current status: {modules}",
+      "downgrade_not_supported": "The binary version is older than the installed one: {modules}"
+    },
+    "install": {
+      "withDeps": "Include dependencies",
+      "enable": "Enable after install"
+    },
+    "result": {
+      "title": "Operation result",
+      "running": "Operation in progress…",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "noop": "No change: the status already matches.",
+      "timeout": "Monitoring stopped after 10 minutes; follow progress in History.",
+      "pollError": "The operation status cannot be read yet; retrying.",
+      "operation": "{operation}: {status}"
+    },
+    "error": {
+      "invalid_transition": "The operation is not allowed for the module's current status.",
+      "operation_in_progress": "Another module operation is running. Try again shortly.",
+      "module_required": "A required module cannot be disabled.",
+      "dependency_not_ready": "Module dependencies are not ready.",
+      "dependents_active": "Other modules still depend on it and are active.",
+      "module_incompatible": "The module is incompatible with this platform.",
+      "downgrade_not_supported": "The binary version is older than the installed version; downgrade is not supported.",
+      "module_not_found": "Module not found.",
+      "version_mismatch": "The module status changed. The list was reloaded; review the impact and confirm again.",
+      "mutation_disabled": "Module management is not enabled in this environment.",
+      "requestId": "Request ID: {requestId}"
+    },
+    "failure": {
+      "migration_failed": "The database migration failed.",
+      "interrupted": "The operation was interrupted; use Retry.",
+      "health_check_failed": "The module health check failed.",
+      "hook_failed": "The module hook failed.",
+      "dependency_not_ready": "Dependencies are not ready.",
+      "downgrade_not_supported": "Downgrade is not supported.",
+      "internal_error": "An internal error occurred.",
+      "unknown": "The operation failed."
+    },
+    "history": {
+      "title": "History of {name}",
+      "description": "Lifecycle events, newest first.",
+      "empty": "No history yet.",
+      "error": "The history could not be loaded.",
+      "actor": "by {actor}",
+      "page": "Page {page}",
+      "details": "Details",
+      "operationSteps": "Operation steps",
+      "stepsEmpty": "No steps.",
+      "step": "{name}: {status} ({durationMs} ms)",
+      "event": {
+        "installed": "Installed",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "upgraded": "Upgraded",
+        "uninstalled": "Uninstalled",
+        "operation_failed": "Operation failed",
+        "interrupted": "Interrupted",
+        "retried": "Retried",
+        "reconciled": "Reconciled",
+        "unknown": "{event}"
+      }
+    }
   }
 }
