@@ -127,7 +127,7 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
 - [x] 9. Checkpoint — tooling
   - Jalankan `task lint arch check:gowork-off test web:check` dan pastikan `task erpora -- i18n:check` serta `i18n:generate --check` hijau pada repo.
 
-- [ ] 10. Tahap I5 — Override istilah
+- [x] 10. Tahap I5 — Override istilah
   - [x] 10.1 Migrasi `migrations/control/0003_i18n_overrides.sql` (test dulu)
     - Tabel `i18n_overrides` dan `i18n_revisions` sesuai `design.md` (kolom `tenant_id` NOT NULL, `CHECK` pola namespace/locale/key, panjang pesan 1–2000, kunci utama komposit); tambahkan ke test migrasi (naik, idempoten) di `tests/integration`.
     - **Validates: Requirements 12.1**
@@ -149,11 +149,11 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - [x] 10.7 CLI produksi `erpora i18n override set|list|rm`
     - `cmd/erpora` (di samping `modules`): memakai `Service` langsung, konfirmasi untuk `rm` (`--yes` untuk skrip), exit code 2/3/4; test golden untuk `list` dan exit code.
     - _Requirements: 12.5_
-  - [~] 10.8 Test integrasi alur override (PostgreSQL di VPS)
+  - [x] 10.8 Test integrasi alur override (PostgreSQL di VPS)
     - `PUT` → revisi naik → `GET` katalog berubah (ETag baru, ETag lama → 200) → `DELETE` → kembali ke bawaan; `error.message` modul `example` berbahasa sesuai `Accept-Language` dan tertimpa override sementara `code` tetap.
     - **Validates: Requirements 5.7, 11.2, 12.6**
 
-- [ ] 11. Checkpoint — override
+- [x] 11. Checkpoint — override
   - Jalankan `task lint arch check:gowork-off test contracts:check test:integration`; tanyakan ke user bila ada temuan keamanan.
 
 - [ ] 12. Tahap I6 — Runtime frontend (`@erpora/platform-web`)
