@@ -106,7 +106,8 @@
     },
     "readonly": {
       "title": "Read-only mode",
-      "description": "Modules are managed in this environment through the erpora modules CLI (install, enable, disable, upgrade, uninstall). This page only shows status."
+      "description": "Modules are managed in this environment through the erpora modules CLI (install, enable, disable, upgrade, uninstall). This page only shows status.",
+      "noPermission": "Your account does not have permission to manage modules (platform.modules.manage). This page only shows status."
     },
     "columns": {
       "name": "Name",

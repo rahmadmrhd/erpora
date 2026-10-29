@@ -27,7 +27,7 @@ const shop = (over: Partial<ModuleView> = {}) =>
 async function open(
   modules: ModuleView[],
   opts: ServerOptions = {},
-  extra: { adminApi?: boolean; queryClient?: QueryClient } = {},
+  extra: { adminApi?: boolean; permissions?: string[]; queryClient?: QueryClient } = {},
 ) {
   const server = createModulesServer(modules, opts);
   const view = await renderWithServer({ server, ...extra, children: <ModulesPage /> });
@@ -116,6 +116,28 @@ describe("mode hanya-baca dan galat daftar (R13.2)", () => {
     const alert = screen.getByRole("status", { name: "" });
     expect(alert).toHaveTextContent("Mode hanya-baca");
     expect(alert).toHaveTextContent("erpora modules");
+  });
+
+  test("M-8: tanpa permission platform.modules.manage (permissions terisi) halaman hanya-baca walau API mutasi aktif", async () => {
+    await open([shop()], {}, { permissions: ["platform.modules.read"] });
+    const table = await screen.findByRole("table");
+    expect(within(table).queryByRole("columnheader", { name: "Aksi" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Aksi untuk/ })).toBeNull();
+    const alert = screen.getByRole("status", { name: "" });
+    expect(alert).toHaveTextContent("Mode hanya-baca");
+    expect(alert).toHaveTextContent("platform.modules.manage");
+    expect(alert).not.toHaveTextContent("erpora modules");
+  });
+
+  test("M-8: dengan permission platform.modules.manage aksi ditawarkan", async () => {
+    await open([shop()], {}, { permissions: ["platform.modules.read", "platform.modules.manage"] });
+    expect(await screen.findByRole("button", { name: "Aksi untuk Shop" })).toBeInTheDocument();
+    expect(screen.queryByText("Mode hanya-baca")).toBeNull();
+  });
+
+  test("M-8: permissions kosong (belum ada informasi) tetap optimistis (K-30)", async () => {
+    await open([shop()], {}, { permissions: [] });
+    expect(await screen.findByRole("button", { name: "Aksi untuk Shop" })).toBeInTheDocument();
   });
 
   test("403 pada daftar menampilkan ErrorPage 403 di dalam halaman", async () => {
@@ -405,27 +427,6 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
 });
 
 describe("riwayat (R13.4)", () => {
-  const events = [
-    {
-      id: "e1",
-      moduleKey: "acme.shop",
-      event: "enabled",
-      actor: "cli:admin",
-      operationId: "op-1",
-      details: { note: "<b>tebal</b>" },
-      occurredAt: "2026-10-29T07:00:00Z",
-    },
-    {
-      id: "e2",
-      moduleKey: "acme.shop",
-      event: "reconciled",
-      actor: "system:reconcile",
-      operationId: null,
-      details: {},
-      occurredAt: "2026-10-28T07:00:00Z",
-    },
-  ];
-
   test("daftar event dengan aktor; langkah operasi dimuat saat baris dibuka; details sebagai teks", async () => {
     const user = userEvent.setup();
     const { server } = await open([shop()], {

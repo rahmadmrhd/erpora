@@ -19,6 +19,7 @@ export const MODULE_KEYS = {
   "modules.forbidden.description": a(),
   "modules.readonly.title": a(),
   "modules.readonly.description": a(),
+  "modules.readonly.noPermission": a(),
   "modules.columns.name": a(),
   "modules.columns.version": a(),
   "modules.columns.status": a(),

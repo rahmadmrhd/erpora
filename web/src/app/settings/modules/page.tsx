@@ -5,6 +5,7 @@ import {
   useMessage,
   useModuleRegistry,
   usePageActions,
+  usePermission,
   useTenantId,
   useTranslation,
 } from "@erpora/platform-web";
@@ -36,7 +37,11 @@ export function ModulesPage() {
   const describe = useDescribe();
   const { t: tui } = useTranslation("ui");
   const adminFlag = useFeature("modulesAdminApi");
+  // Aksi mutasi tampil bila API mutasi diumumkan aktif DAN pengguna berhak (UX saja; backend tetap otoritas, K-30:
+  // permissions bootstrap kosong = optimistis).
+  const canManage = usePermission("platform.modules.manage");
   const adminApi = adminFlag;
+  const showActions = adminFlag && canManage;
 
   const query = useModules();
   const registry = useModuleRegistry();
@@ -132,7 +137,7 @@ export function ModulesPage() {
     body = (
       <ModulesTable
         modules={modules}
-        showActions={adminApi}
+        showActions={showActions}
         onOperation={(op, m) => setAction({ op, key: m.key })}
         onHistory={(m) => setHistoryKey(m.key)}
       />
@@ -146,10 +151,12 @@ export function ModulesPage() {
         <p className="text-sm text-muted-foreground">{t("modules.description")}</p>
       </header>
 
-      {!adminApi && !query.isError ? (
+      {!showActions && !query.isError ? (
         <Alert>
           <AlertTitle>{t("modules.readonly.title")}</AlertTitle>
-          <AlertDescription>{t("modules.readonly.description")}</AlertDescription>
+          <AlertDescription>
+            {adminFlag ? t("modules.readonly.noPermission") : t("modules.readonly.description")}
+          </AlertDescription>
         </Alert>
       ) : null}
 

@@ -106,7 +106,8 @@
     },
     "readonly": {
       "title": "Mode hanya-baca",
-      "description": "Manajemen modul di lingkungan ini dilakukan lewat CLI erpora modules (install, enable, disable, upgrade, uninstall). Halaman ini hanya menampilkan status."
+      "description": "Manajemen modul di lingkungan ini dilakukan lewat CLI erpora modules (install, enable, disable, upgrade, uninstall). Halaman ini hanya menampilkan status.",
+      "noPermission": "Akun Anda tidak memiliki izin mengelola modul (platform.modules.manage). Halaman ini hanya menampilkan status."
     },
     "columns": {
       "name": "Nama",
