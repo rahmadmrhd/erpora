@@ -93,7 +93,6 @@ export {
   useSidebar,
 } from "./components/ui/sidebar";
 export { Skeleton } from "./components/ui/skeleton";
-export { Toaster } from "./components/ui/sonner";
 export {
   Table,
   TableBody,

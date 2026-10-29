@@ -16,13 +16,16 @@ import {
   PageChromeProvider,
   ThemeProvider,
 } from "@erpora/platform-web";
-import { Toaster, TooltipProvider } from "@erpora/ui";
+import { TooltipProvider } from "@erpora/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { RouterHistory } from "@tanstack/react-router";
-import { Suspense, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AppRouter } from "../router/app-router";
 import { BootErrorScreen, BootLoading } from "./boot-screens";
 import { UiLabelsBridge } from "./ui-labels-bridge";
+
+// Toaster (sonner, ±35 KB gzip) dimuat malas dari entry sekunder `@erpora/ui/toaster`: tidak ada di bundel awal (K-12).
+const LazyToaster = lazy(() => import("@erpora/ui/toaster").then((m) => ({ default: m.Toaster })));
 
 function isRetryable(error: unknown): boolean {
   const status = (error as { status?: unknown } | null)?.status;
@@ -86,7 +89,9 @@ export function Providers(props: ProvidersProps) {
                       >
                         <PageChromeProvider>
                           <AppRouter history={props.history} />
-                          <Toaster />
+                          <Suspense fallback={null}>
+                            <LazyToaster />
+                          </Suspense>
                         </PageChromeProvider>
                       </CurrentUserSourceProvider>
                     </NotificationSourceProvider>

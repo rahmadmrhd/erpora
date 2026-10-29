@@ -42,7 +42,12 @@ module.exports = {
       from: { path: "^(modules/[^/]+/web|web/src)/" },
       to: {
         path: "^packages/[^/]+/",
-        pathNot: "^packages/[^/]+/(src/)?index\\.(ts|tsx)$",
+        // Entry paket: index, dan entry sekunder terdaftar di `exports` paket (packages/<x>/src/entries/*) untuk pemuatan malas
+        // (mis. `@erpora/ui/toaster`: sonner hanya di chunk terpisah, M3a K-12).
+        pathNot: [
+          "^packages/[^/]+/(src/)?index\\.(ts|tsx)$",
+          "^packages/[^/]+/src/entries/[^/]+\\.(ts|tsx)$",
+        ],
       },
     },
     {
