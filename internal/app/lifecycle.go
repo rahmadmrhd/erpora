@@ -97,14 +97,27 @@ func NewGuardedLifecycle(ctx context.Context, cfg config.Config, log *slog.Logge
 	return rt.svc, rt.tid, rt.guardWrite, rt.cleanup, nil
 }
 
-// NewGuardedI18n membuka i18n.Service (dengan penyimpanan override) untuk CLI `erpora i18n override`, ditambah guard
-// penanda lingkungan yang dipanggil sebelum mutasi (FR-22.5). cleanup wajib dipanggil.
+// NewGuardedI18n membuka i18n.Service (dengan penyimpanan override, namespace modul dibatasi pada modul enabled)
+// untuk CLI `erpora i18n override`, ditambah guard penanda lingkungan sebelum mutasi (FR-22.5). cleanup wajib dipanggil.
 func NewGuardedI18n(ctx context.Context, cfg config.Config, log *slog.Logger) (*i18n.Service, tenancy.TenantID, func(context.Context) error, func(), error) {
 	rt, err := openCLI(ctx, cfg, log)
 	if err != nil {
 		return nil, tenancy.TenantID{}, nil, nil, err
 	}
-	return rt.i18n, rt.tid, rt.guardWrite, rt.cleanup, nil
+	// Seperti API, override hanya untuk namespace modul yang AKTIF: status efektif dibaca dari lifecycle (store).
+	// Service khusus ini (bukan rt.i18n, yang menganggap semua modul aktif agar hook lifecycle dapat memakai
+	// namespace-nya sendiri) dibangun dengan Active dari status tersebut (R-13).
+	mods, _, err := rt.svc.Modules(ctx, rt.tid)
+	if err != nil {
+		rt.cleanup()
+		return nil, tenancy.TenantID{}, nil, nil, fmt.Errorf("baca status modul: %w", err)
+	}
+	svc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, rt.reg, activeFromModules(mods), i18nstore.New(database.ControlDB{DB: rt.db}), nil)
+	if err != nil {
+		rt.cleanup()
+		return nil, tenancy.TenantID{}, nil, nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}
+	}
+	return svc, rt.tid, rt.guardWrite, rt.cleanup, nil
 }
 
 // NewLifecycle dipakai CLI `erpora modules`: lihat openCLI. cleanup wajib dipanggil.

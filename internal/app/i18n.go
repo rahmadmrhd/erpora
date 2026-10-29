@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"erpora/internal/platform/modules/lifecycle"
+	"erpora/internal/platform/modules/runtime"
 	"go.opentelemetry.io/otel/metric"
 	"log/slog"
 
@@ -67,4 +69,14 @@ func i18nHook(svc *i18n.Service, reg *registry.Registry) func(context.Context, t
 		}
 		return ctx
 	}
+}
+
+// activeFromModules membentuk Options.Active dari status efektif lifecycle: hanya modul berstatus enabled yang aktif
+// (sama dengan API, yang memakai runtime snapshot). Dipakai CLI `erpora i18n override`.
+func activeFromModules(mods []lifecycle.ModuleState) func(tenancy.TenantID, string) bool {
+	enabled := make(map[string]bool, len(mods))
+	for _, m := range mods {
+		enabled[m.Slug] = m.Status == runtime.StatusEnabled
+	}
+	return func(_ tenancy.TenantID, ns string) bool { return enabled[ns] }
 }
