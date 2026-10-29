@@ -21,6 +21,7 @@
     "title": "Notifications",
     "empty": "No notifications yet",
     "loadError": "Notifications could not be loaded.",
+    "actionError": "The notification action failed. Try again.",
     "markAllRead": "Mark all as read",
     "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}"
   },

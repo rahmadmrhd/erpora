@@ -109,6 +109,7 @@ declare module "./types" {
       "modules.impact.api_closed": { prefix: string | number; code: string | number };
       "modules.impact.blockers": {};
       "modules.impact.data_kept": {};
+      "modules.impact.dependents_uncertain": { modules: string | number };
       "modules.impact.effects": {};
       "modules.impact.menu_hidden": { labels: string | number };
       "modules.impact.menu_shown": { labels: string | number };
@@ -161,6 +162,7 @@ declare module "./types" {
       "notFound.backHome": {};
       "notFound.description": {};
       "notFound.title": {};
+      "notifications.actionError": {};
       "notifications.empty": {};
       "notifications.loadError": {};
       "notifications.markAllRead": {};

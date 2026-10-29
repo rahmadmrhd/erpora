@@ -127,4 +127,23 @@ describe("NotificationsPanel", () => {
       within(title.closest("li") as HTMLElement).getByText("<b>tebal</b>"),
     ).toBeInTheDocument();
   });
+
+  test("markAllRead dan markRead yang ditolak sumber menampilkan Alert lokal (tanpa unhandled rejection)", async () => {
+    const m = memory([mk("a")]);
+    const source: NotificationSource = {
+      ...m.source,
+      markAllRead: async () => {
+        throw new Error("gagal");
+      },
+      markRead: async () => {
+        throw new Error("gagal");
+      },
+    };
+    renderApp({ notificationSource: source });
+    const user = await openPanel();
+    await user.click(await screen.findByRole("button", { name: "Tandai semua telah dibaca" }));
+    expect(await screen.findByText("Aksi pada notifikasi gagal. Coba lagi.")).toBeInTheDocument();
+    await user.click(screen.getByText("Judul a"));
+    expect(screen.getByText("Aksi pada notifikasi gagal. Coba lagi.")).toBeInTheDocument();
+  });
 });

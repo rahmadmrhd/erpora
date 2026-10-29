@@ -55,7 +55,15 @@ function Header({ n, onMarkAll }: { n: NotificationsState; onMarkAll: () => void
   );
 }
 
-function Rows({ n, onNavigate }: { n: NotificationsState; onNavigate: (href: string) => void }) {
+function Rows({
+  n,
+  onNavigate,
+  onFailure,
+}: {
+  n: NotificationsState;
+  onNavigate: (href: string) => void;
+  onFailure: (action: Promise<void>) => void;
+}) {
   const { locale } = useTranslation("platform");
   return (
     <ul className="divide-y">
@@ -67,7 +75,7 @@ function Rows({ n, onNavigate }: { n: NotificationsState; onNavigate: (href: str
               type="button"
               className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent"
               onClick={() => {
-                void n.markRead(item.id);
+                onFailure(n.markRead(item.id));
                 if (href !== null) onNavigate(href);
               }}
             >
@@ -100,6 +108,11 @@ export function NotificationsPanel({
   onNavigate: (href: string) => void;
 }) {
   const { t } = useTranslation("platform");
+  const [actionFailed, setActionFailed] = useState(false);
+  const run = (action: Promise<void>) => {
+    setActionFailed(false);
+    action.catch(() => setActionFailed(true));
+  };
   let body: ReactNode;
   if (n.status === "loading") {
     body = (
@@ -121,11 +134,18 @@ export function NotificationsPanel({
   } else if (n.items.length === 0) {
     body = <EmptyState icon="bell" title={t("notifications.empty")} />;
   } else {
-    body = <Rows n={n} onNavigate={onNavigate} />;
+    body = <Rows n={n} onNavigate={onNavigate} onFailure={run} />;
   }
   return (
     <div className="flex h-[460px] flex-col">
-      <Header n={n} onMarkAll={() => void n.markAllRead()} />
+      <Header n={n} onMarkAll={() => run(n.markAllRead())} />
+      {actionFailed ? (
+        <div className="border-b p-3">
+          <Alert variant="destructive">
+            <AlertDescription>{t("notifications.actionError")}</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-auto">{body}</div>
     </div>
   );
