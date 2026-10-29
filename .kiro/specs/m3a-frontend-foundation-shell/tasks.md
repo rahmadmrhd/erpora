@@ -139,14 +139,14 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - `src/index.ts` mengekspor API publik; `typecheck`, `lint`, `deps` (F1 sampai F4 hijau), `bun test`.
     - _Requirements: 1.5, 7.1_
 
-- [ ] 10. Backend: bendera API mutasi di bootstrap (Kelas beban: Sonnet; Go)
-  - [ ] 10.1 Test dulu
+- [x] 10. Backend: bendera API mutasi di bootstrap (Kelas beban: Sonnet; Go)
+  - [x] 10.1 Test dulu
     - `internal/platform/bootstrap/bootstrap_test.go`: `Manifest.Features` terserialisasi sebagai `"features":{"modulesAdminApi":…}`; test `internal/app` untuk `bootstrapFrom` memakai `cfg.ModulesAdminAPIEnabled()` (development → true; production tanpa flag → false; production dengan `ERP_MODULES_ADMIN_API=true` → true). Perbarui test yang membandingkan JSON bootstrap penuh.
     - **Validates: Requirements 13.2**
-  - [ ] 10.2 Implementasi
+  - [x] 10.2 Implementasi
     - `bootstrap.Features{ModulesAdminAPI bool}` dan `Manifest.Features`; `bootstrapFrom` menerima bendera dan mengisinya **setelah** `bootstrap.Build(...)` (tanda tangan `Build` tidak berubah); `assemble.go` meneruskan `cfg.ModulesAdminAPIEnabled()`.
     - _Requirements: 13.2_
-  - [ ] 10.3 Kontrak dan tipe TS
+  - [x] 10.3 Kontrak dan tipe TS
     - `contracts/openapi/platform.yaml`: `features` (opsional) pada `BootstrapEnvelope` + contoh respons; `task erpora -- contracts:generate` (hasilnya di-commit: `platform.gen.ts`); `task contracts:check` dan test kesesuaian route ↔ kontrak lolos; catat di `api-guidelines.md` bila perlu (tidak ada endpoint baru).
     - _Requirements: 13.2, 15.2_
 

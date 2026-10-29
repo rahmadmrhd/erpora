@@ -128,28 +128,28 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - Jalankan `task lint arch check:gowork-off test web:check` dan pastikan `task erpora -- i18n:check` serta `i18n:generate --check` hijau pada repo.
 
 - [ ] 10. Tahap I5 — Override istilah
-  - [ ] 10.1 Migrasi `migrations/control/0003_i18n_overrides.sql` (test dulu)
+  - [x] 10.1 Migrasi `migrations/control/0003_i18n_overrides.sql` (test dulu)
     - Tabel `i18n_overrides` dan `i18n_revisions` sesuai `design.md` (kolom `tenant_id` NOT NULL, `CHECK` pola namespace/locale/key, panjang pesan 1–2000, kunci utama komposit); tambahkan ke test migrasi (naik, idempoten) di `tests/integration`.
     - **Validates: Requirements 12.1**
-  - [ ] 10.2 Store GORM + allowlist D3b
+  - [x] 10.2 Store GORM + allowlist D3b
     - `internal/platform/i18n/store`: `List`, `Upsert` (satu transaksi dengan kenaikan `i18n_revisions` hanya bila nilai berubah), `Delete` (revisi naik hanya bila baris ada); semua query memfilter `tenant_id`. Perbarui `internal/archcheck` (allowlist D3b menambah `internal/platform/i18n/store`) dan tes aturan.
     - _Requirements: 12.1, 12.4, 12.6_
-  - [ ] 10.3 Tulis test `Service` override (merah dulu)
+  - [x] 10.3 Tulis test `Service` override (merah dulu)
     - Override mengalahkan bawaan pada bahasa yang sama; override pada bahasa fallback; `PUT` dua kali tidak menaikkan revisi kedua kali (P8); `Delete` kunci tak ada tidak menaikkan revisi; validasi: kunci tak ada di katalog bawaan bahasa default → `unknown_key`, ICU tidak valid, `Params()` berbeda → `param_mismatch` (P10), HTML, terlalu panjang; isolasi tenant A vs B (P6); cache segar setelah mutasi dan setelah revisi DB berubah (TTL).
     - **Validates: Requirements 12.3, 12.4, 12.6**
-  - [ ] 10.4 Implementasi override di `Service`
+  - [x] 10.4 Implementasi override di `Service`
     - `SetOverride`, `DeleteOverride`, cache `(tenant, ns, locale) → Flat` dengan pemeriksaan `i18n_revisions` (TTL 5 detik); katalog efektif menggabungkan override di atas bawaan sebelum fallback; log terstruktur `i18n_override_changed` (tenant, ns, locale, key, actor, trace_id); bila DB tak terjangkau, tetap sajikan bawaan dengan peringatan.
     - _Requirements: 3.2, 5.7, 12.3, 12.6, 12.7_
-  - [ ] 10.5 API override (kontrak dulu)
+  - [x] 10.5 API override (kontrak dulu)
     - `contracts/openapi/platform.yaml`: `GET /api/platform/i18n/overrides` (`platform.i18n.read`), `PUT` dan `DELETE /api/platform/i18n/overrides/{namespace}/{locale}/{key}` (`platform.i18n.manage`); tambahkan `platform.i18n.read|manage` ke `admin.Capabilities`; kode `invalid_i18n_override` dengan `details[].code`. Handler: gerbang `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true` (selain itu `404` sebelum permission), `Content-Type: application/json` wajib (`415`), batas body 8 KB, `If-Match` opsional (`412`), actor `api:dev`. Bangkitkan tipe TS.
     - _Requirements: 12.2, 12.3, 12.8, 12.9_
-  - [ ] 10.6 Test API override dan IDOR
+  - [x] 10.6 Test API override dan IDOR
     - Permission (stub authz deny → 403), mutasi mati di `production` → 404, `415`, `412`, validasi 400, `PUT` idempoten, `code` galat tetap stabil walau `message` ditimpa, `tenantId` di body ditolak; test IDOR tingkat store (tenant A vs B) untuk list/put/delete; `contracts:check` lolos.
     - **Validates: Requirements 12.2, 12.3, 12.4, 12.8, 12.9**
-  - [ ] 10.7 CLI produksi `erpora i18n override set|list|rm`
+  - [x] 10.7 CLI produksi `erpora i18n override set|list|rm`
     - `cmd/erpora` (di samping `modules`): memakai `Service` langsung, konfirmasi untuk `rm` (`--yes` untuk skrip), exit code 2/3/4; test golden untuk `list` dan exit code.
     - _Requirements: 12.5_
-  - [ ] 10.8 Test integrasi alur override (PostgreSQL di VPS)
+  - [~] 10.8 Test integrasi alur override (PostgreSQL di VPS)
     - `PUT` → revisi naik → `GET` katalog berubah (ETag baru, ETag lama → 200) → `DELETE` → kembali ke bawaan; `error.message` modul `example` berbahasa sesuai `Accept-Language` dan tertimpa override sementara `code` tetap.
     - **Validates: Requirements 5.7, 11.2, 12.6**
 
