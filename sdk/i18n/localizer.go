@@ -95,7 +95,7 @@ var strict atomic.Pointer[strictState]
 
 // StrictMissing menjadikan setiap kunci yang tidak ditemukan pada T (sampai ujung rantai fallback) sebagai galat
 // test t selama t berjalan (Requirement 3.3: "galat di mode pengujian"). Dilepas otomatis lewat t.Cleanup. Mode ini
-// global proses: pakai pada test yang tidak berjalan paralel dengan test lain yang sengaja memicu kunci hilang.
+// global proses: pakai pada test yang tidak berjalan secara parallel dengan test lain yang sengaja memicu kunci hilang.
 func StrictMissing(t TestReporter) {
 	prev := strict.Swap(&strictState{t: t})
 	t.Cleanup(func() { strict.Store(prev) })

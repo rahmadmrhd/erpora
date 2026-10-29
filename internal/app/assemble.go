@@ -3,9 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel/metric"
 	"log/slog"
 	"net/http"
+
+	"go.opentelemetry.io/otel/metric"
 
 	"erpora/internal/platform/audit"
 	"erpora/internal/platform/authorization"
