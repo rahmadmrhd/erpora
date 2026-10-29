@@ -141,8 +141,9 @@ describe("judul, pengumuman, dan fokus (K-33)", () => {
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("navigation", { name: "Navigasi utama" });
-    const skip = screen.getByRole("button", { name: "Lewati ke konten" });
+    const skip = screen.getByRole("link", { name: "Lewati ke konten" });
     expect(document.body.querySelector("button,a,[tabindex]")).toBe(skip);
+    expect(skip.getAttribute("href")).toBe("#content");
     await user.click(skip);
     expect(document.activeElement).toBe(screen.getByRole("main"));
   });

@@ -56,13 +56,18 @@ export function AppShell() {
   const resetKey = useRouterState({ select: (s) => s.location.href });
   return (
     <SidebarProvider className="h-svh overflow-hidden">
-      <button
-        type="button"
+      {/* biome-ignore lint/a11y/useValidAnchor: skip link (K-33): tautan ke #content dengan fokus langsung ke <main> tanpa mengubah hash router */}
+      <a
+        href="#content"
         className="sr-only z-50 rounded-md bg-background px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
-        onClick={() => main.current?.focus()}
+        onClick={(e) => {
+          // Tanpa mengubah hash URL (router klien): fokus langsung ke <main>.
+          e.preventDefault();
+          main.current?.focus();
+        }}
       >
         <Message message={{ ns: "platform", key: "shell.skipToContent" }} />
-      </button>
+      </a>
       <AppSidebar />
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
         {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
