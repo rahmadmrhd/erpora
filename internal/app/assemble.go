@@ -14,6 +14,8 @@ import (
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/i18n"
+	i18nadmin "erpora/internal/platform/i18n/admin"
+	i18nstore "erpora/internal/platform/i18n/store"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/lifecycle"
@@ -79,7 +81,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	// Katalog terjemahan divalidasi sebelum apa pun dilayani: galat struktural menggagalkan startup (exit 2).
 	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, moduleActive(reg, func(t tenancy.TenantID, key string) bool {
 		return snap.Status(t, key) == runtime.StatusEnabled
-	}))
+	}), i18nstore.New(database.ControlDB{DB: db}))
 	if err != nil {
 		return nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}
 	}
@@ -130,7 +132,9 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	// dilayani (404 sebelum permission), sementara route baca tetap tunduk pada permission.
 	var mountOpts []runtime.MountOption
 	if !cfg.ModulesAdminAPIEnabled() {
-		mountOpts = append(mountOpts, runtime.SkipRoute(admin.IsMutation))
+		mountOpts = append(mountOpts, runtime.SkipRoute(func(rt registry.RouteInfo) bool {
+			return admin.IsMutation(rt) || i18nadmin.IsMutation(rt)
+		}))
 	}
 	mountOpts = append(mountOpts, runtime.WithServices(services))
 	if prov.Meter != nil {

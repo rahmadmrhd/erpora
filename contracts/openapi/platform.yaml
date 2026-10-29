@@ -78,6 +78,108 @@ paths:
                     pagination.summary: '{total, plural, =0 {No data} one {# item} other {# items}}'
         '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
+  /api/platform/i18n/overrides:
+    get:
+      operationId: listI18nOverrides
+      summary: Daftar override istilah terjemahan tenant
+      description: >-
+        Override teks katalog milik tenant ini (PRD-000 FR-25, Q34), berpagination halaman dan dapat difilter per
+        namespace dan bahasa. Klasifikasi data internal.
+      x-erp-permission: platform.i18n.read
+      parameters:
+        - { name: namespace, in: query, schema: { type: string, maxLength: 50 } }
+        - { name: locale, in: query, schema: { type: string, maxLength: 16 } }
+        - { $ref: 'erp:common#/components/parameters/Page' }
+        - { $ref: 'erp:common#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Daftar override terurut (namespace, bahasa, kunci).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/I18nOverride' } }
+                  page: { $ref: 'erp:common#/components/schemas/Page' }
+              example:
+                data:
+                  - { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
+                page: { page: 1, pageSize: 25, total: 1, hasMore: false }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
+  /api/platform/i18n/overrides/{namespace}/{locale}/{key}:
+    put:
+      operationId: putI18nOverride
+      x-erp-allow-put: true
+      summary: Simpan (upsert) satu override istilah
+      description: >-
+        Mengganti teks bawaan untuk (namespace, locale, key) pada tenant ini. Validasi: namespace aktif dan locale
+        terdaftar; key ada di katalog bawaan bahasa default namespace itu; pesan lolos sintaks ICU dalam batas ukuran,
+        tanpa HTML, dan memiliki argumen yang sama dengan pesan bawaan. Idempoten: nilai yang sama tidak mengubah
+        apa pun dan tidak menaikkan revisi. Hanya aktif bila ERP_ENV=development atau ERP_MODULES_ADMIN_API=true; selain itu
+        404 not_found sebelum permission. ETag respons (kuat) dapat dipakai pada If-Match. PUT dipakai (pengecualian api-guidelines §3, x-erp-allow-put) karena resource-nya hanya satu bidang `message` sehingga ganti penuh tidak berisiko menghapus field.
+      x-erp-permission: platform.i18n.manage
+      parameters:
+        - { $ref: '#/components/parameters/OverrideNamespace' }
+        - { $ref: '#/components/parameters/OverrideLocale' }
+        - { $ref: '#/components/parameters/OverrideKey' }
+        - { $ref: 'erp:common#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/I18nOverrideBody' }
+            example: { message: Klien }
+      responses:
+        '200':
+          description: Override tersimpan (atau sudah bernilai sama).
+          headers: { ETag: { $ref: 'erp:common#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: { data: { $ref: '#/components/schemas/I18nOverride' } }
+              example:
+                data: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
+        '400':
+          description: >
+            invalid_i18n_override dengan error.details[].code salah satu: unknown_key, invalid_syntax, param_mismatch,
+            html_not_allowed, too_long; atau bad_request untuk kerusakan struktur body.
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+        '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '415':
+          description: >
+            unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8).
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
+    delete:
+      operationId: deleteI18nOverride
+      summary: Hapus satu override istilah (kembali ke bawaan)
+      description: >-
+        Menghapus override; revisi namespace dan bahasa naik hanya bila barisnya ada. Namespace atau bahasa tak dikenal,
+        atau override yang tidak ada, menghasilkan 404 not_found. Gerbang dan pengamanan sama dengan PUT.
+      x-erp-permission: platform.i18n.manage
+      parameters:
+        - { $ref: '#/components/parameters/OverrideNamespace' }
+        - { $ref: '#/components/parameters/OverrideLocale' }
+        - { $ref: '#/components/parameters/OverrideKey' }
+        - { $ref: 'erp:common#/components/parameters/IfMatch' }
+      responses:
+        '204': { description: Override dihapus. }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '404': { $ref: 'erp:common#/components/responses/NotFound' }
+        '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '415':
+          description: >
+            unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8).
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
   /api/platform/modules:
     get:
       operationId: listModules
@@ -346,6 +448,22 @@ components:
       required: true
       description: ui, platform, atau slug modul aktif.
       schema: { type: string, maxLength: 50 }
+    OverrideNamespace:
+      name: namespace
+      in: path
+      required: true
+      schema: { type: string, maxLength: 50 }
+    OverrideLocale:
+      name: locale
+      in: path
+      required: true
+      schema: { type: string, maxLength: 16 }
+    OverrideKey:
+      name: key
+      in: path
+      required: true
+      description: Kunci lengkap bertitik pada katalog bawaan (mis. note.title).
+      schema: { type: string, maxLength: 200, pattern: '^[A-Za-z0-9_.-]+$' }
     Key:
       name: key
       in: path
@@ -394,6 +512,30 @@ components:
                 revisions:
                   type: object
                   additionalProperties: { type: string }
+    I18nOverrideBody:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Pesan ICU MessageFormat pengganti; argumen harus sama dengan pesan bawaan; tanpa HTML.
+          x-erp-classification: internal
+    I18nOverride:
+      type: object
+      required: [namespace, locale, key, message, etag, updatedBy, updatedAt]
+      properties:
+        namespace: { type: string }
+        locale: { type: string }
+        key: { type: string }
+        message:
+          type: string
+          x-erp-classification: internal
+        etag: { type: string, description: 'ETag kuat baris (hash isi); dipakai pada If-Match.' }
+        updatedBy: { type: string, description: 'api:dev atau cli:<pengguna>.' }
+        updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
     I18nCatalogEnvelope:
       type: object
       required: [data]

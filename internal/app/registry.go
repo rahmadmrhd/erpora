@@ -1,6 +1,8 @@
 package app
 
 import (
+	"slices"
+
 	"erpora/contracts"
 	"erpora/internal/platform/buildinfo"
 	i18nadmin "erpora/internal/platform/i18n/admin"
@@ -39,7 +41,7 @@ func buildRegistry() (*registry.Registry, *platformAPIs, error) {
 			}
 			return apis.I18n.Register(r)
 		},
-		PlatformCapabilities: admin.Capabilities,
+		PlatformCapabilities: append(slices.Clone(admin.Capabilities), i18nadmin.Capabilities...),
 		PlatformContract:     contracts.PlatformOpenAPI,
 	}, compiledModulesFn()...)
 	return reg, apis, err

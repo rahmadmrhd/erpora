@@ -11,6 +11,7 @@ import (
 
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
+	i18nstore "erpora/internal/platform/i18n/store"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/lifecycle"
 	"erpora/internal/platform/modules/registry"
@@ -62,7 +63,7 @@ func openCLI(ctx context.Context, cfg config.Config, log *slog.Logger) (*cliRunt
 		return nil, err
 	}
 	prov := observability.Providers{Tracer: tnoop.NewTracerProvider(), Meter: noop.NewMeterProvider()}
-	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, nil)
+	i18nSvc, err := newI18nService(log, cfg.Env == config.EnvDevelopment, reg, nil, i18nstore.New(database.ControlDB{DB: db}))
 	if err != nil {
 		cleanup()
 		return nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}

@@ -1,5 +1,5 @@
 // Package admin memuat endpoint HTTP i18n milik platform.core (PRD-000 FR-25): penyaji katalog terjemahan
-// per namespace dan bahasa. Override istilah (tahap I5) ditambahkan di paket ini.
+// per namespace dan bahasa, serta API override istilah (baca, simpan, hapus).
 package admin
 
 import (
@@ -10,6 +10,7 @@ import (
 
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/i18n"
+	"erpora/internal/platform/i18n/store"
 	"erpora/internal/platform/tenancy"
 	"erpora/sdk/httpx"
 	sdki18n "erpora/sdk/i18n"
@@ -19,6 +20,10 @@ import (
 // Backend dipenuhi *i18n.Service; fake pada test.
 type Backend interface {
 	Catalog(ctx context.Context, t tenancy.TenantID, ns string, loc sdki18n.Locale) (i18n.View, error)
+	SetOverride(ctx context.Context, t tenancy.TenantID, o i18n.Override, actor string, pre store.Precondition) (bool, error)
+	DeleteOverride(ctx context.Context, t tenancy.TenantID, ns, loc, key, actor string, pre store.Precondition) (bool, error)
+	GetOverride(ctx context.Context, t tenancy.TenantID, ns, loc, key string) (store.Override, error)
+	ListOverrides(ctx context.Context, t tenancy.TenantID, f store.Filter, page, pageSize int) ([]store.Override, int64, error)
 }
 
 // API adalah handler /api/platform/i18n. Backend di-bind setelah perakitan (route didaftarkan lebih dulu
@@ -37,6 +42,7 @@ func (a *API) Bind(b Backend) { a.backend.Store(&b) }
 // terjemahan, keputusan D-4); PRD-001 mengetatkan namespace modul ke pengguna terautentikasi.
 func (a *API) Register(r module.Registrar) error {
 	r.Public(http.MethodGet, "/i18n/{locale}/{namespace}", http.HandlerFunc(a.catalog))
+	a.registerOverrides(r)
 	return nil
 }
 

@@ -41,6 +41,50 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/api/platform/i18n/overrides": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Daftar override istilah terjemahan tenant
+     * @description Override teks katalog milik tenant ini (PRD-000 FR-25, Q34), berpagination halaman dan dapat difilter per namespace dan bahasa. Klasifikasi data internal.
+     */
+    get: operations["listI18nOverrides"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/platform/i18n/overrides/{namespace}/{locale}/{key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Simpan (upsert) satu override istilah
+     * @description Mengganti teks bawaan untuk (namespace, locale, key) pada tenant ini. Validasi: namespace aktif dan locale terdaftar; key ada di katalog bawaan bahasa default namespace itu; pesan lolos sintaks ICU dalam batas ukuran, tanpa HTML, dan memiliki argumen yang sama dengan pesan bawaan. Idempoten: nilai yang sama tidak mengubah apa pun dan tidak menaikkan revisi. Hanya aktif bila ERP_ENV=development atau ERP_MODULES_ADMIN_API=true; selain itu 404 not_found sebelum permission. ETag respons (kuat) dapat dipakai pada If-Match. PUT dipakai (pengecualian api-guidelines §3, x-erp-allow-put) karena resource-nya hanya satu bidang `message` sehingga ganti penuh tidak berisiko menghapus field.
+     */
+    put: operations["putI18nOverride"];
+    post?: never;
+    /**
+     * Hapus satu override istilah (kembali ke bawaan)
+     * @description Menghapus override; revisi namespace dan bahasa naik hanya bila barisnya ada. Namespace atau bahasa tak dikenal, atau override yang tidak ada, menghasilkan 404 not_found. Gerbang dan pengamanan sama dengan PUT.
+     */
+    delete: operations["deleteI18nOverride"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/platform/modules": {
     parameters: {
       query?: never;
@@ -250,6 +294,21 @@ export type components = {
         revision: string;
       };
     };
+    I18nOverride: {
+      /** @description ETag kuat baris (hash isi); dipakai pada If-Match. */
+      etag: string;
+      key: string;
+      locale: string;
+      message: string;
+      namespace: string;
+      updatedAt: components["schemas"]["common.Timestamp"];
+      /** @description api:dev atau cli:<pengguna>. */
+      updatedBy: string;
+    };
+    I18nOverrideBody: {
+      /** @description Pesan ICU MessageFormat pengganti; argumen harus sama dengan pesan bawaan; tanpa HTML. */
+      message: string;
+    };
     Module: {
       binaryVersion: string;
       compatible: boolean;
@@ -360,6 +419,15 @@ export type components = {
         "application/json": components["schemas"]["common.Error"];
       };
     };
+    /** @description validation_failed atau business_rule_violated; kode spesifik di error.details[].code. */
+    "common.Unprocessable": {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["common.Error"];
+      };
+    };
   };
   parameters: {
     /** @description UUID dari klien. Diterima, tetapi untuk endpoint platform modul TIDAK disimpan (setiap operasi idempoten lewat aturan no-op); penyimpanan 24 jam menunggu infrastruktur idempotency. */
@@ -376,6 +444,10 @@ export type components = {
     Locale: string;
     /** @description ui, platform, atau slug modul aktif. */
     Namespace: string;
+    /** @description Kunci lengkap bertitik pada katalog bawaan (mis. note.title). */
+    OverrideKey: string;
+    OverrideLocale: string;
+    OverrideNamespace: string;
   };
   requestBodies: never;
   headers: {
@@ -505,6 +577,175 @@ export interface operations {
         content?: never;
       };
       404: components["responses"]["common.NotFound"];
+    };
+  };
+  listI18nOverrides: {
+    parameters: {
+      query?: {
+        locale?: string;
+        namespace?: string;
+        /** @description Halaman, mulai 1. */
+        page?: components["parameters"]["common.Page"];
+        /** @description Jumlah item per halaman. */
+        pageSize?: components["parameters"]["common.PageSize"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Daftar override terurut (namespace, bahasa, kunci). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "data": [
+           *         {
+           *           "etag": "\"3f9a1c20b7d84e55\"",
+           *           "key": "note.title",
+           *           "locale": "id",
+           *           "message": "Klien",
+           *           "namespace": "example",
+           *           "updatedAt": "2026-10-29T10:00:00Z",
+           *           "updatedBy": "api:dev"
+           *         }
+           *       ],
+           *       "page": {
+           *         "hasMore": false,
+           *         "page": 1,
+           *         "pageSize": 25,
+           *         "total": 1
+           *       }
+           *     }
+           */
+          "application/json": {
+            data: components["schemas"]["I18nOverride"][];
+            page: components["schemas"]["common.Page"];
+          };
+        };
+      };
+      400: components["responses"]["common.BadRequest"];
+      403: components["responses"]["common.PermissionDenied"];
+      503: components["responses"]["common.NotReady"];
+    };
+  };
+  putI18nOverride: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Opsional. Revision yang diharapkan; tidak cocok -> 412 version_mismatch. */
+        "If-Match"?: components["parameters"]["common.IfMatch"];
+      };
+      path: {
+        /** @description Kunci lengkap bertitik pada katalog bawaan (mis. note.title). */
+        key: components["parameters"]["OverrideKey"];
+        locale: components["parameters"]["OverrideLocale"];
+        namespace: components["parameters"]["OverrideNamespace"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "message": "Klien"
+         *     }
+         */
+        "application/json": components["schemas"]["I18nOverrideBody"];
+      };
+    };
+    responses: {
+      /** @description Override tersimpan (atau sudah bernilai sama). */
+      200: {
+        headers: {
+          ETag: components["headers"]["common.ETag"];
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "data": {
+           *         "etag": "\"3f9a1c20b7d84e55\"",
+           *         "key": "note.title",
+           *         "locale": "id",
+           *         "message": "Klien",
+           *         "namespace": "example",
+           *         "updatedAt": "2026-10-29T10:00:00Z",
+           *         "updatedBy": "api:dev"
+           *       }
+           *     }
+           */
+          "application/json": {
+            data: components["schemas"]["I18nOverride"];
+          };
+        };
+      };
+      /** @description invalid_i18n_override dengan error.details[].code salah satu: unknown_key, invalid_syntax, param_mismatch, html_not_allowed, too_long; atau bad_request untuk kerusakan struktur body. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
+      403: components["responses"]["common.PermissionDenied"];
+      404: components["responses"]["common.NotFound"];
+      412: components["responses"]["common.PreconditionFailed"];
+      /** @description unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8). */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
+      422: components["responses"]["common.Unprocessable"];
+      503: components["responses"]["common.NotReady"];
+    };
+  };
+  deleteI18nOverride: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Opsional. Revision yang diharapkan; tidak cocok -> 412 version_mismatch. */
+        "If-Match"?: components["parameters"]["common.IfMatch"];
+      };
+      path: {
+        /** @description Kunci lengkap bertitik pada katalog bawaan (mis. note.title). */
+        key: components["parameters"]["OverrideKey"];
+        locale: components["parameters"]["OverrideLocale"];
+        namespace: components["parameters"]["OverrideNamespace"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Override dihapus. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      403: components["responses"]["common.PermissionDenied"];
+      404: components["responses"]["common.NotFound"];
+      412: components["responses"]["common.PreconditionFailed"];
+      /** @description unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8). */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
+      503: components["responses"]["common.NotReady"];
     };
   };
   listModules: {

@@ -14,9 +14,9 @@ import (
 
 // newI18nService membangun i18n.Service dari registri bahasa repo, katalog platform dan ui, serta katalog
 // setiap modul ber-CatalogSource (namespace = slug). active melaporkan apakah modul ber-slug ns aktif untuk
-// tenant; nil = semua aktif (CLI). Katalog yang rusak secara struktural mengembalikan galat sehingga startup
+// tenant; nil = semua aktif (CLI). overrides (opsional, nil literal bila tidak ada) menyimpan override istilah per tenant. Katalog yang rusak secara struktural mengembalikan galat sehingga startup
 // ditolak (PRD-000 FR-25, Requirement 8.1); ketidaksesuaian antar bahasa hanya dicatat sebagai peringatan.
-func newI18nService(log *slog.Logger, dev bool, reg *registry.Registry, active func(tenancy.TenantID, string) bool) (*i18n.Service, error) {
+func newI18nService(log *slog.Logger, dev bool, reg *registry.Registry, active func(tenancy.TenantID, string) bool, overrides i18n.OverrideStore) (*i18n.Service, error) {
 	locales, err := i18n.Load()
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func newI18nService(log *slog.Logger, dev bool, reg *registry.Registry, active f
 			Locales: e.Manifest.I18n.Locales, Default: e.Manifest.I18n.DefaultLocale,
 		})
 	}
-	return i18n.New(i18n.Options{Registry: locales, Sources: sources, Active: active, Dev: dev, Log: log})
+	return i18n.New(i18n.Options{Registry: locales, Sources: sources, Active: active, Dev: dev, Log: log, Overrides: overrides})
 }
 
 // moduleActive membentuk Options.Active dari status runtime: modul ber-namespace ns aktif bila statusnya enabled.
