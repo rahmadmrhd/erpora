@@ -13,5 +13,6 @@
   ],
   "capabilities": ["example-addon.summary.read"],
   "migrations": { "strategy": "none" },
+  "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" }
 }

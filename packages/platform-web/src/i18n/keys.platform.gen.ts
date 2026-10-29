@@ -134,7 +134,6 @@ declare module "./types" {
       "modules.required": {};
       "modules.result.failed": {};
       "modules.result.noop": {};
-      "modules.result.operation": { operation: string | number; status: string | number };
       "modules.result.pollError": {};
       "modules.result.running": {};
       "modules.result.succeeded": {};

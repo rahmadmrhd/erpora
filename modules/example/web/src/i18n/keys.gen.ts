@@ -5,6 +5,7 @@ declare module "@erpora/platform-web" {
   interface I18nCatalogs {
     example: {
       "actions.refresh": {};
+      "errors.bad_request": {};
       "nav.notes": {};
       "page.notes.columns.title": {};
       "page.notes.columns.updated": {};

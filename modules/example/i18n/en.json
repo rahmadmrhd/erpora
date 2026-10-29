@@ -18,5 +18,8 @@
   },
   "actions": {
     "refresh": "Refresh"
+  },
+  "errors": {
+    "bad_request": "The notes list parameter is invalid."
   }
 }

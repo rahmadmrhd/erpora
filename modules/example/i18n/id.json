@@ -18,5 +18,8 @@
   },
   "actions": {
     "refresh": "Segarkan"
+  },
+  "errors": {
+    "bad_request": "Parameter daftar catatan tidak valid."
   }
 }

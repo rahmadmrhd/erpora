@@ -4,7 +4,8 @@ package exampleaddon
 
 import (
 	"context"
-	_ "embed"
+	"embed"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -18,6 +19,9 @@ var manifestJSON []byte
 
 //go:embed openapi.yaml
 var openAPI []byte
+
+//go:embed i18n/*.json
+var catalogsFS embed.FS
 
 // Module adalah implementasi module.Module untuk acme.example-addon.
 type Module struct {
@@ -35,6 +39,15 @@ func New(notes contract.Notes) *Module {
 
 // OpenAPI mengembalikan kontrak API modul (module.ContractSource; PRD-000 FR-23.1).
 func (m *Module) OpenAPI() []byte { return openAPI }
+
+// Catalogs mengembalikan katalog terjemahan modul, satu berkas "<locale>.json" per bahasa (module.CatalogSource; PRD-000 FR-25).
+func (m *Module) Catalogs() fs.FS {
+	sub, err := fs.Sub(catalogsFS, "i18n")
+	if err != nil {
+		panic(err) // direktori di-embed saat kompilasi; tidak mungkin gagal
+	}
+	return sub
+}
 
 // Manifest mengembalikan manifest modul.
 func (m *Module) Manifest() module.Manifest { return m.manifest }
