@@ -169,9 +169,16 @@ func (s *Service) refreshLocked(ctx context.Context, to *tenantOv, t tenancy.Ten
 		to.nextCheck = now.Add(overrideBackoff)
 		return
 	}
-	revs := make(map[string]int64, len(rows))
+	// Gabung dengan max per kunci: revisi di DB hanya naik, dan hasil query yang dimulai SEBELUM sebuah mutasi
+	// (afterMutation sudah mengisi revisi lebih baru) tidak boleh menurunkannya (monoton di semua jalur; F-2).
+	revs := make(map[string]int64, len(rows)+len(to.revs))
+	for k, v := range to.revs {
+		revs[k] = v
+	}
 	for _, r := range rows {
-		revs[ovKey(r.Namespace, r.Locale)] = r.Revision
+		if k := ovKey(r.Namespace, r.Locale); r.Revision > revs[k] {
+			revs[k] = r.Revision
+		}
 	}
 	to.revs = revs
 	to.nextCheck = now.Add(s.ttl)
