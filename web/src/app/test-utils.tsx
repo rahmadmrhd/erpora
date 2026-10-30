@@ -26,6 +26,7 @@ import {
 import { focusManager, QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, render } from "@testing-library/react";
+import { handleCaughtError } from "./providers/caught-error";
 import { Providers } from "./providers/providers";
 
 // Katalog nyata dibaca dari berkas (bukan `import`) agar aturan F2 (tanpa deep import ke packages/*) tidak terpicu.
@@ -56,6 +57,7 @@ const FIXTURE_CATALOGS: Record<string, Record<string, Record<string, string>>> =
       "nav.reports": "Laporan",
       "nav.sales": "Penjualan",
       "page.deep": "Dalam",
+      "page.homeAlias": "Alpha Beranda",
       "page.title": "Judul Alpha",
     },
     en: {
@@ -63,6 +65,7 @@ const FIXTURE_CATALOGS: Record<string, Record<string, Record<string, string>>> =
       "nav.reports": "Reports",
       "nav.sales": "Sales",
       "page.deep": "Deep",
+      "page.homeAlias": "Alpha Home",
       "page.title": "Alpha Title",
     },
   },
@@ -281,6 +284,17 @@ export function makeFixtureModules(loads: FixtureLoads): FrontendModule[] {
       }),
       createRoute({
         getParentRoute: () => base,
+        path: "/dupe",
+        staticData: {
+          crumb: [
+            { ref: { ns: "alpha", key: "nav.home" } },
+            { ref: { ns: "alpha", key: "page.homeAlias" } },
+          ],
+        },
+        component: () => <p>Isi Duplikat</p>,
+      }),
+      createRoute({
+        getParentRoute: () => base,
         path: "/crumbfail",
         staticData: { crumb: { ref: { ns: "gamma", key: "x" } } },
         component: () => <p>Isi Crumb Gagal</p>,
@@ -331,6 +345,8 @@ export interface RenderAppOptions {
   currentUserSource?: CurrentUserSource;
   server?: FakeServer;
   bootstrap?: Partial<Bootstrap>;
+  /** Penanganan galat tertangkap batas galat; bawaan sama dengan produksi (`handleCaughtError`). */
+  onCaughtError?: (error: unknown, info: { componentStack?: string }) => void;
 }
 
 /** Merakit `Providers` penuh dengan server tiruan; `refreshBootstrap` memicu refetch (fokus jendela). */
@@ -359,6 +375,7 @@ export function renderApp(opts: RenderAppOptions = {}) {
       currentUserSource={opts.currentUserSource}
       bootstrapOptions={{ retry: false, staleTime: 0 }}
     />,
+    { onCaughtError: opts.onCaughtError ?? handleCaughtError },
   );
   const refreshBootstrap = async () => {
     await act(async () => {
