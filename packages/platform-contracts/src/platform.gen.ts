@@ -314,6 +314,10 @@ export type components = {
       /** @description Pesan ICU MessageFormat pengganti; argumen harus sama dengan pesan bawaan; tanpa HTML. */
       message: string;
     };
+    /** @description Bentuk error.details pada 412 version_mismatch override (OverrideView terbaru; hilang bila baris belum ada). */
+    I18nOverridePreconditionDetails: {
+      current: components["schemas"]["I18nOverride"];
+    };
     Module: {
       binaryVersion: string;
       compatible: boolean;
@@ -703,7 +707,34 @@ export interface operations {
       };
       403: components["responses"]["common.PermissionDenied"];
       404: components["responses"]["common.NotFound"];
-      412: components["responses"]["common.PreconditionFailed"];
+      /** @description version_mismatch: If-Match tidak cocok dengan ETag override saat ini. Bila barisnya ada, error.details.current memuat override terbaru (skema I18nOverride; bentuk lengkap details: I18nOverridePreconditionDetails) sehingga klien dapat menyelesaikan bentrok tanpa permintaan tambahan (api-guidelines section 5); bila barisnya belum ada, details tidak dikirim. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "version_mismatch",
+           *         "details": {
+           *           "current": {
+           *             "etag": "\"3f9a1c20b7d84e55\"",
+           *             "key": "note.title",
+           *             "locale": "id",
+           *             "message": "Klien",
+           *             "namespace": "example",
+           *             "updatedAt": "2026-10-29T10:00:00Z",
+           *             "updatedBy": "api:dev"
+           *           }
+           *         },
+           *         "message": "Override telah berubah; muat ulang lalu coba lagi."
+           *       }
+           *     }
+           */
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
       /** @description unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8). */
       415: {
         headers: {
@@ -743,7 +774,34 @@ export interface operations {
       };
       403: components["responses"]["common.PermissionDenied"];
       404: components["responses"]["common.NotFound"];
-      412: components["responses"]["common.PreconditionFailed"];
+      /** @description version_mismatch: If-Match tidak cocok dengan ETag override saat ini. Bila barisnya ada, error.details.current memuat override terbaru (skema I18nOverride; bentuk lengkap details: I18nOverridePreconditionDetails) sehingga klien dapat menyelesaikan bentrok tanpa permintaan tambahan (api-guidelines section 5); bila barisnya belum ada, details tidak dikirim. */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "version_mismatch",
+           *         "details": {
+           *           "current": {
+           *             "etag": "\"3f9a1c20b7d84e55\"",
+           *             "key": "note.title",
+           *             "locale": "id",
+           *             "message": "Klien",
+           *             "namespace": "example",
+           *             "updatedAt": "2026-10-29T10:00:00Z",
+           *             "updatedBy": "api:dev"
+           *           }
+           *         },
+           *         "message": "Override telah berubah; muat ulang lalu coba lagi."
+           *       }
+           *     }
+           */
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
       /** @description unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8). */
       415: {
         headers: {

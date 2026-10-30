@@ -152,7 +152,21 @@ paths:
           content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
-        '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '412':
+          description: >-
+            version_mismatch: If-Match tidak cocok dengan ETag override saat ini. Bila barisnya ada, error.details.current
+            memuat override terbaru (skema I18nOverride; bentuk lengkap details: I18nOverridePreconditionDetails) sehingga
+            klien dapat menyelesaikan bentrok tanpa permintaan tambahan (api-guidelines section 5); bila barisnya belum ada,
+            details tidak dikirim.
+          content:
+            application/json:
+              schema: { $ref: 'erp:common#/components/schemas/Error' }
+              example:
+                error:
+                  code: version_mismatch
+                  message: Override telah berubah; muat ulang lalu coba lagi.
+                  details:
+                    current: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
         '415':
           description: >
             unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8).
@@ -175,7 +189,21 @@ paths:
         '204': { description: Override dihapus. }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
-        '412': { $ref: 'erp:common#/components/responses/PreconditionFailed' }
+        '412':
+          description: >-
+            version_mismatch: If-Match tidak cocok dengan ETag override saat ini. Bila barisnya ada, error.details.current
+            memuat override terbaru (skema I18nOverride; bentuk lengkap details: I18nOverridePreconditionDetails) sehingga
+            klien dapat menyelesaikan bentrok tanpa permintaan tambahan (api-guidelines section 5); bila barisnya belum ada,
+            details tidak dikirim.
+          content:
+            application/json:
+              schema: { $ref: 'erp:common#/components/schemas/Error' }
+              example:
+                error:
+                  code: version_mismatch
+                  message: Override telah berubah; muat ulang lalu coba lagi.
+                  details:
+                    current: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
         '415':
           description: >
             unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8).
@@ -530,6 +558,12 @@ components:
           maxLength: 2000
           description: Pesan ICU MessageFormat pengganti; argumen harus sama dengan pesan bawaan; tanpa HTML.
           x-erp-classification: internal
+    I18nOverridePreconditionDetails:
+      type: object
+      description: Bentuk error.details pada 412 version_mismatch override (OverrideView terbaru; hilang bila baris belum ada).
+      required: [current]
+      properties:
+        current: { $ref: '#/components/schemas/I18nOverride' }
     I18nOverride:
       type: object
       required: [namespace, locale, key, message, etag, updatedBy, updatedAt]
