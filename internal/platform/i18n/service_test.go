@@ -524,9 +524,9 @@ func TestOverrideStoreErrorsCounted(t *testing.T) {
 	}
 }
 
-// F-8 (G32): jalur Catalog menghitung erp.i18n.fallback SEKALI per pembangunan View (jumlah kunci yang berasal dari
-// bahasa fallback), bukan per request.
-func TestCatalogFallbackCountedOncePerViewBuild(t *testing.T) {
+// G-5 (G37): jalur Catalog TIDAK menambah erp.i18n.fallback (pemakaian runtime lewat Resolve); jumlah kunci fallback
+// per pembangunan View menjadi metrik terpisah erp.i18n.catalog_fallback_keys (sekali per View, bukan per request).
+func TestCatalogFallbackKeysSeparateMetricOncePerViewBuild(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	s := newTestService(t, Options{Meter: mp.Meter("test")})
@@ -537,15 +537,18 @@ func TestCatalogFallbackCountedOncePerViewBuild(t *testing.T) {
 		}
 	}
 	// en-GB hanya punya "a"; "b", "c", "n.count" berasal dari fallback (en/id)
-	got := collectMetric(t, reader, FallbackMetric)
+	got := collectMetric(t, reader, "erp.i18n.catalog_fallback_keys")
 	if got["locale=en-GB,namespace=example"] != 3 {
-		t.Errorf("%s = %v, want en-GB/example = 3 (sekali per View)", FallbackMetric, got)
+		t.Errorf("catalog_fallback_keys = %v, want en-GB/example = 3 (sekali per View)", got)
+	}
+	if got := collectMetric(t, reader, FallbackMetric); len(got) != 0 {
+		t.Errorf("%s hanya untuk pemakaian runtime lewat Resolve, tetapi Catalog menambah: %v", FallbackMetric, got)
 	}
 	// bahasa default tidak punya fallback
 	if _, err := s.Catalog(ctx, tenantA, "example", "id"); err != nil {
 		t.Fatal(err)
 	}
-	if got := collectMetric(t, reader, FallbackMetric); got["locale=id,namespace=example"] != 0 {
+	if got := collectMetric(t, reader, "erp.i18n.catalog_fallback_keys"); got["locale=id,namespace=example"] != 0 {
 		t.Errorf("bahasa default tidak boleh dihitung: %v", got)
 	}
 }

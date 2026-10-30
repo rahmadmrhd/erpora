@@ -158,6 +158,7 @@ type Service struct {
 	fallbackCtr   metric.Int64Counter // nil bila tanpa Meter
 	missingCtr    metric.Int64Counter
 	ovErrCtr      metric.Int64Counter
+	catFallbackCt metric.Int64Counter
 
 	warned     sync.Map
 	warnedSize atomic.Int64
@@ -209,6 +210,11 @@ func New(opts Options) (*Service, error) {
 			metric.WithUnit("{message}"),
 			metric.WithDescription("Pemakaian pesan terjemahan dari bahasa fallback (bukan bahasa yang diminta)")); err == nil {
 			s.fallbackCtr = c
+		}
+		if c, err := opts.Meter.Int64Counter(CatalogFallbackKeysMetric,
+			metric.WithUnit("{message}"),
+			metric.WithDescription("Jumlah kunci yang berasal dari bahasa fallback pada setiap pembangunan katalog efektif (View)")); err == nil {
+			s.catFallbackCt = c
 		}
 		if c, err := opts.Meter.Int64Counter(MissingMetric,
 			metric.WithUnit("{message}"),
@@ -439,8 +445,13 @@ func (s *Service) resolve(ctx context.Context, t tenancy.TenantID, ns, key strin
 
 const warnedMax = 4096
 
-// FallbackMetric adalah nama counter pemakaian fallback (atribut: locale, namespace; tanpa kunci).
+// FallbackMetric adalah nama counter pemakaian fallback runtime lewat Resolve/T (atribut: locale, namespace; tanpa
+// kunci). Jalur Catalog tidak menambahnya: lihat CatalogFallbackKeysMetric (G-5).
 const FallbackMetric = "erp.i18n.fallback"
+
+// CatalogFallbackKeysMetric adalah counter jumlah kunci fallback per pembangunan View katalog (atribut: locale,
+// namespace). Dihitung ulang saat revisi override berubah atau cache View dikosongkan, jadi bukan ukuran pemakaian.
+const CatalogFallbackKeysMetric = "erp.i18n.catalog_fallback_keys"
 
 // MissingMetric adalah counter kunci hilang pada T (atribut: locale, namespace; tanpa kunci).
 const MissingMetric = "erp.i18n.missing"
@@ -521,9 +532,9 @@ func (s *Service) Catalog(ctx context.Context, t tenancy.TenantID, ns string, lo
 		Locale: string(loc), Namespace: ns, Revision: rev,
 		ETag: `W/"` + hex.EncodeToString(sum[:16]) + `"`, Messages: msgs,
 	}
-	// Metrik fallback jalur Catalog (G32): SEKALI per pembangunan View (cache miss), sebanyak kunci yang berasal dari
-	// bahasa fallback; bukan per request.
-	if s.fallbackCtr != nil && len(chain) > 1 {
+	// Metrik jalur Catalog (G32, G37): SEKALI per pembangunan View (cache miss), sebanyak kunci yang berasal dari
+	// bahasa fallback; bukan per request, dan terpisah dari erp.i18n.fallback (pemakaian runtime).
+	if s.catFallbackCt != nil && len(chain) > 1 {
 		exact := nd.flats[chain[0]]
 		n := 0
 		for key := range msgs {
@@ -538,7 +549,7 @@ func (s *Service) Catalog(ctx context.Context, t tenancy.TenantID, ns string, lo
 			n++
 		}
 		if n > 0 {
-			s.fallbackCtr.Add(context.Background(), int64(n),
+			s.catFallbackCt.Add(context.Background(), int64(n),
 				metric.WithAttributes(attribute.String("locale", string(loc)), attribute.String("namespace", ns)))
 		}
 	}
