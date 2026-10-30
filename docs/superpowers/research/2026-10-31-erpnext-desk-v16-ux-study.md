@@ -2,7 +2,7 @@
 
 Catatan pengamatan, bukan spesifikasi mengikat. Sumber: deployment milik pemilik produk (`erpnext.rhd.my.id`: ERPNext, Frappe HR, CRM, Helpdesk), diamati 31 Okt 2026 pada tema gelap, viewport ±800 px, data nyaris kosong (satu user, satu lead). Hanya membaca: tidak ada pengaturan yang disimpan atau dokumen yang diubah. Tujuannya menjadi bahan spec revisi M3 (shell, M3b–M3d), dengan komponen **persis shadcn** dan ERP Design System sebagai acuan visual (keputusan 31 Okt 2026).
 
-Batas pengamatan: `/hrms` adalah portal swa-layanan karyawan (menolak akun tanpa data karyawan), sehingga tidak diamati. Tampilan Kanban, laporan, dan dashboard Desk tidak diamati karena data kosong; tampilan Kanban hanya dilihat di CRM.
+Putaran kedua (31 Okt 2026, atas izin pemilik produk untuk mengubah data uji): dibuat enam ToDo ber-prefiks `[Uji UX]`, satu Kanban Board `Uji UX Status`, satu Item `UJI-UX-001` dan satu Material Request `MAT-MR-2026-00001` (sudah di-Submit). Pengaturan pengguna (tema, layout, dock) yang diubah untuk percobaan sudah dikembalikan ke Dark, Full Width, Pinned. Tidak ada data yang dihapus permanen.
 
 ## 1. Dua gaya UI dalam satu deployment
 
@@ -18,9 +18,9 @@ Keputusan pemilik produk (31 Okt 2026): shell mengikuti **Desk v16**.
 ## 2. Shell Desk v16
 
 - **Peluncur (`/desk`)**: kisi ikon aplikasi (ERPNext, Frappe HR, CRM, Helpdesk, Framework) di bawah bar Search `Ctrl+K`; pojok kanan atas: lonceng notifikasi dan avatar.
-- **Dock (rel ikon)**: logo app di atas (membuka peluncur), Search, Notifications, satu ikon per Desk, avatar di dasar. Mode **Pinned** (menempel di sisi sidebar) atau **Floating** (melayang, muncul dari tepi kiri); `Shift+Ctrl+/` membuka dock. Menu avatar: **My Space, Settings, Manage Dock, Reload, Logout**.
+- **Dock (rel ikon)**: logo app di atas (membuka peluncur), Search, Notifications, satu ikon per Desk, avatar di dasar. Mode **Pinned** (menempel di sisi sidebar) atau **Floating** (sidebar menjadi satu panel; dock berupa pil melayang yang meluncur dari tepi kiri; lihat 7.1); `Shift+Ctrl+/` membuka dock. Menu avatar: **My Space, Settings, Manage Dock, Reload, Logout**.
 - **Manage Dock** (dialog): daftar entri dengan seret-untuk-urut dan ikon mata (sembunyikan), tombol Add / Reset / **Reset for everyone**, pemilih cakupan "For everyone", panel **Preview** ("dock seperti hasil susunan ini"), tombol Save.
-- **Panel menu**: judul Desk berdropdown (`Setup ▾`), item dengan ikon, sebagian bersarang dengan chevron dan membuka inline (Reports membuka daftar anak).
+- **Panel menu**: judul Desk berdropdown (`Setup ▾`; menu: All apps, Edit Sidebar, Help), item dengan ikon, sebagian bersarang dengan chevron dan membuka inline (Reports membuka daftar anak). Susunan dan hierarkinya dapat diatur pengguna atau seluruh situs (lihat 7.2).
 - **Notifikasi**: panel yang meluncur di sebelah sidebar (kolom ketiga), tab **All / Events**, ikon pengaturan, tandai-semua, tutup; keadaan kosong dengan ikon lonceng dan kalimat penjelas.
 - **Awesomebar (`Ctrl+K`)**: palet perintah "Search or type a command"; hasil campuran dokumen dan aksi (User List, User Report, New User, Open Users Workspace, ...) dengan teks cocok disorot; pintasan di footer (↑↓ navigasi, ↵ pilih, Esc tutup, `Ctrl+G` Global Search).
 - **Home Desk**: kartu sambutan ("Good evening, Rahmad") dengan progres onboarding 9 langkah (Add User, Import, Skip; dapat di-Dismiss), kartu chart dengan filter dan `...`, deretan tile angka (Annual Sales, Annual Purchase, Total Stock Value).
@@ -71,6 +71,51 @@ Semua preferensi bersifat per pengguna dan tercatat di riwayat dokumen User (mis
 7. Satu palet perintah untuk navigasi dan aksi.
 8. Form dan daftar menyimpan konteks asal di breadcrumb.
 
-## 7. Belum diamati (perlu rujukan tambahan sebelum spec blok terkait)
+## 7. Temuan putaran kedua
 
-Tampilan Report View, Dashboard View, Image View, Kanban Desk, Calendar/Gantt; popover filter dengan beberapa kondisi dan filter tersimpan; sidebar group-by di daftar (pengaturan "Show sidebar" ada, tetapi tidak terlihat pada viewport ini); form dokumen yang dapat di-Submit dengan status Draft/Submitted/Cancelled; dialog form (quick entry); keadaan Floating dock secara langsung (hanya dilihat lewat tangkapan layar pemilik produk); lebar Compact vs Full Width; perilaku mobile.
+### 7.1 Dock Floating (diuji langsung)
+- Hanya mengubah **mode**, bukan isi: pada Floating, rel ikon hilang dan sidebar menjadi **satu panel lebar** (mirip CRM): kepala berisi pemilih Desk (`Setup ▾`), di bawahnya **Search** dan **Notification** (pada Pinned keduanya ada di rel), lalu menu, dan di dasar **avatar + nama + email**.
+- Dock menjadi **pil vertikal** (lebar 56 px, tinggi menyesuaikan, maks `100vh − 32px`, di tengah tinggi layar, `left: 8px`) yang diparkir di luar layar (`translate(-150%, -50%)`) dan meluncur masuk dengan transisi 0,28 dtk (`cubic-bezier(0.4, 0, 0.2, 1)`); isi: logo di atas, garis pemisah, ikon Desk, yang aktif disorot. Pemicunya (tepi kiri atau pintasan) tidak berhasil saya picu lewat hover; yang terverifikasi hanya wujud dan animasinya.
+- Setelan tersimpan seketika (toast "Saved · Refresh to see changes") dan kelas `body` berganti (`dock-pinned` / `dock-active`); tema `full-width` juga kelas `body`.
+- **Compact vs Full Width**: Compact mengunci lebar form (±921 px dari area ±1199 px), Full Width memakai seluruh area.
+- Pengaturan tampilan disimpan sebagai objek `desk_settings` per pengguna: `search_bar`, `notifications`, `list_sidebar`, `bulk_actions`, `view_switcher`, `form_sidebar`, `form_navigation_buttons`, `timeline`, `dashboard`, `report_split_view`, `show_my_space`, `dock_mode`.
+
+### 7.2 Edit Sidebar (pengaturan panel menu)
+- Menu kepala panel (`Setup ▾`) berisi **All apps, Edit Sidebar, Help ▸**. Edit Sidebar membuka dialog **Manage <Desk> Sidebar** (pola yang sama dengan Manage Dock): daftar entri hierarkis dengan **seret untuk mengurutkan** dan **seret ke dalam bagian untuk menyarangkan**, pensil = ganti nama, mata = sembunyikan, label **Section** pada entri induk, panel **Preview** ("sidebar seperti hasil susunan ini"), tombol Add, Reset, **Reset to Standard**, Save.
+- Pemilih cakupan di pojok dialog: `user` (susunan pribadi) atau `site` ("For everyone").
+- **Add to the Sidebar**: *Kind* = Link / Section; *Links To* = DocType / Page / Report / Workspace / Dashboard / URL; *Item*, *Label*, *Icon* (pemilih ikon), tombol Add.
+
+### 7.3 Frappe HR (`/hrms`)
+PWA **mobile-first** khusus swa-layanan karyawan: header (judul, lonceng, avatar), kartu sambutan dengan tombol **Check In**, daftar **Quick Links** (Request Attendance, Request a Shift, Request Leave, Request Compensatory Leave, Claim an Expense, Request an Advance, View Salary Slips), tab **My Requests / Team Requests**, dan navigasi bawah (Home, Attendance, Leaves, Expenses, Salary). Menolak akun tanpa data karyawan dengan dialog "Login Failed". Pelajaran untuk M3g (PWA): mobile punya tata letak sendiri dengan navigasi bawah, bukan sidebar yang diciutkan.
+
+### 7.4 Daftar (ToDo, 8 data)
+- Badge berwarna per nilai: Status (Open merah, Closed hijau, Cancelled abu-abu), Priority (High merah, Medium oranye, Low abu-abu); kolom referensi memuat tombol kecil "Open" ke dokumen terkait.
+- Baris filter standar mengikuti jenis field: field *select* menjadi dropdown (Status, Priority), tanggal menjadi pemilih tanggal, teks memakai ikon kondisi (≈).
+- Pintasan dan menu `...`: User Permissions, Role Permissions Manager, **Customize (`Ctrl+Y`)**, Settings, Customize Quick Filters, List Settings, Documentation.
+- **Tidak ada sidebar group-by** di tampilan daftar (panel kirinya disembunyikan, `display: none`); group-by dipindah ke Report View. Pengaturan "Lists → Show sidebar" ada, tetapi pada instalasi ini tidak menampilkan apa pun.
+
+### 7.5 Report View
+Grid bernomor dengan checkbox, **filter per kolom** di bawah header, dan tombol **Add Group**: pilih satu field (Allocated To, Created By, Priority, Reference Type, Status, Tags, ...) dan **agregat** Count / Sum / Average (+ field agregat). Hasil berupa tabel ringkas (mis. Open 6, Closed 1, Cancelled 1) dengan penghitung "1 of 8 (3 rows with children)". Status group-by tersimpan di URL (`?_group_by=[...]`). Hanya **satu level** (spesifikasi M3c kita menargetkan sampai 4).
+
+### 7.6 Kanban (Desk)
+- Dialog **New Kanban Board**: nama (privat) dan "Columns based on" (hanya field *select*: Status, Priority).
+- Halaman: judul = nama board, **pemilih board** di kanan atas, filter, tombol **Group** (None / Assigned To / Priority → swimlane) dan **Settings**.
+- Kolom: titik + nama + jumlah + "+"; kartu memuat judul, field terpilih (Priority berbadge, Due Date, Reference Type), tombol assign "+", dan waktu relatif.
+- **Seret-lepas antar kolom** langsung menyimpan nilai field (diuji: Open 6→5, Closed 1→2).
+- **Kanban Settings** (dialog dengan navigasi kiri Config / Columns / Cards / Swimlanes): Board Name, Footer Date (Modified), Title Field, Image Field, Show Assigned To, Show Tags on Cards.
+
+### 7.7 Dashboard View dan Dashboard Chart
+- Keadaan kosong: "No charts or cards yet — Click Customize to add your first widget".
+- Mode kustomisasi: tombol **Save Customizations / Discard**, area putus-putus **+ New Number Card** dan **+ New Chart**; menambah chart membuka dialog "Choose an existing chart or create a new chart".
+- Chart dibangun sebagai form DocType biasa (**Dashboard Chart**): Chart Name, **Chart Type** (Count / Sum / Average / Group By), Document Type, Time Series Based On, Timespan (Last Year, ...), Time Interval (Yearly, ...), Type (Line, ...), Show Values over Chart, Currency, tabel **Filters**, **Custom Options** (JSON), Color, Empty State Message, Roles, "Is Public", "Is Standard".
+
+### 7.8 Dokumen Submit (Material Request, Stock Desk)
+- **Draft**: lencana "Draft", banner biru "Submit this document to confirm", tombol utama **Submit**, dropdown konteks (Get Items From), tab (Details, Terms, More Info, Connections); tabel anak dengan nomor, checkbox, ikon pensil per baris, **Add row / Add multiple / Download / Upload**.
+- **Konfirmasi**: dialog "Permanently Submit MAT-MR-...?" dengan **No / Yes**; tombol utama berubah menjadi "Submitting...".
+- **Submitted**: lencana berubah mengikuti status ("Pending"), semua field menjadi baca-saja, tombol: **Stop**, **Create ▾** (dokumen turunan), panah, `...`, **Cancel**; toast "Submitted"; timeline mencatat status.
+- Peralihan menutup tab Terms dan menyembunyikan banner serta tombol edit tabel.
+- Dokumen non-submittable (ToDo): setelah simpan header menampilkan lencana status (Open), tombol **Close** dan **New**, serta toast "Saved"; layar diredupkan selama menyimpan.
+
+## 8. Belum diamati
+
+Image View, Calendar, Gantt; filter tersimpan dan beberapa kondisi sekaligus pada popover filter; dialog form (quick entry) dan field Link; alur Cancel/Amend dan kolom docstatus di daftar; pemicu dock Floating (hover tepi kiri / `Ctrl+Shift+/`) dan keadaan tersembunyi saat tidak dipakai; perilaku mobile Desk; halaman Workspace yang dapat diedit; Helpdesk dan CRM di luar Leads (Deals, Contacts, Notes, Tasks, Call Logs).
