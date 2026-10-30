@@ -158,3 +158,5 @@ Rincian dan status resmi ada di PRD-000 Q40 butir 9–12.
 | Buka `/desk/buying/user` (User tidak ada di Buying) | Dialihkan ke `/desk/users/user`: pasangan tidak valid diganti Desk pemilik utama |
 
 Pelajaran: di ERPNext **Desk adalah bagian rute** (`/desk/<desk>/<halaman>`), sehingga "Desk saat ini per tab" otomatis berasal dari URL dan validasi terhadap halaman dilakukan di router. Sidebar Selling juga memuat **Home dan Dashboard sekaligus** (arahan produk: hanya Dashboard).
+
+13. **URL bersih, Desk di state** (menolak `/desk/<desk>/<halaman>` milik ERPNext): `/` = Dashboard Desk saat ini, `/desks` = halaman Desks, `/<slug-menu>` = halaman menu (`/sales-order`). Tautan yang dibagikan terbuka di Desk yang biasa dipakai penerima. Rinci di PRD-000 Q40 butir 13.
