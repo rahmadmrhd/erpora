@@ -23,6 +23,6 @@
     "@types/react": "19.3.0",
     "fast-check": "4.10.2",
     "react": "19.3.1",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }
