@@ -116,6 +116,12 @@ func (s *Service) warnStore(err error) {
 	}
 }
 
+// isCallerCancel melaporkan apakah err hanyalah akibat pembatalan context PEMANGGIL (bukan kegagalan nyata store):
+// tidak boleh memicu backoff atau peringatan "DB tak terjangkau" (F-1).
+func isCallerCancel(ctx context.Context, err error) bool {
+	return ctx.Err() != nil && errors.Is(err, ctx.Err())
+}
+
 // waitFlight menunggu pekerjaan yang sedang berlangsung paling lama overrideWait (atau ctx selesai).
 func waitFlight(ctx context.Context, ch chan struct{}) {
 	timer := time.NewTimer(overrideWait)
@@ -147,13 +153,18 @@ func (s *Service) refreshLocked(ctx context.Context, to *tenantOv, t tenancy.Ten
 	ch := make(chan struct{})
 	to.refreshing = ch
 	to.mu.Unlock()
-	qctx, cancel := context.WithTimeout(ctx, overrideQueryTimeout)
+	// Query bersama milik SEMUA penunggu, bukan satu pemanggil: dijalankan di luar pembatalan request pemicu
+	// (klien memutus koneksi atau React Query membatalkan fetch) dengan timeout sendiri (F-1).
+	qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), overrideQueryTimeout)
 	rows, err := s.ovs.Revisions(qctx, t)
 	cancel()
 	to.mu.Lock()
 	to.refreshing = nil
 	close(ch)
 	if err != nil {
+		if isCallerCancel(ctx, err) { // bukan kegagalan DB: tanpa backoff dan tanpa peringatan
+			return
+		}
 		s.warnStore(err)
 		to.nextCheck = now.Add(overrideBackoff)
 		return
@@ -210,13 +221,16 @@ func (s *Service) overrideSet(ctx context.Context, t tenancy.TenantID, ns, loc s
 	ch := make(chan struct{})
 	to.loading[k] = ch
 	to.mu.Unlock()
-	qctx, cancel := context.WithTimeout(ctx, overrideQueryTimeout)
+	qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), overrideQueryTimeout)
 	rows, err := s.ovs.ListLocale(qctx, t, ns, loc)
 	cancel()
 	to.mu.Lock()
 	delete(to.loading, k)
 	close(ch)
 	if err != nil {
+		if isCallerCancel(ctx, err) {
+			return to.sets[k]
+		}
 		s.warnStore(err)
 		to.failUntil[k] = now.Add(overrideBackoff)
 		return to.sets[k]
