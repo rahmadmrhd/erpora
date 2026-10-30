@@ -71,9 +71,9 @@ func T(ctx context.Context, key string, args ...Args) string {
 		// Kunci tidak ada sampai ujung rantai fallback (Requirement 3.3): peringatan sekali per kunci, dan galat
 		// test bila StrictMissing aktif. Lookup (opsional) sengaja tidak melaporkan.
 		warnOnce("missing|"+shown, "i18n: kunci terjemahan tidak ditemukan", "key", shown)
-		if rep := strict.Load(); rep != nil {
-			rep.t.Helper()
-			rep.t.Errorf("i18n: kunci terjemahan tidak ditemukan: %s", shown)
+		notifyMissing(ctx, key)
+		if st := strict.Load(); st != nil {
+			st.report(shown)
 		}
 	}
 	if ok {
@@ -89,16 +89,63 @@ type TestReporter interface {
 	Cleanup(func())
 }
 
-type strictState struct{ t TestReporter }
+// strictState membungkus reporter dengan penanda aktif di bawah mutex: sesudah cleanup test, tidak ada lagi
+// pemanggilan Errorf (mis. dari goroutine server yang masih berjalan), yang akan panik bila test sudah selesai.
+type strictState struct {
+	mu     sync.Mutex
+	active bool
+	t      TestReporter
+}
+
+func (st *strictState) report(shown string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.active {
+		st.t.Helper()
+		st.t.Errorf("i18n: kunci terjemahan tidak ditemukan: %s", shown)
+	}
+}
+
+func (st *strictState) stop() {
+	st.mu.Lock()
+	st.active = false
+	st.mu.Unlock()
+}
 
 var strict atomic.Pointer[strictState]
+
+// MissingObserver (opsional) diimplementasi Resolver yang ingin diberi tahu bahwa T tidak menemukan sebuah kunci
+// (bukan Lookup, yang memang opsional); platform memakainya untuk metrik tanpa mengimpor telemetri ke SDK.
+type MissingObserver interface {
+	ObserveMissing(ctx context.Context, ns, key string, loc Locale)
+}
+
+// notifyMissing memberi tahu Resolver di ctx (bila MissingObserver) tentang kunci yang hilang.
+func notifyMissing(ctx context.Context, key string) {
+	res, ok := ResolverFrom(ctx)
+	if !ok {
+		return
+	}
+	mo, ok := res.(MissingObserver)
+	if !ok {
+		return
+	}
+	if ns, rel, allowed := splitKey(ctx, key); allowed {
+		loc, _ := LocaleFrom(ctx)
+		mo.ObserveMissing(ctx, ns, rel, loc)
+	}
+}
 
 // StrictMissing menjadikan setiap kunci yang tidak ditemukan pada T (sampai ujung rantai fallback) sebagai galat
 // test t selama t berjalan (Requirement 3.3: "galat di mode pengujian"). Dilepas otomatis lewat t.Cleanup. Mode ini
 // global proses: pakai pada test yang tidak berjalan secara parallel dengan test lain yang sengaja memicu kunci hilang.
 func StrictMissing(t TestReporter) {
-	prev := strict.Swap(&strictState{t: t})
-	t.Cleanup(func() { strict.Store(prev) })
+	st := &strictState{t: t, active: true}
+	prev := strict.Swap(st)
+	t.Cleanup(func() {
+		st.stop() // lebih dulu: panggilan serentak yang masih berjalan tidak lagi menyentuh t
+		strict.Store(prev)
+	})
 }
 
 // Lookup seperti T tetapi melaporkan apakah pesan ditemukan dan berhasil diformat; bila tidak,
