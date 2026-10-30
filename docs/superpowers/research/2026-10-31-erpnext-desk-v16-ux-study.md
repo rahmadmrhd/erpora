@@ -80,6 +80,12 @@ Semua preferensi bersifat per pengguna dan tercatat di riwayat dokumen User (mis
 - **Compact vs Full Width**: Compact mengunci lebar form (±921 px dari area ±1199 px), Full Width memakai seluruh area.
 - Pengaturan tampilan disimpan sebagai objek `desk_settings` per pengguna: `search_bar`, `notifications`, `list_sidebar`, `bulk_actions`, `view_switcher`, `form_sidebar`, `form_navigation_buttons`, `timeline`, `dashboard`, `report_split_view`, `show_my_space`, `dock_mode`.
 
+### 7.1a Pembatas sidebar yang dapat diklik (diuji di Pinned dan Floating)
+- Pembatas sidebar adalah elemen `.sidebar-edge` selebar 8 px setinggi layar; kursor `w-resize` saat terbuka dan `e-resize` saat diciutkan. Tidak ada gagang visual saat hover; kursor saja penandanya.
+- **Klik menciutkan atau membuka**; `body` mendapat kelas `sidebar-collapsed`. Klik pertama setelah perubahan keadaan kadang tidak terdaftar pada pengujian otomatis (klik kedua berhasil), jadi pada implementasi area klik sebaiknya lebih lebar dari 8 px.
+- **Pinned:** menciutkan **panel menu saja**; rel Desk tetap (logo, Search, Notification, ikon Desk, avatar). **Floating:** sidebar menjadi **strip ikon** (±48 px) berisi ikon Desk (kepala), Search, Notification, ikon menu, dan avatar di dasar.
+- Ada juga tombol `sidebar-collapse-arrow` (24 px) dan pintasan "Toggle sidebar" di daftar pintasan.
+
 ### 7.2 Edit Sidebar (pengaturan panel menu)
 - Menu kepala panel (`Setup ▾`) berisi **All apps, Edit Sidebar, Help ▸**. Edit Sidebar membuka dialog **Manage <Desk> Sidebar** (pola yang sama dengan Manage Dock): daftar entri hierarkis dengan **seret untuk mengurutkan** dan **seret ke dalam bagian untuk menyarangkan**, pensil = ganti nama, mata = sembunyikan, label **Section** pada entri induk, panel **Preview** ("sidebar seperti hasil susunan ini"), tombol Add, Reset, **Reset to Standard**, Save.
 - Pemilih cakupan di pojok dialog: `user` (susunan pribadi) atau `site` ("For everyone").
