@@ -1,0 +1,6 @@
+{
+  "specId": "ac20178d-291e-40c9-bee7-49115a216920",
+  "workflowType": "requirements-first",
+  "specType": "feature",
+  "description": "Revisi M3a: komponen @erpora/ui persis shadcn terbaru (ERP Design System hanya lewat token CSS), shell Desk v16 (Dock Pinned/Floating, panel menu dengan grup tetap, breadcrumb bertahap, Desk per modul dengan penentuan Desk saat ini dan Dashboard), URL bersih, dan kerangka backend Desk (PRD-000 Q40)"
+}
