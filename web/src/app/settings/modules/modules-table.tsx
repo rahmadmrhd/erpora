@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@erpora/ui";
+import { useRef } from "react";
 import { availableOps } from "./impact";
 import { opKey, statusKey, useModulesT } from "./keys";
 import type { ModuleOp, ModuleStatus, ModuleView } from "./types";
@@ -44,13 +45,15 @@ export interface ModulesTableProps {
   modules: readonly ModuleView[];
   /** `false` menyembunyikan kolom Aksi (mode hanya-baca); tombol Riwayat pindah ke sel nama. */
   showActions: boolean;
-  onOperation(op: ModuleOp, module: ModuleView): void;
+  /** `trigger` = tombol menu aksi baris itu; dialog mengembalikan fokus ke sana saat ditutup (R14.1). */
+  onOperation(op: ModuleOp, module: ModuleView, trigger: HTMLElement | null): void;
   onHistory(module: ModuleView): void;
 }
 
 export function ModulesTable({ modules, showActions, onOperation, onHistory }: ModulesTableProps) {
   const t = useModulesT();
   const MoreIcon = resolveIcon("ellipsis");
+  const triggers = useRef(new Map<string, HTMLElement>());
 
   return (
     <Table>
@@ -141,6 +144,10 @@ export function ModulesTable({ modules, showActions, onOperation, onHistory }: M
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
+                        ref={(el) => {
+                          if (el) triggers.current.set(m.key, el);
+                          else triggers.current.delete(m.key);
+                        }}
                         variant="ghost"
                         size="icon"
                         aria-label={t("modules.op.menu", { name: m.name })}
@@ -150,7 +157,10 @@ export function ModulesTable({ modules, showActions, onOperation, onHistory }: M
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {ops.map((op) => (
-                        <DropdownMenuItem key={op} onSelect={() => onOperation(op, m)}>
+                        <DropdownMenuItem
+                          key={op}
+                          onSelect={() => onOperation(op, m, triggers.current.get(m.key) ?? null)}
+                        >
                           {t(opKey(op))}
                         </DropdownMenuItem>
                       ))}

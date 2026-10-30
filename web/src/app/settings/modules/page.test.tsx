@@ -218,6 +218,34 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   });
 
+  test("R14.1: fokus berpindah ke tombol Tutup setelah Lanjutkan (tidak jatuh ke body) dan kembali ke pemicu setelah dialog ditutup", async () => {
+    const user = userEvent.setup();
+    await open([shop()]);
+    await pickMenu(user, "Shop", "Nonaktifkan");
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Lanjutkan" }));
+    const close = await within(dialog).findByRole("button", { name: "Tutup" });
+    await waitFor(() => expect(document.activeElement === close).toBe(true));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute("aria-label")).toBe("Aksi untuk Shop"),
+    );
+  });
+
+  test("R14.1: Batal mengembalikan fokus ke tombol pemicu menu aksi", async () => {
+    const user = userEvent.setup();
+    await open([shop()]);
+    await pickMenu(user, "Shop", "Nonaktifkan");
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Batal" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute("aria-label")).toBe("Aksi untuk Shop"),
+    );
+  });
+
   test("M-1: Aktifkan modul nonaktif tidak memuat katalog namespace modul (404 di backend); label dari nama/key API", async () => {
     const user = userEvent.setup();
     await open([shop({ status: "disabled" })]);

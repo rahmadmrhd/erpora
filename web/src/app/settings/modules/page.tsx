@@ -47,6 +47,7 @@ export function ModulesPage() {
   const frontend = registry.resolved.map((r) => r.module);
 
   const [action, setAction] = useState<{ op: ModuleOp; key: string } | null>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const [historyKey, setHistoryKey] = useState<string | null>(null);
 
   // Pemantauan operasi 202 hidup di halaman: menutup dialog tidak boleh menghentikan invalidasi saat selesai (R13.5),
@@ -139,7 +140,10 @@ export function ModulesPage() {
       <ModulesTable
         modules={modules}
         showActions={showActions}
-        onOperation={(op, m) => setAction({ op, key: m.key })}
+        onOperation={(op, m, trigger) => {
+          returnFocus.current = trigger;
+          setAction({ op, key: m.key });
+        }}
         onHistory={(m) => setHistoryKey(m.key)}
       />
     );
@@ -172,6 +176,7 @@ export function ModulesPage() {
           frontend={frontend}
           etag={query.data?.etag}
           onClose={() => setAction(null)}
+          returnFocusTo={returnFocus}
           polling={polling}
           onAccepted={onAccepted}
         />

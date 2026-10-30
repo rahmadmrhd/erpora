@@ -17,7 +17,7 @@ import {
   LoadingIcon,
 } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState } from "react";
+import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ModulesApiError, type OperationPolling, runModuleOperation } from "./api";
 import { useModulesClient } from "./client";
 import { type MappedError, mapFailureCode, mapModuleError } from "./errors";
@@ -146,6 +146,8 @@ export interface ActionDialogProps {
   /** ETag daftar yang dipakai menghitung dampak (dikirim sebagai `If-Match`). */
   etag: string | undefined;
   onClose(): void;
+  /** Elemen yang menerima fokus lagi saat dialog ditutup (tombol menu aksi baris; R14.1). */
+  returnFocusTo?: RefObject<HTMLElement | null>;
   /** Status pemantauan operasi 202 yang dimiliki halaman. */
   polling: OperationPolling;
   /** Operasi diterima (202): halaman mulai/meneruskan pemantauan. */
@@ -163,6 +165,7 @@ export function ActionDialog({
   frontend,
   etag,
   onClose,
+  returnFocusTo,
   polling,
   onAccepted,
 }: ActionDialogProps) {
@@ -182,6 +185,15 @@ export function ActionDialog({
   const [options, setOptions] = useState<InstallOptions | undefined>(initialOptions);
   const [phase, setPhase] = useState<Phase>({ kind: "confirm" });
   const started = phase.kind !== "confirm";
+  const contentRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Tombol yang fokus (Lanjutkan, Batal) hilang saat fase berganti sehingga fokus jatuh ke body; pindahkan ke dialog
+  // selama berjalan dan ke tombol Tutup saat hasil/galat tampil (R14.1).
+  useEffect(() => {
+    if (phase.kind === "running") contentRef.current?.focus();
+    else if (phase.kind !== "confirm") closeRef.current?.focus();
+  }, [phase.kind]);
 
   const impact = useMemo(
     () => computeImpact({ op, target, modules, frontend, options }),
@@ -229,7 +241,13 @@ export function ActionDialog({
 
   return (
     <AlertDialog open>
-      <AlertDialogContent>
+      <AlertDialogContent
+        ref={contentRef}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusTo?.current?.focus();
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -301,7 +319,9 @@ export function ActionDialog({
 
         <AlertDialogFooter>
           {started && phase.kind !== "running" ? (
-            <Button onClick={onClose}>{t("modules.dialog.close")}</Button>
+            <Button ref={closeRef} onClick={onClose}>
+              {t("modules.dialog.close")}
+            </Button>
           ) : (
             <>
               <AlertDialogCancel disabled={phase.kind === "running"} onClick={onClose}>
