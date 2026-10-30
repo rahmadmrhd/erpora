@@ -34,33 +34,39 @@ func newFakeStore() *fakeStore {
 	return &fakeStore{rows: map[tenancy.TenantID]map[[3]string]store.Override{}, revs: map[tenancy.TenantID]map[[2]string]int64{}}
 }
 
-func (f *fakeStore) Revisions(_ context.Context, t tenancy.TenantID) ([]store.Revision, error) {
+func (f *fakeStore) Revisions(ctx context.Context, t tenancy.TenantID) ([]store.Revision, error) {
 	f.mu.Lock()
 	f.revCalls++
 	gate := f.revGate
-	f.mu.Unlock()
-	if gate != nil {
-		<-gate
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.failAll != nil {
-		return nil, f.failAll
-	}
+	// Isi dibaca SEBELUM menunggu gate: meniru query yang membaca keadaan lama lalu selesai belakangan.
 	var out []store.Revision
 	for k, v := range f.revs[t] {
 		out = append(out, store.Revision{Namespace: k[0], Locale: k[1], Revision: v})
 	}
+	failErr := f.failAll
+	f.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
+	if err := ctx.Err(); err != nil { // store yang menghormati context (seperti driver nyata)
+		return nil, err
+	}
+	if failErr != nil {
+		return nil, failErr
+	}
 	return out, nil
 }
 
-func (f *fakeStore) ListLocale(_ context.Context, t tenancy.TenantID, ns, loc string) ([]store.Override, error) {
+func (f *fakeStore) ListLocale(ctx context.Context, t tenancy.TenantID, ns, loc string) ([]store.Override, error) {
 	f.mu.Lock()
 	f.loadCalls++
 	gate := f.loadGate
 	f.mu.Unlock()
 	if gate != nil {
 		<-gate
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -767,4 +773,94 @@ type loadFailStore struct {
 func (l *loadFailStore) ListLocale(context.Context, tenancy.TenantID, string, string) ([]store.Override, error) {
 	l.loads++
 	return nil, errors.New("muat gagal")
+}
+
+// F-1: request yang dibatalkan klien tidak boleh memicu backoff untuk semua pengguna (endpoint katalog/bootstrap
+// publik): query bersama berjalan di luar pembatalan pemanggil, dan context.Canceled milik pemanggil bukan kegagalan DB.
+func TestOverrideCanceledRequestDoesNotTriggerBackoff(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	fs, clk := newFakeStore(), newClock()
+	s := newOverrideService(t, fs, clk, func(o *Options) { o.Log = log })
+	set(t, s, tenantA, "example", "id", "a", "Lama")
+	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "Lama" {
+		t.Fatalf("awal: %q", got)
+	}
+	// perubahan dari instance lain (langsung di store)
+	fs.mu.Lock()
+	fs.rows[tenantA][[3]string{"example", "id", "a"}] = store.Override{TenantID: tenantA, Namespace: "example", Locale: "id", Key: "a", Message: "Baru"}
+	fs.revs[tenantA][[2]string{"example", "id"}]++
+	fs.mu.Unlock()
+	clk.Advance(DefaultOverrideTTL + time.Second)
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel() // klien sudah memutus koneksi
+	s.Resolve(canceled, tenantA, "example", "a", "id")
+	if strings.Contains(buf.String(), WarnOverrideStoreMessage) {
+		t.Errorf("pembatalan request dicatat sebagai DB tak terjangkau:\n%s", buf.String())
+	}
+	// pemanggil lain (request normal) tetap segar: tidak ada backoff 30 detik
+	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "Baru" {
+		t.Errorf("setelah request dibatalkan, pemanggil lain mendapat %q, want Baru (tanpa backoff)", got)
+	}
+}
+
+// F-1: kegagalan nyata store tetap memicu backoff, tetapi pembatalan context pemanggil di tengah query tidak.
+func TestOverrideRealFailureStillBacksOffButCallerCancelDoesNot(t *testing.T) {
+	fs, clk := newFakeStore(), newClock()
+	gate := make(chan struct{})
+	fs.revGate = gate
+	s := newOverrideService(t, fs, clk)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { s.Resolve(ctx, tenantA, "example", "a", "id"); close(done) }()
+	time.Sleep(50 * time.Millisecond)
+	cancel() // dibatalkan saat query berlangsung
+	close(gate)
+	<-done
+	if n := fs.revCalls; n != 1 {
+		t.Fatalf("revCalls = %d", n)
+	}
+	fs.mu.Lock()
+	fs.revGate = nil
+	fs.mu.Unlock()
+	resolve(s, tenantA, "example", "id", "a") // masih jendela TTL (sukses) -> tidak query lagi; lalu majukan jam
+	clk.Advance(DefaultOverrideTTL + time.Second)
+	resolve(s, tenantA, "example", "id", "a")
+	if fs.revCalls != 2 {
+		t.Errorf("revCalls = %d, want 2 (tanpa backoff setelah pembatalan)", fs.revCalls)
+	}
+}
+
+// F-2: hasil refresh yang dimulai SEBELUM mutasi tidak boleh menimpa revisi yang lebih baru dari afterMutation:
+// revisi digabung dengan max per kunci (monoton di semua jalur).
+func TestOverrideStaleRefreshDoesNotRegressRevision(t *testing.T) {
+	fs, clk := newFakeStore(), newClock()
+	s := newOverrideService(t, fs, clk)
+	set(t, s, tenantA, "example", "id", "a", "Satu") // rev 1
+	resolve(s, tenantA, "example", "id", "a")        // muat cache
+	clk.Advance(DefaultOverrideTTL + time.Second)
+	gate := make(chan struct{})
+	fs.mu.Lock()
+	fs.revGate = gate
+	fs.mu.Unlock()
+	refreshing := make(chan struct{})
+	go func() { resolve(s, tenantA, "example", "id", "a"); close(refreshing) }() // refresh membaca rev 1, lalu menunggu
+	time.Sleep(50 * time.Millisecond)
+	fs.mu.Lock()
+	fs.revGate = nil
+	fs.mu.Unlock()
+	set(t, s, tenantA, "example", "id", "a", "Dua") // rev 2; afterMutation mengisi revisi 2
+	close(gate)                                     // refresh lama selesai dengan hasil basi (rev 1)
+	<-refreshing
+	if got := s.overrideRevisions(context.Background(), tenantA)[ovKey("example", "id")]; got != 2 {
+		t.Errorf("revisi cache = %d, want 2 (hasil refresh basi tidak boleh menurunkan)", got)
+	}
+	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "Dua" {
+		t.Errorf("Resolve = %q, want Dua", got)
+	}
+	v, _ := s.Catalog(context.Background(), tenantA, "example", "id")
+	if v.Messages["a"] != "Dua" {
+		t.Errorf("Catalog = %q, want Dua", v.Messages["a"])
+	}
 }
