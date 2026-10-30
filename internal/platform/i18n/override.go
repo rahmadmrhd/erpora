@@ -105,7 +105,8 @@ func (s *Service) tenantOv(t tenancy.TenantID) *tenantOv {
 }
 
 // warnStore mencatat peringatan DB override tidak terjangkau paling sering satu kali per 30 detik.
-func (s *Service) warnStore(err error) {
+func (s *Service) warnStore(err error, reason string) {
+	s.countOverrideError(reason)
 	nowNs := s.now().UnixNano()
 	last := s.lastWarnStore.Load()
 	if last != 0 && nowNs-last < int64(30*time.Second) {
@@ -165,7 +166,7 @@ func (s *Service) refreshLocked(ctx context.Context, to *tenantOv, t tenancy.Ten
 		if isCallerCancel(ctx, err) { // bukan kegagalan DB: tanpa backoff dan tanpa peringatan
 			return
 		}
-		s.warnStore(err)
+		s.warnStore(err, "revisions")
 		to.nextCheck = now.Add(overrideBackoff)
 		return
 	}
@@ -238,7 +239,7 @@ func (s *Service) overrideSet(ctx context.Context, t tenancy.TenantID, ns, loc s
 		if isCallerCancel(ctx, err) {
 			return to.sets[k]
 		}
-		s.warnStore(err)
+		s.warnStore(err, "load")
 		to.failUntil[k] = now.Add(overrideBackoff)
 		return to.sets[k]
 	}

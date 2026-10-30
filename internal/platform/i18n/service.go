@@ -156,6 +156,8 @@ type Service struct {
 	ov            map[tenancy.TenantID]*tenantOv
 	lastWarnStore atomic.Int64
 	fallbackCtr   metric.Int64Counter // nil bila tanpa Meter
+	missingCtr    metric.Int64Counter
+	ovErrCtr      metric.Int64Counter
 
 	warned     sync.Map
 	warnedSize atomic.Int64
@@ -207,6 +209,16 @@ func New(opts Options) (*Service, error) {
 			metric.WithUnit("{message}"),
 			metric.WithDescription("Pemakaian pesan terjemahan dari bahasa fallback (bukan bahasa yang diminta)")); err == nil {
 			s.fallbackCtr = c
+		}
+		if c, err := opts.Meter.Int64Counter(MissingMetric,
+			metric.WithUnit("{message}"),
+			metric.WithDescription("Kunci terjemahan tidak ditemukan sampai ujung rantai fallback (hanya dari T, bukan Lookup)")); err == nil {
+			s.missingCtr = c
+		}
+		if c, err := opts.Meter.Int64Counter(OverrideErrorsMetric,
+			metric.WithUnit("{error}"),
+			metric.WithDescription("Kegagalan memuat override istilah dari DB (katalog bawaan tetap disajikan)")); err == nil {
+			s.ovErrCtr = c
 		}
 	}
 	if s.ttl <= 0 {
@@ -430,6 +442,26 @@ const warnedMax = 4096
 // FallbackMetric adalah nama counter pemakaian fallback (atribut: locale, namespace; tanpa kunci).
 const FallbackMetric = "erp.i18n.fallback"
 
+// MissingMetric adalah counter kunci hilang pada T (atribut: locale, namespace; tanpa kunci).
+const MissingMetric = "erp.i18n.missing"
+
+// OverrideErrorsMetric adalah counter kegagalan DB override (atribut reason: "revisions" atau "load").
+const OverrideErrorsMetric = "erp.i18n.override_errors"
+
+// countMissing menghitung kunci hilang dari T (dipanggil lewat MissingObserver pada Resolver).
+func (s *Service) countMissing(loc, ns string) {
+	if s.missingCtr != nil {
+		s.missingCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("locale", loc), attribute.String("namespace", ns)))
+	}
+}
+
+// countOverrideError menghitung kegagalan DB override; reason himpunan tertutup.
+func (s *Service) countOverrideError(reason string) {
+	if s.ovErrCtr != nil {
+		s.ovErrCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("reason", reason)))
+	}
+}
+
 // warnFallback menghitung metrik di semua lingkungan dan mencatat peringatan satu kali per (bahasa, namespace,
 // kunci) hanya di mode development/test (Requirement 3.7).
 func (s *Service) warnFallback(loc, ns, key string) {
@@ -488,6 +520,27 @@ func (s *Service) Catalog(ctx context.Context, t tenancy.TenantID, ns string, lo
 	v := &View{
 		Locale: string(loc), Namespace: ns, Revision: rev,
 		ETag: `W/"` + hex.EncodeToString(sum[:16]) + `"`, Messages: msgs,
+	}
+	// Metrik fallback jalur Catalog (G32): SEKALI per pembangunan View (cache miss), sebanyak kunci yang berasal dari
+	// bahasa fallback; bukan per request.
+	if s.fallbackCtr != nil && len(chain) > 1 {
+		exact := nd.flats[chain[0]]
+		n := 0
+		for key := range msgs {
+			if _, ok := exact[key]; ok {
+				continue
+			}
+			if sets[0] != nil {
+				if _, ok := sets[0].msgs[key]; ok {
+					continue
+				}
+			}
+			n++
+		}
+		if n > 0 {
+			s.fallbackCtr.Add(context.Background(), int64(n),
+				metric.WithAttributes(attribute.String("locale", string(loc)), attribute.String("namespace", ns)))
+		}
 	}
 	if len(s.views) >= maxViews {
 		s.views = map[string]*View{}
@@ -550,6 +603,16 @@ type builtinResolver struct{ s *Service }
 func (r builtinResolver) Resolve(ctx context.Context, ns, key string, loc sdki18n.Locale) (string, bool) {
 	src, origin := r.s.ResolveBuiltin(ctx, ns, key, loc)
 	return src, origin != OriginMissing
+}
+
+// ObserveMissing mengimplementasi sdki18n.MissingObserver: kunci hilang pada T dihitung sebagai metrik.
+func (r builtinResolver) ObserveMissing(_ context.Context, ns, _ string, loc sdki18n.Locale) {
+	r.s.countMissing(string(loc), ns)
+}
+
+// ObserveMissing mengimplementasi sdki18n.MissingObserver.
+func (r tenantResolver) ObserveMissing(_ context.Context, ns, _ string, loc sdki18n.Locale) {
+	r.s.countMissing(string(loc), ns)
 }
 
 // BuiltinResolver mengembalikan sdki18n.Resolver yang hanya memakai katalog bawaan: dipasang paling awal di rantai
