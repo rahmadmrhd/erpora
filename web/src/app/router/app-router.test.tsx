@@ -53,7 +53,7 @@ describe("route guard (P17, K-11)", () => {
     expect(within(nav).queryByRole("link", { name: "Alpha Beranda" })).toBeNull();
   });
 
-  test("modul diaktifkan ulang: hanya bootstrap, katalog, dan chunk halaman yang diminta (tanpa permintaan API lain)", async () => {
+  test("modul diaktifkan ulang: hanya bootstrap dan katalog i18n modul yang diminta ke server (tanpa permintaan API lain)", async () => {
     const app = renderApp({ path: "/", statuses: { alpha: "disabled" } });
     await screen.findByRole("navigation", { name: "Navigasi utama" });
     app.server.setModuleStatus("acme.alpha", "enabled");
@@ -68,7 +68,10 @@ describe("route guard (P17, K-11)", () => {
         (p) => p.startsWith("/api/bootstrap") || p.startsWith("/api/platform/i18n/"),
       ),
     ).toBe(true);
-    expect(app.server.requests.some((p) => p.endsWith("/alpha"))).toBe(true);
+    // Yang tercatat server tiruan adalah permintaan katalog namespace modul (chunk JS halaman tidak lewat server tiruan).
+    expect(
+      app.server.requests.some((p) => p.startsWith("/api/platform/i18n/") && p.endsWith("/alpha")),
+    ).toBe(true);
   });
 });
 
