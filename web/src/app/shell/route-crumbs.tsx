@@ -1,4 +1,4 @@
-import type { Crumb } from "@erpora/module-sdk";
+import type { Crumb, MessageRef } from "@erpora/module-sdk";
 import { Message, useMessage, useModuleRegistry } from "@erpora/platform-web";
 import { useMatches } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -7,7 +7,12 @@ import type { ResolvedCrumb } from "./breadcrumbs";
 const APP_NAME = { ns: "platform", key: "app.name" } as const;
 
 /** Menormalkan `staticData.crumb` (satu tingkat atau beberapa) dari setiap route yang cocok menjadi satu jejak. */
-export function useRouteCrumbs(): { crumbs: ResolvedCrumb[]; last: Crumb | undefined } {
+export function useRouteCrumbs(): {
+  crumbs: ResolvedCrumb[];
+  /** Crumb berpesan beserta kuncinya (untuk probe teks dan de-duplikasi). */
+  refs: { key: string; ref: MessageRef }[];
+  last: Crumb | undefined;
+} {
   const matches = useMatches();
   const registry = useModuleRegistry();
   return useMemo(() => {
@@ -26,6 +31,7 @@ export function useRouteCrumbs(): { crumbs: ResolvedCrumb[]; last: Crumb | undef
       return crumb;
     };
     const flat: { crumb: Crumb; key: string; to: string | undefined }[] = [];
+    const refs: { key: string; ref: MessageRef }[] = [];
     for (const m of matches) {
       const raw = m.staticData?.crumb;
       if (raw === undefined) continue;
@@ -39,12 +45,16 @@ export function useRouteCrumbs(): { crumbs: ResolvedCrumb[]; last: Crumb | undef
         });
       });
     }
-    const crumbs = flat.map(({ crumb, key, to }) => ({
+    const crumbs: ResolvedCrumb[] = flat.map(({ crumb, key, to }) => ({
       key,
       to,
       label: "ref" in crumb ? <Message message={crumb.ref} /> : crumb.text,
+      ...("ref" in crumb ? {} : { text: crumb.text }),
     }));
-    return { crumbs, last: flat.at(-1)?.crumb };
+    refs.push(
+      ...flat.flatMap(({ crumb, key }) => ("ref" in crumb ? [{ key, ref: crumb.ref }] : [])),
+    );
+    return { crumbs, refs, last: flat.at(-1)?.crumb };
   }, [matches, registry]);
 }
 
