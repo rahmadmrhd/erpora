@@ -138,3 +138,12 @@ Bukan salinan ERPNext: ini keputusan dan pengecualian pemilik produk terhadap ya
 6. **Dock di halaman utama berisi daftar Desk**, sehingga berpindah desk tidak perlu kembali ke halaman Desks.
 7. **Breadcrumb**: `ikon Home` (menuju halaman Desks) `>` **desk saat ini** (menuju Dashboard desk itu) `>` ... Diringkas **bertahap menurut lebar** (rincian tahap dan pengecualian ponsel di PRD-000 Q40 butir 4): utuh bila muat; Opsi A (Home, Desk, "…", dua langkah terakhir); Opsi B (Home, "…", dua langkah terakhir bila muat); ponsel (`… › langkah terakhir`, Home di dalam "…").
 8. **Setiap desk punya satu halaman Dashboard** (menggantikan pasangan Home + Dashboard di ERPNext, yang memakai komponen sama); hanya "Dashboard" yang ada, setara Home ERPNext.
+
+### Arahan lanjutan (31 Okt 2026, setelah mockup sidebar)
+
+9. **Struktur sidebar**: header Desk dihapus; grup tetap **Cari, Notifikasi, ToDo** (boleh bertambah kelak), divider, menu Desk saat ini; popover pada logo berlaku di Pinned dan Floating; pembatas sidebar dapat diklik untuk menciutkan atau membuka (hasil uji di 7.1a).
+10. **Dashboard wajib per Desk**, tetap berupa item di grup menu, **terkunci** pada pengaturan sidebar.
+11. **Penentuan Desk saat ini** (tiap tahap memeriksa izin): memori klien per tab, lalu cookie/`localStorage`, lalu `default_desk` pengguna, lalu Desk pemilik utama menu, lalu Desk pertama dari menu itu yang diizinkan.
+12. **Aturan Desk boleh tampil**: kepemilikan Desk kustom (pribadi, atau terlihat untuk pengguna/peran), minimal satu menu diizinkan, tidak dinonaktifkan, dan seterusnya.
+
+Rincian dan status resmi ada di PRD-000 Q40 butir 9–12.
