@@ -100,6 +100,10 @@ export interface ServerOptions {
   listStatus?: number;
   /** Status HTTP GET operations/{id} (bawaan 200); selain 200 membalas galat. */
   operationStatus?: number;
+  /** Status HTTP GET operations/{id} per id (menimpa `operationStatus`). */
+  operationStatuses?: Record<string, number>;
+  /** Id operasi yang dibalas POST 202 secara berurutan (bawaan selalu `op-1`). */
+  acceptedIds?: string[];
   postStatus?: number;
   postError?: { code: string; details?: unknown[]; message?: string; requestId?: string };
   events?: EventView[];
@@ -184,8 +188,9 @@ export function createModulesServer(
       if (method === "GET" && m) {
         const id = decodeURIComponent(m[1] ?? "");
         s.opFetches[id] = (s.opFetches[id] ?? 0) + 1;
-        if (s.options.operationStatus && s.options.operationStatus !== 200) {
-          return json({ error: { code: "not_found", message: "x" } }, s.options.operationStatus);
+        const forced = s.options.operationStatuses?.[id] ?? s.options.operationStatus;
+        if (forced && forced !== 200) {
+          return json({ error: { code: "not_found", message: "x" } }, forced);
         }
         const op = s.options.operations?.[id] ?? operation({ id });
         return json({ data: op });
@@ -213,10 +218,8 @@ export function createModulesServer(
         const op = m[2] as string;
         const target = s.modules.find((x) => x.key === key);
         if (s.options.mode === "accepted") {
-          return json(
-            { data: { operationId: "op-1", operationIds: ["op-1"], status: "running" } },
-            202,
-          );
+          const id = s.options.acceptedIds?.shift() ?? "op-1";
+          return json({ data: { operationId: id, operationIds: [id], status: "running" } }, 202);
         }
         if (target && !s.options.failure) {
           s.modules = s.modules.map((x) =>

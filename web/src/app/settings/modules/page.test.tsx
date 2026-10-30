@@ -411,6 +411,74 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     expect(server.opFetches["op-1"]).toBe(n);
   }, 15_000);
 
+  test("F-4: operasi lama yang pemantauannya berhenti (404) tidak ikut dipantau lagi; operasi baru tetap terpantau dan menginvalidasi bootstrap", async () => {
+    const user = userEvent.setup();
+    const ops: Record<string, ReturnType<typeof operation>> = {
+      "op-2": operation({ id: "op-2", status: "succeeded" }),
+    };
+    const { server, queryClient } = await open([shop()], {
+      mode: "accepted",
+      acceptedIds: ["op-1", "op-2"],
+      operationStatuses: { "op-1": 404 },
+      operations: ops,
+    });
+    const invalidated: unknown[] = [];
+    const original = queryClient.invalidateQueries.bind(queryClient);
+    queryClient.invalidateQueries = ((f: { queryKey?: unknown }) => {
+      invalidated.push(f?.queryKey);
+      return original(f as never);
+    }) as typeof queryClient.invalidateQueries;
+    const confirmAction = async () => {
+      await pickMenu(user, "Shop", "Nonaktifkan");
+      await user.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
+      );
+    };
+    await confirmAction();
+    expect(await screen.findByText(/Pemantauan operasi dihentikan/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Tutup" }));
+    const op1Fetches = server.opFetches["op-1"];
+    const before = invalidated.filter((k) => k === BOOTSTRAP_KEY).length;
+
+    await confirmAction();
+    expect(await screen.findByText("Berhasil")).toBeInTheDocument();
+    expect(screen.queryByText(/Pemantauan operasi dihentikan/)).toBeNull();
+    expect(server.opFetches["op-1"]).toBe(op1Fetches);
+    // Satu invalidasi dari POST 202 dan satu dari selesainya operasi baru.
+    await waitFor(() =>
+      expect(invalidated.filter((k) => k === BOOTSTRAP_KEY).length).toBeGreaterThanOrEqual(
+        before + 2,
+      ),
+    );
+  }, 15_000);
+
+  test("F-4: satu operasi mati (404) di antara beberapa tidak menghentikan pemantauan operasi lain", async () => {
+    const user = userEvent.setup();
+    const ops: Record<string, ReturnType<typeof operation>> = {
+      "op-1": operation({ id: "op-1", status: "running" }),
+      "op-2": operation({ id: "op-2", status: "succeeded" }),
+    };
+    const { server } = await open([shop()], {
+      mode: "accepted",
+      acceptedIds: ["op-1", "op-2"],
+      operations: ops,
+    });
+    const confirmAction = async () => {
+      await pickMenu(user, "Shop", "Nonaktifkan");
+      await user.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
+      );
+    };
+    await confirmAction();
+    await waitFor(() => expect(server.opFetches["op-1"]).toBeGreaterThanOrEqual(1));
+    await user.click(await screen.findByRole("button", { name: "Tutup" }));
+    // op-1 hilang (404) sebelum pemantauan berikutnya; op-2 baru diterima lalu dipantau bersama op-1.
+    server.options.operationStatuses = { "op-1": 404 };
+    await confirmAction();
+    expect(await screen.findByText("Berhasil")).toBeInTheDocument();
+    expect(screen.queryByText(/Pemantauan operasi dihentikan/)).toBeNull();
+  }, 15_000);
+
   test("M-7: galat permanen saat polling (404) menghentikan polling dan menampilkan pesan, bukan percobaan terus-menerus", async () => {
     const user = userEvent.setup();
     const { server } = await open([shop()], { mode: "accepted", operationStatus: 404 });

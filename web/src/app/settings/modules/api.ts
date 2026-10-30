@@ -191,8 +191,30 @@ export function useOperationPolling(
       return;
     }
     setState({ operations: [], phase: "running", pollError: false });
+    // Operasi yang membalas galat permanen (mis. 404) dikeluarkan sendiri-sendiri; satu operasi mati tidak boleh
+    // menghentikan pemantauan operasi lain. Polling berhenti (fatal) hanya bila SEMUA operasi mati.
+    const dead = new Set<string>();
     const deps: PollerDeps = {
-      fetchStates: () => Promise.all(ids.map((id) => fetchOperation(client, id))),
+      fetchStates: async () => {
+        const live = ids.filter((id) => !dead.has(id));
+        const results = await Promise.allSettled(live.map((id) => fetchOperation(client, id)));
+        const operations: OperationView[] = [];
+        let transient: unknown;
+        let permanent: unknown;
+        results.forEach((r, i) => {
+          if (r.status === "fulfilled") {
+            operations.push(r.value);
+          } else if (isPermanentApiError(r.reason)) {
+            dead.add(live[i] as string);
+            permanent = r.reason;
+          } else {
+            transient = r.reason;
+          }
+        });
+        if (transient !== undefined) throw transient;
+        if (operations.length === 0 && permanent !== undefined) throw permanent;
+        return operations;
+      },
       onUpdate: (operations) => setState((s) => ({ ...s, operations, pollError: false })),
       onFinish: (operations) => {
         setState({ operations, phase: "finished", pollError: false });

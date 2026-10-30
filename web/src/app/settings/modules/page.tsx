@@ -62,11 +62,13 @@ export function ModulesPage() {
   const pollingRef = useRef(polling);
   pollingRef.current = polling;
   const onAccepted = (ids: readonly string[]) => {
-    // Operasi lama yang belum selesai tetap dipantau agar invalidasinya tidak hilang; yang sudah selesai dibuang.
-    const finished = new Set(
-      pollingRef.current.operations.filter((o) => o.status !== "running").map((o) => o.id),
-    );
-    setPollIds((prev) => [...new Set([...prev.filter((id) => !finished.has(id)), ...ids])]);
+    // Operasi lama yang masih berjalan tetap dipantau agar invalidasinya tidak hilang. Dibuang: yang sudah selesai, yang
+    // sudah mati (404/403: tidak ada di hasil), dan semuanya bila pemantauan berhenti (stopped/timeout).
+    const { phase, operations } = pollingRef.current;
+    const running = new Set(operations.filter((o) => o.status === "running").map((o) => o.id));
+    const keep = (id: string) =>
+      phase === "running" && (operations.length === 0 || running.has(id));
+    setPollIds((prev) => [...new Set([...prev.filter(keep), ...ids])]);
   };
 
   const refreshLabel = useMessage({ ns: "platform", key: "modules.refresh" });

@@ -118,7 +118,7 @@ function OperationResults({ operations }: { operations: readonly OperationView[]
 function PollingResult({ ids, polling }: { ids: readonly string[]; polling: OperationPolling }) {
   const t = useModulesT();
   const mine = polling.operations.filter((o) => ids.includes(o.id));
-  const done = mine.length === ids.length && mine.every((o) => o.status !== "running");
+  const done = mine.length > 0 && mine.every((o) => o.status !== "running");
   if (done) return <OperationResults operations={mine} />;
   return (
     <div className="flex flex-col gap-2 text-sm">
