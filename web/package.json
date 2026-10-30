@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@stoplight/spectral-core": "1.24.0",
     "@stoplight/spectral-functions": "1.11.0",
     "@stoplight/spectral-parsers": "1.0.5",
@@ -39,7 +39,7 @@
     "@types/react-dom": "19.3.0",
     "bun-plugin-tailwind": "0.1.2",
     "dependency-cruiser": "18.7.0",
-    "happy-dom": "21.0.1",
+    "happy-dom": "21.0.4",
     "json-schema-to-typescript": "16.0.0",
     "openapi-typescript": "7.13.0",
     "radix-ui": "1.8.1",
