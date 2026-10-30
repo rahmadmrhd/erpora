@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -446,4 +447,105 @@ func TestFallbackCountedAsMetric(t *testing.T) {
 func TestNoMeterIsSafe(t *testing.T) {
 	s := newTestService(t, Options{})
 	s.Resolve(context.Background(), tenantA, "example", "c", "en-GB") // tanpa Meter tidak panik
+}
+
+// collectMetric mengumpulkan datapoint counter int64 bernama name: peta "attr=val,..." -> nilai.
+func collectMetric(t *testing.T, reader sdkmetric.Reader, name string) map[string]int64 {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != name {
+				continue
+			}
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("%s: data = %T", name, m.Data)
+			}
+			for _, dp := range sum.DataPoints {
+				var parts []string
+				for _, kv := range dp.Attributes.ToSlice() {
+					parts = append(parts, string(kv.Key)+"="+kv.Value.AsString())
+				}
+				sort.Strings(parts)
+				out[strings.Join(parts, ",")] += dp.Value
+			}
+		}
+	}
+	return out
+}
+
+// F-7 (G31): kunci hilang pada T (bukan Lookup) dihitung sebagai erp.i18n.missing (locale, namespace; tanpa kunci).
+func TestMissingKeyCountedFromTNotLookup(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	s := newTestService(t, Options{Meter: mp.Meter("test")})
+	ctx := sdki18n.WithScope(sdki18n.WithLocale(sdki18n.WithResolver(context.Background(), s.Resolver(tenantA)), "en"), "example")
+	_ = sdki18n.T(ctx, "a")             // ada
+	_ = sdki18n.T(ctx, "salah.ketik.1") // hilang
+	_ = sdki18n.T(ctx, "salah.ketik.2") // hilang (kunci lain, atribut sama)
+	_, _ = sdki18n.Lookup(ctx, "opsional.tak.ada")
+	got := collectMetric(t, reader, MissingMetric)
+	if len(got) != 1 || got["locale=en,namespace=example"] != 2 {
+		t.Errorf("%s = %v, want {locale=en,namespace=example: 2}", MissingMetric, got)
+	}
+	// Resolver bawaan (jalur pra-tenant) juga menghitung
+	bctx := sdki18n.WithScope(sdki18n.WithLocale(sdki18n.WithResolver(context.Background(), s.BuiltinResolver()), "id"), "platform")
+	_ = sdki18n.T(bctx, "errors.tidak.ada")
+	if got := collectMetric(t, reader, MissingMetric); got["locale=id,namespace=platform"] != 1 {
+		t.Errorf("resolver bawaan: %v", got)
+	}
+}
+
+// F-7: kegagalan DB override dihitung sebagai erp.i18n.override_errors dengan atribut reason (himpunan tertutup).
+func TestOverrideStoreErrorsCounted(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	fs := newFakeStore()
+	fs.failAll = errors.New("db mati")
+	clk := newClock()
+	s := newTestService(t, Options{Meter: mp.Meter("test"), Overrides: fs, Now: clk.Now})
+	s.Resolve(context.Background(), tenantA, "example", "a", "id")
+	if got := collectMetric(t, reader, OverrideErrorsMetric); got["reason=revisions"] != 1 {
+		t.Errorf("revisions: %v", got)
+	}
+	// kegagalan memuat isi: store yang revisinya ada tetapi muat isinya gagal
+	fs2 := newFakeStore()
+	fs2.revs[tenantA] = map[[2]string]int64{{"example", "id"}: 2}
+	failing := &loadFailStore{fakeStore: fs2}
+	s2 := newTestService(t, Options{Meter: mp.Meter("test2"), Overrides: failing, Now: clk.Now})
+	s2.Resolve(context.Background(), tenantA, "example", "a", "id")
+	if got := collectMetric(t, reader, OverrideErrorsMetric); got["reason=load"] != 1 {
+		t.Errorf("load: %v", got)
+	}
+}
+
+// F-8 (G32): jalur Catalog menghitung erp.i18n.fallback SEKALI per pembangunan View (jumlah kunci yang berasal dari
+// bahasa fallback), bukan per request.
+func TestCatalogFallbackCountedOncePerViewBuild(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	s := newTestService(t, Options{Meter: mp.Meter("test")})
+	ctx := context.Background()
+	for i := 0; i < 5; i++ { // 1 cache miss + 4 cache hit
+		if _, err := s.Catalog(ctx, tenantA, "example", "en-GB"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// en-GB hanya punya "a"; "b", "c", "n.count" berasal dari fallback (en/id)
+	got := collectMetric(t, reader, FallbackMetric)
+	if got["locale=en-GB,namespace=example"] != 3 {
+		t.Errorf("%s = %v, want en-GB/example = 3 (sekali per View)", FallbackMetric, got)
+	}
+	// bahasa default tidak punya fallback
+	if _, err := s.Catalog(ctx, tenantA, "example", "id"); err != nil {
+		t.Fatal(err)
+	}
+	if got := collectMetric(t, reader, FallbackMetric); got["locale=id,namespace=example"] != 0 {
+		t.Errorf("bahasa default tidak boleh dihitung: %v", got)
+	}
 }

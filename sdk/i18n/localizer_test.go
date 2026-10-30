@@ -330,3 +330,91 @@ func TestFormatReportListsMissingArguments(t *testing.T) {
 		t.Errorf("Format = %q, FormatReport = %q", plain, out)
 	}
 }
+
+// observerResolver adalah Resolver yang juga MissingObserver.
+type observerResolver struct {
+	*spyResolver
+	missing []string
+}
+
+func (o *observerResolver) ObserveMissing(_ context.Context, ns, key string, loc Locale) {
+	o.missing = append(o.missing, string(loc)+"|"+ns+"|"+key)
+}
+
+// F-7: T (bukan Lookup) memberi tahu Resolver yang mengimplementasikan MissingObserver bahwa kunci tidak ditemukan,
+// sehingga platform dapat menghitung metrik tanpa mengimpor telemetri ke SDK.
+func TestTNotifiesMissingObserverButLookupDoesNot(t *testing.T) {
+	_ = slogCapture(t)
+	r := &observerResolver{spyResolver: &spyResolver{msgs: map[string]string{"f7|id|ada": "ada"}}}
+	ctx := newCtx(r, "f7", "id")
+	_ = T(ctx, "ada")
+	_, _ = Lookup(ctx, "opsional")
+	if len(r.missing) != 0 {
+		t.Fatalf("kunci ada atau Lookup tidak boleh dilaporkan: %v", r.missing)
+	}
+	_ = T(ctx, "salah.ketik.f7")
+	_ = T(ctx, "salah.ketik.f7") // setiap pemanggilan dilaporkan ke observer (metrik menghitung kejadian)
+	if len(r.missing) != 2 || r.missing[0] != "id|f7|salah.ketik.f7" {
+		t.Errorf("missing = %v", r.missing)
+	}
+}
+
+// F-12: setelah cleanup, StrictMissing tidak lagi memanggil reporter (menghindari t.Errorf dari goroutine sesudah
+// test selesai); pemanggilan serentak aman.
+func TestStrictMissingStopsReportingAfterCleanupConcurrently(t *testing.T) {
+	_ = slogCapture(t)
+	rep := &lockedReporter{}
+	StrictMissing(rep)
+	r := &spyResolver{msgs: map[string]string{}}
+	ctx := newCtx(r, "f12", "id")
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				_ = T(ctx, "salah.f12")
+			}
+		}()
+	}
+	rep.finish() // test "selesai" sementara goroutine masih memanggil T
+	wg.Wait()
+	rep.mu.Lock()
+	defer rep.mu.Unlock()
+	if rep.afterFinish > 0 {
+		t.Errorf("reporter dipanggil %d kali SETELAH test selesai", rep.afterFinish)
+	}
+}
+
+// lockedReporter menandai panggilan Errorf yang terjadi setelah finish.
+type lockedReporter struct {
+	mu          sync.Mutex
+	cleanups    []func()
+	finished    bool
+	afterFinish int
+}
+
+func (l *lockedReporter) Helper() {}
+func (l *lockedReporter) Errorf(string, ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.finished {
+		l.afterFinish++
+	}
+}
+func (l *lockedReporter) Cleanup(fn func()) {
+	l.mu.Lock()
+	l.cleanups = append(l.cleanups, fn)
+	l.mu.Unlock()
+}
+func (l *lockedReporter) finish() {
+	l.mu.Lock()
+	fns := append([]func(){}, l.cleanups...)
+	l.mu.Unlock()
+	for i := len(fns) - 1; i >= 0; i-- {
+		fns[i]()
+	}
+	l.mu.Lock()
+	l.finished = true
+	l.mu.Unlock()
+}
