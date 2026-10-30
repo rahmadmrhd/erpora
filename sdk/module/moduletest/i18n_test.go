@@ -95,3 +95,24 @@ func TestI18nContextReportsBrokenOrMissingCatalogs(t *testing.T) {
 		t.Error("berkas bahasa hilang harus dilaporkan")
 	}
 }
+
+// G-6: rantai fallback meniru induk BCP 47 (en-GB jatuh ke en, baru bahasa dasar); locale regional tak dideklarasikan
+// tanpa berkas tidak dianggap galat.
+func TestI18nContextFallsBackThroughParentLocale(t *testing.T) {
+	m := newCatalogModule(t, map[string]string{
+		"id.json": `{"note":{"title":"Catatan","only_id":"Hanya id"}}`,
+		"en.json": `{"note":{"title":"Note"}}`,
+	})
+	rep := &recReporter{}
+	ctx := I18nContext(rep, m, "en-GB") // tidak ada en-GB.json
+	if got := i18n.T(ctx, "note.title"); got != "Note" {
+		t.Errorf("en-GB harus jatuh ke en, bukan langsung ke id: %q", got)
+	}
+	if got := i18n.T(ctx, "note.only_id"); got != "Hanya id" {
+		t.Errorf("lalu ke bahasa dasar: %q", got)
+	}
+	if len(rep.errs) != 0 {
+		t.Errorf("locale regional tak dideklarasikan tanpa berkas bukan galat: %v", rep.errs)
+	}
+	rep.finish()
+}
