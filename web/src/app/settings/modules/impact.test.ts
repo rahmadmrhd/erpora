@@ -171,7 +171,7 @@ describe("computeImpact: blocker", () => {
     }
   });
 
-  test("M-4: disable memakai status tersimpan: dependen incompatible dianggap mungkin aktif (blocker); upgrade_pending/failed memberi peringatan", () => {
+  test("M-4/F-3 (G30): disable: hanya dependen enabled yang memblokir; incompatible/upgrade_pending/failed hanya memberi peringatan (backend otoritas)", () => {
     const t = mod("a.base", { dependents: ["a.inc", "a.up", "a.fail"] });
     const rd = (key: string, status: ModuleStatus) =>
       mod(key, { status, dependencies: [dep("a.base")] });
@@ -186,8 +186,18 @@ describe("computeImpact: blocker", () => {
       ],
       frontend: [],
     });
-    expect(r.blockers).toEqual([{ code: "dependents_active", modules: ["a.inc"] }]);
-    expect(r.effects).toContainEqual({ kind: "dependents_uncertain", modules: ["a.up", "a.fail"] });
+    expect(r.blockers).toEqual([]);
+    expect(r.effects).toContainEqual({
+      kind: "dependents_uncertain",
+      modules: ["a.inc", "a.up", "a.fail"],
+    });
+    const active = computeImpact({
+      op: "disable",
+      target: { ...t, dependents: ["a.on", "a.inc"] },
+      modules: [t, rd("a.on", "enabled"), rd("a.inc", "incompatible")],
+      frontend: [],
+    });
+    expect(active.blockers).toEqual([{ code: "dependents_active", modules: ["a.on"] }]);
   });
 
   test("module_incompatible untuk install/enable/upgrade pada modul tidak kompatibel, tidak untuk disable", () => {
@@ -413,7 +423,15 @@ describe("P7: dampak tidak melanggar transisi (properti)", () => {
       );
       if (op === "disable") {
         for (const key of requiredDependents) {
-          expect(["enabled", "incompatible"]).not.toContain(byKey.get(key)?.status as string);
+          expect(byKey.get(key)?.status).not.toBe("enabled");
+          // Dependen yang tak pasti (incompatible/upgrade_pending/failed) tidak memblokir tetapi harus diperingatkan.
+          if (
+            ["incompatible", "upgrade_pending", "failed"].includes(byKey.get(key)?.status as string)
+          ) {
+            expect(
+              res.effects.some((e) => e.kind === "dependents_uncertain" && e.modules.includes(key)),
+            ).toBe(true);
+          }
         }
       }
       if (op === "uninstall") {

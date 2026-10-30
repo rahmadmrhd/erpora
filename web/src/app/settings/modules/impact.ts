@@ -181,16 +181,16 @@ export function computeImpact({ op, target, modules, frontend, options }: Impact
     );
   }
   if (op === "disable") {
-    // Backend memakai status TERSIMPAN: dependen yang dilaporkan `incompatible` bisa tersimpan `enabled`, jadi dianggap aktif.
+    // Backend memakai status TERSIMPAN yang tidak dibuka API: dependen `incompatible`/`upgrade_pending`/`failed` bisa
+    // aktif atau tidak. Hanya `enabled` yang pasti memblokir; sisanya peringatan (keputusan G30), dan backend tetap
+    // otoritas (422 `dependents_active` dipetakan ke pesan katalog).
     const dependents = requiredDependents(target, byKey);
     block(
       "dependents_active",
-      dependents
-        .filter((m) => m.status === "enabled" || m.status === "incompatible")
-        .map((m) => m.key),
+      dependents.filter((m) => m.status === "enabled").map((m) => m.key),
     );
     const uncertain = dependents.filter(
-      (m) => m.status === "upgrade_pending" || m.status === "failed",
+      (m) => m.status === "incompatible" || m.status === "upgrade_pending" || m.status === "failed",
     );
     if (uncertain.length > 0) {
       effects.push({ kind: "dependents_uncertain", modules: uncertain.map((m) => m.key) });
