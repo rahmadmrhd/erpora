@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 
@@ -239,13 +240,38 @@ func (ovStore) Delete(context.Context, tenancy.TenantID, string, string, string,
 	return false, 0, errors.New("tidak dipakai")
 }
 
+// anyTenantOvStore membalas override untuk TENANT APA PUN (termasuk tenant nol yang dipakai Resolver bawaan) dan
+// menghitung pemanggilannya: dipakai membuktikan jalur pra-tenant tidak pernah membaca override.
+type anyTenantOvStore struct {
+	ovStore
+	calls atomic.Int32
+}
+
+func (a *anyTenantOvStore) Revisions(_ context.Context, _ tenancy.TenantID) ([]store.Revision, error) {
+	a.calls.Add(1)
+	return []store.Revision{{Namespace: "platform", Locale: "id", Revision: 1}}, nil
+}
+
+func (a *anyTenantOvStore) ListLocale(_ context.Context, _ tenancy.TenantID, ns, loc string) ([]store.Override, error) {
+	a.calls.Add(1)
+	if ns == "platform" && loc == "id" {
+		return []store.Override{{Namespace: "platform", Locale: "id", Key: "errors.tenant_unresolved", Message: "OVERRIDE tenant"}}, nil
+	}
+	return nil, nil
+}
+
 func testI18nWithOverrides(t *testing.T) *i18n.Service {
+	t.Helper()
+	return testI18nWithStore(t, ovStore{})
+}
+
+func testI18nWithStore(t *testing.T, ovs i18n.OverrideStore) *i18n.Service {
 	t.Helper()
 	reg, err := i18n.ParseRegistry([]byte(`{"default":"id","locales":[{"code":"id","name":"ID"},{"code":"en","name":"EN","fallback":"id"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := i18n.New(i18n.Options{Registry: reg, Overrides: ovStore{}, Sources: []i18n.Source{
+	s, err := i18n.New(i18n.Options{Registry: reg, Overrides: ovs, Sources: []i18n.Source{
 		{Namespace: "platform", FS: i18nFS(map[string]string{
 			"id.json": `{"errors":{"tenant_unresolved":"tenant tidak jelas"}}`, "en.json": `{"errors":{"tenant_unresolved":"tenant unknown"}}`})},
 		{Namespace: "ui", FS: i18nFS(map[string]string{"id.json": `{"hi":"Halo"}`, "en.json": `{"hi":"Hello"}`})},
@@ -287,10 +313,25 @@ func TestLocaleResolverBindsTenantOverridesAfterTenantKnown(t *testing.T) {
 	if got2 != "Halo" {
 		t.Errorf("tenant lain memperoleh %q, want bawaan", got2)
 	}
-	// (2) tenant tidak dapat ditentukan: galat memakai teks BAWAAN walau ada override untuk defaultTenant
-	r3 := NewRouter(deps(failingResolver{}))
-	r3.Handle("GET /t", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	if e := errOf(t, doLang(r3, "/t", "id")); e.Error.Code != "tenant_unresolved" || e.Error.Message != "tenant tidak jelas" {
+}
+
+// F-5/G-10c: galat SEBELUM tenant dikenal memakai Resolver bawaan yang tidak pernah membaca override. Store membalas
+// override untuk tenant apa pun (termasuk tenant nol), jadi test gagal bila Resolver bawaan ikut membaca override.
+func TestLocalePreTenantErrorNeverReadsOverrides(t *testing.T) {
+	ovs := &anyTenantOvStore{}
+	r := NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:   failingResolver{},
+		Connector:  database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Assets:     fstest.MapFS{"index.html": {Data: []byte("x")}},
+		AppVersion: "1",
+		I18n:       testI18nWithStore(t, ovs),
+	})
+	r.Handle("GET /t", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	if e := errOf(t, doLang(r, "/t", "id")); e.Error.Code != "tenant_unresolved" || e.Error.Message != "tenant tidak jelas" {
 		t.Errorf("galat pra-tenant = %+v, want teks bawaan (bukan override)", e.Error)
+	}
+	if n := ovs.calls.Load(); n != 0 {
+		t.Errorf("store override dipanggil %d kali pada jalur pra-tenant, want 0", n)
 	}
 }
