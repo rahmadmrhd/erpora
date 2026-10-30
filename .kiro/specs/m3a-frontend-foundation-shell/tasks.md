@@ -150,7 +150,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - `contracts/openapi/platform.yaml`: `features` (opsional) pada `BootstrapEnvelope` + contoh respons; `task erpora -- contracts:generate` (hasilnya di-commit: `platform.gen.ts`); `task contracts:check` dan test kesesuaian route ↔ kontrak lolos; catat di `api-guidelines.md` bila perlu (tidak ada endpoint baru).
     - _Requirements: 13.2, 15.2_
 
-- [ ] 11. Checkpoint — SDK, layanan, dan backend
+- [x] 11. Checkpoint — SDK, layanan, dan backend
   - Jalankan `task lint arch check:gowork-off test contracts:check`, `task web:check`; bila menyentuh DB jalankan `task test:integration` lewat PostgreSQL di VPS (tunnel + `ERP_TEST_DATABASE_URL`). Tanyakan ke user bila bentuk runtime i18n memaksa perubahan desain.
 
 - [x] 12. Shell aplikasi (Kelas beban: Sonnet; 12.8 Haiku)
@@ -216,7 +216,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - Rekonsiliasi kunci `platform:modules.*` (kolom, `status.<9 status>`, `op.<6 operasi>`, `impact.*`, `error.*`, `failure.*`, `history.*`, `readonly.*`) id/en (ditambahkan bersama 14.2 sampai 14.4); `i18n:generate` dan `i18n:check`.
     - _Requirements: 13.7, 14.4_
 
-- [ ] 15. Checkpoint — shell dan halaman modul
+- [x] 15. Checkpoint — shell dan halaman modul
   - Jalankan `task web:check` dan `task lint arch check:gowork-off test contracts:check`; verifikasi manual cepat dengan `erpora serve` dev: `/settings/modules` memuat daftar, disable/enable `example` mengubah sidebar tanpa reload. Tanyakan ke user bila ada temuan UX.
 
 - [x] 16. Dokumentasi dan sinkron dokumen proyek (Kelas beban: Haiku)
@@ -233,18 +233,18 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
     - Tambahkan butir frontend: `@erpora/ui` milik repo (shadcn via `bun run shadcn add`, tanpa palet langsung), ui adalah daun (F4), teks UI lewat i18n, `bun test` dari root dan `task web:check`, `dangerouslySetInnerHTML` dilarang. Jalankan `go test ./tests/architecture/...`.
     - _Requirements: 15.6_
 
-- [ ] 17. Gate akhir dan verifikasi (Kelas beban: Sonnet; review akhir oleh model tertinggi yang tersedia)
-  - [ ] 17.1 Gate lengkap
+- [x] 17. Gate akhir dan verifikasi (Kelas beban: Sonnet; review akhir oleh model tertinggi yang tersedia)
+  - [x] 17.1 Gate lengkap
     - Berurutan: `task lint arch check:gowork-off test`, `task contracts:check`, `task web:check` (termasuk `bun test` dan build + anggaran), `task test:integration` (PostgreSQL di VPS), `task test:generator`; pastikan `erpora serve` menyajikan SPA baru (`go:embed` dari `web/dist`) dan test SPA/integrasi yang ada lolos. Catat hasil dan yang tidak terverifikasi.
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
-  - [ ] 17.2 Verifikasi manual R15.5
+  - [x] 17.2 Verifikasi manual R15.5
     - `task dev:setup`, `erpora serve` (dev) + build web; di peramban: disable `example` lewat `/settings/modules` → menu hilang tanpa reload, `/example` menampilkan "Modul tidak aktif", enable kembali → pulih; mode hanya-baca saat API mutasi mati (`ERP_ENV=production`, tanpa flag); `localStorage` hanya berisi `erpora.theme`, `erpora.sidebar`, `erpora.locale`; tema, bahasa, collapse sidebar (klik dan Ctrl/Cmd+B), layar kecil (Sheet); simpan temuan beserta tangkapan bila ada.
     - _Requirements: 15.5, 8.2, 4.2, 9.4, 9.5_
-  - [ ] 17.3 Review akhir independen
+  - [x] 17.3 Review akhir independen
     - Satu review menyeluruh oleh agent baru (diff + spec, tanpa kesimpulan implementer) atas kesesuaian spec dan skill `security-audit` terfokus pada perubahan (XSS lewat konten dinamis, `localStorage`, hygiene request, CSP/font/skrip, rantai pasok dependensi baru). Putaran perbaikan sesuai aturan `CLAUDE.md` global: yang sesuai spek dikerjakan oleh implementer yang sama; yang di luar spek menunggu konfirmasi.
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 15.6_
 
-- [ ] 18. Final checkpoint — Ensure all tests pass
+- [x] 18. Final checkpoint — Ensure all tests pass
   - Semua gate hijau dan tidak ada temuan terbuka; laporkan terpisah: yang dikerjakan, yang menunggu konfirmasi (PK-1 sampai PK-6 beserta rekomendasi), dan yang sengaja tidak dikerjakan (Desk, daftar, form, pencarian, PWA, notifikasi dan identitas backend). Blok M3b boleh dimulai setelah ini.
 
 ## Notes

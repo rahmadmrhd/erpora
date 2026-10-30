@@ -157,13 +157,13 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - Jalankan `task lint arch check:gowork-off test contracts:check test:integration`; tanyakan ke user bila ada temuan keamanan.
 
 - [x] 12. Tahap I6 — Runtime frontend (`@erpora/platform-web`)
-  - [ ] 12.1 Kerangka paket `packages/platform-web`
+  - [x] 12.1 Kerangka paket `packages/platform-web`
     - Buat `package.json` (`@erpora/platform-web`, versi dependensi dipin, workspace `packages/*` sudah terdaftar), `tsconfig.json` (`strict` + `noUncheckedIndexedAccess`), `src/index.ts`, dan `src/i18n/`. Tambahkan dependensi `intl-messageformat` (versi dipin hasil spike 1.2) dan dev dependency `fast-check`; jalankan `bun install` agar `bun.lock` terkunci. Biome dan `dependency-cruiser` (F1–F3) tetap lolos. Koordinasikan dengan M3a: paket ini dipakai bersama.
     - _Requirements: 6.7, 11.1_
-  - [ ] 12.2 Tulis test konformansi TS (merah dulu)
+  - [x] 12.2 Tulis test konformansi TS (merah dulu)
     - `src/i18n/conformance.test.ts` membaca `sdk/i18n/testdata/conformance.json` lewat path relatif repo dan membandingkan keluaran `format.ts` dengan hasil yang diharapkan.
     - **Validates: Requirements 9.1, 9.2, 9.3**
-  - [ ] 12.3 `src/i18n/format.ts`
+  - [x] 12.3 `src/i18n/format.ts`
     - Bungkus `intl-messageformat`: `compile(locale, message)` dengan cache, argumen hilang tidak melempar, tag rich → fungsi `rich`, teks polos melucuti tag; angka/tanggal diformat di kode (`Intl`) dan diteruskan sebagai teks.
     - _Requirements: 2.1, 2.3, 2.4, 2.6_
   - [x] 12.4 `loader.ts` dan `provider.tsx`
@@ -178,7 +178,7 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
   - [x] 12.7 Test komponen runtime
     - `useTranslation`: Suspense tanpa kunci mentah, ganti bahasa, `rich`, validasi bahasa pilihan, kegagalan `localStorage`, bahasa tak terdaftar, `If-None-Match`/304 (ETag disimpan); uji tipe: kunci salah ketik atau argumen salah tipe gagal pada `tsc --noEmit` (fixture negatif).
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.5, 7.2**
-  - [ ]* 12.8 Test properti `fast-check` (opsional)
+  - [x]* 12.8 Test properti `fast-check` (opsional)
     - Properti: `format` tidak melempar untuk pesan/argumen acak yang lolos kompilasi; hasil identik untuk panggilan berulang (cache aman); validasi bahasa pilihan selalu anggota daftar atau default.
     - **Validates: Requirements 2.3, 6.5, 9.3**
   - [x] 12.9 Gate frontend
@@ -188,21 +188,21 @@ Implementasi mengikuti tahap **I0–I7** di PRD-000 FR-25: spike mesin ICU, inti
 - [x] 13. Checkpoint — runtime frontend
   - Jalankan `task web:check` dan `ERP_REQUIRE_BUN=1 task test`; tanyakan ke user bila anggaran bundle terlampaui (keputusan D-3 cadangan).
 
-- [ ] 14. Tahap I7 — Dokumentasi dan gate akhir
+- [x] 14. Tahap I7 — Dokumentasi dan gate akhir
   - [x] 14.1 `docs/module-sdk/i18n.md`
     - Tulis panduan: tata letak katalog dan namespace, sintaks ICU yang didukung (dan yang tidak), konvensi kunci (`fields.*`, `errors.*`, `status.*`), segmen bertitik dan aturan tabrakan, registri bahasa dan fallback, alur penerjemah (`i18n:add`, `check`, `status`), kustomisasi istilah (override), kunci terketik, dan catatan keamanan (tanpa HTML dan data sensitif). Tautkan dari `docs/module-sdk/README.md` dan perbarui `docs/module-sdk/generators.md`.
     - _Requirements: 11.4_
   - [x] 14.2 Selaraskan dokumen proyek
     - `CLAUDE.md` dan `AGENTS.md` (harus identik, `TestAgentsMDMatchesClaudeMD`): tambahkan butir i18n (katalog per modul, `task i18n:check`, jangan menanam string UI); perbarui `docs/architecture/api-guidelines.md` bila belum (task 6.1); tandai FR-25 selesai di PRD-000 dan perbarui `Requirement 12.5` di `requirements.md` agar sama dengan penamaan CLI final (`erpora i18n override`).
     - _Requirements: 11.4, 11.5_
-  - [ ] 14.3 Gate akhir lengkap
+  - [x] 14.3 Gate akhir lengkap
     - Jalankan berurutan: `task lint arch check:gowork-off test`, `task contracts:check`, `task web:check`, `task test:integration` (PostgreSQL di VPS), dan `task test:generator`; verifikasi manual `Accept-Language: en` pada modul `example`, override lewat CLI, dan `i18n:check` pada repo. Catat hasil dan hal yang tidak terverifikasi.
     - _Requirements: 11.1, 11.2, 11.3_
-  - [ ] 14.4 Review akhir independen
+  - [x] 14.4 Review akhir independen
     - Satu review menyeluruh oleh agent baru (diff + spec, tanpa kesimpulan implementer), mencakup kesesuaian spec dan skill `security-audit` terfokus pada perubahan; putaran perbaikan sesuai aturan CLAUDE.md.
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 15. Final checkpoint — Ensure all tests pass
+- [x] 15. Final checkpoint — Ensure all tests pass
   - Pastikan semua gate hijau dan tidak ada temuan terbuka; laporkan terpisah yang dikerjakan, yang menunggu konfirmasi, dan yang sengaja tidak dikerjakan. M3a boleh dimulai setelah grup 12 selesai.
 
 ## Notes
