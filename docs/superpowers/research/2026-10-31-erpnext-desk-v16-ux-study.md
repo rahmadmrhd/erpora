@@ -160,3 +160,7 @@ Rincian dan status resmi ada di PRD-000 Q40 butir 9–12.
 Pelajaran: di ERPNext **Desk adalah bagian rute** (`/desk/<desk>/<halaman>`), sehingga "Desk saat ini per tab" otomatis berasal dari URL dan validasi terhadap halaman dilakukan di router. Sidebar Selling juga memuat **Home dan Dashboard sekaligus** (arahan produk: hanya Dashboard).
 
 13. **URL bersih, Desk di state** (menolak `/desk/<desk>/<halaman>` milik ERPNext): `/` = Dashboard Desk saat ini, `/desks` = halaman Desks, `/<slug-menu>` = halaman menu (`/sales-order`). Tautan yang dibagikan terbuka di Desk yang biasa dipakai penerima. Rinci di PRD-000 Q40 butir 13.
+
+14. **Koreksi rute (31 Okt 2026)**: rute modul **non-core wajib diawali slug modul** (`/example/notes`); rute modul **core tidak berawalan**. Menggantikan usulan "semua rute datar" pada butir 13.
+15. **Setiap modul wajib punya definisi Desk bawaan** (sidebar dan pengaturan relevan lain) sebagai default yang masih dapat diedit (timpaan di atas default, "Reset to Standard").
+16. **Aturan mengedit Desk**: Desk bawaan modul dan Desk yang diatur untuk beberapa pengguna/peran hanya dapat diedit pengguna ber-permission atas Desk itu; Desk kustom pribadi dapat diedit pemiliknya dan pengguna ber-permission atas Desk. Rincian di PRD-000 Q40 butir 13–15.
