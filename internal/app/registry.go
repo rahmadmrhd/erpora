@@ -1,8 +1,11 @@
 package app
 
 import (
+	"slices"
+
 	"erpora/contracts"
 	"erpora/internal/platform/buildinfo"
+	i18nadmin "erpora/internal/platform/i18n/admin"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/registry"
 	"erpora/sdk/module"
@@ -18,16 +21,28 @@ func BuildRegistry() (*registry.Registry, error) {
 	return reg, err
 }
 
-// buildRegistry seperti BuildRegistry, ditambah API manajemen modul (route platform.core) yang di-bind
-// ke lifecycle.Service oleh assemble.
-func buildRegistry() (*registry.Registry, *admin.API, error) {
-	api := admin.New()
+// platformAPIs mengumpulkan handler route platform.core yang di-bind ke layanan oleh assemble (route
+// didaftarkan lebih dulu lewat registry, layanannya baru ada setelah perakitan).
+type platformAPIs struct {
+	Modules *admin.API
+	I18n    *i18nadmin.API
+}
+
+// buildRegistry seperti BuildRegistry, ditambah API route platform.core: manajemen modul (di-bind ke
+// lifecycle.Service) dan katalog i18n (di-bind ke i18n.Service) oleh assemble.
+func buildRegistry() (*registry.Registry, *platformAPIs, error) {
+	apis := &platformAPIs{Modules: admin.New(), I18n: i18nadmin.New()}
 	reg, err := registry.Build(registry.Options{
-		PlatformVersion:      buildinfo.PlatformVersion,
-		SDKVersion:           module.SDKVersion,
-		Platform:             api.Register,
-		PlatformCapabilities: admin.Capabilities,
+		PlatformVersion: buildinfo.PlatformVersion,
+		SDKVersion:      module.SDKVersion,
+		Platform: func(r module.Registrar) error {
+			if err := apis.Modules.Register(r); err != nil {
+				return err
+			}
+			return apis.I18n.Register(r)
+		},
+		PlatformCapabilities: append(slices.Clone(admin.Capabilities), i18nadmin.Capabilities...),
 		PlatformContract:     contracts.PlatformOpenAPI,
 	}, compiledModulesFn()...)
-	return reg, api, err
+	return reg, apis, err
 }

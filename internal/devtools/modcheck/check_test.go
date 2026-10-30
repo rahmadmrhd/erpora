@@ -144,3 +144,78 @@ func TestCheck_FixtureCleanAndOnly(t *testing.T) {
 		t.Fatalf("only=beta harus bersih: got=%+v err=%v", got, err)
 	}
 }
+
+const testLocalesJSON = `{"default":"id","locales":[{"code":"id","name":"ID"},{"code":"en","name":"EN","fallback":"id"}]}`
+
+// i18nFixture membangun fixture bersih lalu menambahkan registri bahasa dan perubahan per kasus pada alpha.
+func i18nFixture(t *testing.T, i18nManifest string, files ...string) string {
+	t.Helper()
+	root := fixture{betaDeclaresDep: true}.build(t)
+	write(t, root, "internal/platform/i18n/locales.json", testLocalesJSON)
+	if i18nManifest != "" {
+		p := filepath.Join(root, "modules", "alpha", "module.json")
+		b, err := os.ReadFile(p) //nolint:gosec // path uji
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := strings.Replace(string(b), `"offline": { "mode": "online-only" }`, `"offline": { "mode": "online-only" },
+  "i18n": `+i18nManifest, 1)
+		write(t, root, "modules/alpha/module.json", s)
+	}
+	for _, f := range files {
+		write(t, root, "modules/alpha/i18n/"+f, `{}`)
+	}
+	return root
+}
+
+func TestCheck_I18n(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	tests := []struct {
+		name     string
+		manifest string
+		files    []string
+		want     string // potongan Detail yang diharapkan; kosong = bersih
+	}{
+		{"modul tanpa i18n bersih", "", nil, ""},
+		{"i18n lengkap bersih", `{"locales":["id","en"],"defaultLocale":"id"}`, []string{"id.json", "en.json"}, ""},
+		{"bahasa tak terdaftar", `{"locales":["id","fr"],"defaultLocale":"id"}`, []string{"id.json", "fr.json"}, `"fr" tidak terdaftar`},
+		{"defaultLocale di luar locales", `{"locales":["id"],"defaultLocale":"en"}`, []string{"id.json"}, "defaultLocale"},
+		{"berkas bahasa hilang", `{"locales":["id","en"],"defaultLocale":"id"}`, []string{"id.json"}, "en.json"},
+		{"direktori i18n tanpa bagian manifest", "", []string{"id.json"}, `bagian "i18n"`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Check(i18nFixture(t, tc.manifest, tc.files...), "alpha")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if len(got) != 0 {
+					t.Fatalf("harus bersih: %+v", got)
+				}
+				return
+			}
+			for _, f := range got {
+				if f.Rule == RuleI18n && strings.Contains(f.Detail, tc.want) {
+					return
+				}
+			}
+			t.Fatalf("temuan I18N %q tidak ada: %+v", tc.want, got)
+		})
+	}
+}
+
+func TestCheck_I18nSkipsRegistryCheckWithoutRegistryFile(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	root := i18nFixture(t, `{"locales":["fr"],"defaultLocale":"fr"}`, "fr.json")
+	if err := os.Remove(filepath.Join(root, "internal", "platform", "i18n", "locales.json")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Check(root, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("tanpa registri, pemeriksaan registri dilewati: %+v", got)
+	}
+}

@@ -152,6 +152,10 @@ func TestCheckGenerated_DetectsStale(t *testing.T) {
 func TestGenerate_ModuleWithWeb(t *testing.T) {
 	bun := requireBun(t)
 	root := minimalRepo(t, "example", "exampleaddon")
+	// Salinan repo kini membawa web/ kedua modul referensi; kasus ini membuktikan hanya modul ber-web/ yang dibangkitkan.
+	if err := os.RemoveAll(filepath.Join(root, "modules", "exampleaddon", "web")); err != nil {
+		t.Fatal(err)
+	}
 	writeFile(t, root, "modules/example/web/package.json", []byte(`{"name":"@erpora/module-example"}`))
 	repo, err := LoadRepo(root)
 	if err != nil {

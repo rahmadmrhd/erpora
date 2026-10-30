@@ -88,10 +88,14 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 		example + "/internal/infrastructure/persistence",
 		root + "/internal/platform/database",
 		root + "/internal/platform/modules/store",
+		root + "/internal/platform/i18n/store", // PRD-000 Q35 D-1
 		sdk + "/data",
 	} {
 		assertNone(t, Check(repoWith(pkg(ok, "gorm.io/gorm"))), "D3b")
 	}
+	// paket i18n lain (bukan store) tetap tidak boleh memakai GORM
+	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/i18n", "gorm.io/gorm"))), "D3b")
+	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/i18n/admin", "gorm.io/gorm"))), "D3b")
 }
 
 func TestD4_ApplicationImportsInfrastructure(t *testing.T) {
@@ -435,4 +439,40 @@ func TestDevtoolsRule_OnlyEntryFile(t *testing.T) {
 	if !strings.Contains(got[0].Detail+got[1].Detail, "bad.go") {
 		t.Errorf("detail harus menyebut bad.go: %+v", got)
 	}
+}
+
+// I1 (PRD-000 §4.2, spec i18n-platform 10): modul hanya memakai sdk/i18n; runtime katalog platform tertutup.
+func TestI1_ModuleMustNotImportPlatformI18n(t *testing.T) {
+	const platI18n = root + "/internal/platform/i18n"
+	assertViolation(t, Check(repoWith(pkg(example+"/internal/application", platI18n))), "I1")
+	assertViolation(t, Check(repoWith(pkg(example+"/x", platI18n+"/store"))), "I1")
+	p := pkg(example + "/internal/application")
+	p.TestImports = []string{platI18n}
+	assertViolation(t, Check(repoWith(p)), "I1")
+	// Yang sah: sdk/i18n untuk modul; platform sendiri dan internal/app boleh memakai runtime platform.
+	assertNone(t, Check(repoWith(pkg(example+"/internal/application", sdk+"/i18n"))), "I1")
+	assertNone(t, Check(repoWith(pkg(root+"/internal/app", platI18n))), "I1")
+	assertNone(t, Check(repoWith(pkg(root+"/internal/platform/httpserver", platI18n))), "I1")
+}
+
+// F2 (PRD-000 §4.2, Q27): paket platform boleh diimpor frontend modul dan tidak dihitung sebagai dependensi modul.
+// @erpora/module-sdk berawalan @erpora/module- tetapi adalah SDK platform; @erpora/module-<x> tetap dihitung.
+func TestParseWebPackage_PlatformPackagesAreNotModuleDeps(t *testing.T) {
+	data := []byte(`{"name":"@erpora/module-example","dependencies":{
+		"@erpora/module-sdk":"workspace:*","@erpora/platform-contracts":"workspace:*",
+		"@erpora/platform-web":"workspace:*","@erpora/ui":"workspace:*","@erpora/module-lain":"workspace:*"},
+		"peerDependencies":{"@erpora/module-sdk":"workspace:*","react":"19"}}`)
+	wp, ok, err := parseWebPackage(data)
+	if err != nil || !ok {
+		t.Fatal(err, ok)
+	}
+	if strings.Join(wp.ModuleDeps, ",") != "@erpora/module-lain" {
+		t.Fatalf("ModuleDeps = %v, want hanya @erpora/module-lain", wp.ModuleDeps)
+	}
+	// Modul yang memakai paket platform tidak melanggar F2; modul lain yang tidak ada di manifest tetap melanggar.
+	r := repoWith()
+	r.Web = map[string]WebPackage{example: {Name: "@erpora/module-example", ModuleDeps: nil}}
+	assertNone(t, Check(r), "F2")
+	r.Web = map[string]WebPackage{example: wp}
+	assertViolation(t, Check(r), "F2")
 }

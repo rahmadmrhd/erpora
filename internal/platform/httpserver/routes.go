@@ -3,7 +3,6 @@ package httpserver
 import (
 	"net/http"
 	"net/textproto"
-	"strconv"
 	"strings"
 
 	"erpora/internal/platform/bootstrap"
@@ -67,7 +66,7 @@ func bootstrapHandler(d Deps) http.Handler {
 		} else {
 			m = bootstrap.Build(d.AppVersion, tid, nil, 0)
 		}
-		etag := `"` + strconv.FormatInt(m.Revision, 10) + `"`
+		etag := m.ETag()
 		w.Header().Set("ETag", etag)
 		if etagMatches(req.Header[textproto.CanonicalMIMEHeaderKey("If-None-Match")], etag) {
 			w.WriteHeader(http.StatusNotModified)
@@ -77,11 +76,14 @@ func bootstrapHandler(d Deps) http.Handler {
 	})
 }
 
+// etagMatches mengevaluasi If-None-Match dengan perbandingan LEMAH (RFC 9110 section 8.8.3.2): awalan W/ di
+// kedua sisi diabaikan, sehingga "x" cocok dengan W/"x". "*" cocok dengan apa pun.
 func etagMatches(values []string, etag string) bool {
+	want := strings.TrimPrefix(etag, "W/")
 	for _, v := range values {
 		for _, part := range strings.Split(v, ",") {
 			p := strings.TrimSpace(part)
-			if p == "*" || p == etag || p == "W/"+etag {
+			if p == "*" || strings.TrimPrefix(p, "W/") == want {
 				return true
 			}
 		}

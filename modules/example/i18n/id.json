@@ -1,0 +1,25 @@
+{
+  "nav": {
+    "notes": "Catatan"
+  },
+  "page": {
+    "notes": {
+      "title": "Catatan",
+      "description": "Contoh halaman modul: daftar catatan dari API example.",
+      "empty": "Belum ada catatan.",
+      "count": "{count, plural, =0 {Tidak ada catatan} other {# catatan}}",
+      "error": "Catatan tidak dapat dimuat.",
+      "columns": {
+        "title": "Judul",
+        "version": "Versi",
+        "updated": "Diperbarui"
+      }
+    }
+  },
+  "actions": {
+    "refresh": "Segarkan"
+  },
+  "errors": {
+    "bad_request": "Parameter daftar catatan tidak valid."
+  }
+}

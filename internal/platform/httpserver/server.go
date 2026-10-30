@@ -16,6 +16,7 @@ import (
 
 	"erpora/internal/platform/bootstrap"
 	"erpora/internal/platform/database"
+	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 )
@@ -40,6 +41,9 @@ type Deps struct {
 	Dev bool
 	// NPlusOneThreshold > 0 mengaktifkan deteksi N+1 per request, hanya bila Dev (FR-07 guardrail 5).
 	NPlusOneThreshold int
+	// I18n (opsional) menegosiasikan bahasa dari Accept-Language dan memasang locale serta Resolver terjemahan
+	// ke context setiap request (PRD-000 FR-25); nil = tanpa i18n.
+	I18n *i18n.Service
 	// Authenticate membungkus route non-Public; nil = pass-through (autentikasi nyata datang dari PRD-001).
 	Authenticate func(http.Handler) http.Handler
 }
@@ -84,12 +88,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // Handle mendaftarkan pattern dengan rantai:
-// otelhttp -> recover -> requestScope -> Authenticate (kecuali Public) -> tenantContext -> h.
+// otelhttp -> localeEarly -> recover -> requestScope -> Authenticate (kecuali Public) -> tenantContext -> localeContext -> h.
 // recover berada di dalam span otelhttp agar panic tercatat pada span aktif (lihat recoverMW).
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	var cfg routeConfig
 	for _, o := range opts {
 		o(&cfg)
+	}
+	if r.deps.I18n != nil {
+		h = localeContext(r.deps.I18n, h)
 	}
 	if !cfg.noTenant {
 		h = tenantContext(r.deps.Resolver, r.deps.Connector, h)
@@ -99,6 +106,9 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	}
 	h = requestScope(r.deps.Logger, pattern, r.nPlusOneThreshold(), h)
 	h = recoverMW(r.deps.Logger, h)
+	if r.deps.I18n != nil {
+		h = localeEarly(r.deps.I18n, h)
+	}
 	h = otelhttp.NewHandler(h, pattern,
 		otelhttp.WithTracerProvider(r.deps.Tracer),
 		// Endpoint publik: traceparent klien tidak menjadi parent (hanya link pada span root baru).

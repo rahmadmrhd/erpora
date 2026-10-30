@@ -28,6 +28,8 @@ modules/example/
 
 `exampleaddon` memakai bagian yang sama, tetapi tanpa `contract/`, `migrations/`, dan `infrastructure/`, karena tidak memiliki data.
 
+Modul dengan frontend memiliki folder `web/` (lihat [`frontend.md`](frontend.md)), dan katalog terjemahan ada di `i18n/` (lihat [`i18n.md`](i18n.md)).
+
 ## 2. `module.json`
 
 Manifest divalidasi terhadap `contracts/module.schema.json` saat startup. Objek di setiap tingkat memakai `additionalProperties: false`, sehingga field yang salah ketik akan ditolak. Contoh `modules/example/module.json`:
@@ -221,7 +223,7 @@ task erpora -- module:check inventory
 Perintah ini menurunkan modul dari `example` (migrasi, empat lapisan, `openapi.yaml`, command `recount`, `DevSeeder`, test), mendaftarkannya di `go.work`,
 `go.mod` root, dan `internal/app/modules.go`, dan hasilnya langsung lolos `task lint arch check:gowork-off test`. Tambahkan endpoint dengan
 `make:handler`, lapisan lain dengan `make:entity|usecase|repository|contract|command`. Aturan penamaan, penanda, `--dry-run`/`--force`, dan keputusan
-yang berlaku ada di [`generators.md`](generators.md); kontrak API di [`contracts.md`](contracts.md).
+yang berlaku ada di [`generators.md`](generators.md); kontrak API di [`contracts.md`](contracts.md). Isi bagian frontend dan i18n yang dibuat generator dijelaskan di [`generators.md`](generators.md); panduan penulisannya ada di [`frontend.md`](frontend.md) dan [`i18n.md`](i18n.md).
 
 ### 8.2. Lampiran: menyalin `example` secara manual
 

@@ -1,0 +1,330 @@
+/*
+ * Token dan tema @erpora/ui (M3a design §2; ERP Design System, disesuaikan K-14 dan K-15).
+ * Nilai warna HANYA ditulis di berkas ini (komponen memakai token semantik; diuji di theme.test.ts).
+ * Tema: blok :root (terang) dan .dark (gelap) biasa, ditambah salinan blok .dark di @media (prefers-color-scheme: dark)
+ * untuk pilihan "sistem" sebelum JS (K-13). Salinan itu HARUS sama persis dengan .dark (P15, diuji).
+ */
+@import "tw-animate-css";
+
+/* Font Figtree variabel, subset latin, di-host sendiri (K-1). Build menyisipkannya sebagai data: URI; web/build.ts memindahkannya ke /assets. */
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url("../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --radius: 0.5rem;
+
+  --background: #fff;
+  --foreground: oklch(14.1% 0.005 285.823);
+  --card: #fff;
+  --card-foreground: oklch(14.1% 0.005 285.823);
+  --popover: #fff;
+  --popover-foreground: oklch(14.1% 0.005 285.823);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(96.7% 0.001 286.375);
+  --secondary-foreground: oklch(21% 0.006 285.885);
+  --muted: oklch(96.7% 0.001 286.375);
+  --muted-foreground: oklch(0.54 0.016 285.938);
+  --accent: oklch(96.7% 0.001 286.375);
+  --accent-foreground: oklch(21% 0.006 285.885);
+  --destructive: oklch(57.7% 0.245 27.325);
+  --destructive-foreground: #fff;
+  --border: oklch(94% 0.004 286.32);
+  --input: oklch(92% 0.004 286.32);
+  --ring: oklch(0.62 0.016 285.938);
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  --success: oklch(69.6% 0.17 162.48);
+  --success-foreground: oklch(37.8% 0.077 168.94);
+  --info: oklch(60.6% 0.25 292.717);
+  --info-foreground: oklch(38% 0.189 293.745);
+  --warning: oklch(79.5% 0.184 86.047);
+  --warning-foreground: oklch(42.1% 0.095 57.708);
+  --invert: oklch(21% 0.006 285.885);
+  --invert-foreground: oklch(98.5% 0 0);
+
+  --status-primary-bg: oklch(93.2% 0.032 255.585);
+  --status-primary-fg: oklch(37.9% 0.146 265.522);
+  --status-success-bg: oklch(96.2% 0.044 156.743);
+  --status-success-fg: oklch(39.3% 0.095 152.535);
+  --status-error-bg: oklch(93.6% 0.032 17.717);
+  --status-error-fg: oklch(39.6% 0.141 25.723);
+  --status-warning-bg: oklch(97.3% 0.071 103.193);
+  --status-warning-fg: oklch(47.6% 0.114 61.907);
+  --status-secondary-bg: oklch(96.7% 0.003 264.542);
+  --status-secondary-fg: oklch(21% 0.034 264.665);
+
+  --overlay: rgba(0, 0, 0, 0.8);
+  --notification-badge-bg: oklch(57.7% 0.245 27.325);
+  --notification-dot: oklch(62.3% 0.214 259.815);
+  /* K-14 (tambahan): red-500 DS 3,76:1 di popover terang; red-700 memenuhi 4,5:1 (teks item "Keluar"). Gelap tetap red-500. */
+  --logout-fg: oklch(50.5% 0.213 27.518);
+
+  /* Ukuran shell (K-15): mockup yang disetujui, bukan bawaan shadcn/DS. */
+  --sidebar-width: 14.25rem;
+  --sidebar-width-icon: 3.25rem;
+  --navbar-height: 3rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: oklch(14.1% 0.005 285.823);
+  --foreground: oklch(98.5% 0 0);
+  --card: oklch(14.1% 0.005 285.823);
+  --card-foreground: oklch(98.5% 0 0);
+  --popover: oklch(14.1% 0.005 285.823);
+  --popover-foreground: oklch(98.5% 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(27.4% 0.006 286.033);
+  --secondary-foreground: oklch(98.5% 0 0);
+  --muted: oklch(21% 0.006 285.885);
+  --muted-foreground: oklch(0.66 0.016 285.938);
+  --accent: oklch(21% 0.006 285.885);
+  --accent-foreground: oklch(98.5% 0 0);
+  --destructive: oklch(57.7% 0.245 27.325);
+  --destructive-foreground: #fff;
+  --border: oklch(27.4% 0.006 286.033);
+  --input: oklch(27.4% 0.006 286.033);
+  --ring: oklch(0.54 0.016 285.938);
+
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+
+  --success: oklch(69.6% 0.17 162.48);
+  --success-foreground: oklch(59.6% 0.145 163.225);
+  --info: oklch(60.6% 0.25 292.717);
+  --info-foreground: oklch(54.1% 0.281 293.009);
+  --warning: oklch(79.5% 0.184 86.047);
+  --warning-foreground: oklch(68.1% 0.162 75.834);
+  --invert: oklch(37% 0.013 285.805);
+  --invert-foreground: oklch(98.5% 0 0);
+
+  --status-primary-bg: oklch(37.9% 0.146 265.522);
+  --status-primary-fg: oklch(93.2% 0.032 255.585);
+  --status-success-bg: oklch(39.3% 0.095 152.535);
+  --status-success-fg: oklch(96.2% 0.044 156.743);
+  --status-error-bg: oklch(39.6% 0.141 25.723);
+  --status-error-fg: oklch(93.6% 0.032 17.717);
+  --status-warning-bg: oklch(55.4% 0.135 66.442);
+  --status-warning-fg: oklch(98.5% 0 0);
+  --status-secondary-bg: oklch(21% 0.034 264.665);
+  --status-secondary-fg: oklch(96.7% 0.003 264.542);
+
+  --overlay: rgba(0, 0, 0, 0.8);
+  --notification-badge-bg: oklch(57.7% 0.245 27.325);
+  --notification-dot: oklch(62.3% 0.214 259.815);
+  --logout-fg: oklch(63.7% 0.237 25.331);
+}
+
+/* Pilihan "sistem" tanpa JS: salinan blok .dark, hanya bila belum ada kelas .light/.dark (P15). */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.dark) {
+    color-scheme: dark;
+
+    --background: oklch(14.1% 0.005 285.823);
+    --foreground: oklch(98.5% 0 0);
+    --card: oklch(14.1% 0.005 285.823);
+    --card-foreground: oklch(98.5% 0 0);
+    --popover: oklch(14.1% 0.005 285.823);
+    --popover-foreground: oklch(98.5% 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(27.4% 0.006 286.033);
+    --secondary-foreground: oklch(98.5% 0 0);
+    --muted: oklch(21% 0.006 285.885);
+    --muted-foreground: oklch(0.66 0.016 285.938);
+    --accent: oklch(21% 0.006 285.885);
+    --accent-foreground: oklch(98.5% 0 0);
+    --destructive: oklch(57.7% 0.245 27.325);
+    --destructive-foreground: #fff;
+    --border: oklch(27.4% 0.006 286.033);
+    --input: oklch(27.4% 0.006 286.033);
+    --ring: oklch(0.54 0.016 285.938);
+
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.269 0 0);
+    --sidebar-ring: oklch(0.439 0 0);
+
+    --success: oklch(69.6% 0.17 162.48);
+    --success-foreground: oklch(59.6% 0.145 163.225);
+    --info: oklch(60.6% 0.25 292.717);
+    --info-foreground: oklch(54.1% 0.281 293.009);
+    --warning: oklch(79.5% 0.184 86.047);
+    --warning-foreground: oklch(68.1% 0.162 75.834);
+    --invert: oklch(37% 0.013 285.805);
+    --invert-foreground: oklch(98.5% 0 0);
+
+    --status-primary-bg: oklch(37.9% 0.146 265.522);
+    --status-primary-fg: oklch(93.2% 0.032 255.585);
+    --status-success-bg: oklch(39.3% 0.095 152.535);
+    --status-success-fg: oklch(96.2% 0.044 156.743);
+    --status-error-bg: oklch(39.6% 0.141 25.723);
+    --status-error-fg: oklch(93.6% 0.032 17.717);
+    --status-warning-bg: oklch(55.4% 0.135 66.442);
+    --status-warning-fg: oklch(98.5% 0 0);
+    --status-secondary-bg: oklch(21% 0.034 264.665);
+    --status-secondary-fg: oklch(96.7% 0.003 264.542);
+
+    --overlay: rgba(0, 0, 0, 0.8);
+    --notification-badge-bg: oklch(57.7% 0.245 27.325);
+    --notification-dot: oklch(62.3% 0.214 259.815);
+    --logout-fg: oklch(63.7% 0.237 25.331);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-invert: var(--invert);
+  --color-invert-foreground: var(--invert-foreground);
+  --color-status-primary-bg: var(--status-primary-bg);
+  --color-status-primary-fg: var(--status-primary-fg);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-fg: var(--status-success-fg);
+  --color-status-error-bg: var(--status-error-bg);
+  --color-status-error-fg: var(--status-error-fg);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-fg: var(--status-warning-fg);
+  --color-status-secondary-bg: var(--status-secondary-bg);
+  --color-status-secondary-fg: var(--status-secondary-fg);
+  --color-overlay: var(--overlay);
+  --color-notification-badge-bg: var(--notification-badge-bg);
+  --color-notification-dot: var(--notification-dot);
+  --color-logout-fg: var(--logout-fg);
+
+  --font-sans:
+    "Figtree", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --spacing-control-sm: 1.75rem;
+  --spacing-control-md: 2.125rem;
+  --spacing-control-lg: 2.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+  }
+
+  /* Fokus terlihat (R14.1): garis 2 px token ring, offset 3 px. */
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+    border-radius: var(--radius-xs);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      /* biome-ignore lint/complexity/noImportantStyles: reduced-motion (R14.1) harus menang atas utilitas animasi/transisi */
+      animation-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: reduced-motion (R14.1) harus menang atas utilitas animasi/transisi */
+      animation-iteration-count: 1 !important;
+      /* biome-ignore lint/complexity/noImportantStyles: reduced-motion (R14.1) harus menang atas utilitas animasi/transisi */
+      transition-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: reduced-motion (R14.1) harus menang atas utilitas animasi/transisi */
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* LoadingIcon (kartu DS): delapan titik tumbuh bergiliran; CSS keyframes (bukan SMIL) agar patuh reduced-motion. */
+@layer components {
+  .erpora-loading-dot {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: erpora-loading-dot 1s linear infinite both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .erpora-loading-dot {
+      animation: none;
+      transform: scale(0.7);
+    }
+  }
+}
+
+@keyframes erpora-loading-dot {
+  0%,
+  100% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1);
+  }
+}

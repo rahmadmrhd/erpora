@@ -9,10 +9,14 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "jsx": "react-jsx",
+    "resolveJsonModule": true,
     "types": ["bun"]
   },
   "include": [
     "src",
+    "tools",
+    "test",
     "build.ts",
     "dev.ts",
     "deps.ts",

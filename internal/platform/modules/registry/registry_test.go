@@ -40,6 +40,7 @@ type manifestSpec struct {
 	caps               []string
 	deps               []module.Dependency
 	strategy           string // default "none"
+	i18n               any    // bagian "i18n" manifest (nil = tanpa)
 }
 
 // newFake membuat fakeModule dari manifest JSON inline yang valid terhadap schema.
@@ -65,6 +66,9 @@ func newFake(s manifestSpec, register func(r module.Registrar) error) fakeModule
 		"capabilities":  s.caps,
 		"migrations":    map[string]string{"strategy": s.strategy},
 		"offline":       map[string]string{"mode": "online-only"},
+	}
+	if s.i18n != nil {
+		doc["i18n"] = s.i18n
 	}
 	b, err := json.Marshal(doc)
 	if err != nil {
@@ -198,3 +202,100 @@ func TestBuild_MigrationsStrategyMustMatchCode(t *testing.T) {
 		t.Fatalf("none tanpa MigrationSource harus valid: %v", err)
 	}
 }
+
+// catalogFake menambahkan module.CatalogSource ke fakeModule.
+type catalogFake struct {
+	fakeModule
+	fsys fs.FS
+}
+
+func (c catalogFake) Catalogs() fs.FS { return c.fsys }
+
+func i18nSpec(locales ...string) map[string]any {
+	return map[string]any{"locales": locales, "defaultLocale": locales[0]}
+}
+
+func TestBuild_CatalogSourceMappedToEntry(t *testing.T) {
+	fsys := fstest.MapFS{"id.json": {Data: []byte(`{}`)}}
+	base := newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: i18nSpec("id")}, nil)
+	reg, err := Build(testOpts(), catalogFake{fakeModule: base, fsys: fsys})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, ok := reg.Entry("acme.notes")
+	if !ok || e.Catalogs == nil {
+		t.Fatalf("Entry.Catalogs harus terisi: %+v", e)
+	}
+	if _, err := fs.Stat(e.Catalogs, "id.json"); err != nil {
+		t.Errorf("Catalogs tidak memuat id.json: %v", err)
+	}
+	if pe, _ := reg.Entry(PlatformKey); pe.Catalogs != nil {
+		t.Error("platform.core tidak punya Catalogs dari registry")
+	}
+}
+
+func TestBuild_ModuleWithoutCatalogHasNilCatalogs(t *testing.T) {
+	reg, err := Build(testOpts(), notes(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := reg.Entry("acme.notes"); e.Catalogs != nil {
+		t.Error("Catalogs harus nil")
+	}
+}
+
+func TestBuild_I18nManifestMustMatchCatalogSource(t *testing.T) {
+	fsys := fstest.MapFS{"id.json": {Data: []byte(`{}`)}}
+	cases := map[string]struct {
+		mod  module.Module
+		code string
+	}{
+		"CatalogSource tanpa bagian i18n": {
+			catalogFake{fakeModule: newFake(manifestSpec{key: "acme.notes", slug: "notes"}, nil), fsys: fsys}, CodeI18nMismatch},
+		"bagian i18n tanpa CatalogSource": {
+			newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: i18nSpec("id")}, nil), CodeI18nMismatch},
+		"Catalogs() nil": {
+			catalogFake{fakeModule: newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: i18nSpec("id")}, nil)}, CodeI18nMismatch},
+		"berkas bahasa deklarasi hilang": {
+			catalogFake{fakeModule: newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: i18nSpec("id", "en")}, nil), fsys: fsys}, CodeI18nMismatch},
+		"defaultLocale di luar locales": {
+			catalogFake{fakeModule: newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: map[string]any{"locales": []string{"id"}, "defaultLocale": "en"}}, nil), fsys: fsys}, CodeI18nMismatch},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := Build(testOpts(), c.mod)
+			var re *Error
+			if !errors.As(err, &re) {
+				t.Fatalf("err = %v, want *Error", err)
+			}
+			found := false
+			for _, p := range re.Problems {
+				if p.Code == c.code && p.Module == "acme.notes" {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("problems = %+v, want %s", re.Problems, c.code)
+			}
+		})
+	}
+}
+
+func TestBuild_CatalogsPanicBecomesProblem(t *testing.T) {
+	base := newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: i18nSpec("id")}, nil)
+	_, err := Build(testOpts(), panicCatalog{base})
+	var re *Error
+	if !errors.As(err, &re) {
+		t.Fatalf("err = %v", err)
+	}
+	for _, p := range re.Problems {
+		if p.Code == CodeI18nMismatch {
+			return
+		}
+	}
+	t.Errorf("problems = %+v", re.Problems)
+}
+
+type panicCatalog struct{ fakeModule }
+
+func (panicCatalog) Catalogs() fs.FS { panic("boom") }

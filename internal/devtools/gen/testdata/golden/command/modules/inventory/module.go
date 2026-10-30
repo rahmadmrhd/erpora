@@ -26,6 +26,9 @@ var openAPI []byte
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
+//go:embed i18n/*.json
+var catalogsFS embed.FS
+
 // Module adalah implementasi module.Module untuk acme.inventory.
 type Module struct {
 	manifest module.Manifest
@@ -74,6 +77,15 @@ func (m *Module) Register(r module.Registrar) error {
 // Migrations mengembalikan migrasi goose modul.
 func (m *Module) Migrations() fs.FS {
 	sub, err := fs.Sub(migrationsFS, "migrations")
+	if err != nil {
+		panic(err) // direktori di-embed saat kompilasi; tidak mungkin gagal
+	}
+	return sub
+}
+
+// Catalogs mengembalikan katalog terjemahan modul, satu berkas "<locale>.json" per bahasa (module.CatalogSource; PRD-000 FR-25).
+func (m *Module) Catalogs() fs.FS {
+	sub, err := fs.Sub(catalogsFS, "i18n")
 	if err != nil {
 		panic(err) // direktori di-embed saat kompilasi; tidak mungkin gagal
 	}

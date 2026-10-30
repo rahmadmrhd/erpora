@@ -1,0 +1,3 @@
+NAMESPACE  LOCALE  KEY           MESSAGE                 UPDATED BY  UPDATED AT
+example    id      note.title    "Klien"                 cli:budi    2026-10-29T10:00:00Z
+ui         en      actions.save  "Store \"now\"\nline2"  api:dev     2026-10-29T11:00:00Z

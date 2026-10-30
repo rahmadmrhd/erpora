@@ -1,7 +1,15 @@
 // Package bootstrap membentuk manifest bootstrap yang dikonsumsi frontend (GET /api/bootstrap).
 package bootstrap
 
-import "erpora/internal/platform/tenancy"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+	"strconv"
+
+	"erpora/internal/platform/tenancy"
+)
 
 // Manifest adalah isi `data` dari GET /api/bootstrap. Daftar modul diisi dari runtime snapshot (M2).
 type Manifest struct {
@@ -10,6 +18,65 @@ type Manifest struct {
 	Modules     []Module `json:"modules"`
 	Permissions []string `json:"permissions"`
 	Revision    int64    `json:"revision"`
+	// I18n adalah bahasa yang didukung dan revisi katalog per namespace aktif (PRD-000 FR-25); nil = tanpa i18n
+	// (bidang dihilangkan; perubahan bersifat additive, api-guidelines §14.1).
+	I18n *I18n `json:"i18n,omitempty"`
+	// Features memuat bendera kemampuan server untuk UI (additive, api-guidelines §14.1); nil = tidak dinyatakan.
+	Features *Features `json:"features,omitempty"`
+}
+
+// Features adalah bendera kemampuan server. ModulesAdminAPI true bila API mutasi /api/platform/modules aktif
+// (ERP_ENV=development atau ERP_MODULES_ADMIN_API=true); UI hanya-baca bila false (PRD-000 Q36 PK-2).
+type Features struct {
+	ModulesAdminAPI bool `json:"modulesAdminApi"`
+}
+
+// I18n adalah bagian i18n manifest bootstrap. Frontend memuat ulang katalog sebuah namespace bila revisinya berubah.
+type I18n struct {
+	DefaultLocale string            `json:"defaultLocale"`
+	Locales       []I18nLocale      `json:"locales"`
+	Revisions     map[string]string `json:"revisions"`
+}
+
+// I18nLocale adalah satu bahasa terdaftar.
+type I18nLocale struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+// NewI18n membentuk bagian i18n; locales dan revisions tidak pernah null di JSON.
+func NewI18n(defaultLocale string, locales []I18nLocale, revisions map[string]string) *I18n {
+	if locales == nil {
+		locales = []I18nLocale{}
+	}
+	if revisions == nil {
+		revisions = map[string]string{}
+	}
+	return &I18n{DefaultLocale: defaultLocale, Locales: locales, Revisions: revisions}
+}
+
+// ETag mengembalikan ETag bootstrap: `"<revision>"` bila tanpa i18n (format lama), selain itu
+// `"<revision>-<hash revisi katalog>"` sehingga perubahan katalog terjemahan (mis. override istilah)
+// membuat klien memuat ulang bootstrap dan lalu katalognya.
+func (m Manifest) ETag() string {
+	rev := strconv.FormatInt(m.Revision, 10)
+	if m.I18n == nil {
+		return `"` + rev + `"`
+	}
+	keys := make([]string, 0, len(m.I18n.Revisions))
+	for k := range m.I18n.Revisions {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	h := sha256.New()
+	fmt.Fprintf(h, "%s;", m.I18n.DefaultLocale)
+	for _, l := range m.I18n.Locales {
+		fmt.Fprintf(h, "%s=%s;", l.Code, l.Name)
+	}
+	for _, k := range keys {
+		fmt.Fprintf(h, "%s:%s;", k, m.I18n.Revisions[k])
+	}
+	return `"` + rev + "-" + hex.EncodeToString(h.Sum(nil)[:6]) + `"`
 }
 
 // Module adalah entri modul pada bootstrap (FR-19).

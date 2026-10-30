@@ -30,6 +30,17 @@ export interface ModuleManifest {
     mode: "online-only" | "offline-read" | "offline-draft" | "offline-write";
   };
   /**
+   * PRD-000 FR-25: katalog terjemahan modul (namespace = slug). Opsional; modul tanpa bagian ini tidak punya namespace.
+   */
+  i18n?: {
+    /**
+     * @minItems 1
+     * @maxItems 50
+     */
+    locales: [string, ...string[]];
+    defaultLocale: string;
+  };
+  /**
    * Marketplace: lokasi artefak modul.
    */
   artifact?: string;

@@ -1,0 +1,22 @@
+import {
+  type AnyModuleChildRoute,
+  createRoute,
+  lazyRouteComponent,
+  type ModuleBaseRoute,
+} from "@erpora/module-sdk";
+import { crumb } from "@erpora/platform-web";
+import "./i18n/keys.gen";
+
+/**
+ * Route modul: anak langsung base route `/inventory` (sudah berguard oleh shell). Komponen halaman dimuat malas
+ * (`import()` di sini) sehingga kodenya menjadi chunk terpisah dan tidak ada di JS awal.
+ */
+export function registerRoutes(base: ModuleBaseRoute): readonly AnyModuleChildRoute[] {
+  const index = createRoute({
+    getParentRoute: () => base,
+    path: "/",
+    staticData: { crumb: crumb("inventory", "page.home.title") },
+    component: lazyRouteComponent(() => import("./pages/home-page"), "HomePage"),
+  });
+  return [index];
+}

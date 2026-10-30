@@ -1,0 +1,7 @@
+{
+  "default": "id",
+  "locales": [
+    { "code": "id", "name": "Bahasa Indonesia" },
+    { "code": "en", "name": "English", "fallback": "id" }
+  ]
+}

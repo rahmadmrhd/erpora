@@ -31,6 +31,8 @@ task dev
 
 Setelah `task dev` berjalan, API ada di `http://127.0.0.1:8080` (cek `/healthz` dan `/readyz`) dan web dev server di `http://127.0.0.1:5173`.
 
+Batas dev server: halaman dev disajikan Bun apa adanya sehingga skrip `theme-init` (yang memasang tema sebelum paint pada build produksi lewat `web/build.ts`) tidak disuntikkan; di `task dev` pilihan tema eksplisit yang berbeda dari tema OS dapat berkedip sesaat saat muat. Build produksi (`bun run --filter @erpora/web build`) tidak terpengaruh.
+
 Daftar perintah lengkap: `task --list`.
 
 ### Perintah developer

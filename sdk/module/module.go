@@ -28,6 +28,15 @@ type ContractSource interface {
 	OpenAPI() []byte
 }
 
+// CatalogSource diimplementasi modul yang membawa katalog terjemahan (PRD-000 FR-25, Requirement 1.1):
+// satu berkas JSON bersarang per bahasa. Modul yang mengimplementasikannya wajib punya bagian "i18n"
+// di manifest, dan namespace katalognya adalah slug modul.
+type CatalogSource interface {
+	// Catalogs mengembalikan filesystem dengan berkas "<locale>.json" di akar (hasil //go:embed i18n/*.json
+	// lalu fs.Sub).
+	Catalogs() fs.FS
+}
+
 // Seluruh hook lifecycle di bawah WAJIB idempoten (PRD-000 FR-19.5): platform
 // dapat memanggilnya ulang setelah kegagalan sebagian.
 

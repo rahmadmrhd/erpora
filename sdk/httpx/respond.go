@@ -1,12 +1,15 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 
 	"go.opentelemetry.io/otel/trace"
+
+	"erpora/sdk/i18n"
 )
 
 // HeaderRequestID adalah header respons yang membawa request ID (diisi middleware platform).
@@ -58,11 +61,17 @@ type errorEnvelope struct {
 
 // WriteError menulis {"error":{code,message,details,requestId,traceId}}. requestId diambil dari header
 // respons X-Request-Id, traceId dari span context. Pesan 5xx tidak boleh memuat detail internal.
+//
+// Bila context membawa penerjemah platform (i18n.WithResolver), message diganti teks terlokalisasi dari
+// katalog: errors.<code> di namespace modul pemilik route, lalu platform::errors.<code>; bila tidak ada,
+// message dari pemanggil dipertahankan. Hanya message yang berubah; code dan details tidak pernah disentuh
+// (PRD-000 FR-25, Requirement 4.4 dan 12.9).
 func WriteError(w http.ResponseWriter, r *http.Request, status int, code, message string, details any) {
 	traceID := ""
 	if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
 		traceID = sc.TraceID().String()
 	}
+	message = localizedMessage(r.Context(), code, message)
 	writeJSON(w, status, errorEnvelope{Error: errorBody{
 		Code: code, Message: message, Details: details,
 		RequestID: w.Header().Get(HeaderRequestID), TraceID: traceID,
@@ -115,4 +124,21 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// localizedMessage mencari terjemahan errors.<code>; tanpa Resolver di ctx atau tanpa kunci, fallback dikembalikan.
+func localizedMessage(ctx context.Context, code, fallback string) string {
+	if _, ok := i18n.ResolverFrom(ctx); !ok || code == "" {
+		return fallback
+	}
+	key := "errors." + code
+	if scope, ok := i18n.ScopeFrom(ctx); ok && scope != "" && scope != i18n.NamespacePlatform {
+		if s, ok := i18n.Lookup(ctx, key); ok {
+			return s
+		}
+	}
+	if s, ok := i18n.Lookup(ctx, i18n.NamespacePlatform+"::"+key); ok {
+		return s
+	}
+	return fallback
 }

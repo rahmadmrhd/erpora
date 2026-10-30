@@ -177,6 +177,9 @@ func loadWebPackage(dir string) (WebPackage, bool, error) {
 	return parseWebPackage(data)
 }
 
+// platformModuleSDK adalah paket SDK frontend platform; berawalan @erpora/module- tetapi bukan modul.
+const platformModuleSDK = "@erpora/module-sdk"
+
 func parseWebPackage(data []byte) (WebPackage, bool, error) {
 	var raw struct {
 		Name             string            `json:"name"`
@@ -190,7 +193,8 @@ func parseWebPackage(data []byte) (WebPackage, bool, error) {
 	seen := map[string]bool{}
 	for _, deps := range []map[string]string{raw.Dependencies, raw.PeerDependencies} {
 		for name := range deps {
-			if strings.HasPrefix(name, "@erpora/module-") && !seen[name] {
+			// @erpora/module-sdk adalah paket platform yang BOLEH diimpor frontend modul (F2), bukan frontend modul.
+			if strings.HasPrefix(name, "@erpora/module-") && name != platformModuleSDK && !seen[name] {
 				seen[name] = true
 				wp.ModuleDeps = append(wp.ModuleDeps, name)
 			}

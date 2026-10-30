@@ -1,0 +1,242 @@
+{
+  "app": {
+    "name": "ERPora"
+  },
+  "shell": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "skipToContent": "Skip to content",
+    "language": {
+      "label": "Language"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "menu": "Menu",
+    "settings": "Settings",
+    "settingsModules": "Modules",
+    "empty": "No module menus yet"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "loadError": "Notifications could not be loaded.",
+    "actionError": "The notification action failed. Try again.",
+    "markAllRead": "Mark all as read",
+    "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}"
+  },
+  "user": {
+    "anonymous": "User",
+    "menu": "Account menu",
+    "manageAccount": "Manage Account",
+    "signOut": "Sign Out",
+    "unavailable": "Not available in this version"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "moduleInactive": {
+    "title": "Module Not Active",
+    "notEnabled": "This module has not been enabled.",
+    "notInstalled": "This module has not been installed.",
+    "unavailable": "This module is temporarily unavailable.",
+    "openSettings": "Open Module Settings"
+  },
+  "notFound": {
+    "title": "Page Not Found",
+    "description": "The address you opened does not exist.",
+    "backHome": "Back to Home"
+  },
+  "routeError": {
+    "title": "Something Went Wrong",
+    "description": "This page could not be displayed.",
+    "requestId": "Request ID: {requestId}",
+    "traceId": "Trace ID: {traceId}"
+  },
+  "dashboard": {
+    "title": "Dashboard Not Available Yet",
+    "description": "The dashboard will arrive in an upcoming update."
+  },
+  "pageActions": {
+    "more": "More actions"
+  },
+  "errors": {
+    "bad_request": "The request is not valid.",
+    "invalid_filter": "The filter is not valid.",
+    "invalid_sort": "The sort order is not valid.",
+    "tenant_unresolved": "The tenant could not be determined.",
+    "unauthenticated": "You are not signed in.",
+    "token_expired": "Your session has expired.",
+    "permission_denied": "You do not have permission to do this.",
+    "field_forbidden": "You are not allowed to access this field.",
+    "mfa_required": "Two-step verification is required.",
+    "module_disabled": "The module is not enabled.",
+    "not_found": "The record was not found.",
+    "module_not_found": "The module was not found.",
+    "invalid_state": "The current state does not allow this action.",
+    "request_in_progress": "A similar request is already in progress.",
+    "conflict": "The data conflicts with existing data.",
+    "version_mismatch": "The data has changed; reload and try again.",
+    "validation_failed": "The data is not valid.",
+    "business_rule_violated": "The data violates a business rule.",
+    "idempotency_key_reused": "The idempotency key was already used for another request.",
+    "rate_limited": "Too many requests; try again later.",
+    "unsupported_media_type": "The content type is not supported.",
+    "internal_error": "Something went wrong on the server.",
+    "not_implemented": "This feature is not available yet.",
+    "method_not_allowed": "The method is not supported for this address.",
+    "module_unavailable": "The module is temporarily unavailable.",
+    "not_ready": "The service is not ready.",
+    "invalid_i18n_override": "The term override is not valid.",
+    "unknown": "An unknown error occurred"
+  },
+  "modules": {
+    "title": "Modules",
+    "description": "Compiled modules and their status for this tenant.",
+    "empty": "No modules yet.",
+    "required": "Required",
+    "refresh": "Refresh",
+    "loadError": "The module list could not be loaded.",
+    "forbidden": {
+      "title": "403: Not allowed",
+      "description": "You do not have permission to view the module list."
+    },
+    "readonly": {
+      "title": "Read-only mode",
+      "description": "Modules are managed in this environment through the erpora modules CLI (install, enable, disable, upgrade, uninstall). This page only shows status.",
+      "noPermission": "Your account does not have permission to manage modules (platform.modules.manage). This page only shows status."
+    },
+    "columns": {
+      "name": "Name",
+      "version": "Version",
+      "status": "Status",
+      "dependencies": "Dependencies",
+      "dependents": "Dependents",
+      "actions": "Actions"
+    },
+    "version": {
+      "installed": "Installed {version}",
+      "binary": "Binary {version}",
+      "notInstalled": "Not installed",
+      "upgradeAvailable": "Upgrade available"
+    },
+    "dependencies": {
+      "none": "None",
+      "optional": "{name} (optional)"
+    },
+    "status": {
+      "available": "Available",
+      "installed": "Installed",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "upgrade_pending": "Upgrade pending",
+      "failed": "Failed",
+      "uninstalled": "Uninstalled",
+      "missing": "Missing",
+      "incompatible": "Incompatible"
+    },
+    "op": {
+      "install": "Install",
+      "enable": "Enable",
+      "disable": "Disable",
+      "upgrade": "Upgrade",
+      "uninstall": "Uninstall",
+      "retry": "Retry",
+      "history": "History",
+      "menu": "Actions for {name}"
+    },
+    "dialog": {
+      "title": "{operation}: {name}",
+      "confirm": "Continue",
+      "cancel": "Cancel",
+      "close": "Close",
+      "noImpact": "No additional impact can be computed. The server still checks dependency rules."
+    },
+    "impact": {
+      "effects": "Impact",
+      "blockers": "Cannot continue",
+      "menu_hidden": "Menu hidden: {labels}",
+      "menu_shown": "Menu shown: {labels}",
+      "routes_inactive": "Pages become inactive: {paths}",
+      "routes_active": "Pages become active: {paths}",
+      "api_closed": "API {prefix} rejects requests ({code})",
+      "data_kept": "Data is kept",
+      "migrations_run": "Database migrations run if any",
+      "version_change": "Version {from} to {to}",
+      "needs_dependencies": "Dependencies installed too: {modules}",
+      "dependents_uncertain": "Dependents that failed or await upgrade and may still be active: {modules}"
+    },
+    "blocker": {
+      "module_required": "A required module cannot be disabled or uninstalled: {modules}",
+      "dependency_not_ready": "Dependencies not ready: {modules}",
+      "dependents_active": "Other modules still depend on it and are active: {modules}",
+      "module_incompatible": "Incompatible with the platform: {modules}",
+      "invalid_transition": "This operation is not allowed for the current status: {modules}",
+      "downgrade_not_supported": "The binary version is older than the installed one: {modules}"
+    },
+    "install": {
+      "withDeps": "Include dependencies",
+      "enable": "Enable after install"
+    },
+    "result": {
+      "title": "Operation result",
+      "running": "Operation in progress…",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "noop": "No change: the status already matches.",
+      "timeout": "Monitoring stopped after 10 minutes; follow progress in History.",
+      "pollError": "The operation status cannot be read yet; retrying.",
+      "pollStopped": "Operation monitoring stopped because the operation status cannot be read; check History."
+    },
+    "error": {
+      "invalid_transition": "The operation is not allowed for the module's current status.",
+      "operation_in_progress": "Another module operation is running. Try again shortly.",
+      "module_required": "A required module cannot be disabled.",
+      "dependency_not_ready": "Module dependencies are not ready.",
+      "dependents_active": "Other modules still depend on it and are active.",
+      "module_incompatible": "The module is incompatible with this platform.",
+      "downgrade_not_supported": "The binary version is older than the installed version; downgrade is not supported.",
+      "module_not_found": "Module not found.",
+      "version_mismatch": "The module status changed. The list was reloaded; review the impact and confirm again.",
+      "operation_unavailable": "The operation is not available. The module list and feature status are being reloaded.",
+      "requestId": "Request ID: {requestId}"
+    },
+    "failure": {
+      "migration_failed": "The database migration failed.",
+      "interrupted": "The operation was interrupted; use Retry.",
+      "health_check_failed": "The module health check failed.",
+      "hook_failed": "The module hook failed.",
+      "dependency_not_ready": "Dependencies are not ready.",
+      "downgrade_not_supported": "Downgrade is not supported.",
+      "internal_error": "An internal error occurred.",
+      "unknown": "The operation failed."
+    },
+    "history": {
+      "title": "History of {name}",
+      "description": "Lifecycle events, newest first.",
+      "empty": "No history yet.",
+      "error": "The history could not be loaded.",
+      "actor": "by {actor}",
+      "page": "Page {page}",
+      "details": "Details",
+      "operationSteps": "Operation steps",
+      "stepsEmpty": "No steps.",
+      "step": "{name}: {status} ({durationMs} ms)",
+      "event": {
+        "installed": "Installed",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "upgraded": "Upgraded",
+        "uninstalled": "Uninstalled",
+        "operation_failed": "Operation failed",
+        "interrupted": "Interrupted",
+        "retried": "Retried",
+        "reconciled": "Reconciled",
+        "unknown": "{event}"
+      }
+    }
+  }
+}

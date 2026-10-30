@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Stock Opname"
+  },
+  "page": {
+    "home": {
+      "title": "Stock Opname",
+      "description": "Halaman awal modul Stock Opname. Ganti dengan halaman Anda."
+    }
+  },
+  "errors": {
+    "bad_request": "Parameter daftar tidak valid."
+  }
+}

@@ -37,12 +37,14 @@ type moduleData struct {
 	PublisherName string
 	Dependencies  []moduleDep
 	Frontend      bool
+	// NSKey adalah kunci namespace i18n modul pada keys.gen.ts: tanpa kutip bila pengenal TS sah, selain itu dikutip.
+	NSKey string
 }
 
 // MakeModule membangun Plan modul baru turunan example (keputusan rencana 13-15). Validasi dilakukan sebelum Plan:
 // nama, bentrok Dir/slug/key dengan modul yang ada (Dir yang sudah ada -> ErrExists), dan dependensi ada di repo.
 // Ops: semua file template (OpCreate) ditambah OpModify untuk go.work, go.mod root, internal/app/modules.go dan, bila
-// Frontend, web/package.json dan web/src/app/modules.ts. Post: go mod tidy, contracts:generate (Frontend), bun install,
+// Frontend, web/package.json dan web/src/app/modules.ts (menyisipkan frontendModule). Post: go mod tidy, contracts:generate (Frontend), bun install,
 // dan Biome atas file TS.
 func MakeModule(root string, o ModuleOptions) (Plan, error) {
 	if o.Publisher == "" {
@@ -73,7 +75,7 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 	if err := CheckModuleDir(name.Dir, modulesGo); err != nil {
 		return Plan{}, err
 	}
-	data := moduleData{ModuleName: name, PublisherName: titleCase(o.Publisher), Frontend: o.Frontend}
+	data := moduleData{ModuleName: name, PublisherName: titleCase(o.Publisher), Frontend: o.Frontend, NSKey: tsPropKey(name.Slug)}
 	for _, key := range o.Depends {
 		ref, err := ResolveModule(root, key)
 		if err != nil {
@@ -125,6 +127,14 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 	plan.Post = modulePost(name, o.Frontend)
 	plan.NoForce = true
 	return plan, nil
+}
+
+// tsPropKey menulis kunci properti TypeScript seperti keluaran i18n:generate (Biome quoteProperties asNeeded).
+func tsPropKey(s string) string {
+	if strings.Contains(s, "-") {
+		return fmt.Sprintf("%q", s)
+	}
+	return s
 }
 
 func titleCase(s string) string {
@@ -213,9 +223,9 @@ func modifyRepoFiles(root string, n ModuleName, frontend bool) ([]FileOp, error)
 		if err != nil {
 			return nil, err
 		}
-		ident := n.Camel + "Info"
+		ident := n.Camel + "Module"
 		tsOut, err := InsertAtMarker("web/src/app/modules.ts", ts, "// erp:generated:web-imports",
-			fmt.Sprintf("import { moduleInfo as %s } from %q;", ident, n.NPM))
+			fmt.Sprintf("import { frontendModule as %s } from %q;", ident, n.NPM))
 		if err != nil {
 			return nil, err
 		}

@@ -114,5 +114,20 @@ dan `stock-opname`, lalu menjalankan seluruh gate dan memasang modul ke PostgreS
 
 ## 9. Status keputusan ★ (PRD-000 Q31)
 
-- **★1 Frontend minimal.** `--frontend` membuat package `modules/<dir>/web` (`package.json`, `tsconfig.json`, `src/index.ts`, `api/contract.gen.ts`) dan mendaftarkannya di `web/package.json` dan `web/src/app/modules.ts`. `make:page` ditunda ke M3 bersama shell dan router.
+- **★1 Frontend.** `--frontend` membuat package `modules/<dir>/web` (`@erpora/module-<dir>`) dan mendaftarkannya di `web/package.json` dan `web/src/app/modules.ts`. `make:page` ditunda ke M3d (Q36 PK-5).
+
+Isi yang dibuat `make:module` (sumber: `internal/devtools/templates/module`):
+
+- **Selalu** (dengan atau tanpa `--frontend`):
+  - `i18n/id.json` dan `i18n/en.json` berisi kunci contoh bersarang: `nav.home`, `page.home.title`, `page.home.description`, dan `errors.bad_request`.
+  - `module.go` dengan `//go:embed i18n/*.json` dan `Catalogs()`.
+  - Bagian `"i18n": { "locales": ["id", "en"], "defaultLocale": "id" }` pada `module.json`.
+- **Hanya dengan `--frontend`**, di `modules/<dir>/web/`:
+  - `bunfig.toml` (preload `web/test/dom.ts` dan `setup.ts`), `package.json` (`@erpora/module-<dir>`), dan `tsconfig.json`.
+  - `src/index.ts` (mengekspor `api`, `moduleInfo`, `frontendModule`), `src/info.ts`, dan `src/module.ts` (`defineModule`, navigasi satu item `nav.home`).
+  - `src/routes.tsx` (route lazy `/<slug>/`) dan `src/pages/home-page.tsx`.
+  - `src/i18n/keys.gen.ts` (augmentasi kunci awal) dan `src/module.test.ts` (memastikan key, slug, dan versi sama dengan `module.json`; offline `online-only`; navigasi satu item; route anak dengan crumb; dan entry paket).
+- **Langkah lanjutan `--frontend`:** `contracts:generate <dir>` (membangkitkan `api/contract.gen.ts` dari `openapi.yaml`), `bun install`, dan `biome check --write`.
+
+Konvensi isi halaman dan teks ada di [`frontend.md`](frontend.md) dan [`i18n.md`](i18n.md).
 - **★2 Integration test repository.** `make:repository` membuat unit test mapping, bukan integration test (Q28 menghapus driver Postgres dari `go.mod` modul). Integration test repository ditulis manual; keputusan generik ditinjau di PRD-001.

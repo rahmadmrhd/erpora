@@ -48,6 +48,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		newMigrateCmd(opts),
 		newServeCmd(opts),
 		newModulesCmd(opts, defaultBackend),
+		newI18nCmd(opts, defaultI18nBackend),
 	)
 	addModuleCommands(root, opts)
 	registerDevtools(root, opts)

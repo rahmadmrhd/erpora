@@ -87,6 +87,7 @@ func Check(r Repo) []Violation {
 			(isModulePkg && hasSeg(rp, "internal/infrastructure")) ||
 			underPath(rp, "internal/platform/database") ||
 			underPath(rp, "internal/platform/modules/store") ||
+			underPath(rp, "internal/platform/i18n/store") ||
 			underPath(rp, "sdk/data")
 		dbOK := isArch || underPath(rp, "internal/platform/database")
 		sqlOK := dbOK || underPath(rp, "internal/platform/migrate")
@@ -98,6 +99,10 @@ func Check(r Repo) []Violation {
 			}
 			if inRepo && strings.HasPrefix(imp, modulesBase) && !isPlatform && !isModulePkg && !isApp {
 				add("D7", p.ImportPath, "hanya internal/app yang boleh mengimpor modul: "+imp)
+			}
+			// I1 (spec i18n-platform 10): modul memakai erpora/sdk/i18n; runtime katalog platform tertutup.
+			if isModulePkg && underPath(imp, rootModule+"/internal/platform/i18n") {
+				add("I1", p.ImportPath, "modul hanya boleh memakai erpora/sdk/i18n, bukan runtime platform: "+imp)
 			}
 			if isModulePkg {
 				if y := owningModule(imp); y != "" && p.Module != "" && y != p.Module && !allowedByManifest(p.Module, y) {

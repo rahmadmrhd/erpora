@@ -12,5 +12,6 @@
   ],
   "capabilities": ["example.ping.read", "example.notes.read"],
   "migrations": { "strategy": "versioned" },
+  "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" }
 }

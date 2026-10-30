@@ -1,2 +1,5 @@
 # Allowlist route publik modul (tanpa permission). Satu pola "METHOD /path" per baris.
 # Setiap penambahan wajib melewati review keamanan. Modul referensi tidak punya route publik.
+# Katalog terjemahan (PRD-000 FR-25, keputusan D-4 / Q35, disetujui pemilik produk 29 Okt 2026): hanya teks
+# terjemahan, tanpa data tenant atau rahasia; PRD-001 mengetatkan namespace modul ke pengguna terautentikasi.
+GET /api/platform/i18n/{locale}/{namespace}

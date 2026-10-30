@@ -21,6 +21,8 @@ type Manifest struct {
 	Provides      []string      `json:"provides,omitempty"`
 	Migrations    Migrations    `json:"migrations"`
 	Offline       Offline       `json:"offline"`
+	// I18n menyatakan bahasa katalog terjemahan modul; nil = modul tanpa namespace i18n.
+	I18n *I18n `json:"i18n,omitempty"`
 	// Raw adalah byte module.json asli; divalidasi platform terhadap schema.
 	Raw []byte `json:"-"`
 }
@@ -52,6 +54,13 @@ type Migrations struct {
 // Offline menyatakan mode offline modul: online-only, offline-read, offline-draft, atau offline-write.
 type Offline struct {
 	Mode string `json:"mode"`
+}
+
+// I18n menyatakan katalog terjemahan modul (PRD-000 FR-25): bahasa yang disediakan dan bahasa dasar
+// kunci (sumber tipe kunci terketik). Setiap bahasa wajib terdaftar di registri bahasa platform.
+type I18n struct {
+	Locales       []string `json:"locales"`
+	DefaultLocale string   `json:"defaultLocale"`
 }
 
 // ParseManifest mengurai module.json dan menyalin byte aslinya ke Raw.

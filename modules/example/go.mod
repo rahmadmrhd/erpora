@@ -18,5 +18,5 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )

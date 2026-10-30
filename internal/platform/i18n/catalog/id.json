@@ -1,0 +1,242 @@
+{
+  "app": {
+    "name": "ERPora"
+  },
+  "shell": {
+    "loading": "Memuat…",
+    "retry": "Coba lagi",
+    "skipToContent": "Lewati ke konten",
+    "language": {
+      "label": "Bahasa"
+    }
+  },
+  "nav": {
+    "home": "Beranda",
+    "menu": "Menu",
+    "settings": "Pengaturan",
+    "settingsModules": "Modul",
+    "empty": "Belum ada menu modul"
+  },
+  "notifications": {
+    "title": "Notifikasi",
+    "empty": "Belum ada notifikasi",
+    "loadError": "Notifikasi gagal dimuat.",
+    "actionError": "Aksi pada notifikasi gagal. Coba lagi.",
+    "markAllRead": "Tandai semua telah dibaca",
+    "unreadLabel": "{count, plural, =0 {Notifikasi, tidak ada yang belum dibaca} other {Notifikasi, # belum dibaca}}"
+  },
+  "user": {
+    "anonymous": "Pengguna",
+    "menu": "Menu akun",
+    "manageAccount": "Kelola Akun",
+    "signOut": "Keluar",
+    "unavailable": "Belum tersedia di versi ini"
+  },
+  "theme": {
+    "label": "Tema",
+    "light": "Terang",
+    "dark": "Gelap",
+    "system": "Sistem"
+  },
+  "moduleInactive": {
+    "title": "Modul Tidak Aktif",
+    "notEnabled": "Modul ini belum diaktifkan.",
+    "notInstalled": "Modul ini belum dipasang.",
+    "unavailable": "Modul ini sementara tidak tersedia.",
+    "openSettings": "Buka Pengaturan Modul"
+  },
+  "notFound": {
+    "title": "Halaman Tidak Ditemukan",
+    "description": "Alamat yang Anda buka tidak ada.",
+    "backHome": "Kembali ke Beranda"
+  },
+  "routeError": {
+    "title": "Terjadi Kesalahan",
+    "description": "Halaman ini gagal ditampilkan.",
+    "requestId": "ID permintaan: {requestId}",
+    "traceId": "ID jejak: {traceId}"
+  },
+  "dashboard": {
+    "title": "Dashboard Belum Tersedia",
+    "description": "Dashboard akan hadir pada pembaruan berikutnya."
+  },
+  "pageActions": {
+    "more": "Aksi lainnya"
+  },
+  "errors": {
+    "bad_request": "Permintaan tidak valid.",
+    "invalid_filter": "Filter tidak valid.",
+    "invalid_sort": "Pengurutan tidak valid.",
+    "tenant_unresolved": "Tenant tidak dapat ditentukan.",
+    "unauthenticated": "Anda belum masuk.",
+    "token_expired": "Sesi Anda telah berakhir.",
+    "permission_denied": "Anda tidak memiliki izin untuk aksi ini.",
+    "field_forbidden": "Anda tidak boleh mengakses field ini.",
+    "mfa_required": "Verifikasi dua langkah diperlukan.",
+    "module_disabled": "Modul tidak aktif.",
+    "not_found": "Data tidak ditemukan.",
+    "module_not_found": "Modul tidak ditemukan.",
+    "invalid_state": "Status data tidak mengizinkan aksi ini.",
+    "request_in_progress": "Permintaan serupa sedang diproses.",
+    "conflict": "Data bentrok dengan data yang sudah ada.",
+    "version_mismatch": "Data telah berubah; muat ulang lalu coba lagi.",
+    "validation_failed": "Data tidak valid.",
+    "business_rule_violated": "Data melanggar aturan bisnis.",
+    "idempotency_key_reused": "Kunci idempotensi sudah dipakai untuk permintaan lain.",
+    "rate_limited": "Terlalu banyak permintaan; coba lagi nanti.",
+    "unsupported_media_type": "Jenis konten tidak didukung.",
+    "internal_error": "Terjadi kesalahan pada server.",
+    "not_implemented": "Fitur ini belum tersedia.",
+    "method_not_allowed": "Metode tidak didukung untuk alamat ini.",
+    "module_unavailable": "Modul sedang tidak tersedia.",
+    "not_ready": "Layanan belum siap.",
+    "invalid_i18n_override": "Istilah pengganti tidak valid.",
+    "unknown": "Terjadi kesalahan yang tidak dikenali"
+  },
+  "modules": {
+    "title": "Modul",
+    "description": "Daftar modul terkompilasi dan statusnya untuk tenant ini.",
+    "empty": "Belum ada modul.",
+    "required": "Wajib",
+    "refresh": "Segarkan",
+    "loadError": "Daftar modul tidak dapat dimuat.",
+    "forbidden": {
+      "title": "403: Tidak diizinkan",
+      "description": "Anda tidak memiliki izin untuk melihat daftar modul."
+    },
+    "readonly": {
+      "title": "Mode hanya-baca",
+      "description": "Manajemen modul di lingkungan ini dilakukan lewat CLI erpora modules (install, enable, disable, upgrade, uninstall). Halaman ini hanya menampilkan status.",
+      "noPermission": "Akun Anda tidak memiliki izin mengelola modul (platform.modules.manage). Halaman ini hanya menampilkan status."
+    },
+    "columns": {
+      "name": "Nama",
+      "version": "Versi",
+      "status": "Status",
+      "dependencies": "Dependensi",
+      "dependents": "Dependen",
+      "actions": "Aksi"
+    },
+    "version": {
+      "installed": "Terpasang {version}",
+      "binary": "Binary {version}",
+      "notInstalled": "Belum terpasang",
+      "upgradeAvailable": "Upgrade tersedia"
+    },
+    "dependencies": {
+      "none": "Tidak ada",
+      "optional": "{name} (opsional)"
+    },
+    "status": {
+      "available": "Tersedia",
+      "installed": "Terinstal",
+      "enabled": "Aktif",
+      "disabled": "Nonaktif",
+      "upgrade_pending": "Menunggu upgrade",
+      "failed": "Gagal",
+      "uninstalled": "Dihapus",
+      "missing": "Hilang",
+      "incompatible": "Tidak kompatibel"
+    },
+    "op": {
+      "install": "Install",
+      "enable": "Aktifkan",
+      "disable": "Nonaktifkan",
+      "upgrade": "Upgrade",
+      "uninstall": "Uninstall",
+      "retry": "Coba ulang",
+      "history": "Riwayat",
+      "menu": "Aksi untuk {name}"
+    },
+    "dialog": {
+      "title": "{operation}: {name}",
+      "confirm": "Lanjutkan",
+      "cancel": "Batal",
+      "close": "Tutup",
+      "noImpact": "Tidak ada dampak tambahan yang dapat dihitung. Server tetap memeriksa aturan dependensi."
+    },
+    "impact": {
+      "effects": "Dampak",
+      "blockers": "Tidak dapat dilanjutkan",
+      "menu_hidden": "Menu disembunyikan: {labels}",
+      "menu_shown": "Menu ditampilkan: {labels}",
+      "routes_inactive": "Halaman tidak aktif: {paths}",
+      "routes_active": "Halaman aktif: {paths}",
+      "api_closed": "API {prefix} menolak permintaan ({code})",
+      "data_kept": "Data tidak dihapus",
+      "migrations_run": "Migrasi database dijalankan bila ada",
+      "version_change": "Versi {from} menjadi {to}",
+      "needs_dependencies": "Dependensi ikut dipasang: {modules}",
+      "dependents_uncertain": "Dependen berstatus gagal/menunggu upgrade yang mungkin masih aktif: {modules}"
+    },
+    "blocker": {
+      "module_required": "Modul wajib tidak boleh dinonaktifkan atau di-uninstall: {modules}",
+      "dependency_not_ready": "Dependensi belum siap: {modules}",
+      "dependents_active": "Modul lain masih bergantung dan aktif: {modules}",
+      "module_incompatible": "Tidak kompatibel dengan platform: {modules}",
+      "invalid_transition": "Operasi ini tidak diizinkan untuk status saat ini: {modules}",
+      "downgrade_not_supported": "Versi binary lebih lama daripada yang terpasang: {modules}"
+    },
+    "install": {
+      "withDeps": "Sertakan dependensi",
+      "enable": "Aktifkan setelah install"
+    },
+    "result": {
+      "title": "Hasil operasi",
+      "running": "Operasi berjalan…",
+      "succeeded": "Berhasil",
+      "failed": "Gagal",
+      "noop": "Tidak ada perubahan: status sudah sesuai.",
+      "timeout": "Pemantauan dihentikan setelah 10 menit; pantau lewat Riwayat.",
+      "pollError": "Status operasi belum dapat dibaca; mencoba lagi.",
+      "pollStopped": "Pemantauan operasi dihentikan karena status operasi tidak dapat dibaca; periksa lewat Riwayat."
+    },
+    "error": {
+      "invalid_transition": "Operasi tidak diizinkan untuk status modul saat ini.",
+      "operation_in_progress": "Operasi modul lain sedang berjalan. Coba lagi sebentar lagi.",
+      "module_required": "Modul wajib tidak dapat dinonaktifkan.",
+      "dependency_not_ready": "Dependensi modul belum siap.",
+      "dependents_active": "Masih ada modul lain yang bergantung dan aktif.",
+      "module_incompatible": "Modul tidak kompatibel dengan platform ini.",
+      "downgrade_not_supported": "Versi binary lebih lama daripada versi terpasang; downgrade tidak didukung.",
+      "module_not_found": "Modul tidak ditemukan.",
+      "version_mismatch": "Status modul berubah. Daftar dimuat ulang; periksa dampak lalu konfirmasi lagi.",
+      "operation_unavailable": "Operasi tidak tersedia. Daftar modul dan status fitur dimuat ulang.",
+      "requestId": "ID permintaan: {requestId}"
+    },
+    "failure": {
+      "migration_failed": "Migrasi database gagal.",
+      "interrupted": "Operasi terputus; gunakan Coba ulang.",
+      "health_check_failed": "Pemeriksaan kesehatan modul gagal.",
+      "hook_failed": "Hook modul gagal.",
+      "dependency_not_ready": "Dependensi belum siap.",
+      "downgrade_not_supported": "Downgrade tidak didukung.",
+      "internal_error": "Terjadi kesalahan internal.",
+      "unknown": "Operasi gagal."
+    },
+    "history": {
+      "title": "Riwayat {name}",
+      "description": "Event lifecycle terbaru lebih dulu.",
+      "empty": "Belum ada riwayat.",
+      "error": "Riwayat tidak dapat dimuat.",
+      "actor": "oleh {actor}",
+      "page": "Halaman {page}",
+      "details": "Detail",
+      "operationSteps": "Langkah operasi",
+      "stepsEmpty": "Tidak ada langkah.",
+      "step": "{name}: {status} ({durationMs} ms)",
+      "event": {
+        "installed": "Diinstal",
+        "enabled": "Diaktifkan",
+        "disabled": "Dinonaktifkan",
+        "upgraded": "Di-upgrade",
+        "uninstalled": "Di-uninstall",
+        "operation_failed": "Operasi gagal",
+        "interrupted": "Terputus",
+        "retried": "Dicoba ulang",
+        "reconciled": "Direkonsiliasi",
+        "unknown": "{event}"
+      }
+    }
+  }
+}

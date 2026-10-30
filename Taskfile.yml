@@ -52,6 +52,8 @@ tasks:
         cmd: cd "{{.ITEM}}" && golangci-lint run --build-tags=integration,devtools ./...
       # tests/generator hanya terkompilasi dengan tag generator (+ integration untuk pgtest); satu paket, murah.
       - golangci-lint run --build-tags=generator,integration ./tests/generator/...
+      # Katalog terjemahan: galat struktural menggagalkan; peringatan antar bahasa hanya dicetak (i18n Requirement 8.5).
+      - task: i18n:check
 
   test:
     desc: Jalankan unit test di setiap Go module
@@ -182,12 +184,30 @@ tasks:
       - bun run --filter @erpora/web dev
 
   web:check:
-    desc: Typecheck, lint, dan dependency rules frontend
+    desc: Typecheck, lint, dependency rules, test, dan build frontend (anggaran bundle + csp-check)
     cmds:
       - bun install --frozen-lockfile
       - bun run --filter '*' typecheck
       - bun run --filter '*' lint
+      - go run -tags devtools ./cmd/erpora i18n:generate --check
       - bun run --filter @erpora/web deps
+      - bun test --pass-with-no-tests
+      - bun run --filter @erpora/web build
+
+  web:test:
+    desc: Test frontend (bun test dari root; memuat preload DOM happy-dom)
+    cmds:
+      - bun test --pass-with-no-tests
+
+  i18n:check:
+    desc: Periksa katalog terjemahan (galat struktural gagal, peringatan dicetak; task i18n:check -- --strict menggagalkan peringatan)
+    cmds:
+      - go run -tags devtools ./cmd/erpora i18n:check {{.CLI_ARGS}}
+
+  i18n:generate:
+    desc: Bangkitkan tipe kunci terketik keys.gen.ts dari katalog (task i18n:generate -- --check hanya memeriksa drift)
+    cmds:
+      - go run -tags devtools ./cmd/erpora i18n:generate {{.CLI_ARGS}}
 
   contracts:lint:
     desc: Lint kontrak OpenAPI (Spectral; api-guidelines dan klasifikasi data)

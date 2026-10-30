@@ -1,4 +1,6 @@
-body {
-  font-family: system-ui, sans-serif;
-  margin: 2rem;
-}
+@import "tailwindcss" source(none);
+@import "@erpora/ui/theme.css";
+@source "./";
+@source "../../packages/ui/src";
+@source "../../packages/platform-web/src";
+@source "../../modules/*/web/src";

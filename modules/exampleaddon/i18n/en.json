@@ -1,0 +1,17 @@
+{
+  "nav": {
+    "summary": "Summary"
+  },
+  "page": {
+    "summary": {
+      "title": "Summary",
+      "description": "Example add-on module page: a summary that uses the public contract of the example module.",
+      "note_count": "{count, plural, =0 {No notes} one {# note} other {# notes}}",
+      "error": "The summary could not be loaded.",
+      "view_notes": "View notes"
+    }
+  },
+  "actions": {
+    "refresh": "Refresh"
+  }
+}
