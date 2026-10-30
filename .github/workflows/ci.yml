@@ -211,6 +211,20 @@ jobs:
           if-no-files-found: error
 
       # SBOM CycloneDX: sekali saja (leg linux/amd64) untuk semua Go module + frontend.
+      # Urutan: frontend dulu (hanya membaca bun.lock), lalu node_modules dibuang, baru SBOM Go. cyclonedx-gomod
+      # menghitung hash direktori tiap Go module; modul yang punya paket web (modules/*/web) kini memuat
+      # node_modules hasil `bun install` berisi symlink ke direktori sehingga hash gagal ("is a directory").
+      # Binary dan artefak sudah dibangun dan diunggah di langkah sebelumnya, jadi node_modules tidak dibutuhkan lagi.
+      # cdxgen tidak membaca bun.lock dan menjalankan npm install sendiri; SBOM frontend dibuat dari
+      # bun.lock yang sudah terpasang (--frozen-lockfile), tanpa unduhan tambahan.
+      - name: SBOM frontend
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/sbom"
+          bun web/sbom.ts sbom/sbom-web.cdx.json
+      - name: Buang node_modules sebelum SBOM Go
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: find . -name node_modules -type d -prune -exec rm -rf {} +
       - name: SBOM Go modules
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         env:
@@ -229,11 +243,6 @@ jobs:
             esac
             (cd "$dir" && GOWORK=off cyclonedx-gomod mod -licenses -json -output "$GITHUB_WORKSPACE/sbom/sbom-go-${n}.cdx.json")
           done
-      # cdxgen tidak membaca bun.lock dan menjalankan npm install sendiri; SBOM frontend dibuat dari
-      # bun.lock yang sudah terpasang (--frozen-lockfile), tanpa unduhan tambahan.
-      - name: SBOM frontend
-        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-        run: bun web/sbom.ts sbom/sbom-web.cdx.json
       - name: Periksa SBOM
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: |
