@@ -8,7 +8,7 @@ Implementasi bertahap dari bawah ke atas: prasyarat dan spike (grup 1), toolchai
 
 - [x] 1. Prasyarat dan spike (Kelas beban: Sonnet; 1.2 Haiku)
   - [x] 1.1 Verifikasi prasyarat spec `i18n-platform`
-    - Pastikan grup 12 `.kiro/specs/i18n-platform/tasks.md` selesai: `packages/platform-web` ada dengan `I18nProvider`, `useTranslation`, `createTestI18n`, `keys.gen.ts` (platform, ui, modul); `GET /api/platform/i18n/{locale}/{namespace}` dan bidang `i18n` di bootstrap tersedia. Bila belum, **berhenti dan laporkan**.
+    - Pastikan grup 12 `docs/specs/i18n-platform/tasks.md` selesai: `packages/platform-web` ada dengan `I18nProvider`, `useTranslation`, `createTestI18n`, `keys.gen.ts` (platform, ui, modul); `GET /api/platform/i18n/{locale}/{namespace}` dan bidang `i18n` di bootstrap tersedia. Bila belum, **berhenti dan laporkan**.
     - Catat bentuk aktual yang dipakai M3a di bagian "Catatan integrasi" (akhir berkas ini): cara `I18nProvider` mendapat `tenantId` dan `bootstrap.i18n`, lokasi `keys.gen.ts` untuk `ui`, apakah `UiLabels` sudah ada, dan ada tidaknya `modules/example/web/src/i18n/keys.gen.ts`.
     - _Requirements: 12.5, 14.4_
   - [x] 1.2 Verifikasi ulang versi pustaka

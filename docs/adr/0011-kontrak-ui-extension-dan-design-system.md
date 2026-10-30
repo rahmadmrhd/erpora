@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Tanggal:** 2026-10-29
-- **Sumber:** PRD-000 Q33 (pendekatan UI dan batas blok M3), Q36 (keputusan M3a, PK-1 sampai PK-6), Q38 (keputusan pelaksanaan M3a: entry sekunder F2, anggaran); spec `.kiro/specs/m3a-frontend-foundation-shell/` (design K-1 sampai K-34)
+- **Sumber:** PRD-000 Q33 (pendekatan UI dan batas blok M3), Q36 (keputusan M3a, PK-1 sampai PK-6), Q38 (keputusan pelaksanaan M3a: entry sekunder F2, anggaran); spec `docs/specs/m3a-frontend-foundation-shell/` (design K-1 sampai K-34)
 
 ## Konteks
 

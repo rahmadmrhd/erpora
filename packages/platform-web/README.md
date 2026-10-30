@@ -1,8 +1,8 @@
 # platform-web
 
 Layanan frontend platform (`@erpora/platform-web`) yang dipakai bersama app shell dan modul. Tidak mengimpor `@erpora/ui`
-(komponen dijembatani di shell, mis. `UiLabelsBridge`) dan tidak mengimpor paket modul. Spesifikasi: `.kiro/specs/m3a-frontend-foundation-shell/`
-(design §5) dan `.kiro/specs/i18n-platform/`.
+(komponen dijembatani di shell, mis. `UiLabelsBridge`) dan tidak mengimpor paket modul. Spesifikasi: `docs/specs/m3a-frontend-foundation-shell/`
+(design §5) dan `docs/specs/i18n-platform/`.
 
 ## Isi
 

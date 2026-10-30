@@ -2,7 +2,7 @@
 
 Panduan ini menjelaskan cara menulis frontend untuk modul ERPora: struktur folder, deklarasi modul dengan `defineModule`, route lazy, aksi halaman, teks lewat i18n, pemakaian `@erpora/ui`, uji komponen, dan anggaran bundle. Contoh acuannya adalah `modules/example/web` dan `modules/exampleaddon/web`.
 
-Keputusan yang melandasinya: [ADR-011](../adr/0011-kontrak-ui-extension-dan-design-system.md) (design system, batas paket, registry), PRD-000 FR-08 dan FR-09, serta spec `.kiro/specs/m3a-frontend-foundation-shell/`. Panduan teks dan kunci terjemahan ada di [`i18n.md`](i18n.md).
+Keputusan yang melandasinya: [ADR-011](../adr/0011-kontrak-ui-extension-dan-design-system.md) (design system, batas paket, registry), PRD-000 FR-08 dan FR-09, serta spec `docs/specs/m3a-frontend-foundation-shell/`. Panduan teks dan kunci terjemahan ada di [`i18n.md`](i18n.md).
 
 ## Ringkasan
 

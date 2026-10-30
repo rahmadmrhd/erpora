@@ -6,7 +6,7 @@ mengimpor dari `@erpora/ui` (barrel `src/index.ts`) dan memuat tema lewat `@impo
 ## Aturan
 
 - **Komponen dimiliki repo.** Hasil `shadcn add` disalin ke `src/components/ui`, diadaptasi (token, label, ukuran), dan dicatat di
-  tabel K-24 `.kiro/specs/m3a-frontend-foundation-shell/design.md`. Jangan menyalin komponen manual.
+  tabel K-24 `docs/specs/m3a-frontend-foundation-shell/design.md`. Jangan menyalin komponen manual.
 - **Tanpa nilai palet langsung.** Komponen memakai token semantik (`bg-background`, `text-muted-foreground`, `bg-status-success-bg`, ...),
   tidak pernah `zinc-100`, `red-500`, `#fff`, atau `rgb(...)`. Nilai warna hanya ada di `src/styles/theme.css` (diuji).
 - **Daun arsitektur (F4).** Paket ini tidak mengimpor paket `@erpora/*` lain; teks bawaan komponen dibaca lewat konteks `UiLabels`
