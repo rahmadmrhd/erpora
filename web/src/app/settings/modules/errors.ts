@@ -32,8 +32,6 @@ export interface MappedError {
   messages: readonly MessageDescriptor[];
   /** Status server berubah (409/412): daftar harus dimuat ulang. */
   reloadList: boolean;
-  /** API mutasi tidak aktif di lingkungan ini (404 pada mutasi): halaman beralih ke mode hanya-baca. */
-  switchToReadOnly: boolean;
   /** Status server mungkin berubah (mis. 404 mutasi): bootstrap (bendera fitur) perlu dimuat ulang. */
   refetchBootstrap: boolean;
 }
@@ -52,22 +50,20 @@ function detailCodes(details: unknown): string[] {
 
 /**
  * Memetakan galat API modul ke pesan katalog (R13.7). Urutan: detail lifecycle yang dikenal (satu pesan per detail,
- * tanpa duplikat), status khusus (412 `version_mismatch`, 404 pada mutasi dibedakan lewat `opts.adminApi`), lalu `describeApiError`. Kode tak dikenal
+ * tanpa duplikat), status khusus (412 `version_mismatch`, 404 pada mutasi tanpa detail dikenal = pesan netral), lalu `describeApiError`. Kode tak dikenal
  * menjadi `errors.unknown` ditambah `requestId` untuk korelasi.
  */
 export function mapModuleError(
   status: number,
   error: ApiError,
   context: "read" | "mutation",
-  opts: { adminApi?: boolean } = {},
 ): MappedError {
-  const reloadList = status === 409 || status === 412;
   const known = [...new Set(detailCodes(error?.details).filter((c) => DETAIL_SET.has(c)))];
+  const reloadList = status === 409 || status === 412 || known.includes("module_not_found");
   if (known.length > 0) {
     return {
       messages: known.map((c) => ({ key: `modules.error.${c}` as ModulesKey })),
       reloadList,
-      switchToReadOnly: false,
       refetchBootstrap: false,
     };
   }
@@ -75,25 +71,16 @@ export function mapModuleError(
     return {
       messages: [{ key: "modules.error.version_mismatch" }],
       reloadList: true,
-      switchToReadOnly: false,
       refetchBootstrap: false,
     };
   }
   if (status === 404 && context === "mutation") {
-    // Backend membalas 404 `not_found` yang seragam untuk gerbang mutasi mati DAN untuk modul/operasi tidak ditemukan.
-    // Pembedanya bendera `features.modulesAdminApi`: hanya bila diumumkan mati halaman beralih ke hanya-baca.
-    if (opts.adminApi === false) {
-      return {
-        messages: [{ key: "modules.error.mutation_disabled" }],
-        reloadList: false,
-        switchToReadOnly: true,
-        refetchBootstrap: false,
-      };
-    }
+    // Backend membalas 404 `not_found` yang seragam untuk gerbang mutasi mati DAN modul/operasi tidak ditemukan, dan
+    // bendera bootstrap bisa basi: pesan dijaga netral, lalu daftar dan bootstrap dimuat ulang (halaman otomatis
+    // mengikuti `features.modulesAdminApi` terbaru).
     return {
-      messages: [{ key: "modules.error.module_not_found" }],
+      messages: [{ key: "modules.error.operation_unavailable" }],
       reloadList: true,
-      switchToReadOnly: false,
       refetchBootstrap: true,
     };
   }
@@ -102,7 +89,7 @@ export function mapModuleError(
   if (d.key === "errors.unknown" && d.params?.requestId) {
     messages.push({ key: "modules.error.requestId", args: { requestId: d.params.requestId } });
   }
-  return { messages, reloadList, switchToReadOnly: false, refetchBootstrap: false };
+  return { messages, reloadList, refetchBootstrap: false };
 }
 
 /** Pesan untuk `operation.failure.code`; kode tak dikenal menjadi `modules.failure.unknown`. */

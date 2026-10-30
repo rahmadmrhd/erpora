@@ -91,7 +91,7 @@ export const MODULE_KEYS = {
   "modules.error.downgrade_not_supported": a(),
   "modules.error.module_not_found": a(),
   "modules.error.version_mismatch": a(),
-  "modules.error.mutation_disabled": a(),
+  "modules.error.operation_unavailable": a(),
   "modules.error.requestId": a<{ requestId: string }>(),
   "modules.failure.migration_failed": a(),
   "modules.failure.interrupted": a(),

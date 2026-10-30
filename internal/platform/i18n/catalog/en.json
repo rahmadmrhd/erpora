@@ -201,7 +201,7 @@
       "downgrade_not_supported": "The binary version is older than the installed version; downgrade is not supported.",
       "module_not_found": "Module not found.",
       "version_mismatch": "The module status changed. The list was reloaded; review the impact and confirm again.",
-      "mutation_disabled": "Module management is not enabled in this environment.",
+      "operation_unavailable": "The operation is not available. The module list and feature status are being reloaded.",
       "requestId": "Request ID: {requestId}"
     },
     "failure": {

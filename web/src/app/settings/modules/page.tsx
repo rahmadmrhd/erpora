@@ -40,7 +40,6 @@ export function ModulesPage() {
   // Aksi mutasi tampil bila API mutasi diumumkan aktif DAN pengguna berhak (UX saja; backend tetap otoritas, K-30:
   // permissions bootstrap kosong = optimistis).
   const canManage = usePermission("platform.modules.manage");
-  const adminApi = adminFlag;
   const showActions = adminFlag && canManage;
 
   const query = useModules();
@@ -175,7 +174,6 @@ export function ModulesPage() {
           onClose={() => setAction(null)}
           polling={polling}
           onAccepted={onAccepted}
-          adminApi={adminApi}
         />
       ) : null}
       {historyTarget ? (

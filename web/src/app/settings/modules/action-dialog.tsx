@@ -150,8 +150,6 @@ export interface ActionDialogProps {
   polling: OperationPolling;
   /** Operasi diterima (202): halaman mulai/meneruskan pemantauan. */
   onAccepted(ids: readonly string[]): void;
-  /** Bendera `features.modulesAdminApi` saat dialog dibuka (membedakan 404 gerbang mati dari modul tidak ditemukan). */
-  adminApi: boolean;
 }
 
 /**
@@ -167,7 +165,6 @@ export function ActionDialog({
   onClose,
   polling,
   onAccepted,
-  adminApi,
 }: ActionDialogProps) {
   const t = useModulesT();
   const describe = useDescribe();
@@ -216,8 +213,8 @@ export function ActionDialog({
     } catch (error) {
       const mapped =
         error instanceof ModulesApiError
-          ? mapModuleError(error.status, error.apiError, "mutation", { adminApi })
-          : mapModuleError(500, { code: "internal_error", message: "" }, "mutation", { adminApi });
+          ? mapModuleError(error.status, error.apiError, "mutation")
+          : mapModuleError(500, { code: "internal_error", message: "" }, "mutation");
       if (mapped.reloadList)
         void queryClient.invalidateQueries({
           queryKey: scopedKey(tenantId, "platform", "modules"),

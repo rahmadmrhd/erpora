@@ -68,8 +68,8 @@ declare module "./types" {
       "modules.error.module_incompatible": {};
       "modules.error.module_not_found": {};
       "modules.error.module_required": {};
-      "modules.error.mutation_disabled": {};
       "modules.error.operation_in_progress": {};
+      "modules.error.operation_unavailable": {};
       "modules.error.requestId": { requestId: string | number };
       "modules.error.version_mismatch": {};
       "modules.failure.dependency_not_ready": {};

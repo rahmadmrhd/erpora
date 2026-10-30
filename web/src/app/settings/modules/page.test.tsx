@@ -324,7 +324,7 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     );
   });
 
-  test("M-3: 404 pada mutasi saat API mutasi aktif = 'modul tidak ditemukan': tetap mode aksi, daftar dan bootstrap dimuat ulang", async () => {
+  test("M-3/F-10: 404 pada mutasi = pesan netral 'operasi tidak tersedia': tetap mode aksi, daftar dan bootstrap dimuat ulang", async () => {
     const user = userEvent.setup();
     const { server, queryClient } = await open([shop()], {
       postStatus: 404,
@@ -340,7 +340,8 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     await user.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Lanjutkan" }),
     );
-    expect(await screen.findByText(/Modul tidak ditemukan/)).toBeInTheDocument();
+    expect(await screen.findByText(/Operasi tidak tersedia/)).toBeInTheDocument();
+    expect(screen.queryByText(/Modul tidak ditemukan/)).toBeNull();
     expect(screen.queryByText(/Manajemen modul tidak aktif/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Tutup" }));
     expect(await screen.findByRole("button", { name: "Aksi untuk Shop" })).toBeInTheDocument();

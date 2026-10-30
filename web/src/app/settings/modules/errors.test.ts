@@ -62,24 +62,27 @@ describe("mapModuleError: status HTTP", () => {
     expect(r.reloadList).toBe(true);
   });
 
-  test("M-3: 404 pada mutasi saat features.modulesAdminApi false = gerbang mati: pesan khusus dan hanya-baca", () => {
-    const r = mapModuleError(404, err("not_found"), "mutation", { adminApi: false });
-    expect<string[]>(keysOf(r)).toEqual(["modules.error.mutation_disabled"]);
-    expect(r.switchToReadOnly).toBe(true);
-  });
-
-  test("M-3: 404 pada mutasi saat API mutasi diumumkan aktif = modul/operasi tidak ditemukan: tanpa hanya-baca, muat ulang daftar dan bootstrap", () => {
-    const r = mapModuleError(404, err("not_found"), "mutation", { adminApi: true });
-    expect<string[]>(keysOf(r)).toEqual(["modules.error.module_not_found"]);
-    expect(r.switchToReadOnly).toBe(false);
+  test("F-10: 404 pada mutasi tanpa details = 'operasi tidak tersedia' (netral): muat ulang daftar dan bootstrap, tanpa mode paksa", () => {
+    const r = mapModuleError(404, err("not_found"), "mutation");
+    expect<string[]>(keysOf(r)).toEqual(["modules.error.operation_unavailable"]);
     expect(r.reloadList).toBe(true);
     expect(r.refetchBootstrap).toBe(true);
+    expect("switchToReadOnly" in r).toBe(false);
+  });
+
+  test("F-10: 404 pada mutasi dengan detail module_not_found tetap 'Modul tidak ditemukan' dan memuat ulang daftar", () => {
+    const r = mapModuleError(
+      404,
+      { code: "not_found", message: "x", details: [{ code: "module_not_found" }] } as never,
+      "mutation",
+    );
+    expect<string[]>(keysOf(r)).toEqual(["modules.error.module_not_found"]);
+    expect(r.reloadList).toBe(true);
   });
 
   test("404 pada bacaan memakai errors.not_found tanpa beralih mode", () => {
     const r = mapModuleError(404, err("not_found"), "read");
     expect<string[]>(keysOf(r)).toEqual(["errors.not_found"]);
-    expect(r.switchToReadOnly).toBe(false);
   });
 
   test("415 dan kode tak dikenal: pesan umum + requestId, tanpa menyalin teks server", () => {

@@ -201,7 +201,7 @@
       "downgrade_not_supported": "Versi binary lebih lama daripada versi terpasang; downgrade tidak didukung.",
       "module_not_found": "Modul tidak ditemukan.",
       "version_mismatch": "Status modul berubah. Daftar dimuat ulang; periksa dampak lalu konfirmasi lagi.",
-      "mutation_disabled": "Manajemen modul tidak aktif di lingkungan ini.",
+      "operation_unavailable": "Operasi tidak tersedia. Daftar modul dan status fitur dimuat ulang.",
       "requestId": "ID permintaan: {requestId}"
     },
     "failure": {
