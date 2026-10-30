@@ -119,3 +119,16 @@ Grid bernomor dengan checkbox, **filter per kolom** di bawah header, dan tombol 
 ## 8. Belum diamati
 
 Image View, Calendar, Gantt; filter tersimpan dan beberapa kondisi sekaligus pada popover filter; dialog form (quick entry) dan field Link; alur Cancel/Amend dan kolom docstatus di daftar; pemicu dock Floating (hover tepi kiri / `Ctrl+Shift+/`) dan keadaan tersembunyi saat tidak dipakai; perilaku mobile Desk; halaman Workspace yang dapat diedit; Helpdesk dan CRM di luar Leads (Deals, Contacts, Notes, Tasks, Call Logs).
+
+## 9. Arahan pemilik produk setelah studi (31 Okt 2026)
+
+Bukan salinan ERPNext: ini keputusan dan pengecualian pemilik produk terhadap yang diamati di atas. Status: dicatat, belum dibahas per butir dan belum menjadi spec.
+
+1. **Halaman Start Guide**: tahapan setup per modul (padanan kartu onboarding "Good evening, ... 0 of 9 steps done", tetapi sebagai halaman tersendiri).
+2. **Manajemen sidebar kustom diperluas** agar mendukung tautan spesifik (dokumen tertentu), laporan, dan jenis lain. **Hanya dicatat; jangan dikerjakan sekarang.**
+3. **Editor Tiptap berfitur lengkap** sebagai komponen editor teks kaya.
+4. **Comments di halaman Form** juga memakai Tiptap dengan **toolbar terlihat** dan **mention pengguna yang punya akses ke Form saat itu** (daftar mention mengikuti otorisasi dokumen; bergantung pada PRD-001).
+5. **Halaman Desks**: satu desk per **modul** (ERPNext v16: per app). Desk dapat dikustomisasi seperti di ERP Design System, dengan **pengelompokan desk/folder** di halaman Desks.
+6. **Dock di halaman utama berisi daftar Desk**, sehingga berpindah desk tidak perlu kembali ke halaman Desks.
+7. **Breadcrumb**: `ikon Home` (menuju halaman Desks) `>` **desk saat ini** (menuju Dashboard desk itu) `>` ... Bila terlalu panjang, **diringkas** dengan tetap mempertahankan ikon Home dan nama halaman saat ini.
+8. **Setiap desk punya satu halaman Dashboard** (menggantikan pasangan Home + Dashboard di ERPNext, yang memakai komponen sama); hanya "Dashboard" yang ada, setara Home ERPNext.
