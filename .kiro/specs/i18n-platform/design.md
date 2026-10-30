@@ -375,7 +375,7 @@ Properti yang harus selalu benar (diuji dengan test berbasis properti/fuzz bila 
 | --- | --- |
 | Berkas katalog JSON rusak / ICU tidak valid / kunci ganda / tabrakan perataan / karakter terlarang / registri tidak valid | `i18n:check` dan build gagal; saat boot `Service` menolak start dengan pesan yang menyebut berkas dan kunci |
 | Kunci hilang/berlebih atau parameter tak cocok antar bahasa | Peringatan (build tetap lolos); `--strict` mengubahnya menjadi galat |
-| Kunci tidak ditemukan di rantai fallback | Mengembalikan `namespace::kunci`; peringatan sekali per (bahasa, ns, kunci) di dev/test, hanya metrik di produksi |
+| Kunci tidak ditemukan di rantai fallback | Mengembalikan `namespace::kunci`; peringatan sekali per (bahasa, ns, kunci) di semua lingkungan (dibatasi), metrik `erp.i18n.missing` (locale, namespace), galat di mode pengujian bila `StrictMissing` dipasang (keputusan G31) |
 | `Accept-Language` rusak atau > 1 KB | Diabaikan; memakai default |
 | `GET /api/platform/i18n/...` bahasa/namespace tak dikenal atau modul nonaktif | `404 not_found` (tidak membedakan penyebab) |
 | `PUT` override: kunci tak ada, ICU tidak valid, parameter berbeda, HTML, terlalu panjang | `400 invalid_i18n_override` + `details[].code` |
