@@ -130,5 +130,5 @@ Bukan salinan ERPNext: ini keputusan dan pengecualian pemilik produk terhadap ya
 4. **Comments di halaman Form** juga memakai Tiptap dengan **toolbar terlihat** dan **mention pengguna yang punya akses ke Form saat itu** (daftar mention mengikuti otorisasi dokumen; bergantung pada PRD-001).
 5. **Halaman Desks**: satu desk per **modul** (ERPNext v16: per app). Desk dapat dikustomisasi seperti di ERP Design System, dengan **pengelompokan desk/folder** di halaman Desks.
 6. **Dock di halaman utama berisi daftar Desk**, sehingga berpindah desk tidak perlu kembali ke halaman Desks.
-7. **Breadcrumb**: `ikon Home` (menuju halaman Desks) `>` **desk saat ini** (menuju Dashboard desk itu) `>` ... Bila terlalu panjang, **diringkas** dengan tetap mempertahankan ikon Home dan nama halaman saat ini.
+7. **Breadcrumb**: `ikon Home` (menuju halaman Desks) `>` **desk saat ini** (menuju Dashboard desk itu) `>` ... Diringkas **bertahap menurut lebar** (rincian tahap dan pengecualian ponsel di PRD-000 Q40 butir 4): utuh bila muat; Opsi A (Home, Desk, "…", dua langkah terakhir); Opsi B (Home, "…", dua langkah terakhir bila muat); ponsel (`… › langkah terakhir`, Home di dalam "…").
 8. **Setiap desk punya satu halaman Dashboard** (menggantikan pasangan Home + Dashboard di ERPNext, yang memakai komponen sama); hanya "Dashboard" yang ada, setara Home ERPNext.
