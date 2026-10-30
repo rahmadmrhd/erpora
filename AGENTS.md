@@ -27,7 +27,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 
 - **Fitur yang sudah tercakup PRD** → ikuti PRD; rencana implementasi di `docs/superpowers/plans/`.
 - **Fitur baru di luar PRD** (modul bisnis baru, integrasi baru, perubahan arsitektur, pekerjaan 4+ file) → **wajib memakai Kiro spec** (skill `kiro-spec`, command `/spec`):
-  - Lokasi: `docs/specs/<nama-spec>/` (bukan `.kiro/specs` bawaan skill `kiro-spec`; arahkan command `/spec*` ke lokasi ini) berisi `.config.kiro`, `requirements.md`, `design.md`, `tasks.md`.
+  - Lokasi: `docs/specs/<nama-spec>/` berisi `.config.kiro`, `requirements.md`, `design.md`, `tasks.md`.
   - Alur default requirements-first: `/spec-req` → `/spec-design` → `/spec-task`, lalu eksekusi dengan `/spec-status`.
   - Spec **harus patuh** pada PRD-000, PRD-001, api-guidelines, security-guidelines, dan transaction-data-standards; bagian design wajib menyebut resource/aksi permission, field group + klasifikasi data, scope, kontrak OpenAPI modul, migrasi, bagian **Keamanan** (STRIDE, titik masuk ID/IDOR, koneksi keluar/SSRF, file, data offline), dan — untuk resource transaksional — checklist `transaction-data-standards.md` §15.
   - Bug fix kecil (1–3 file) atau perubahan minor boleh langsung dikerjakan tanpa spec.
