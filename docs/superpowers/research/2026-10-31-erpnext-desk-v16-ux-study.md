@@ -147,3 +147,14 @@ Bukan salinan ERPNext: ini keputusan dan pengecualian pemilik produk terhadap ya
 12. **Aturan Desk boleh tampil**: kepemilikan Desk kustom (pribadi, atau terlihat untuk pengguna/peran), minimal satu menu diizinkan, tidak dinonaktifkan, dan seterusnya.
 
 Rincian dan status resmi ada di PRD-000 Q40 butir 9–12.
+
+### Pengujian penentuan Desk di ERPNext (31 Okt 2026)
+
+| Aksi | Hasil |
+| --- | --- |
+| Buka `/desk/item` (tanpa Desk di URL, muat penuh) | Dialihkan ke `/desk/stock/item`: Desk **pemilik utama** Item |
+| Dari Desk Selling, klik "Items › Item" di sidebar | Tautan `/desk/selling/item`: **tetap di Selling** (Item ada di sidebar Selling) |
+| Buka langsung `/desk/selling/item` | Tetap di Selling (pasangan valid) |
+| Buka `/desk/buying/user` (User tidak ada di Buying) | Dialihkan ke `/desk/users/user`: pasangan tidak valid diganti Desk pemilik utama |
+
+Pelajaran: di ERPNext **Desk adalah bagian rute** (`/desk/<desk>/<halaman>`), sehingga "Desk saat ini per tab" otomatis berasal dari URL dan validasi terhadap halaman dilakukan di router. Sidebar Selling juga memuat **Home dan Dashboard sekaligus** (arahan produk: hanya Dashboard).
