@@ -41,7 +41,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 5. THE komposit buatan sendiri `BadgeStatus`, `EmptyState`, `ErrorPage`, `Kbd`, `LoadingIcon` SHALL diganti padanan resmi shadcn (`Badge`, `Empty`, `Kbd`, `Spinner`) bila padanan itu ada di registry; WHEN tidak ada, THE komposit SHALL pindah ke lapisan pembungkus dan alasannya dicatat di `design.md`.
 6. THE komponen baru dari registry SHALL tetap diminta konfirmasi pemilik produk sebelum dipasang (aturan konfirmasi komponen), memuat perbandingan dengan padanan Frappe UI dan DS.
 7. THE `@erpora/ui` SHALL tetap daun (F4): tidak mengimpor paket `@erpora/*`; teks bawaan komponen tetap lewat konteks label (`useUiLabel`).
-8. [TODO: konfirmasi] **Ukuran kontrol:** shadcn memakai tinggi `h-9` (36 px), sedangkan DS menetapkan 34 px (Button md) dan 32 px (Input sm). Karena komponen tidak boleh diubah, usulan: ukuran shadcn bawaan diterima dan selisih dari DS dicatat; kepadatan hanya dapat dipengaruhi lewat token (mis. `--spacing`) bila diputuskan lain.
+8. **Ukuran kontrol (diputuskan 31 Okt 2026):** shadcn memakai tinggi `h-9` (36 px), sedangkan DS menetapkan 34 px (Button md) dan 32 px (Input sm). Karena komponen tidak boleh diubah, ukuran shadcn bawaan diterima dan selisih dari DS dicatat di `design.md`; kepadatan hanya dapat dipengaruhi lewat token (mis. `--spacing`) bila kelak diputuskan lain.
 9. THE paket SHALL tidak menambah dependensi `cn` dan SHALL menyematkan versi pasti semua dependensi hasil `shadcn add` (aturan pin `package.json` yang ada).
 
 ### Requirement 2: Token ERP Design System lewat CSS
@@ -90,7 +90,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 1. THE panel menu SHALL **tidak** memiliki header Desk (judul dan dropdown Desk dihapus).
 2. THE panel SHALL berisi grup berurutan yang dipisah **divider**: (i) **grup tetap**: Cari, Notifikasi (dengan lencana jumlah), ToDo; (ii) **menu Desk saat ini** dengan label kecil nama Desk; (iii) pada mode Floating, pengguna (avatar, nama, email) di dasar.
-3. THE grup tetap SHALL dapat bertambah kelak lewat registri item tetap di `@erpora/platform-web` tanpa mengubah komponen panel; THE ToDo SHALL tampil sebagai item dengan sumber data sementara sampai modul tugas ada [TODO: konfirmasi: ToDo hanya penampung rute/lencana tanpa halaman, atau halaman daftar kosong].
+3. THE grup tetap SHALL dapat bertambah kelak lewat registri item tetap di `@erpora/platform-web` tanpa mengubah komponen panel; THE ToDo SHALL tampil sebagai item dengan lencana jumlah (sumber data sementara) dan, bila diklik, membuka halaman placeholder di `/platform/todo` (milik pseudo-modul `platform`) berisi keterangan bahwa ToDo belum tersedia (diputuskan 31 Okt 2026); setelah modul tugas ada, item mengarah ke sana tanpa mengubah komponen panel. Cari dan Notifikasi tidak punya rute (membuka palet dan panel).
 4. THE menu Desk SHALL mendukung grup bersarang yang membuka inline (chevron) dan item aktif disorot; Dashboard SHALL selalu menjadi item pertama dan SHALL tidak dapat dihapus atau disembunyikan (terkunci).
 5. THE **pembatas** panel SHALL dapat diklik untuk menciutkan atau membuka: pada **Pinned** hanya panel menu yang hilang dan Dock tetap; pada **Floating** sidebar menjadi **strip ikon** (≈48 px) berisi semua grup.
 6. THE area klik pembatas SHALL lebih lebar dari 8 px dan kursor SHALL berubah menjadi penanda resize; keadaan menciut SHALL disimpan per pengguna dan bertahan saat muat ulang.
@@ -106,7 +106,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 1. THE logo dan nama proyek SHALL tampil sebagai kepala panel pada mode Floating dan sebagai logo di atas Dock pada mode Pinned.
 2. WHEN logo diklik, THE aplikasi SHALL membuka popover yang sama pada kedua mode.
-3. THE popover SHALL memuat: **Pindah Desk** (daftar Desk yang diizinkan), **Semua Desk** (membuka halaman Desks), **Edit sidebar** (dinonaktifkan dengan keterangan sampai M3b), **Bantuan dan pintasan**, **Tentang** (versi aplikasi dari bootstrap). [TODO: konfirmasi isi popover; ini usulan perancang]
+3. THE popover SHALL memuat: **Pindah Desk** (daftar Desk yang diizinkan), **Semua Desk** (membuka halaman Desks), **Edit sidebar** (dinonaktifkan dengan keterangan sampai M3b), **Bantuan dan pintasan**, **Tentang** (versi aplikasi dari bootstrap). Isi popover disetujui 31 Okt 2026.
 4. THE popover SHALL dibangun dari `Popover` atau `DropdownMenu` shadcn tanpa mengubah berkasnya dan dapat dioperasikan dengan keyboard.
 
 ### Requirement 7: Breadcrumb bertahap
@@ -160,7 +160,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 4. THE halaman Desks SHALL tidak punya URL sendiri; THE `/desks` SHALL tidak terdaftar sebagai rute halaman.
 5. WHEN pengguna menekan ikon Home di breadcrumb, THE aplikasi SHALL menampilkan halaman Desks di `/` dengan **melewati** penentuan Desk (penanda state navigasi, bukan URL); WHEN halaman itu dimuat ulang, THE `/` SHALL mengikuti penentuan biasa.
 6. THE halaman Desks pada revisi ini SHALL berupa kerangka: daftar Desk yang diizinkan dan keadaan kosong bila tidak ada; kustomisasi, folder/grup, dan pengelolaan adalah M3b.
-7. [TODO: konfirmasi] **Halaman platform `/settings/modules`** (pseudo-modul `platform`, spec M3a) menyalahi aturan "semua modul berawalan"; usulan: dipindah ke `/platform/modules` dengan `/settings/modules` dialihkan sementara satu rilis, atau dipertahankan sebagai pengecualian tercatat.
+7. THE **halaman platform `/settings/modules`** (pseudo-modul `platform`, spec M3a) SHALL dipindah ke **`/platform/modules`** **tanpa pengalihan** (diputuskan 31 Okt 2026: belum ada rilis dan tautan tersimpan); rute lama dihapus, tautan di shell, dokumen, dan tes diperbarui, dan perubahan dicatat di PRD-000 Q40. Slug `settings` tetap tercadang.
 8. THE kontrak `defineModule` dan rute modul SHALL diperbarui sehingga rute anak tetap berada di bawah base route `/<slug>` (tidak berubah) dan tidak ada modul yang dapat mendaftarkan rute di luar base route-nya.
 
 ### Requirement 11: Definisi Desk per modul
@@ -169,7 +169,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE setiap modul **berfrontend** (`modules/<dir>/web`) SHALL mendefinisikan **Desk bawaannya**: label (kunci i18n), ikon, susunan menu (grup, item, rute, permission per item, ikon), item Dashboard, dan pengaturan relevan lain; modul tanpa frontend tidak punya Desk. [TODO: konfirmasi penafsiran: modul tanpa `web/` tidak diwajibkan]
+1. THE setiap modul **berfrontend** (`modules/<dir>/web`) SHALL mendefinisikan **Desk bawaannya**: label (kunci i18n), ikon, susunan menu (grup, item, rute, permission per item, ikon), item Dashboard, dan pengaturan relevan lain; modul tanpa frontend tidak punya Desk dan tidak diwajibkan (disetujui 31 Okt 2026).
 2. THE definisi SHALL berada di **manifest** modul sebagai properti `desk` (opsional secara skema, wajib bagi modul berfrontend; tambahan aditif seperti properti `i18n`), karena server memerlukan pemetaan menu ke permission untuk menyaring.
 3. THE `module:check` SHALL menolak modul berfrontend tanpa definisi Desk, tanpa item Dashboard, atau dengan item yang merujuk rute/permission yang tidak terdaftar di modul itu, dengan galat yang menyebut berkas dan kunci.
 4. THE item Dashboard SHALL wajib dan terkunci: tidak dapat dihapus atau disembunyikan oleh timpaan.
@@ -202,7 +202,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 2. THE Desk **bawaan modul**, dan Desk yang diatur untuk beberapa pengguna/peran, SHALL hanya dapat diedit pengguna yang memiliki `desk.update` atas Desk itu; THE Desk **kustom pribadi** SHALL dapat diedit pemiliknya dan pengguna yang memiliki `desk.update` atas Desk itu.
 3. THE penegakan SHALL di backend lewat `authz` (klien hanya menyembunyikan kontrol); hak sistem SHALL tidak diberikan otomatis dan setiap penggunaan `authz.AsSystem` SHALL teraudit.
 4. THE migrasi SHALL membuat tabel timpaan Desk (kontrol atau tenant sesuai `design.md`) dengan skema goose, tanpa `AutoMigrate`, dan akses GORM hanya di paket infrastruktur yang masuk allowlist D3b.
-5. THE jalur **baca** SHALL menerapkan timpaan di atas definisi bawaan pada revisi ini; THE **API tulis** timpaan dan antarmuka pengeditan SHALL dikerjakan di M3b. [TODO: konfirmasi pembagian; alternatif: API tulis ikut di revisi ini]
+5. THE jalur **baca** SHALL menerapkan timpaan di atas definisi bawaan pada revisi ini; THE **API tulis** timpaan dan antarmuka pengeditan SHALL dikerjakan di M3b (pembagian disetujui 31 Okt 2026).
 6. THE setiap perubahan timpaan (kelak, M3b) SHALL tercatat di audit.
 
 ### Requirement 14: Dashboard per Desk (kerangka)
@@ -213,7 +213,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 1. THE setiap Desk SHALL punya halaman Dashboard di `/<modul>` yang menjadi tujuan klik nama Desk di breadcrumb dan klik ikon Dock.
 2. THE halaman SHALL menyatukan "Home" dan "Dashboard" ERPNext menjadi satu Dashboard; THE sistem SHALL tidak punya halaman Home terpisah.
-3. THE revisi ini SHALL menyediakan **kerangka** Dashboard: tata letak dengan slot widget dan keadaan kosong; modul dapat mendaftarkan widget bawaan lewat definisi Desk (isi dan pembangun adalah M3f; kartu "Panduan awal" adalah M3b). [TODO: konfirmasi isi kerangka: hanya keadaan kosong, atau menyertakan kartu contoh]
+3. THE revisi ini SHALL menyediakan **kerangka** Dashboard: tata letak dengan slot widget dan keadaan kosong; modul dapat mendaftarkan widget bawaan lewat definisi Desk (isi dan pembangun adalah M3f; kartu "Panduan awal" adalah M3b). Isi kerangka hanya slot widget dan keadaan kosong (disetujui 31 Okt 2026).
 4. THE Dashboard SHALL memuat bagian beratnya secara malas dan SHALL menampilkan kerangka pemuatan (`Skeleton`) selama data diambil.
 
 ### Requirement 15: Panel Notifikasi
@@ -244,8 +244,8 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 #### Acceptance Criteria
 
 1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**.
-2. THE **Appearance** SHALL memuat **Tema** (Otomatis/Terang/Gelap, berupa kartu pratinjau) dan **Dock** (Pinned/Floating, berupa kartu pratinjau); [TODO: konfirmasi apakah **Layout** (Compact/Full Width) ikut sekarang atau M3d bersama form].
-3. THE **Preferences** SHALL memuat **Bahasa** memakai runtime `i18n-platform` dan **Zona waktu** [TODO: konfirmasi isi minimal Preferences].
+2. THE **Appearance** SHALL memuat **Tema** (Otomatis/Terang/Gelap, berupa kartu pratinjau) dan **Dock** (Pinned/Floating, berupa kartu pratinjau); **Layout** (Compact/Full Width) ditunda ke M3d bersama form (keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
+3. THE **Preferences** SHALL memuat **Bahasa** memakai runtime `i18n-platform` dan **Zona waktu** (isi minimal ini keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 4. THE perubahan SHALL tersimpan otomatis per pengguna dan berlaku seketika; penyimpanan SHALL memakai `localStorage` untuk preferensi UI (tema, mode Dock, keadaan panel, bahasa) dan SHALL tidak menyimpan data sensitif.
 5. THE dialog SHALL dimuat malas dan dibangun dari `Dialog` shadcn; Settings SHALL dapat dibuka dari menu pengguna dan dari pintasan keyboard.
 
@@ -294,16 +294,16 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 4. THE spec M3a (`m3a-frontend-foundation-shell`) SHALL dicatat sebagian digantikan (bagian shell, komponen, dan routing) tanpa menghapus isinya, dan PRD-000 Q40, ADR-0011, `docs/module-sdk/frontend.md`, `docs/module-sdk/generators.md`, README `packages/ui`, dan `CLAUDE.md`/`AGENTS.md` (identik) SHALL diperbarui.
 5. THE perubahan di luar spek SHALL dicatat sebagai keputusan di PRD-000 (Q-number) atau ADR, dan review akhir SHALL mencakup review keamanan memakai skill `security-audit` untuk permukaan yang disentuh.
 
-## Pertanyaan terbuka (untuk dikonfirmasi sebelum `/spec-design`)
+## Keputusan atas pertanyaan terbuka (31 Okt 2026, disetujui pemilik produk)
 
-| # | Pertanyaan | Usulan |
-| - | ---------- | ------ |
+| # | Pertanyaan | Keputusan |
+| - | ---------- | --------- |
 | 1 | Ukuran kontrol shadcn 36 px vs DS 34 px (R1.8) | Terima ukuran shadcn bawaan; selisih dicatat |
-| 2 | Isi ToDo di grup tetap (R5.3) | Item dengan lencana dan rute placeholder sampai modul tugas ada |
+| 2 | Isi ToDo di grup tetap (R5.3) | Item dengan lencana; klik membuka placeholder di `/platform/todo` sampai modul tugas ada |
 | 3 | Isi popover logo (R6.3) | Pindah Desk, Semua Desk, Edit sidebar (nonaktif), Bantuan dan pintasan, Tentang |
-| 4 | Nasib `/settings/modules` (R10.7) | Pindah ke `/platform/modules`, alihkan lama satu rilis |
+| 4 | Nasib `/settings/modules` (R10.7) | Pindah ke `/platform/modules` tanpa pengalihan |
 | 5 | Modul tanpa frontend dan Desk (R11.1) | Tidak diwajibkan |
 | 6 | API tulis timpaan Desk (R13.5) | M3b; revisi ini hanya jalur baca |
 | 7 | Isi kerangka Dashboard (R14.3) | Hanya slot widget dan keadaan kosong |
-| 8 | Layout Compact/Full Width di Settings (R17.2) | Ditunda ke M3d |
-| 9 | Isi minimal Preferences (R17.3) | Bahasa dan Zona waktu |
+| 8 | Layout Compact/Full Width di Settings (R17.2) | Ditunda ke M3d (sementara, dapat ditinjau ulang) |
+| 9 | Isi minimal Preferences (R17.3) | Bahasa dan Zona waktu (sementara, dapat ditinjau ulang) |
