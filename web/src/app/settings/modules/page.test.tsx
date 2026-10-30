@@ -27,7 +27,12 @@ const shop = (over: Partial<ModuleView> = {}) =>
 async function open(
   modules: ModuleView[],
   opts: ServerOptions = {},
-  extra: { adminApi?: boolean; permissions?: string[]; queryClient?: QueryClient } = {},
+  extra: {
+    adminApi?: boolean;
+    permissions?: string[];
+    queryClient?: QueryClient;
+    platformCatalog?: Record<string, string>;
+  } = {},
 ) {
   const server = createModulesServer(modules, opts);
   const view = await renderWithServer({ server, ...extra, children: <ModulesPage /> });
@@ -171,6 +176,37 @@ describe("mode hanya-baca dan galat daftar (R13.2)", () => {
 });
 
 describe("menu aksi per status (cermin ADR-0007)", () => {
+  test("seluruh label operasi (Install, Aktifkan, Nonaktifkan, Upgrade, Uninstall, Coba ulang, Riwayat) lewat katalog i18n, bukan teks tertanam", async () => {
+    const user = userEvent.setup();
+    const ops = ["install", "enable", "disable", "upgrade", "uninstall", "retry", "history"];
+    const platformCatalog = Object.fromEntries(ops.map((o) => [`modules.op.${o}`, `OP-${o}`]));
+    await open(
+      [
+        mod("acme.a", { name: "A", status: "available" }),
+        mod("acme.b", { name: "B", status: "disabled" }),
+        mod("acme.c", { name: "C", status: "enabled" }),
+        mod("acme.d", { name: "D", status: "upgrade_pending" }),
+        mod("acme.e", { name: "E", status: "failed" }),
+      ],
+      {},
+      { platformCatalog },
+    );
+    const expected: Record<string, string[]> = {
+      A: ["OP-install", "OP-history"],
+      B: ["OP-enable", "OP-uninstall", "OP-history"],
+      C: ["OP-disable", "OP-history"],
+      D: ["OP-upgrade", "OP-history"],
+      E: ["OP-retry", "OP-history"],
+    };
+    for (const [name, labels] of Object.entries(expected)) {
+      await user.click(await screen.findByRole("button", { name: `Aksi untuk ${name}` }));
+      const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent);
+      expect(items).toEqual(labels);
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull());
+    }
+  });
+
   test.each([
     ["enabled", ["Nonaktifkan", "Riwayat"]],
     ["disabled", ["Aktifkan", "Uninstall", "Riwayat"]],

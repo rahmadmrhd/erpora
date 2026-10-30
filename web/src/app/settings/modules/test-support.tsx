@@ -302,6 +302,8 @@ export interface RenderOptions {
   adminApi?: boolean;
   frontend?: FrontendModule[];
   queryClient?: QueryClient;
+  /** Menimpa teks katalog `platform` (kunci rata) untuk menguji bahwa label benar-benar lewat i18n. */
+  platformCatalog?: Record<string, string>;
   children: ReactNode;
 }
 
@@ -312,12 +314,16 @@ export async function renderWithServer({
   permissions = [],
   frontend,
   queryClient,
+  platformCatalog,
   children,
 }: RenderOptions) {
   const original = globalThis.fetch;
   globalThis.fetch = server.fetch;
   const qc = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const i18n = createTestI18n({ ...catalogs });
+  const i18n = createTestI18n({
+    ...catalogs,
+    platform: { ...catalogs.platform, ...platformCatalog },
+  });
   const modules = frontend ?? fixtureFrontend();
   let view!: ReturnType<typeof render>;
   await act(async () => {
