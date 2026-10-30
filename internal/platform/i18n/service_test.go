@@ -552,3 +552,30 @@ func TestCatalogFallbackKeysSeparateMetricOncePerViewBuild(t *testing.T) {
 		t.Errorf("bahasa default tidak boleh dihitung: %v", got)
 	}
 }
+
+// G-11: atribut locale metrik dinormalisasi ke kode terdaftar di registri (selain itu "other"), sehingga locale mentah
+// dari context (i18n.WithLocale API publik) tidak membuat kardinalitas tak terbatas.
+func TestMetricLocaleAttributeIsClosedSet(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	s := newTestService(t, Options{Meter: mp.Meter("test")})
+	for _, raw := range []string{"zz-evil-1", "zz-evil-2", "<script>"} {
+		ctx := sdki18n.WithScope(sdki18n.WithLocale(sdki18n.WithResolver(context.Background(), s.Resolver(tenantA)), sdki18n.Locale(raw)), "example")
+		_ = sdki18n.T(ctx, "salah.ketik")                                             // hilang
+		s.Resolve(context.Background(), tenantA, "example", "c", sdki18n.Locale(raw)) // jatuh ke bahasa lain
+	}
+	if got := collectMetric(t, reader, MissingMetric); len(got) != 1 || got["locale=other,namespace=example"] != 3 {
+		t.Errorf("%s = %v, want {locale=other,namespace=example: 3}", MissingMetric, got)
+	}
+	for k := range collectMetric(t, reader, FallbackMetric) {
+		if !strings.HasPrefix(k, "locale=other,") {
+			t.Errorf("%s memuat locale mentah: %q", FallbackMetric, k)
+		}
+	}
+	// locale terdaftar tetap apa adanya
+	ctx := sdki18n.WithScope(sdki18n.WithLocale(sdki18n.WithResolver(context.Background(), s.Resolver(tenantA)), "en"), "example")
+	_ = sdki18n.T(ctx, "salah.ketik")
+	if got := collectMetric(t, reader, MissingMetric); got["locale=en,namespace=example"] != 1 {
+		t.Errorf("locale terdaftar: %v", got)
+	}
+}

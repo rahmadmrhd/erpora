@@ -459,10 +459,23 @@ const MissingMetric = "erp.i18n.missing"
 // OverrideErrorsMetric adalah counter kegagalan DB override (atribut reason: "revisions" atau "load").
 const OverrideErrorsMetric = "erp.i18n.override_errors"
 
+// metricLocale membatasi kardinalitas atribut locale: hanya kode terdaftar di registri (kosong = bahasa default);
+// selain itu "other". Locale di context dapat berasal dari modul lewat i18n.WithLocale, jadi tidak boleh dipercaya (G-11).
+func (s *Service) metricLocale(loc string) string {
+	reg := s.snap.Load().reg
+	if loc == "" {
+		return reg.Default
+	}
+	if reg.Has(loc) {
+		return loc
+	}
+	return "other"
+}
+
 // countMissing menghitung kunci hilang dari T (dipanggil lewat MissingObserver pada Resolver).
 func (s *Service) countMissing(loc, ns string) {
 	if s.missingCtr != nil {
-		s.missingCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("locale", loc), attribute.String("namespace", ns)))
+		s.missingCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("locale", s.metricLocale(loc)), attribute.String("namespace", ns)))
 	}
 }
 
@@ -477,7 +490,7 @@ func (s *Service) countOverrideError(reason string) {
 // kunci) hanya di mode development/test (Requirement 3.7).
 func (s *Service) warnFallback(loc, ns, key string) {
 	if s.fallbackCtr != nil {
-		s.fallbackCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("locale", loc), attribute.String("namespace", ns)))
+		s.fallbackCtr.Add(context.Background(), 1, metric.WithAttributes(attribute.String("locale", s.metricLocale(loc)), attribute.String("namespace", ns)))
 	}
 	if !s.dev || s.warnedSize.Load() >= warnedMax {
 		return
