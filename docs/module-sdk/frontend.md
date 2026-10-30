@@ -7,7 +7,7 @@ Keputusan yang melandasinya: [ADR-011](../adr/0011-kontrak-ui-extension-dan-desi
 ## Ringkasan
 
 - Frontend modul ada di `modules/<dir>/web`, package `@erpora/module-<dir>`, dan dirakit oleh app shell `web/` (aturan F3).
-- Modul hanya mengimpor `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, dan `@erpora/module-<x>` yang ada di `manifest.dependencies` (aturan F2). Impor lewat `index.ts`; deep import dilarang.
+- Aturan F2 hanya membatasi impor paket `@erpora/*`: frontend modul boleh mengimpor `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, dan `@erpora/module-<x>` yang ada di `manifest.dependencies`. Pustaka pihak ketiga (`react`, `@tanstack/react-query`, dan lainnya) diizinkan; versinya dipin sebagai `peerDependencies` modul (Q39 butir 1). Impor lewat `index.ts`; deep import dilarang.
 - Backend tetap otoritas. Permission dan status modul di frontend hanya untuk UX (route yang nonaktif menampilkan "Modul tidak aktif").
 - Dilarang: `dangerouslySetInnerHTML` (Biome, `noDangerouslySetInnerHtml` = error), palet warna langsung di komponen, dan string UI yang ditanam di kode.
 
@@ -131,6 +131,13 @@ usePageActions([
 - `useTranslation(ns)` (dari `@erpora/platform-web`) memberi `t` (teks polos), `rich` (tag rich sebagai elemen React), `locale`, dan `setLocale`. Gunakan bila perlu mengakses kunci langsung.
 - Katalog dimuat malas per namespace dengan `useSuspenseQuery`. Komponen yang memakai terjemahan harus berada di bawah batas `Suspense` (shell sudah menyediakannya). Selama memuat, kunci mentah tidak pernah tampil.
 - Kunci dibangkitkan ke `src/i18n/keys.gen.ts` oleh `i18n:generate`. Impor `"./i18n/keys.gen"` di entry modul agar augmentasi tipe berlaku.
+- Kunci yang tidak ada di katalog: `t` mengembalikan `ns::kunci` (paritas dengan Go) dan mencatat peringatan dev sekali per (bahasa, namespace, kunci); di produksi tidak ada peringatan. `t` tidak pernah melempar.
+- Katalog namespace modul yang nonaktif (`404 not_found`) tidak fatal: teksnya menjadi `ns::kunci`. Katalog `platform` dan `ui` yang 404 tetap fatal, karena berarti backend rusak.
+
+## Halaman modul dan mode hanya-baca
+
+- Route modul yang statusnya bukan `enabled` menampilkan "Modul tidak aktif" tanpa memuat chunk halaman (guard di `beforeLoad`).
+- `/settings/modules` berada dalam mode hanya-baca bila `features.modulesAdminApi` di bootstrap tidak aktif, atau bila mutasi membalas `404`. Dalam mode ini kolom Aksi disembunyikan, sedangkan Riwayat operasi tetap tersedia lewat tombol di sel nama (Q39 butir 2). Pemakaian `features` lewat `useFeature("modulesAdminApi")`.
 
 Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
@@ -178,7 +185,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 ## Aturan batas (ringkas)
 
 - F1: `@erpora/ui`, `@erpora/platform-web`, dan `@erpora/module-sdk` tidak bergantung pada `@erpora/module-*`.
-- F2: frontend modul hanya mengimpor paket yang diizinkan dan `@erpora/module-<x>` dari `manifest.dependencies`; dependensi `package.json` modul harus cocok dengan manifest (Q27). Antarmodul hanya lewat `index.ts`.
+- F2: impor `@erpora/*` oleh frontend modul hanya ke paket yang diizinkan dan `@erpora/module-<x>` dari `manifest.dependencies` (Q39 butir 1 membatasi F2 pada paket `@erpora/*`). Dependensi `@erpora/module-*` di `package.json` modul harus cocok dengan manifest (Q27). Antarmodul hanya lewat `index.ts`.
 - F3: hanya app shell `web/` yang bergantung pada semua modul.
 - F4: `@erpora/ui` adalah daun dan tidak mengimpor `@erpora/*` mana pun.
 
