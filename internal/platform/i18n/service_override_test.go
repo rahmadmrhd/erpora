@@ -46,7 +46,10 @@ func (f *fakeStore) Revisions(ctx context.Context, t tenancy.TenantID) ([]store.
 	failErr := f.failAll
 	f.mu.Unlock()
 	if gate != nil {
-		<-gate
+		select {
+		case <-gate:
+		case <-ctx.Done(): // driver nyata berhenti menunggu saat context habis
+		}
 	}
 	if err := ctx.Err(); err != nil { // store yang menghormati context (seperti driver nyata)
 		return nil, err
@@ -63,7 +66,10 @@ func (f *fakeStore) ListLocale(ctx context.Context, t tenancy.TenantID, ns, loc 
 	gate := f.loadGate
 	f.mu.Unlock()
 	if gate != nil {
-		<-gate
+		select {
+		case <-gate:
+		case <-ctx.Done():
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -862,5 +868,55 @@ func TestOverrideStaleRefreshDoesNotRegressRevision(t *testing.T) {
 	v, _ := s.Catalog(context.Background(), tenantA, "example", "id")
 	if v.Messages["a"] != "Dua" {
 		t.Errorf("Catalog = %q, want Dua", v.Messages["a"])
+	}
+}
+
+// G-1: timeout DB nyata (query melewati overrideQueryTimeout) tetap memicu backoff, peringatan, dan metrik walau context
+// PEMANGGIL sudah berdeadline lewat: galat query berasal dari timeout query sendiri, bukan pembatalan pemanggil.
+func TestOverrideRealDBTimeoutBacksOffEvenWhenCallerHasExpiredDeadline(t *testing.T) {
+	old := overrideQueryTimeout
+	overrideQueryTimeout = 30 * time.Millisecond
+	t.Cleanup(func() { overrideQueryTimeout = old })
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	fs, clk := newFakeStore(), newClock()
+	fs.revGate = make(chan struct{}) // DB macet: tidak pernah menjawab
+	s := newOverrideService(t, fs, clk, func(o *Options) { o.Log = log })
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	s.Resolve(expired, tenantA, "example", "a", "id")
+	if !strings.Contains(buf.String(), WarnOverrideStoreMessage) {
+		t.Errorf("timeout DB nyata tidak dicatat:\n%s", buf.String())
+	}
+	before := fs.revCalls
+	for i := 0; i < 20; i++ { // dalam jendela backoff: tidak query lagi
+		s.Resolve(expired, tenantA, "example", "a", "id")
+		clk.Advance(100 * time.Millisecond)
+	}
+	if fs.revCalls != before {
+		t.Errorf("revCalls = %d, want %d (backoff setelah timeout DB nyata)", fs.revCalls, before)
+	}
+}
+
+// G-1 (varian muat isi): timeout DB nyata pada ListLocale dengan pemanggil berdeadline lewat tetap backoff.
+func TestOverrideRealContentLoadTimeoutBacksOffEvenWhenCallerHasExpiredDeadline(t *testing.T) {
+	old := overrideQueryTimeout
+	overrideQueryTimeout = 30 * time.Millisecond
+	t.Cleanup(func() { overrideQueryTimeout = old })
+	fs, clk := newFakeStore(), newClock()
+	fs.revs[tenantA] = map[[2]string]int64{{"example", "id"}: 3}
+	fs.loadGate = make(chan struct{})
+	s := newOverrideService(t, fs, clk)
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	// revisi dimuat dengan context normal agar sampai ke jalur muat isi
+	s.overrideRevisions(context.Background(), tenantA)
+	s.Resolve(expired, tenantA, "example", "a", "id")
+	before := fs.loadCalls
+	for i := 0; i < 20; i++ {
+		s.Resolve(expired, tenantA, "example", "a", "id")
+	}
+	if fs.loadCalls != before {
+		t.Errorf("loadCalls = %d, want %d (backoff setelah timeout muat isi)", fs.loadCalls, before)
 	}
 }
