@@ -14,23 +14,44 @@ const ALLOWED = [
   /^\[\s*\.\.\.BOOTSTRAP_KEY\b/,
 ];
 
+const SCOPED_DEFINITION = /\bqueryKey\s*=\s*(use)?[sS]copedKey\(/;
+
+/**
+ * Apakah `queryKey` shorthand pada baris indeks `useIndex` berasal dari definisi `queryKey = scopedKey(...)` /
+ * `useScopedKey(...)` di lingkup leksikal yang sama? Lingkup didekati lewat indentasi (kode diformat Biome): definisi harus
+ * ada di atas pemakaian dan tidak ada baris di antaranya yang berindentasi lebih dangkal (blok definisi sudah ditutup).
+ */
+function shorthandIsScoped(lines: string[], useIndex: number): boolean {
+  for (let i = useIndex - 1; i >= 0; i--) {
+    const line = lines[i] ?? "";
+    if (!SCOPED_DEFINITION.test(line)) continue;
+    const indent = line.length - line.trimStart().length;
+    for (let j = i + 1; j < useIndex; j++) {
+      const mid = lines[j] ?? "";
+      if (mid.trim() === "") continue;
+      if (mid.length - mid.trimStart().length < indent) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 /**
  * Pelanggaran dalam satu berkas: `queryKey: <ekspresi>` / `queryKey = <ekspresi>` yang tidak berawalan bentuk yang
- * diizinkan (termasuk key dari variabel), dan `queryKey` shorthand (`{ queryKey }`, `{ queryKey, ... }`) kecuali berkas
- * itu mendefinisikan `queryKey = scopedKey(...)` atau `useScopedKey(...)`.
+ * diizinkan (termasuk key dari variabel), dan `queryKey` shorthand (`{ queryKey }`, `{ queryKey, ... }`) kecuali variabelnya
+ * didefinisikan dari `scopedKey(...)`/`useScopedKey(...)` di lingkup yang sama (bukan sekadar di berkas yang sama).
  */
 function findViolations(text: string): { line: number; expr: string }[] {
   const bad: { line: number; expr: string }[] = [];
+  const lines = text.split("\n");
   const lineOf = (index: number | undefined) => text.slice(0, index).split("\n").length;
   for (const m of text.matchAll(/\bqueryKey\s*[:=]\s*([^\n]*)/g)) {
     const expr = (m[1] ?? "").trim();
     if (!ALLOWED.some((a) => a.test(expr))) bad.push({ line: lineOf(m.index), expr });
   }
-  const definedScoped = /\bqueryKey\s*=\s*(use)?[sS]copedKey\(/.test(text);
-  if (!definedScoped) {
-    for (const m of text.matchAll(/\bqueryKey\b(?=\s*[,}])/g)) {
-      bad.push({ line: lineOf(m.index), expr: "queryKey (shorthand)" });
-    }
+  for (const m of text.matchAll(/\bqueryKey\b(?=\s*[,}])/g)) {
+    const line = lineOf(m.index);
+    if (!shorthandIsScoped(lines, line - 1)) bad.push({ line, expr: "queryKey (shorthand)" });
   }
   return bad;
 }
@@ -72,13 +93,40 @@ describe("P8: query key berawalan tenant", () => {
     expect(findViolations("useQuery({ queryKey, queryFn });")).toHaveLength(1);
   });
 
-  test("shorthand diizinkan bila berkas mendefinisikan queryKey dari scopedKey/useScopedKey", () => {
+  test("shorthand diizinkan bila queryKey didefinisikan dari scopedKey/useScopedKey di lingkup yang sama", () => {
     expect(
       findViolations('const queryKey = scopedKey(tenantId, "x");\nuseQuery({ queryKey });'),
     ).toEqual([]);
     expect(
       findViolations('const queryKey = useScopedKey("x");\nuseQuery({ queryKey, queryFn });'),
     ).toEqual([]);
+  });
+
+  test("shorthand di fungsi lain dalam berkas yang sama TIDAK diloloskan oleh definisi scopedKey di fungsi lain", () => {
+    const text = [
+      "function a() {",
+      '  const queryKey = scopedKey(tenantId, "x");',
+      "  return useQuery({ queryKey });",
+      "}",
+      "function b() {",
+      '  const queryKey = ["tanpa", "tenant"];',
+      "  return useQuery({ queryKey });",
+      "}",
+    ].join("\n");
+    // baris 6 (literal tanpa tenant) dan baris 7 (shorthand di luar lingkup definisi scoped)
+    expect(findViolations(text).map((v) => v.line)).toEqual([6, 7]);
+  });
+
+  test("shorthand di blok bersarang dari definisi scoped yang sama lolos", () => {
+    const text = [
+      "function a() {",
+      '  const queryKey = scopedKey(tenantId, "x");',
+      "  if (cond) {",
+      "    return useQuery({ queryKey });",
+      "  }",
+      "}",
+    ].join("\n");
+    expect(findViolations(text)).toEqual([]);
   });
 
   test("bentuk yang diizinkan lolos", () => {
