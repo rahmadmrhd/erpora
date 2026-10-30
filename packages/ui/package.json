@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
-    "shadcn": "shadcn"
+    "shadcn": "bunx shadcn@4.21.5"
   },
   "peerDependencies": {
     "react": ">=19.3.1 <20",
@@ -50,7 +50,6 @@
     "happy-dom": "21.0.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "shadcn": "4.21.5",
     "typescript": "6.0.3"
   }
 }

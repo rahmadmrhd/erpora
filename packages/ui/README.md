@@ -28,7 +28,9 @@ mengimpor dari `@erpora/ui` (barrel `src/index.ts`) dan memuat tema lewat `@impo
 
 ## Memasang komponen baru
 
-CLI `shadcn` terpin sebagai devDependency (tidak memakai `bunx`/`npx` tak terpin):
+CLI `shadcn` dijalankan lewat `bunx` pada **versi terpin** (skrip `shadcn` di `package.json` memanggil `bunx shadcn@4.21.5`); ia sengaja bukan
+devDependency, supaya pohon dependensinya (mis. `zod`, `deepmerge`, `undici`) tidak masuk `bun.lock` dan `bun audit` (keputusan 31 Okt 2026, PRD-000 Q39).
+Naikkan versi di skrip itu hanya sambil memeriksa `npm view shadcn time` (rilis ≥ 14 hari) dan menjalankan `bun audit`:
 
 ```
 cd packages/ui
