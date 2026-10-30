@@ -19,8 +19,10 @@ function failingServer() {
 }
 
 describe("fallback galat Navbar (F-6)", () => {
-  test("galat render di Navbar: tombol collapse tetap ada, konten halaman tetap, galat dicatat sekali", async () => {
+  test("galat render di Navbar: tombol collapse tetap ada, konten halaman tetap, TEPAT satu catatan konsol tanpa stack", async () => {
     const err = spyOn(console, "error").mockImplementation(() => {});
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    const debug = spyOn(console, "debug").mockImplementation(() => {});
     try {
       renderApp({ path: "/alpha/crumbfail", server: failingServer() });
       expect(await screen.findByText("Isi Crumb Gagal")).toBeInTheDocument();
@@ -33,11 +35,21 @@ describe("fallback galat Navbar (F-6)", () => {
       // sidebar dan konten tetap; minimal breadcrumb berupa path
       expect(screen.getByRole("navigation", { name: "Navigasi utama" })).toBeInTheDocument();
       expect(within(header).getByText("/alpha/crumbfail")).toBeInTheDocument();
-      const logged = err.mock.calls.filter((c) => String(c[0]).includes("[erpora] navbar"));
-      expect(logged).toHaveLength(1);
-      expect(String(logged[0]?.[0])).not.toContain("at ");
+      await new Promise((r) => setTimeout(r, 50));
+      // SEMUA panggilan konsol error/warn/debug: satu catatan navbar, tanpa objek galat atau stack.
+      expect(err).toHaveBeenCalledTimes(1);
+      expect(debug).not.toHaveBeenCalled();
+      expect(String(err.mock.calls[0]?.[0])).toContain("[erpora] navbar");
+      for (const call of [...err.mock.calls, ...warn.mock.calls, ...debug.mock.calls]) {
+        for (const arg of call) {
+          expect(arg instanceof Error).toBe(false);
+          expect(String(arg)).not.toMatch(/\n\s+at /);
+        }
+      }
     } finally {
       err.mockRestore();
+      warn.mockRestore();
+      debug.mockRestore();
     }
   });
 

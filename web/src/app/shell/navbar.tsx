@@ -68,18 +68,6 @@ export function Navbar() {
   );
 }
 
-const reported = new WeakSet<object>();
-
-/** Mencatat galat render Navbar sekali per objek galat (nama saja: tanpa pesan/stack/PII); dipakai `onCatch` batas lokal. */
-export function reportNavbarError(error: unknown): void {
-  if (typeof error === "object" && error !== null) {
-    if (reported.has(error)) return;
-    reported.add(error);
-  }
-  const name = error instanceof Error ? error.name : "Error";
-  console.error(`[erpora] navbar gagal dirender: ${name}`);
-}
-
 /**
  * Cadangan Navbar saat memuat atau galat: tombol collapse tetap ada (di layar kecil sidebar hanya dibuka lewat tombol ini)
  * dan jejak minimal berupa path.

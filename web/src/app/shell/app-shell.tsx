@@ -4,7 +4,8 @@ import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { RouteErrorPage } from "../pages/pages";
 import { AppSidebar } from "./app-sidebar";
-import { Navbar, NavbarFallback, reportNavbarError } from "./navbar";
+import { LocalBoundary } from "./local-boundary";
+import { Navbar, NavbarFallback } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
 
 function ContentSkeleton() {
@@ -71,15 +72,11 @@ export function AppShell() {
       <AppSidebar />
       <div className="relative flex min-w-0 flex-1 flex-col bg-background">
         {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
-        <CatchBoundary
-          getResetKey={() => resetKey}
-          onCatch={reportNavbarError}
-          errorComponent={() => <NavbarFallback />}
-        >
+        <LocalBoundary label="navbar" resetKey={resetKey} fallback={<NavbarFallback />}>
           <Suspense fallback={<NavbarFallback />}>
             <Navbar />
           </Suspense>
-        </CatchBoundary>
+        </LocalBoundary>
         <main
           id="content"
           ref={main}
@@ -100,11 +97,11 @@ export function AppShell() {
           </CatchBoundary>
         </main>
       </div>
-      <CatchBoundary getResetKey={() => resetKey} errorComponent={() => null}>
+      <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
         <Suspense fallback={null}>
           <RouteAnnouncer main={main} />
         </Suspense>
-      </CatchBoundary>
+      </LocalBoundary>
     </SidebarProvider>
   );
 }
