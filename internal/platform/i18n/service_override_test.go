@@ -28,6 +28,9 @@ type fakeStore struct {
 	// gate (opsional): bila tidak nil, Revisions/ListLocale menunggu sampai ditutup (meniru DB lambat/menggantung).
 	revGate  chan struct{}
 	loadGate chan struct{}
+	// revEntered (opsional, buffer >= 1): diberi sinyal saat Revisions sudah membaca isinya dan menunggu revGate;
+	// sinkronisasi deterministik pengganti Sleep.
+	revEntered chan struct{}
 }
 
 func newFakeStore() *fakeStore {
@@ -44,8 +47,15 @@ func (f *fakeStore) Revisions(ctx context.Context, t tenancy.TenantID) ([]store.
 		out = append(out, store.Revision{Namespace: k[0], Locale: k[1], Revision: v})
 	}
 	failErr := f.failAll
+	entered := f.revEntered
 	f.mu.Unlock()
 	if gate != nil {
+		if entered != nil {
+			select {
+			case entered <- struct{}{}:
+			default:
+			}
+		}
 		select {
 		case <-gate:
 		case <-ctx.Done(): // driver nyata berhenti menunggu saat context habis
@@ -811,17 +821,19 @@ func TestOverrideCanceledRequestDoesNotTriggerBackoff(t *testing.T) {
 	}
 }
 
-// F-1: kegagalan nyata store tetap memicu backoff, tetapi pembatalan context pemanggil di tengah query tidak.
-func TestOverrideRealFailureStillBacksOffButCallerCancelDoesNot(t *testing.T) {
+// F-1: pembatalan context pemanggil di TENGAH query tidak memicu backoff (query berjalan di luar pembatalan pemanggil).
+// Kegagalan nyata store yang tetap memicu backoff diuji di TestOverrideStoreFailureBackoff dan test timeout DB (G-1).
+func TestOverrideCallerCancelMidQueryDoesNotBackOff(t *testing.T) {
 	fs, clk := newFakeStore(), newClock()
 	gate := make(chan struct{})
 	fs.revGate = gate
+	fs.revEntered = make(chan struct{}, 1)
 	s := newOverrideService(t, fs, clk)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { s.Resolve(ctx, tenantA, "example", "a", "id"); close(done) }()
-	time.Sleep(50 * time.Millisecond)
-	cancel() // dibatalkan saat query berlangsung
+	<-fs.revEntered // query sudah berjalan dan menunggu gate
+	cancel()        // pemanggil dibatalkan saat query berlangsung
 	close(gate)
 	<-done
 	if n := fs.revCalls; n != 1 {
@@ -849,10 +861,11 @@ func TestOverrideStaleRefreshDoesNotRegressRevision(t *testing.T) {
 	gate := make(chan struct{})
 	fs.mu.Lock()
 	fs.revGate = gate
+	fs.revEntered = make(chan struct{}, 1)
 	fs.mu.Unlock()
 	refreshing := make(chan struct{})
 	go func() { resolve(s, tenantA, "example", "id", "a"); close(refreshing) }() // refresh membaca rev 1, lalu menunggu
-	time.Sleep(50 * time.Millisecond)
+	<-fs.revEntered                                                              // pasti sudah membaca rev 1 dan menunggu gate (deterministik, tanpa Sleep)
 	fs.mu.Lock()
 	fs.revGate = nil
 	fs.mu.Unlock()
