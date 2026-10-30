@@ -117,12 +117,6 @@ func (s *Service) warnStore(err error, reason string) {
 	}
 }
 
-// isCallerCancel melaporkan apakah err hanyalah akibat pembatalan context PEMANGGIL (bukan kegagalan nyata store):
-// tidak boleh memicu backoff atau peringatan "DB tak terjangkau" (F-1).
-func isCallerCancel(ctx context.Context, err error) bool {
-	return ctx.Err() != nil && errors.Is(err, ctx.Err())
-}
-
 // waitFlight menunggu pekerjaan yang sedang berlangsung paling lama overrideWait (atau ctx selesai).
 func waitFlight(ctx context.Context, ch chan struct{}) {
 	timer := time.NewTimer(overrideWait)
@@ -163,9 +157,8 @@ func (s *Service) refreshLocked(ctx context.Context, to *tenantOv, t tenancy.Ten
 	to.refreshing = nil
 	close(ch)
 	if err != nil {
-		if isCallerCancel(ctx, err) { // bukan kegagalan DB: tanpa backoff dan tanpa peringatan
-			return
-		}
+		// Query berjalan di luar pembatalan pemanggil, jadi galat apa pun (termasuk timeout query sendiri) adalah
+		// kegagalan DB nyata: peringatan, metrik, dan backoff (G-1).
 		s.warnStore(err, "revisions")
 		to.nextCheck = now.Add(overrideBackoff)
 		return
@@ -236,9 +229,7 @@ func (s *Service) overrideSet(ctx context.Context, t tenancy.TenantID, ns, loc s
 	delete(to.loading, k)
 	close(ch)
 	if err != nil {
-		if isCallerCancel(ctx, err) {
-			return to.sets[k]
-		}
+		// Sama dengan refreshLocked: galat apa pun adalah kegagalan DB nyata (G-1).
 		s.warnStore(err, "load")
 		to.failUntil[k] = now.Add(overrideBackoff)
 		return to.sets[k]
