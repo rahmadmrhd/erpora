@@ -48,6 +48,7 @@ export function ModulesPage() {
 
   const [action, setAction] = useState<{ op: ModuleOp; key: string } | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const [historyKey, setHistoryKey] = useState<string | null>(null);
 
   // Pemantauan operasi 202 hidup di halaman: menutup dialog tidak boleh menghentikan invalidasi saat selesai (R13.5),
@@ -152,7 +153,9 @@ export function ModulesPage() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">{t("modules.title")}</h1>
+        <h1 ref={titleRef} tabIndex={-1} className="text-xl font-semibold">
+          {t("modules.title")}
+        </h1>
         <p className="text-sm text-muted-foreground">{t("modules.description")}</p>
       </header>
 
@@ -176,7 +179,12 @@ export function ModulesPage() {
           frontend={frontend}
           etag={query.data?.etag}
           onClose={() => setAction(null)}
-          returnFocusTo={returnFocus}
+          restoreFocus={() => {
+            // Pemicu bisa sudah dilepas (mis. bootstrap menyembunyikan kolom Aksi): fokus jatuh ke judul halaman.
+            const trigger = returnFocus.current;
+            if (trigger?.isConnected) trigger.focus();
+            else titleRef.current?.focus();
+          }}
           polling={polling}
           onAccepted={onAccepted}
         />

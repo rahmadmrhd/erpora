@@ -17,7 +17,7 @@ import {
 import { TooltipProvider } from "@erpora/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, configure, render } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { EventView, ModuleView, OperationView } from "./types";
 
 configure({ asyncUtilTimeout: 5000 });
@@ -325,27 +325,38 @@ export async function renderWithServer({
     platform: { ...catalogs.platform, ...platformCatalog },
   });
   const modules = frontend ?? fixtureFrontend();
+  // Bendera `modulesAdminApi` dapat diubah setelah render (meniru refetch bootstrap yang mengubah fitur).
+  let setFlag: (value: boolean) => void = () => {};
+  function BootstrapGate({ children: inner }: { children: ReactNode }) {
+    const [flag, set] = useState(adminApi);
+    setFlag = set;
+    return (
+      <StaticBootstrapProvider
+        value={makeBootstrap({
+          tenantId: TENANT,
+          permissions,
+          features: { modulesAdminApi: flag },
+          modules: [
+            {
+              key: "acme.shop",
+              slug: "shop",
+              version: "1.0.0",
+              status: "enabled",
+              basePath: "/shop",
+              offline: false,
+            },
+          ],
+        })}
+      >
+        {inner}
+      </StaticBootstrapProvider>
+    );
+  }
   let view!: ReturnType<typeof render>;
   await act(async () => {
     view = render(
       <QueryClientProvider client={qc}>
-        <StaticBootstrapProvider
-          value={makeBootstrap({
-            tenantId: TENANT,
-            permissions,
-            features: { modulesAdminApi: adminApi },
-            modules: [
-              {
-                key: "acme.shop",
-                slug: "shop",
-                version: "1.0.0",
-                status: "enabled",
-                basePath: "/shop",
-                offline: false,
-              },
-            ],
-          })}
-        >
+        <BootstrapGate>
           <ModuleRegistryProvider modules={modules}>
             <i18n.Provider>
               <TooltipProvider>
@@ -358,13 +369,14 @@ export async function renderWithServer({
               </TooltipProvider>
             </i18n.Provider>
           </ModuleRegistryProvider>
-        </StaticBootstrapProvider>
+        </BootstrapGate>
       </QueryClientProvider>,
     );
   });
   return {
     ...view,
     queryClient: qc,
+    setAdminApi: (value: boolean) => act(async () => setFlag(value)),
     restore: () => {
       globalThis.fetch = original;
     },

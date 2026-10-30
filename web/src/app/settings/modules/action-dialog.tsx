@@ -17,7 +17,7 @@ import {
   LoadingIcon,
 } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ModulesApiError, type OperationPolling, runModuleOperation } from "./api";
 import { useModulesClient } from "./client";
 import { type MappedError, mapFailureCode, mapModuleError } from "./errors";
@@ -146,8 +146,8 @@ export interface ActionDialogProps {
   /** ETag daftar yang dipakai menghitung dampak (dikirim sebagai `If-Match`). */
   etag: string | undefined;
   onClose(): void;
-  /** Elemen yang menerima fokus lagi saat dialog ditutup (tombol menu aksi baris; R14.1). */
-  returnFocusTo?: RefObject<HTMLElement | null>;
+  /** Mengembalikan fokus saat dialog ditutup (ke tombol menu aksi baris, atau cadangan bila sudah hilang; R14.1). */
+  restoreFocus?(): void;
   /** Status pemantauan operasi 202 yang dimiliki halaman. */
   polling: OperationPolling;
   /** Operasi diterima (202): halaman mulai/meneruskan pemantauan. */
@@ -165,7 +165,7 @@ export function ActionDialog({
   frontend,
   etag,
   onClose,
-  returnFocusTo,
+  restoreFocus,
   polling,
   onAccepted,
 }: ActionDialogProps) {
@@ -245,7 +245,7 @@ export function ActionDialog({
         ref={contentRef}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          returnFocusTo?.current?.focus();
+          restoreFocus?.();
         }}
       >
         <AlertDialogHeader>
