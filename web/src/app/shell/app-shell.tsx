@@ -4,7 +4,7 @@ import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { RouteErrorPage } from "../pages/pages";
 import { AppSidebar } from "./app-sidebar";
-import { Navbar } from "./navbar";
+import { Navbar, NavbarFallback, reportNavbarError } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
 
 function ContentSkeleton() {
@@ -73,9 +73,10 @@ export function AppShell() {
         {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
         <CatchBoundary
           getResetKey={() => resetKey}
-          errorComponent={() => <header className="h-(--navbar-height) shrink-0 border-b" />}
+          onCatch={reportNavbarError}
+          errorComponent={() => <NavbarFallback />}
         >
-          <Suspense fallback={<header className="h-(--navbar-height) shrink-0 border-b" />}>
+          <Suspense fallback={<NavbarFallback />}>
             <Navbar />
           </Suspense>
         </CatchBoundary>

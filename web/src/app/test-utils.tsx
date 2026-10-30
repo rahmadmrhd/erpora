@@ -79,6 +79,8 @@ export interface FakeServer {
   update(patch: Partial<Bootstrap> | ((b: Bootstrap) => Partial<Bootstrap>)): void;
   setModuleStatus(key: string, status: BootstrapModule["status"]): void;
   failBootstrap: boolean;
+  /** Namespace katalog yang dijawab 500 (galat non-404 yang fatal). */
+  failNamespaces: Set<string>;
   requests: string[];
 }
 
@@ -115,6 +117,7 @@ export function createFakeServer(
       }),
     ),
     failBootstrap: false,
+    failNamespaces: new Set(),
     requests: [],
     update(patch) {
       const next = typeof patch === "function" ? patch(server.bootstrap) : patch;
@@ -150,6 +153,11 @@ export function createFakeServer(
       if (m) {
         const locale = decodeURIComponent(m[1] ?? "");
         const ns = decodeURIComponent(m[2] ?? "");
+        if (server.failNamespaces.has(ns)) {
+          return new Response(JSON.stringify({ error: { code: "internal_error", message: "x" } }), {
+            status: 500,
+          });
+        }
         const mod = server.bootstrap.modules.find((x) => x.slug === ns);
         const active = CORE_NS.has(ns) || mod?.status === "enabled";
         const cat = active ? catalogFor(locale, ns) : undefined;
@@ -270,6 +278,12 @@ export function makeFixtureModules(loads: FixtureLoads): FrontendModule[] {
           ],
         },
         component: () => <p>Isi Dalam</p>,
+      }),
+      createRoute({
+        getParentRoute: () => base,
+        path: "/crumbfail",
+        staticData: { crumb: { ref: { ns: "gamma", key: "x" } } },
+        component: () => <p>Isi Crumb Gagal</p>,
       }),
       createRoute({
         getParentRoute: () => base,
