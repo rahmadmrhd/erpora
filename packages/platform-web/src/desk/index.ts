@@ -1,10 +1,8 @@
 export {
   createDesksFetcher,
   DESKS_PATH,
-  type DesksClient,
   DesksError,
   parseDeskList,
-  toDesksClient,
   useDesksQuery,
 } from "./api";
 export { deskContains, deskDashboardPath, matchMenu } from "./match-menu";

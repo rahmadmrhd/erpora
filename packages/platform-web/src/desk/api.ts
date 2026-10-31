@@ -1,4 +1,4 @@
-import type { ApiError, ApiResult, PlatformPaths, TypedClient } from "@erpora/platform-contracts";
+import type { ApiError, PlatformPaths, TypedClient } from "@erpora/platform-contracts";
 import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { useBootstrap } from "../bootstrap";
@@ -7,26 +7,8 @@ import { scopedKey } from "../tenancy";
 import { isValidDeskId } from "./storage";
 import type { Desk, DeskList, DeskMenuGroup, DeskMenuItem, MessageRef } from "./types";
 
-/**
- * CATATAN: `GET /api/platform/desks` belum ada di `platform.gen.ts` (kontrak dibuat agent backend). Sampai tipe
- * terbangkit tersedia, klien dipersempit lewat `DesksClient`/`toDesksClient` dan bentuk respons divalidasi saat
- * runtime (`parseDeskList`). Setelah `contracts:generate`: hapus `DesksClient`/`toDesksClient`, ketik fetcher dengan
- * `TypedClient<PlatformPaths>` langsung, dan ganti `types.ts` dengan `PlatformComponents["schemas"]["Desk"]` dst.
- */
+/** Path kontrak `listDesks`; bentuk respons dari tipe terbangkit (`types.ts`), tetap divalidasi saat runtime. */
 export const DESKS_PATH = "/api/platform/desks";
-
-/** Bagian klien yang dipakai fetcher Desk. */
-export interface DesksClient {
-  get(
-    path: typeof DESKS_PATH,
-    init?: { headers?: Record<string, string> },
-  ): Promise<ApiResult<unknown>>;
-}
-
-/** Mempersempit klien bertipe ke `DesksClient` (sementara; lihat catatan di atas). */
-export function toDesksClient(client: TypedClient<PlatformPaths>): DesksClient {
-  return client as unknown as DesksClient;
-}
 
 /** Dilempar fetcher Desk bila server membalas galat, respons rusak, atau 304 tanpa data sebelumnya. */
 export class DesksError extends Error {
@@ -120,7 +102,7 @@ export function parseDeskList(data: unknown): DeskList {
  * Fetcher ber-`ETag`: menyimpan `{ etag, data }` terakhir, mengirim `If-None-Match`, dan pada `304` mengembalikan
  * **referensi objek yang sama** (tanpa render ulang). Galat melempar `DesksError`.
  */
-export function createDesksFetcher(client: DesksClient): () => Promise<DeskList> {
+export function createDesksFetcher(client: TypedClient<PlatformPaths>): () => Promise<DeskList> {
   let last: { etag: string | undefined; data: DeskList } | undefined;
   return async () => {
     const res = await client.get(DESKS_PATH, {
@@ -143,7 +125,7 @@ export function createDesksFetcher(client: DesksClient): () => Promise<DeskList>
 export function useDesksQuery(client: TypedClient<PlatformPaths>): UseQueryResult<DeskList> {
   const { tenantId, revision } = useBootstrap();
   const queryClient = useQueryClient();
-  const fetcher = useMemo(() => createDesksFetcher(toDesksClient(client)), [client]);
+  const fetcher = useMemo(() => createDesksFetcher(client), [client]);
   // Revisi bootstrap berubah = modul diaktifkan/dinonaktifkan/diperbarui: daftar Desk (dan menu) ikut dimuat ulang
   // tanpa muat ulang halaman (ber-ETag, sehingga murah bila tidak berubah).
   const seen = useRef(revision);

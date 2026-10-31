@@ -1,39 +1,18 @@
+import type { PlatformComponents } from "@erpora/platform-contracts";
+
 /**
- * Tipe Desk di klien (design M3a "Komponen 2"). Sementara didefinisikan lokal karena `platform.gen.ts` belum memuat
- * `GET /api/platform/desks`; ganti ke tipe terbangkit setelah `contracts:generate` (lihat `api.ts`).
+ * Tipe Desk di klien (design M3a "Komponen 2"): diturunkan dari kontrak terbangkit (`platform.gen.ts`, skema
+ * `Desk`/`DeskMenuItem`/`DeskMenuGroup`/`DesksEnvelope`) agar tidak menyimpang dari OpenAPI.
  */
+type Schemas = PlatformComponents["schemas"];
 
 /** Rujukan kunci i18n (namespace + kunci); teks tidak pernah datang dari server. */
-export type MessageRef = { ns: string; key: string };
+export type MessageRef = Schemas["MessageRef"];
 
-export type DeskMenuItem = {
-  type: "item";
-  id: string;
-  label: MessageRef;
-  /** Path internal absolut (mis. `/example/notes`); Dashboard berupa `/<slug>`. */
-  to: string;
-  icon?: string;
-  /** Item terkunci (Dashboard): hanya cocok persis dengan `to`, tidak dapat disembunyikan. */
-  locked?: boolean;
-  /** Id Desk pemilik utama menu (tahap 4 penentuan Desk). */
-  ownerDesk: string;
-};
+export type DeskMenuItem = Schemas["DeskMenuItem"];
 
-export type DeskMenuGroup = {
-  type: "group";
-  id: string;
-  label: MessageRef;
-  icon?: string;
-  children: DeskMenuItem[];
-};
+export type DeskMenuGroup = Schemas["DeskMenuGroup"];
 
-export type Desk = {
-  id: string;
-  source: "module" | "platform" | "custom";
-  moduleKey?: string;
-  label: MessageRef;
-  icon?: string;
-  menus: (DeskMenuItem | DeskMenuGroup)[];
-};
+export type Desk = Schemas["Desk"];
 
-export type DeskList = { desks: Desk[]; revision: string };
+export type DeskList = Schemas["DesksEnvelope"]["data"];

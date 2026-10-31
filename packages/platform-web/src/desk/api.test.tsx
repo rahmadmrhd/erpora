@@ -5,7 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { StaticBootstrapProvider } from "../bootstrap";
 import { makeBootstrap } from "../bootstrap/testing";
-import { createDesksFetcher, DesksError, parseDeskList, toDesksClient, useDesksQuery } from "./api";
+import { createDesksFetcher, DesksError, parseDeskList, useDesksQuery } from "./api";
 import { makeDashboardItem, makeDesk, makeDeskGroup, makeDeskItem } from "./testing";
 
 const list = {
@@ -31,7 +31,7 @@ function harness(responses: (() => Response)[]) {
       return r();
     }) as unknown as typeof fetch,
   });
-  return { client: toDesksClient(client), raw: client, seen };
+  return { client, raw: client, seen };
 }
 
 const ok = (data: unknown, etag = '"e1"') =>
