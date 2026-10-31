@@ -8,6 +8,7 @@ function Probe(props: { toggleTheme: () => void; showShortcuts: () => void }) {
     <>
       <input aria-label="isian" />
       <textarea aria-label="area" />
+      {/* biome-ignore lint/a11y/useSemanticElements: elemen contenteditable memang diuji (editor Tiptap kelak) */}
       <div
         contentEditable
         role="textbox"
