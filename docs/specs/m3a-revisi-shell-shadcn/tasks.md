@@ -94,41 +94,41 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - `packages/module-sdk/src/{types,define-module,routing}.ts`: `FrontendModule.navigation` dihapus; `attachModuleRoutes` menolak rute indeks (`path: "/"`) dengan `ModuleDefinitionError`; `@erpora/module-sdk/testing` mendapat `assertDeskRoutes(module, manifestDesk)` (setiap `to` ada di rute terdaftar). `platform-web/src/registry`: hapus `selectNavigation`. Tes tiap perubahan (test dulu).
     - _Requirements: 10.8, 11.3_
 
-- [ ] 8. Shell baru (Kelas beban: Sonnet; 8.12 Haiku)
-  - [ ] 8.1 `fitBreadcrumb` dan property test (test dulu)
+- [x] 8. Shell baru (Kelas beban: Sonnet; 8.12 Haiku)
+  - [x] 8.1 `fitBreadcrumb` dan property test (test dulu)
     - `packages/ui/src/lib/breadcrumb-fit.ts` fungsi murni `fitBreadcrumb({segments, widths, available, mobile}): Plan`. Properti: Home dan halaman saat ini selalu tersedia (Home bisa di dalam "…"); lebar total tidak melampaui `available` kecuali tahap akhir terpotong elipsis; tahap monoton menyempit bersama `available`; tahap 4 (`mobile`) hanya `… › langkah terakhir`; tidak ada segmen terduplikasi. Ganti `collapseCrumbs` lama dan tesnya.
     - **Validates: Requirements 7.1, 7.2, 7.3, 7.4**
-  - [ ] 8.2 Tulis test shell (merah dulu)
+  - [x] 8.2 Tulis test shell (merah dulu)
     - Testing Library, peran ARIA, keyboard: Dock Pinned dan Floating (pil muncul lewat `Ctrl+Shift+/` dan hot-edge, tutup `Escape`/fokus keluar, `+N` saat tinggi kurang, `aria-current` pada Desk aktif); panel tanpa header Desk, urutan grup tetap lalu divider lalu menu Desk, Dashboard item pertama terkunci; pembatas `role="separator"` dapat diklik/Enter/Spasi dan status tersimpan di `erpora.sidebar`; popover logo (lima item, "Edit sidebar" nonaktif); panel Notifikasi (tab Semua/Peristiwa, `Empty`, fokus kembali ke pemicu); Settings (kartu tema dan Dock tersimpan seketika); palet `Ctrl+K`; breadcrumb (Home membuka Desks tanpa resolve, klik Desk menuju Dashboard, drawer di < 480 px); lebar < 1024 px panel menjadi `Sheet`.
     - **Validates: Requirements 4, 5, 6, 7, 8, 15, 16, 17, 18, 19**
-  - [ ] 8.3 Dock dan Dock Floating
+  - [x] 8.3 Dock dan Dock Floating
     - `web/src/app/shell/{dock,dock-floating}.tsx`: daftar Desk dari `useDesks()`; `+N` lewat `DropdownMenu` dengan `ResizeObserver`; pil Floating (transisi 280 ms `cubic-bezier(.4,0,.2,1)`, dimatikan `prefers-reduced-motion`), zona hot-edge 12 px, pintasan `Ctrl+Shift+/`; `role="navigation"` berlabel; Dock Floating dimuat malas.
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 4.8, 19.2_
-  - [ ] 8.4 Panel menu, grup tetap, pembatas
+  - [x] 8.4 Panel menu, grup tetap, pembatas
     - `desk-panel.tsx`, `fixed-group.tsx` (registri `registerFixedItem` di `platform-web`: Cari → palet, Notifikasi → panel + lencana, ToDo → `/platform/todo` + lencana sumber sementara), `collapse-edge.tsx` (`role="separator"`, area klik 16 px, `aria-controls`; Pinned: panel saja, Floating: strip ikon ≈48 px via `collapsible="icon"`), `Sheet` di bawah 1024 px tanpa pembatas; tulis ulang `AppShell`/`SidebarProvider` memakai `sidebar` shadcn hasil resync.
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 4.6_
-  - [ ] 8.5 Popover logo dan menu pengguna
+  - [x] 8.5 Popover logo dan menu pengguna
     - `logo-popover.tsx` (`DropdownMenu`: Pindah Desk submenu, Semua Desk, Edit sidebar `disabled` + tooltip "M3b", Bantuan dan pintasan, Tentang dengan `AppVersion`), `user-menu.tsx` (Settings, Reload, Logout nonaktif sementara; tanpa "My Space").
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 16.1, 16.2, 16.3_
-  - [ ] 8.6 Navbar dan breadcrumb bertahap
+  - [x] 8.6 Navbar dan breadcrumb bertahap
     - `navbar.tsx`, `breadcrumb-nav.tsx` (pengukuran `ResizeObserver` atas navbar dan blok aksi, `fitBreadcrumb`, dropdown ≥ 480 px dan `Drawer` < 480 px dimuat malas, Home → `goToDesks()`, Desk → `setCurrentDesk` + navigasi, label lewat `crumb()`); aksi sekunder masuk "⋯" sebelum breadcrumb diringkas lebih jauh, aksi utama selalu tampil (ikon di < 480 px).
     - _Requirements: 7.5, 7.6, 7.7, 7.8, 8.1, 8.2, 8.3, 9.6_
-  - [ ] 8.7 Panel Notifikasi
+  - [x] 8.7 Panel Notifikasi
     - `notification-panel.tsx`: `Sheet side="left"` dimulai di tepi kanan panel menu tanpa overlay penuh, `Tabs` Semua/Peristiwa, tandai semua dibaca, `Empty`, `Escape` menutup dan fokus kembali; sumber `NotificationSource` M3a tak berubah; dimuat malas.
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
-  - [ ] 8.8 Dialog Settings
+  - [x] 8.8 Dialog Settings
     - `shell/settings/*` (dimuat malas): `Dialog` dua kolom; Appearance (kartu pratinjau Tema dan Dock lewat `RadioGroup`/`ToggleGroup`), Preferences (Bahasa memakai `useLocale`, Zona waktu `Select`); tersimpan seketika lewat `writePref`; bagian Pintasan dibuka dari popover logo; tanpa data sensitif.
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 18.3_
-  - [ ] 8.9 Palet perintah
+  - [x] 8.9 Palet perintah
     - `command-palette.tsx` (malas): `Command` dalam `Dialog`, sumber lokal menu Desk saat ini dan semua Desk diizinkan, teks cocok disorot, footer petunjuk; pemilihan memanggil `setCurrentDesk` bila lintas Desk lalu navigasi; tanpa kueri backend; `Ctrl+K`.
     - _Requirements: 18.1, 18.2, 18.4_
-  - [ ] 8.10 Halaman Dashboard, Desks, ToDo, dan pintu masuk
+  - [x] 8.10 Halaman Dashboard, Desks, ToDo, dan pintu masuk
     - `pages/{desk-entry,desks-page,dashboard-page,todo-placeholder}.tsx`: `DeskEntry` menjalankan `resolveDesk` tahap 1–3 lalu `navigate('/<slug>', {replace:true})`, atau `DesksPage` bila `showDesks`/tidak ada hasil; `DesksPage` daftar kartu Desk diizinkan + `Empty`; `DashboardPage` kerangka slot widget + `Empty` + `Skeleton` selama `useDesks()` belum siap; placeholder ToDo.
     - _Requirements: 10.3, 10.4, 10.5, 10.6, 14.1, 14.2, 14.3, 14.4, 5.3_
-  - [ ] 8.11 Router dan pemindahan halaman platform
+  - [x] 8.11 Router dan pemindahan halaman platform
     - `web/src/app/router/*` sesuai tabel rute `design.md`: `/`, `/platform`, `/platform/modules`, `/platform/todo`, `/<slug>` (Dashboard, guard modul aktif tetap), `/<slug>/<halaman>`; hapus `/settings/modules` **tanpa pengalihan** dan pindahkan `settings/modules` ke `platform/modules/page.tsx`; `/desks` tidak terdaftar; perbarui tautan, tes, dan dokumen yang merujuk rute lama.
     - _Requirements: 10.1, 10.2, 10.4, 10.7, 10.8_
-  - [ ] 8.12 Katalog i18n shell
+  - [x] 8.12 Katalog i18n shell
     - Kunci baru di namespace `ui` dan `platform` (`id` dan `en`) untuk semua teks shell baru; `task i18n:generate`, `task i18n:check --strict`, dan `i18n:generate --check` lolos.
     - _Requirements: 19.1_
 
@@ -278,6 +278,18 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 
 - `CLAUDE.md` dan `AGENTS.md` identik (salinan byte per byte); `go test ./tests/architecture -run TestAgentsMDMatchesClaudeMD` lolos.
 - Spec M3a lama (`requirements.md`, `design.md`, `tasks.md`) mendapat catatan "sebagian digantikan" di bagian atas, tanpa menghapus isi dan tanpa mengubah centang.
+
+### 8.3, 8.4, 8.5 dan perakitan AppShell (31 Okt 2026, jalur S2)
+
+**Berkas** (`web/src/app/shell/`): `dock.tsx` (Dock Pinned, `DockDeskList`, `fitDockCount`), `dock-floating.tsx` (lazy), `desk-panel.tsx` (`DeskPanel`, `PanelSheet`, `findActiveItem`), `fixed-group.tsx`, `collapse-edge.tsx`, `icon-strip-group.tsx` (lazy), `logo-popover.tsx`, `user-menu.tsx`, `shell-context.tsx` (`ShellActions`: palet, Notifikasi, Settings, reload), `desk-navigation.ts`, `global-shortcuts.ts`, `use-compact.ts`, `sidebar-state.ts`, `app-shell.tsx`; registri item tetap di `packages/platform-web/src/fixed-items/` (`registerFixedItem`). `app-sidebar.tsx` dan `nav-menu.tsx` dihapus.
+
+**Keputusan teknis.** (a) `useIsMobile` shadcn (768 px) tidak boleh diubah, jadi shell memakai `useIsCompact` (< 1024 px) dan menggambar `Sheet` sendiri (`PanelSheet`); `SidebarProvider` dikendalikan: >= 1024 px memakai `open` yang disimpan di `erpora.sidebar`, < 1024 px memakai state sheet yang tidak disimpan. (b) Pinned: `Sidebar collapsible="offcanvas"` dengan `left-(--dock-width)`; Floating: `collapsible="icon"`. (c) `CollapseEdge` (`role="separator"`, pola window splitter, area klik 16 px) berposisi `fixed` mengikuti variabel lebar dan transisi 200 ms. (d) `aria-current="page"` hanya untuk kecocokan persis; kecocokan awalan hanya menyorot (`data-active`); Dock memakai `aria-current="true"`. (e) Pintasan global `Ctrl+Shift+L` (ganti tema) dan `Shift+/` (Settings, bagian Pintasan; diabaikan di kolom isian) di `useGlobalShortcuts`; `Ctrl+K` lewat `useCommandPaletteHotkey`; `Ctrl+Shift+/` di `DockFloating`. (f) Palet, panel Notifikasi, Settings, Dock Floating, dan grup strip ikon dimuat malas (dipasang saat pertama dibuka).
+
+**Perbaikan akar masalah.** Pengumuman rute (`RouteAnnouncer`) membacakan judul halaman sebelumnya karena lokasi router berubah lebih dulu daripada route yang cocok; kini menunggu status router `idle`.
+
+**Perubahan perilaku akibat shadcn persis** (diterima): lencana Notifikasi tidak tampil pada strip ikon (shadcn menyembunyikan `SidebarMenuBadge` di mode ikon; titik lewat CSS M3a hilang).
+
+**Gate (31 Okt 2026).** `task web:check` (`ERP_REQUIRE_BUN=1`) hijau: `bun test` 1359 lulus, 0 gagal; JS awal 197,7 KB gzip dari 200 KB (grup strip ikon dimuat malas menurunkan 1,0 KB); `task i18n:check -- --strict` dan `i18n:generate --check` hijau (8.12). **Belum terverifikasi:** tampilan browser (transisi pil, posisi pembatas, hot-edge, strip ikon); offset panel Notifikasi pada Pinned yang diciutkan (container sidebar berada di luar layar sehingga offset 0 dan panel dapat menutupi Dock).
 
 ## Task Dependency Graph
 
