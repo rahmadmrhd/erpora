@@ -74,16 +74,17 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 #### Acceptance Criteria
 
 1. THE Dock SHALL menampilkan satu ikon per **Desk yang diizinkan** (Requirement 12), dengan Desk saat ini disorot memakai latar (`accent`/`sidebar-accent`) tanpa outline atau cincin (K2, 31 Okt 2026), dan tooltip berisi nama Desk.
-2. WHEN pengguna mengklik ikon Desk pada mode Floating, THE aplikasi SHALL menetapkan Desk itu sebagai Desk saat ini dan menavigasi ke rute dari `resolveDeskSwitchTarget`: tetap di rute saat ini bila rute itu juga ada di Desk tujuan, selain itu ke Dashboard-nya (`/<modul>`) (K10, 31 Okt 2026). Pada mode Pinned, klik ikon Desk mengikuti AC 9.
+2. WHEN pengguna mengklik ikon Desk pada mode Pinned atau Floating, THE Dock SHALL membuka popover menu Desk sesuai AC 9 dan tidak memindah Desk langsung (K8, K20, 1 Nov 2026). Pindah Desk di popover logo dan entri lintas Desk di palet menetapkan Desk saat ini dan menavigasi ke rute dari `resolveDeskSwitchTarget`: tetap di rute saat ini bila rute itu juga ada di Desk tujuan, selain itu ke Dashboard-nya (`/<modul>`) (K10, 31 Okt 2026).
 3. WHERE jumlah Desk melebihi tinggi yang tersedia, THE Dock SHALL menampilkan sebagian dan sisanya lewat ikon "+N" yang membuka daftar lengkap.
 4. THE Dock SHALL punya dua mode: **Pinned** (rel menempel di kiri bersama panel menu) dan **Floating** (pil vertikal melayang yang meluncur dari tepi kiri dengan transisi ≈0,28 detik dan menghormati `prefers-reduced-motion`).
 5. WHILE mode Floating aktif, THE pil Dock SHALL muncul saat pengguna mendekati tepi kiri atau memakai pintasan keyboard, dan SHALL menutup setelah memilih Desk atau saat fokus keluar.
 6. THE mode Dock SHALL dapat dipilih di Settings (Requirement 17) dan disimpan per pengguna; THE bawaan SHALL **Floating**, dan WHEN lebar tersedia < 1024 px, THE shell SHALL memakai sidebar sebagai sheet yang dibuka lewat tombol `☰` tanpa memandang pilihan mode.
 7. THE Dock SHALL dapat dioperasikan dengan keyboard (peran `navigation`/`toolbar` yang benar, panah untuk berpindah, Enter untuk memilih) dan setiap ikon SHALL punya nama aksesibel.
 8. THE urutan ikon SHALL mengikuti urutan Desk dari backend (Requirement 12); pengaturan urutan oleh pengguna adalah M3b.
-9. WHEN mode Pinned dan pengguna mengklik ikon Desk (termasuk Desk yang sedang aktif), THE Dock SHALL membuka popover di sisi kanan ikon berisi daftar menu Desk itu bergaya item sidebar (Dashboard, menu, dan grup yang dapat dibuka); memilih item menavigasi ke item itu dan menetapkan Desk itu sebagai Desk saat ini. Desk tidak berpindah sebelum item dipilih (K8, 31 Okt 2026).
+9. WHEN pengguna mengklik ikon Desk pada mode Pinned atau Floating (termasuk Desk yang sedang aktif), THE Dock SHALL membuka popover di sisi kanan ikon berisi daftar menu Desk itu bergaya item sidebar (Dashboard, menu, dan grup yang dapat dibuka); memilih item menavigasi ke item itu dan menetapkan Desk itu sebagai Desk saat ini. Desk tidak berpindah sebelum item dipilih (K8, 31 Okt 2026).
 10. THE ukuran tombol, ikon, dan jarak ikon Dock Pinned SHALL sama dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama untuk keduanya (K15, 1 Nov 2026).
 11. THE ikon di Dock Pinned SHALL memiliki sorotan latar saat hover seperti item sidebar (K17, 1 Nov 2026).
+12. WHEN tinggi Dock tidak cukup, Desk yang ikonnya tersisih SHALL dapat dibuka lewat submenu `+N` (`OverflowDeskSub`), yang berisi menu Desk bergaya item sidebar seperti popover AC 9; berlaku pada Pinned dan Floating (tambahan K8, disetujui pemilik produk 1 Nov 2026).
 
 ### Requirement 5: Panel menu
 
@@ -169,7 +170,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 6. THE halaman Desks pada revisi ini SHALL berupa kerangka: daftar Desk yang diizinkan dan keadaan kosong bila tidak ada; kustomisasi, folder/grup, dan pengelolaan adalah M3b.
 7. THE **halaman platform `/settings/modules`** (pseudo-modul `platform`, spec M3a) SHALL dipindah ke **`/platform/modules`** **tanpa pengalihan** (diputuskan 31 Okt 2026: belum ada rilis dan tautan tersimpan); rute lama dihapus, tautan di shell, dokumen, dan tes diperbarui, dan perubahan dicatat di PRD-000 Q40. Slug `settings` tetap tercadang.
 8. THE kontrak `defineModule` dan rute modul SHALL diperbarui sehingga rute anak tetap berada di bawah base route `/<slug>` (tidak berubah) dan tidak ada modul yang dapat mendaftarkan rute di luar base route-nya.
-9. THE halaman Desks SHALL tampil tanpa sidebar, Dock, atau panel: hanya navbar khusus dengan logo ERPora di kiri (membuka popover logo), tombol Search di tengah (`Search … Ctrl+K`, membuka palet), serta lonceng notifikasi (membuka panel Notifikasi) dan avatar (menu pengguna) di kanan; tanpa breadcrumb Home. Isinya kisi kartu Desk gaya ERP DS `DeskList` (ubin ikon 64 px `rounded-2xl` dan nama 14 px medium; klik membuka Desk di Dashboard-nya), seperti halaman Desks ERPNext (K1, 31 Okt 2026).
+9. THE halaman Desks SHALL tampil tanpa sidebar, Dock, atau panel: hanya navbar khusus dengan logo ERPora di kiri (membuka popover logo), tombol Search di tengah (`Search … Ctrl+K`, membuka palet), serta lonceng notifikasi (membuka panel Notifikasi) dan avatar (menu pengguna) di kanan; tanpa breadcrumb Home. Isinya kisi kartu Desk gaya ERP DS `DeskList` (ubin ikon 64 px `rounded-2xl` dan nama 14 px medium; klik membuka Desk di Dashboard-nya), seperti halaman Desks ERPNext (K1, 31 Okt 2026). Avatar dan lonceng di navbar ini berukuran `size-9` (seragam; disetujui pemilik produk 1 Nov 2026, di luar K16).
 
 ### Requirement 11: Definisi Desk per modul
 
@@ -251,7 +252,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**. Pada mode mobile, navigasi kiri SHALL menjadi tab horizontal di atas konten (K19, 1 Nov 2026). "Mode mobile" untuk orientasi ini adalah lebar jendela di bawah 768 px (`useIsNarrow`, `(max-width: 767px)`), berbeda dari ambang 1024 px panel shell (D-15). Ambang 768 px adalah rekomendasi reviewer dan belum ditolak pemilik produk; pemilik produk dapat meminta 1024 px.
+1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**. Pada mode mobile, navigasi kiri SHALL menjadi tab horizontal di atas konten (K19, 1 Nov 2026). "Mode mobile" untuk orientasi ini adalah lebar jendela di bawah 768 px (`useIsNarrow`, `(max-width: 767px)`), berbeda dari ambang 1024 px panel shell (D-15). Ambang 768 px disetujui pemilik produk pada 1 Nov 2026 (keputusan final; D-15).
 2. THE **Appearance** SHALL memuat **Tema** (Otomatis/Terang/Gelap, berupa kartu pratinjau) dan **Dock** (Pinned/Floating, berupa kartu pratinjau); **Layout** (Compact/Full Width) ditunda ke M3d bersama form (keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 3. THE **Preferences** SHALL memuat **Bahasa** memakai runtime `i18n-platform` dan **Zona waktu** (isi minimal ini keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 4. THE perubahan SHALL tersimpan otomatis per pengguna dan berlaku seketika; penyimpanan SHALL memakai `localStorage` untuk preferensi UI (tema, mode Dock, keadaan panel, bahasa) dan SHALL tidak menyimpan data sensitif.
@@ -330,7 +331,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 | 8 | Layout Compact/Full Width di Settings (R17.2) | Ditunda ke M3d (sementara, dapat ditinjau ulang) |
 | 9 | Isi minimal Preferences (R17.3) | Bahasa dan Zona waktu (sementara, dapat ditinjau ulang) |
 
-## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14) dan 1 Nov 2026 (K15–K19)
+## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14) dan 1 Nov 2026 (K15–K20 dan konfirmasi)
 
 Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan review). Keputusan ini **menang atas teks requirement lama** di atas bila berbeda. Setiap butir sudah diterapkan ke requirement yang disebut pada tabel, dan dicatat di PRD-000 Q40 butir 24 serta ADR-0015. Pemilik produk menyetujui seluruh butir (K13 pada 31 Okt 2026 memutuskan CLI tetap `bunx`, tanpa perubahan requirement).
 
@@ -355,6 +356,9 @@ Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan r
 | K17 | Ikon di Dock Pinned memiliki sorotan latar saat hover, seperti item sidebar. | R4.11 (baru) |
 | K18 | Dropdown logo di halaman Desks tidak memuat "Pindah Desk" dan "Semua Desk"; di halaman lain tetap lengkap. | R6.6 (baru) |
 | K19 | Dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten. | R17.1, R17.7 (baru) |
+| K20 | Klik ikon Desk di Dock mode Floating membuka popover menu Desk (seperti K8 di Pinned), bukan memindah Desk langsung; `switchDesk` tetap dipakai oleh popover logo dan palet. | R4.2, R4.9 (diubah) |
+| K8 (tambahan) | Submenu `+N` (`OverflowDeskSub`) memuat Desk yang ikonnya tersisih, berlaku pada Pinned dan Floating. | R4.12 (baru) |
+| Konfirmasi | Pemilik produk menyetujui (1 Nov 2026): (a) avatar navbar halaman Desks `size-9`, seragam dengan lonceng (di luar K16); (b) ambang tab Settings mobile 768 px (D-15 ditutup); (c) submenu `+N` sebagai tambahan K8; (d) keputusan komponen dicatat di ADR-0015, bukan ADR-0011. | R10.9, R17.1, R4.12, R21.4 |
 
 **Temuan review yang sesuai spek** (dikerjakan): I-1 (R11.6), I-2 (R17.3 dan R17.4, tanpa perubahan teks), I-3 (R20.4, tanpa perubahan teks), I-4 (R4.5, tanpa perubahan teks), Minor 1 (R15.1), Minor 2 sampai 8 (tanpa perubahan requirement; dilacak di `tasks.md` grup 14).
 
