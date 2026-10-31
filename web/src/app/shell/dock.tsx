@@ -17,8 +17,11 @@ import {
   TooltipTrigger,
 } from "@erpora/ui";
 import {
+  type ComponentProps,
   type KeyboardEvent,
+  lazy,
   type RefObject,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -72,19 +75,24 @@ function useElementHeight(ref: RefObject<HTMLElement | null>): number {
   return height;
 }
 
+// Popover menu Desk (K8) dimuat malas dan dipra-muat saat Dock Pinned terpasang (bukan bagian bundel awal).
+const importDeskMenu = () => import("./dock-desk-menu");
+const LazyDeskMenuPopover = lazy(() =>
+  importDeskMenu().then((m) => ({ default: m.DeskMenuPopover })),
+);
+const LazyOverflowDeskSub = lazy(() =>
+  importDeskMenu().then((m) => ({ default: m.OverflowDeskSub })),
+);
+
+/**
+ * Tombol ikon sebuah Desk. Properti lain (termasuk `ref`, `onClick`, dan atribut Radix) diteruskan ke `Button` agar
+ * dapat menjadi anak `PopoverTrigger asChild`.
+ */
 function DeskIconButton({
   desk,
   active,
-  tabIndex,
-  onSelect,
-  onFocus,
-}: {
-  desk: Desk;
-  active: boolean;
-  tabIndex: number;
-  onSelect: (desk: Desk) => void;
-  onFocus: () => void;
-}) {
+  ...rest
+}: Omit<ComponentProps<typeof Button>, "children"> & { desk: Desk; active: boolean }) {
   const text = useMessage(desk.label);
   return (
     <Tooltip>
@@ -97,9 +105,7 @@ function DeskIconButton({
           data-active={active ? "true" : undefined}
           aria-current={active ? "true" : undefined}
           aria-label={text}
-          tabIndex={tabIndex}
-          onFocus={onFocus}
-          onClick={() => onSelect(desk)}
+          {...rest}
           className="size-10 rounded-lg text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-5"
         >
           <NavIcon name={desk.icon} label={text} />
@@ -107,6 +113,34 @@ function DeskIconButton({
       </TooltipTrigger>
       <TooltipContent side="right">{text}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * Ikon Desk di Dock Pinned (K8): klik membuka popover menu Desk, bukan langsung berpindah. Sebelum chunk popover
+ * termuat, tombol biasa ditampilkan (chunk dipra-muat saat Dock terpasang).
+ */
+function PinnedDeskIcon({
+  desk,
+  active,
+  tabIndex,
+  onFocus,
+}: {
+  desk: Desk;
+  active: boolean;
+  tabIndex: number;
+  onFocus: () => void;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
+      }
+    >
+      <LazyDeskMenuPopover desk={desk}>
+        <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
+      </LazyDeskMenuPopover>
+    </Suspense>
   );
 }
 
@@ -126,10 +160,16 @@ function OverflowItem({ desk, onSelect }: { desk: Desk; onSelect: (desk: Desk) =
  * dapat difokus pada satu waktu). Dipakai Dock Pinned dan pil Floating.
  */
 export function DockDeskList({
+  variant = "floating",
   onSelected,
   onMenuOpenChange,
   initialFocusRef,
 }: {
+  /**
+   * `pinned`: ikon membuka popover menu Desk (K8); `floating`: ikon langsung berpindah Desk (rute dipertahankan bila
+   * ada di Desk tujuan, K10) dan pil menutup.
+   */
+  variant?: "pinned" | "floating";
   /** Dipanggil setelah Desk dipilih (pil Floating menutup diri). */
   onSelected?: () => void;
   /** Dipanggil saat menu "+N" (dirender di portal, di luar DOM daftar) dibuka atau ditutup. */
@@ -200,13 +240,22 @@ export function DockDeskList({
     >
       {shown.map((desk, i) => (
         <li key={desk.id}>
-          <DeskIconButton
-            desk={desk}
-            active={desk.id === deskId}
-            tabIndex={i === focusable ? 0 : -1}
-            onSelect={select}
-            onFocus={() => setFocusIndex(i)}
-          />
+          {variant === "pinned" ? (
+            <PinnedDeskIcon
+              desk={desk}
+              active={desk.id === deskId}
+              tabIndex={i === focusable ? 0 : -1}
+              onFocus={() => setFocusIndex(i)}
+            />
+          ) : (
+            <DeskIconButton
+              desk={desk}
+              active={desk.id === deskId}
+              tabIndex={i === focusable ? 0 : -1}
+              onFocus={() => setFocusIndex(i)}
+              onClick={() => select(desk)}
+            />
+          )}
         </li>
       ))}
       {hidden.length > 0 ? (
@@ -227,9 +276,15 @@ export function DockDeskList({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="start">
-              {hidden.map((d) => (
-                <OverflowItem key={d.id} desk={d} onSelect={select} />
-              ))}
+              {hidden.map((d) =>
+                variant === "pinned" ? (
+                  <Suspense key={d.id} fallback={<OverflowItem desk={d} onSelect={select} />}>
+                    <LazyOverflowDeskSub desk={d} />
+                  </Suspense>
+                ) : (
+                  <OverflowItem key={d.id} desk={d} onSelect={select} />
+                ),
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </li>
@@ -244,6 +299,9 @@ export function DockDeskList({
  */
 export function Dock() {
   const { t } = useTranslation("platform");
+  useEffect(() => {
+    void importDeskMenu();
+  }, []);
   return (
     <nav
       aria-label={t("dock.label")}
@@ -253,7 +311,7 @@ export function Dock() {
       <LogoPopover variant="dock" />
       <DockFixedItems />
       <Separator className="w-8" />
-      <DockDeskList />
+      <DockDeskList variant="pinned" />
       <UserMenu variant="dock" />
     </nav>
   );

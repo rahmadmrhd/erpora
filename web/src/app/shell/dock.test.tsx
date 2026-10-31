@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Desk, NotificationSource } from "@erpora/platform-web";
-import { makeDashboardItem, makeDesk, makeDeskItem } from "@erpora/platform-web/testing";
+import {
+  makeDashboardItem,
+  makeDesk,
+  makeDeskGroup,
+  makeDeskItem,
+} from "@erpora/platform-web/testing";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Dock, fitDockCount } from "./dock";
@@ -18,7 +23,13 @@ const desks: Desk[] = [
   ),
   makeDesk(
     "example",
-    [makeDashboardItem("example", "example"), makeDeskItem("example", "notes", "/example/notes")],
+    [
+      makeDashboardItem("example", "example"),
+      makeDeskItem("example", "notes", "/example/notes"),
+      makeDeskGroup("example", "reports", [
+        makeDeskItem("example", "sales", "/example/reports/sales"),
+      ]),
+    ],
     { icon: "file-text" },
   ),
   makeDesk("billing", [makeDashboardItem("billing", "billing")], { icon: "receipt" }),
@@ -86,7 +97,7 @@ describe("Dock (Pinned)", () => {
     expect(within(nav).getByRole("button", { name: /^Menu akun/ })).toBeInTheDocument();
   });
 
-  test("Desk saat ini ditandai aria-current dan klik berpindah Desk menuju Dashboard-nya", async () => {
+  test("Desk saat ini ditandai aria-current dan berganti setelah item popover Desk lain dipilih", async () => {
     sessionStorage.setItem("erpora.desk.tab", "example");
     const user = userEvent.setup();
     const { router } = renderShell(<Dock />, { desks });
@@ -94,7 +105,11 @@ describe("Dock (Pinned)", () => {
     await waitFor(() => expect(example).toHaveAttribute("aria-current", "true"));
     expect(screen.getByRole("button", { name: "Platform" })).not.toHaveAttribute("aria-current");
 
-    await user.click(screen.getByRole("button", { name: "Billing" }));
+    const billing = screen.getByRole("button", { name: "Billing" });
+    await waitFor(() => expect(billing).toHaveAttribute("aria-haspopup", "dialog"));
+    await user.click(billing);
+    const popover = await screen.findByRole("dialog", { name: "Billing" });
+    await user.click(within(popover).getByRole("link", { name: "Dashboard" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/billing"));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Billing" })).toHaveAttribute(
@@ -172,6 +187,76 @@ describe("Dock (Pinned)", () => {
     });
   });
 
+  describe("popover menu Desk (K8)", () => {
+    /** Popover dimuat malas: tunggu pemicu asli (aria-haspopup) menggantikan cadangan sebelum diklik. */
+    async function readyTrigger(name: string) {
+      const button = await screen.findByRole("button", { name });
+      await waitFor(() => expect(button).toHaveAttribute("aria-haspopup", "dialog"));
+      return button;
+    }
+
+    test("klik ikon Desk membuka popover berisi menu Desk itu tanpa berpindah", async () => {
+      const user = userEvent.setup();
+      const { router } = renderShell(<Dock />, { desks });
+      await user.click(await readyTrigger("Example"));
+      const popover = await screen.findByRole("dialog", { name: "Example" });
+      expect(within(popover).getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+        "href",
+        "/example",
+      );
+      expect(within(popover).getByRole("link", { name: "Notes" })).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe("/");
+      expect(sessionStorage.getItem("erpora.desk.tab")).toBeNull();
+    });
+
+    test("klik ikon Desk yang sedang aktif juga membuka popover", async () => {
+      sessionStorage.setItem("erpora.desk.tab", "example");
+      const user = userEvent.setup();
+      renderShell(<Dock />, { desks });
+      const example = await readyTrigger("Example");
+      await waitFor(() => expect(example).toHaveAttribute("aria-current", "true"));
+      await user.click(example);
+      expect(await screen.findByRole("dialog", { name: "Example" })).toBeInTheDocument();
+    });
+
+    test("memilih item menavigasi ke item itu, menetapkan Desk itu sebagai Desk saat ini, dan menutup popover", async () => {
+      const user = userEvent.setup();
+      const { router } = renderShell(<Dock />, { desks });
+      await user.click(await readyTrigger("Example"));
+      const popover = await screen.findByRole("dialog", { name: "Example" });
+      await user.click(within(popover).getByRole("link", { name: "Notes" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/example/notes"));
+      expect(sessionStorage.getItem("erpora.desk.tab")).toBe("example");
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Example" })).toBeNull());
+      expect(screen.getByRole("button", { name: "Example" })).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+    });
+
+    test("grup dapat dibuka di dalam popover", async () => {
+      const user = userEvent.setup();
+      const { router } = renderShell(<Dock />, { desks });
+      await user.click(await readyTrigger("Example"));
+      const popover = await screen.findByRole("dialog", { name: "Example" });
+      expect(within(popover).queryByRole("link", { name: "Sales" })).toBeNull();
+      await user.click(within(popover).getByRole("button", { name: "Reports" }));
+      await user.click(await within(popover).findByRole("link", { name: "Sales" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/example/reports/sales"));
+    });
+
+    test("Escape menutup popover dan fokus kembali ke ikon Desk", async () => {
+      const user = userEvent.setup();
+      renderShell(<Dock />, { desks });
+      const billing = await readyTrigger("Billing");
+      await user.click(billing);
+      await screen.findByRole("dialog", { name: "Billing" });
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(billing).toHaveFocus();
+    });
+  });
+
   test("sorotan Desk aktif memakai latar (sidebar-accent), tanpa outline atau cincin (K2)", async () => {
     sessionStorage.setItem("erpora.desk.tab", "example");
     renderShell(<Dock />, { desks });
@@ -211,7 +296,7 @@ describe("Dock (Pinned)", () => {
   describe("+N saat tinggi tidak cukup", () => {
     afterEach(restoreResizeObserver);
 
-    test("menampilkan sebagian ikon dan sisanya di menu +N yang berfungsi", async () => {
+    test("menampilkan sebagian ikon dan sisanya di menu +N: submenu berisi menu Desk, memilih item menavigasi", async () => {
       mockHeight(84); // 2 slot: 1 ikon + +N
       const user = userEvent.setup();
       const { router } = renderShell(<Dock />, { desks });
@@ -220,9 +305,19 @@ describe("Dock (Pinned)", () => {
       expect(screen.getByRole("button", { name: "Platform" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Example" })).toBeNull();
       await user.click(more);
-      const item = await screen.findByRole("menuitem", { name: "Example" });
-      await user.click(item);
-      await waitFor(() => expect(router.state.location.pathname).toBe("/example"));
+      // Submenu dimuat malas: tunggu pemicu submenu asli menggantikan item cadangan.
+      await waitFor(() =>
+        expect(screen.getByRole("menuitem", { name: "Example" })).toHaveAttribute(
+          "aria-haspopup",
+          "menu",
+        ),
+      );
+      await user.click(screen.getByRole("menuitem", { name: "Example" }));
+      await screen.findByRole("menuitem", { name: "Notes" });
+      // Item submenu dipilih lewat keyboard (klik pointer pada konten submenu portal tidak andal di happy-dom).
+      await user.keyboard("{ArrowRight}{ArrowDown}{Enter}");
+      await waitFor(() => expect(router.state.location.pathname).toBe("/example/notes"));
+      expect(sessionStorage.getItem("erpora.desk.tab")).toBe("example");
     });
 
     test("tanpa kekurangan tinggi tidak ada +N", async () => {

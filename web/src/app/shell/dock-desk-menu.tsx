@@ -1,0 +1,125 @@
+import { Link } from "@erpora/module-sdk";
+import { type Desk, Message, useCurrentDesk, useMessage } from "@erpora/platform-web";
+import {
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@erpora/ui";
+import { useRouterState } from "@tanstack/react-router";
+import { type ReactElement, useState } from "react";
+import { DeskMenuTree } from "./desk-panel-menu";
+import { NavIcon } from "./nav-icon";
+
+/**
+ * Isi popover: label Desk dan pohon menunya bergaya item sidebar. Dirender hanya saat popover terbuka sehingga
+ * langganan lokasi router tidak membuat ikon Dock merender ulang pada tiap navigasi.
+ */
+function DeskMenuContent({ desk, onSelect }: { desk: Desk; onSelect: () => void }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return (
+    <>
+      <p className="px-2 pb-1 text-xs font-medium text-sidebar-foreground/70">
+        <Message message={desk.label} />
+      </p>
+      <DeskMenuTree desk={desk} pathname={pathname} tooltip={false} onSelect={onSelect} />
+    </>
+  );
+}
+
+/**
+ * Popover menu sebuah Desk di sisi kanan ikon Desk Dock Pinned (K8). Klik ikon (juga ikon Desk yang sedang aktif)
+ * membuka popover, bukan langsung berpindah; memilih item menavigasi ke item itu dan menetapkan Desk ini sebagai
+ * Desk saat ini. `children` adalah tombol ikon pemicunya. Dimuat malas oleh `Dock`.
+ */
+export function DeskMenuPopover({ desk, children }: { desk: Desk; children: ReactElement }) {
+  const [open, setOpen] = useState(false);
+  const { setCurrentDesk } = useCurrentDesk();
+  const label = useMessage(desk.label);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        aria-label={label}
+        className="max-h-[calc(100svh-1rem)] w-60 overflow-y-auto border-sidebar-border bg-sidebar p-2 text-sidebar-foreground"
+      >
+        <DeskMenuContent
+          desk={desk}
+          onSelect={() => {
+            setCurrentDesk(desk.id);
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Item menu "+N" Dock Pinned untuk Desk yang ikonnya tidak muat: submenu berisi menu Desk itu (Dashboard, item, dan
+ * isi grup di bawah label grupnya). Memilih item menavigasi ke item itu dan menetapkan Desk itu sebagai Desk saat ini.
+ */
+export function OverflowDeskSub({
+  desk,
+  onSelected,
+}: {
+  desk: Desk;
+  /** Dipanggil setelah sebuah item dipilih. */
+  onSelected?: () => void;
+}) {
+  const text = useMessage(desk.label);
+  const { setCurrentDesk } = useCurrentDesk();
+  const choose = () => {
+    setCurrentDesk(desk.id);
+    onSelected?.();
+  };
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <NavIcon name={desk.icon} label={text} />
+        {text}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {desk.menus.map((m) =>
+          m.type === "item" ? (
+            <OverflowLink key={m.id} to={m.to} label={m.label} onSelect={choose} />
+          ) : (
+            <div key={m.id}>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                <Message message={m.label} />
+              </DropdownMenuLabel>
+              {m.children.map((c) => (
+                <OverflowLink key={c.id} to={c.to} label={c.label} onSelect={choose} />
+              ))}
+            </div>
+          ),
+        )}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+function OverflowLink({
+  to,
+  label,
+  onSelect,
+}: {
+  to: string;
+  label: Desk["label"];
+  onSelect: () => void;
+}) {
+  return (
+    <DropdownMenuItem asChild>
+      <Link to={to} onClick={onSelect}>
+        <Message message={label} />
+      </Link>
+    </DropdownMenuItem>
+  );
+}
