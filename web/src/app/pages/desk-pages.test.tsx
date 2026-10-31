@@ -230,6 +230,31 @@ describe("DashboardPage (R14)", () => {
     expect(screen.getByText("Dashboard Belum Tersedia")).toBeInTheDocument();
   });
 
+  test("galat memuat daftar Desk: pesan galat dengan Coba lagi yang memuat ulang, bukan 'tidak tersedia'", async () => {
+    let n = 0;
+    renderPage({
+      desks,
+      routes: [{ path: "/", component: dash("example") }],
+      fetchImpl: (async () => {
+        n += 1;
+        if (n === 1) {
+          return new Response(JSON.stringify({ error: { code: "internal_error", message: "x" } }), {
+            status: 500,
+          });
+        }
+        return new Response(JSON.stringify({ data: { desks, revision: "r1" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ETag: '"e1"' },
+        });
+      }) as unknown as typeof fetch,
+    });
+    expect(await screen.findByText("Daftar Desk tidak dapat dimuat")).toBeInTheDocument();
+    expect(screen.queryByText("Dashboard tidak tersedia")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Coba lagi" }));
+    expect(await screen.findByRole("region", { name: "Widget Dashboard" })).toBeInTheDocument();
+    expect(n).toBeGreaterThan(1);
+  });
+
   test("Desk tidak ada atau tidak diizinkan: pesan tidak tersedia tanpa membocorkan sebabnya", async () => {
     renderPage({ desks, routes: [{ path: "/", component: dash("rahasia") }] });
     expect(await screen.findByText("Dashboard tidak tersedia")).toBeInTheDocument();

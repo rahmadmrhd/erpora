@@ -1,7 +1,7 @@
 import { useDesks, useTranslation } from "@erpora/platform-web";
-import { Skeleton } from "@erpora/ui";
+import { Button, Skeleton } from "@erpora/ui";
 import type { ReactNode } from "react";
-import { EmptyNotice } from "../components/notices";
+import { EmptyNotice, ErrorNotice } from "../components/notices";
 
 /**
  * Kerangka slot widget Dashboard (R14.2): wilayah berlabel; tanpa anak (belum ada widget, sampai M3f) menampilkan
@@ -40,8 +40,22 @@ function DashboardSkeleton() {
  */
 export function DashboardPage({ deskId }: { deskId: string }) {
   const { t } = useTranslation("platform");
-  const { status, desks } = useDesks();
+  const { status, desks, refetch } = useDesks();
   if (status === "loading") return <DashboardSkeleton />;
+  if (status === "error") {
+    return (
+      <ErrorNotice
+        status={500}
+        title={t("desks.loadError.title")}
+        description={t("desks.loadError.description")}
+        actions={
+          <Button type="button" variant="outline" onClick={() => refetch()}>
+            {t("shell.retry")}
+          </Button>
+        }
+      />
+    );
+  }
   const desk = desks.find((d) => d.id === deskId);
   if (!desk) {
     return (
