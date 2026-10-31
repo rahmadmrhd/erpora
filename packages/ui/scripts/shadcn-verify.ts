@@ -8,6 +8,7 @@
 // kabar drift. Kode keluar selalu 0: drift bukan kegagalan build; pembaruan lewat `task shadcn:sync`.
 import { join } from "node:path";
 import {
+  HOOK_PREFIX,
   type LabelPatch,
   LOCK_PATH,
   loadLock,
@@ -51,6 +52,36 @@ export function driftLines(output: string, patches: LabelPatch[] = []): string[]
   return out;
 }
 
+/**
+ * Hook hasil CLI (kunci `hooks/<nama>`) bukan item registry yang dapat di-`add` sendiri; ia datang bersama
+ * komponen asalnya (`shadcn add sidebar` menurunkan `use-mobile`). Peta ini menunjuk komponen asal.
+ */
+export const HOOK_ORIGINS: Record<string, string> = { "hooks/use-mobile": "sidebar" };
+
+export interface VerifyTargets {
+  names: string[];
+  skipped: string[];
+}
+
+/**
+ * Menentukan item registry yang diperiksa dari kunci di `shadcn.lock.json`: komponen apa adanya, kunci
+ * `hooks/*` dipetakan ke komponen asalnya (tanpa duplikat), hook tanpa komponen asal dilewati dengan keterangan.
+ */
+export function verifyTargets(lockKeys: string[]): VerifyTargets {
+  const names = new Set<string>();
+  const skipped: string[] = [];
+  for (const key of lockKeys) {
+    if (!key.startsWith(HOOK_PREFIX)) {
+      names.add(key);
+      continue;
+    }
+    const origin = HOOK_ORIGINS[key];
+    if (origin) names.add(origin);
+    else skipped.push(`${key}: hook tanpa komponen asal terdaftar (HOOK_ORIGINS), dilewati`);
+  }
+  return { names: [...names].sort(), skipped };
+}
+
 const patches = loadPatches(PATCHES_PATH);
 
 async function diffOne(name: string): Promise<{ name: string; drift: string[]; error?: string }> {
@@ -70,7 +101,14 @@ async function diffOne(name: string): Promise<{ name: string; drift: string[]; e
 
 async function main(argv: string[]): Promise<number> {
   const lock = loadLock(LOCK_PATH);
-  const names = argv.length > 0 ? parseComponentNames(argv) : Object.keys(lock.components);
+  let names: string[];
+  if (argv.length > 0) {
+    names = parseComponentNames(argv);
+  } else {
+    const targets = verifyTargets(Object.keys(lock.components));
+    names = targets.names;
+    for (const note of targets.skipped) console.log(`  - ${note}`);
+  }
   if (names.length === 0) {
     console.log("shadcn-verify: tidak ada komponen terkunci; tidak ada yang diperiksa.");
     return 0;

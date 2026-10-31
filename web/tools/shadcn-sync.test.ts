@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  assertSafeMarkup,
   parseComponentNames,
   pinDependencies,
   stripCnDependency,
 } from "../../packages/ui/scripts/shadcn-sync";
-import { driftLines } from "../../packages/ui/scripts/shadcn-verify";
+import { driftLines, verifyTargets } from "../../packages/ui/scripts/shadcn-verify";
 
 // Fungsi murni alat `shadcn:sync` dan `shadcn:verify` (M3a revisi, task 1.3; R1.9, D-1).
 
@@ -164,5 +165,48 @@ describe("driftLines dengan patch terdaftar", () => {
   test("selisih lain tetap dilaporkan", () => {
     const out = box(["-const a = 1", "+const a = 2"]);
     expect(driftLines(out, patches)).toEqual(["-const a = 1", "+const a = 2"]);
+  });
+});
+
+describe("assertSafeMarkup (R20.4)", () => {
+  test("berkas bersih lolos", () => {
+    expect(() => assertSafeMarkup("button", "export const a = 1")).not.toThrow();
+  });
+
+  test("dangerouslySetInnerHTML atau innerHTML pada hasil registry membatalkan sync, menyebut komponen", () => {
+    expect(() =>
+      assertSafeMarkup("chart", "<style dangerouslySetInnerHTML={{ __html: css }} />"),
+    ).toThrow(/chart.*dangerouslySetInnerHTML/s);
+    expect(() => assertSafeMarkup("x", "el.innerHTML = a")).toThrow(/innerHTML/);
+  });
+});
+
+describe("verifyTargets (shadcn:verify tanpa argumen)", () => {
+  test("komponen biasa dipakai apa adanya, terurut", () => {
+    const res = verifyTargets(["tabs", "badge"]);
+    expect(res.names).toEqual(["badge", "tabs"]);
+    expect(res.skipped).toEqual([]);
+  });
+
+  test("kunci hooks/use-mobile dipetakan ke komponen asalnya (sidebar) tanpa duplikat", () => {
+    const res = verifyTargets(["badge", "hooks/use-mobile", "sidebar"]);
+    expect(res.names).toEqual(["badge", "sidebar"]);
+    expect(res.skipped).toEqual([]);
+  });
+
+  test("hook tanpa komponen asal dilewati dengan keterangan, bukan dikirim ke shadcn add", () => {
+    const res = verifyTargets(["badge", "hooks/use-unknown"]);
+    expect(res.names).toEqual(["badge"]);
+    expect(res.skipped).toHaveLength(1);
+    expect(res.skipped[0]).toContain("hooks/use-unknown");
+  });
+
+  test("hook dengan komponen asal yang belum terkunci tetap diperiksa lewat komponen asal itu", () => {
+    expect(verifyTargets(["hooks/use-mobile"]).names).toEqual(["sidebar"]);
+  });
+
+  test("semua nama hasil lolos validasi parseComponentNames", () => {
+    const res = verifyTargets(["alert-dialog", "hooks/use-mobile"]);
+    expect(() => parseComponentNames(res.names)).not.toThrow();
   });
 });
