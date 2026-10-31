@@ -227,8 +227,10 @@ function sync(names: string[], cli: string): void {
     pinnedAll.push(...res.pinned);
     unpinnedAll.push(...res.unpinned);
   }
-  if (JSON.stringify(next) !== JSON.stringify(pkgBefore)) {
-    writeJson(join(PACKAGE_DIR, "package.json"), next);
+  const same = (x: Pkg, y: Pkg): boolean => JSON.stringify(x) === JSON.stringify(y);
+  // Bandingkan dengan keadaan SETELAH CLI (bukan sebelum): CLI menulis `cn` dan rentang ^, yang harus dibuang.
+  if (!same(next, pkgAfter)) writeJson(join(PACKAGE_DIR, "package.json"), next);
+  if (!same(next, pkgBefore) || !same(pkgAfter, pkgBefore)) {
     run([process.execPath, "install"], REPO_ROOT);
   }
 

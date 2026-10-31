@@ -1,0 +1,131 @@
+{
+  "$comment": "Patch deklaratif atas berkas hasil `shadcn add` (diterapkan oleh task shadcn:sync setelah normalisasi cn; hash di shadcn.lock.json dihitung setelah patch; shadcn-check memastikan terpasang). Diputuskan pemilik produk 31 Okt 2026: teks Inggris tertanam diganti label UiLabels (R1.7, aturan i18n) dan kelas palet langsung diganti token DS (R2.2). Tidak ada perubahan struktur komponen.",
+  "patches": [
+    {
+      "component": "dialog",
+      "find": "import { cn } from \"@erpora/ui/lib/utils\"",
+      "replace": "import { cn } from \"@erpora/ui/lib/utils\"\nimport { UiLabel } from \"../../labels\"",
+      "reason": "impor UiLabel untuk label tertanam"
+    },
+    {
+      "component": "dialog",
+      "find": "<span className=\"sr-only\">Close</span>",
+      "replace": "<span className=\"sr-only\"><UiLabel k=\"actions.close\" /></span>",
+      "reason": "teks Inggris tertanam: label actions.close"
+    },
+    {
+      "component": "dialog",
+      "find": "<Button variant=\"outline\">Close</Button>",
+      "replace": "<Button variant=\"outline\"><UiLabel k=\"actions.close\" /></Button>",
+      "reason": "teks Inggris tertanam: label actions.close"
+    },
+    {
+      "component": "sheet",
+      "find": "import { cn } from \"@erpora/ui/lib/utils\"",
+      "replace": "import { cn } from \"@erpora/ui/lib/utils\"\nimport { UiLabel } from \"../../labels\"",
+      "reason": "impor UiLabel untuk label tertanam"
+    },
+    {
+      "component": "sheet",
+      "find": "<span className=\"sr-only\">Close</span>",
+      "replace": "<span className=\"sr-only\"><UiLabel k=\"actions.close\" /></span>",
+      "reason": "teks Inggris tertanam: label actions.close"
+    },
+    {
+      "component": "breadcrumb",
+      "find": "import { cn } from \"@erpora/ui/lib/utils\"",
+      "replace": "import { cn } from \"@erpora/ui/lib/utils\"\nimport { UiLabel, useUiLabel } from \"../../labels\"",
+      "reason": "impor UiLabel dan useUiLabel untuk label tertanam"
+    },
+    {
+      "component": "breadcrumb",
+      "find": "aria-label=\"breadcrumb\"",
+      "replace": "aria-label={useUiLabel()(\"breadcrumb.label\")}",
+      "reason": "teks Inggris tertanam: label breadcrumb.label"
+    },
+    {
+      "component": "breadcrumb",
+      "find": "<span className=\"sr-only\">More</span>",
+      "replace": "<span className=\"sr-only\"><UiLabel k=\"breadcrumb.more\" /></span>",
+      "reason": "teks Inggris tertanam: label breadcrumb.more"
+    },
+    {
+      "component": "sidebar",
+      "find": "import { cn } from \"@erpora/ui/lib/utils\"",
+      "replace": "import { cn } from \"@erpora/ui/lib/utils\"\nimport { UiLabel, useUiLabel } from \"../../labels\"",
+      "reason": "impor UiLabel dan useUiLabel untuk label tertanam"
+    },
+    {
+      "component": "sidebar",
+      "find": "<SheetTitle>Sidebar</SheetTitle>",
+      "replace": "<SheetTitle><UiLabel k=\"sidebar.title\" /></SheetTitle>",
+      "reason": "teks Inggris tertanam: label sidebar.title"
+    },
+    {
+      "component": "sidebar",
+      "find": "<SheetDescription>Displays the mobile sidebar.</SheetDescription>",
+      "replace": "<SheetDescription><UiLabel k=\"sidebar.description\" /></SheetDescription>",
+      "reason": "teks Inggris tertanam: label sidebar.description"
+    },
+    {
+      "component": "sidebar",
+      "find": "<span className=\"sr-only\">Toggle Sidebar</span>",
+      "replace": "<span className=\"sr-only\"><UiLabel k=\"sidebar.toggle\" /></span>",
+      "reason": "teks Inggris tertanam: label sidebar.toggle"
+    },
+    {
+      "component": "sidebar",
+      "find": "aria-label=\"Toggle Sidebar\"",
+      "replace": "aria-label={useUiLabel()(\"sidebar.toggle\")}",
+      "reason": "teks Inggris tertanam: label sidebar.toggle"
+    },
+    {
+      "component": "sidebar",
+      "find": "title=\"Toggle Sidebar\"",
+      "replace": "title={useUiLabel()(\"sidebar.toggle\")}",
+      "reason": "teks Inggris tertanam: label sidebar.toggle"
+    },
+    {
+      "component": "spinner",
+      "find": "import { cn } from \"@erpora/ui/lib/utils\"",
+      "replace": "import { cn } from \"@erpora/ui/lib/utils\"\nimport { useUiLabel } from \"../../labels\"",
+      "reason": "impor useUiLabel untuk label tertanam"
+    },
+    {
+      "component": "alert-dialog",
+      "find": "bg-black/50",
+      "replace": "bg-overlay",
+      "reason": "palet langsung (R2.2): overlay memakai token DS --overlay"
+    },
+    {
+      "component": "dialog",
+      "find": "bg-black/50",
+      "replace": "bg-overlay",
+      "reason": "palet langsung (R2.2): overlay memakai token DS --overlay"
+    },
+    {
+      "component": "sheet",
+      "find": "bg-black/50",
+      "replace": "bg-overlay",
+      "reason": "palet langsung (R2.2): overlay memakai token DS --overlay"
+    },
+    {
+      "component": "button",
+      "find": "bg-destructive text-white",
+      "replace": "bg-destructive text-destructive-foreground",
+      "reason": "palet langsung (R2.2): teks varian destructive memakai token DS"
+    },
+    {
+      "component": "badge",
+      "find": "bg-destructive text-white",
+      "replace": "bg-destructive text-destructive-foreground",
+      "reason": "palet langsung (R2.2): teks varian destructive memakai token DS"
+    },
+    {
+      "component": "spinner",
+      "find": "aria-label=\"Loading\"",
+      "replace": "aria-label={useUiLabel()(\"status.loading\")}",
+      "reason": "teks Inggris tertanam: label status.loading"
+    }
+  ]
+}
