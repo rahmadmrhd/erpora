@@ -21,7 +21,7 @@ import { availableOps } from "./impact";
 import { opKey, statusKey, useModulesT } from "./keys";
 import type { ModuleOp, ModuleStatus, ModuleView } from "./types";
 
-/** Peta status ke nada `BadgeStatus` (design §7). */
+/** Peta status ke nada `StatusBadge` (design §7). */
 export const STATUS_TONE: Record<ModuleStatus, StatusTone> = {
   enabled: "success",
   disabled: "secondary",
