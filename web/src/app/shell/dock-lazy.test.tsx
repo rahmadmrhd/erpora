@@ -172,7 +172,7 @@ describe("ikon Desk Pinned sebelum chunk popover termuat (M-3)", () => {
       // (4) paksa pemasangan ulang: chunk gagal pada render berikutnya (panah memicu render ulang daftar), lalu
       // dicoba lagi setelah server pulih sehingga `DeskMenuPopover` dipasang ulang.
       dockChunks.deskMenu = () => Promise.reject(new Error("chunk gagal"));
-      dockChunks.reset(true);
+      dockChunks.reset();
       await user.keyboard("{ArrowDown}");
       const failed = await screen.findAllByRole("button", { name: /tidak dapat dimuat/ });
       dockChunks.deskMenu = realLoader;
