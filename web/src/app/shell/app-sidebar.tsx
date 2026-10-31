@@ -6,6 +6,7 @@ import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
+  useUiLabel,
 } from "@erpora/ui";
 import { useRouterState } from "@tanstack/react-router";
 import { NavMenu } from "./nav-menu";
@@ -19,6 +20,7 @@ import { UserMenu } from "./user-menu";
 export function AppSidebar() {
   const { navigation } = useModuleRegistry();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const ui = useUiLabel();
   return (
     <Sidebar collapsible="icon" side="left">
       <SidebarHeader>
@@ -35,12 +37,14 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarMenu>
-            <NotificationsMenuItem />
-          </SidebarMenu>
-        </SidebarGroup>
-        <NavMenu moduleNodes={navigation} pathname={pathname} />
+        <nav aria-label={ui("sidebar.label")} className="flex flex-col gap-2">
+          <SidebarGroup>
+            <SidebarMenu>
+              <NotificationsMenuItem />
+            </SidebarMenu>
+          </SidebarGroup>
+          <NavMenu moduleNodes={navigation} pathname={pathname} />
+        </nav>
       </SidebarContent>
       <SidebarFooter>
         <UserMenu />

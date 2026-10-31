@@ -9,17 +9,10 @@ import {
   useTenantId,
   useTranslation,
 } from "@erpora/platform-web";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  EmptyState,
-  ErrorPage,
-  Skeleton,
-} from "@erpora/ui";
+import { Alert, AlertDescription, AlertTitle, Button, LoadingButton, Skeleton } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { EmptyNotice, ErrorNotice } from "../../components/notices";
 import { ActionDialog } from "./action-dialog";
 import { ModulesApiError, useModules, useOperationPolling } from "./api";
 import { mapModuleError } from "./errors";
@@ -104,7 +97,7 @@ export function ModulesPage() {
     const err = query.error;
     if (err instanceof ModulesApiError && err.status === 403) {
       body = (
-        <ErrorPage
+        <ErrorNotice
           status={403}
           title={t("modules.forbidden.title")}
           description={t("modules.forbidden.description")}
@@ -122,20 +115,20 @@ export function ModulesPage() {
             {mapped.messages.map((m) => (
               <p key={m.key}>{describe(m)}</p>
             ))}
-            <Button
+            <LoadingButton
               variant="outline"
               size="sm"
               loading={query.isFetching}
               onClick={() => void query.refetch()}
             >
               {tui("actions.retry")}
-            </Button>
+            </LoadingButton>
           </AlertDescription>
         </Alert>
       );
     }
   } else if (modules.length === 0) {
-    body = <EmptyState icon="blocks" title={t("modules.empty")} />;
+    body = <EmptyNotice icon="blocks" title={t("modules.empty")} />;
   } else {
     body = (
       <ModulesTable
@@ -160,7 +153,7 @@ export function ModulesPage() {
       </header>
 
       {!showActions && !query.isError ? (
-        <Alert>
+        <Alert role="status">
           <AlertTitle>{t("modules.readonly.title")}</AlertTitle>
           <AlertDescription>
             {adminFlag ? t("modules.readonly.noPermission") : t("modules.readonly.description")}

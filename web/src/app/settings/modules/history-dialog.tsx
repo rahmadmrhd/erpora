@@ -9,10 +9,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  EmptyState,
   Skeleton,
 } from "@erpora/ui";
 import { useState } from "react";
+import { EmptyNotice } from "../../components/notices";
 import { useModuleHistory, useOperation } from "./api";
 import { type ModulesKey, useModulesT } from "./keys";
 import type { EventView, ModuleView } from "./types";
@@ -110,7 +110,7 @@ export function HistoryDialog({ module, onClose }: { module: ModuleView; onClose
 
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DialogContent size="wide">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{t("modules.history.title", { name: module.name })}</DialogTitle>
           <DialogDescription>{t("modules.history.description")}</DialogDescription>
@@ -125,7 +125,7 @@ export function HistoryDialog({ module, onClose }: { module: ModuleView; onClose
             {t("modules.history.error")}
           </p>
         ) : query.data.events.length === 0 ? (
-          <EmptyState icon="file-text" title={t("modules.history.empty")} />
+          <EmptyNotice icon="file-text" title={t("modules.history.empty")} />
         ) : (
           <ul className="max-h-[60vh] overflow-auto">
             {query.data.events.map((e) => (

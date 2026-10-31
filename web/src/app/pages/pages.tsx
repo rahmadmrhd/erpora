@@ -6,14 +6,15 @@ import {
   type ModuleStatus,
   useTranslation,
 } from "@erpora/platform-web";
-import { Button, EmptyState, ErrorPage } from "@erpora/ui";
+import { Button } from "@erpora/ui";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { EmptyNotice, ErrorNotice } from "../components/notices";
 
 /** Beranda: dashboard kosong (menunggu M3f). */
 export function DashboardPage() {
   const { t } = useTranslation("platform");
   return (
-    <EmptyState
+    <EmptyNotice
       className="min-h-[60vh] justify-center"
       icon="layout-dashboard"
       title={t("dashboard.title")}
@@ -25,7 +26,7 @@ export function DashboardPage() {
 export function NotFoundPage() {
   const { t } = useTranslation("platform");
   return (
-    <ErrorPage
+    <ErrorNotice
       status={404}
       title={t("notFound.title")}
       description={t("notFound.description")}
@@ -75,7 +76,7 @@ export function inactiveMessageKey(status: ModuleStatus | undefined): InactiveKe
 export function ModuleInactivePage({ status }: { status: ModuleStatus | undefined }) {
   const { t } = useTranslation("platform");
   return (
-    <ErrorPage
+    <ErrorNotice
       status={503}
       title={t("moduleInactive.title")}
       description={t(inactiveMessageKey(status))}
@@ -105,7 +106,7 @@ export function RouteErrorPage({ error, reset }: Pick<ErrorComponentProps, "erro
     ? (t as unknown as (k: ApiErrorKey) => string)(described.key)
     : t("routeError.description");
   return (
-    <ErrorPage
+    <ErrorNotice
       status={500}
       title={t("routeError.title")}
       description={description}

@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  LoadingButton,
   resolveIcon,
   useIsMobile,
 } from "@erpora/ui";
@@ -19,18 +20,25 @@ function ActionIcon({ name }: { name?: string }) {
   return C ? <C aria-hidden="true" /> : null;
 }
 
+/** Kontrak `PageAction.variant` memakai "primary" (aksi utama halaman); pada Button shadcn namanya "default". */
+function buttonVariant(
+  variant: PageAction["variant"],
+): "default" | "outline" | "ghost" | "destructive" {
+  return variant === undefined ? "outline" : variant === "primary" ? "default" : variant;
+}
+
 function InlineButton({ action }: { action: PageAction }) {
   return (
-    <Button
+    <LoadingButton
       type="button"
-      variant={action.variant ?? "outline"}
+      variant={buttonVariant(action.variant)}
       loading={action.loading}
       disabled={action.disabled}
       onClick={action.onSelect}
     >
       <ActionIcon name={action.icon} />
       {action.label}
-    </Button>
+    </LoadingButton>
   );
 }
 
@@ -64,18 +72,18 @@ export function PageActionsView() {
   return (
     <div className="ml-auto flex items-center gap-1">
       {pinned.map((a) => (
-        <Button
+        <LoadingButton
           key={a.id}
           type="button"
           size="icon"
-          variant={a.variant ?? "outline"}
+          variant={buttonVariant(a.variant)}
           aria-label={a.label}
           loading={a.loading}
           disabled={a.disabled}
           onClick={a.onSelect}
         >
           <ActionIcon name={a.icon} />
-        </Button>
+        </LoadingButton>
       ))}
       {rest.length > 0 ? (
         <DropdownMenu>

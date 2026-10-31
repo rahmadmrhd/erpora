@@ -1,6 +1,5 @@
 import {
   Badge,
-  BadgeStatus,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -8,6 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   resolveIcon,
+  StatusBadge,
   type StatusTone,
   Table,
   TableBody,
@@ -111,7 +111,7 @@ export function ModulesTable({ modules, showActions, onOperation, onHistory }: M
                 </div>
               </TableCell>
               <TableCell className="align-top">
-                <BadgeStatus tone={STATUS_TONE[m.status]}>{t(statusKey(m.status))}</BadgeStatus>
+                <StatusBadge tone={STATUS_TONE[m.status]}>{t(statusKey(m.status))}</StatusBadge>
               </TableCell>
               <TableCell className="align-top">
                 {m.dependencies.length === 0 ? (

@@ -12,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  useUiLabel,
 } from "@erpora/ui";
 import { Fragment, type ReactNode } from "react";
 
@@ -65,6 +66,7 @@ export function Breadcrumbs({
   crumbs: readonly ResolvedCrumb[];
   compact: boolean;
 }) {
+  const ui = useUiLabel();
   const { visible, folded } = collapseCrumbs(crumbs, { compact });
   if (visible.length === 0) return null;
   return (
@@ -79,6 +81,7 @@ export function Breadcrumbs({
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
+                      aria-label={ui("breadcrumb.more")}
                       className="flex items-center rounded-sm hover:text-foreground"
                     >
                       <BreadcrumbEllipsis />

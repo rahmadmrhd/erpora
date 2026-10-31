@@ -10,11 +10,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  BadgeStatus,
   Button,
   Checkbox,
   Label,
-  LoadingIcon,
+  LoadingButton,
+  Spinner,
+  StatusBadge,
 } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -85,7 +86,7 @@ function OperationResults({ operations }: { operations: readonly OperationView[]
             {(MODULE_OPS as readonly string[]).includes(o.operation)
               ? t(opKey(o.operation as ModuleOp))
               : o.operation}
-            <BadgeStatus tone={OP_TONE[o.status]}>{t(`modules.result.${o.status}`)}</BadgeStatus>
+            <StatusBadge tone={OP_TONE[o.status]}>{t(`modules.result.${o.status}`)}</StatusBadge>
           </span>
           {o.failure ? (
             <p className="text-sm text-muted-foreground">
@@ -124,7 +125,7 @@ function PollingResult({ ids, polling }: { ids: readonly string[]; polling: Oper
     <div className="flex flex-col gap-2 text-sm">
       {polling.phase === "running" || polling.phase === "idle" ? (
         <p className="flex items-center gap-2">
-          <LoadingIcon aria-label={t("modules.result.running")} />
+          <Spinner aria-label={t("modules.result.running")} />
           {t("modules.result.running")}
         </p>
       ) : null}
@@ -327,14 +328,14 @@ export function ActionDialog({
               <AlertDialogCancel disabled={phase.kind === "running"} onClick={onClose}>
                 {t("modules.dialog.cancel")}
               </AlertDialogCancel>
-              <Button
-                variant={op === "disable" || op === "uninstall" ? "destructive" : "primary"}
+              <LoadingButton
+                variant={op === "disable" || op === "uninstall" ? "destructive" : "default"}
                 disabled={blocked}
                 loading={phase.kind === "running"}
                 onClick={() => void confirm()}
               >
                 {t("modules.dialog.confirm")}
-              </Button>
+              </LoadingButton>
             </>
           )}
         </AlertDialogFooter>

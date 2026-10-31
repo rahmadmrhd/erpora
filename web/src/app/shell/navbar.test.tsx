@@ -6,6 +6,7 @@ import { renderApp } from "../test-utils";
 const originalMatchMedia = window.matchMedia;
 
 function mockViewport(mobile: boolean) {
+  window.innerWidth = mobile ? 500 : 1280; // useIsMobile (shadcn persis) membaca window.innerWidth
   window.matchMedia = ((query: string) => ({
     matches: mobile && query.includes("767"),
     media: query,
@@ -38,7 +39,12 @@ describe("Breadcrumbs (P4)", () => {
     renderApp({ path: "/alpha" });
     const bc = await breadcrumb();
     await within(bc).findByText("Alpha Beranda");
-    expect(within(bc).queryAllByRole("link")).toHaveLength(0);
+    // BreadcrumbPage shadcn berperan link ber-aria-disabled; tautan yang dapat diklik tidak ada
+    expect(
+      within(bc)
+        .queryAllByRole("link")
+        .filter((l) => l.getAttribute("aria-disabled") !== "true"),
+    ).toHaveLength(0);
     expect(within(bc).getByText("Alpha Beranda")).toHaveAttribute("aria-current", "page");
   });
 

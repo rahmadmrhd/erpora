@@ -12,8 +12,6 @@ import {
   Alert,
   AlertDescription,
   Button,
-  EmptyState,
-  LoadingIcon,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -21,8 +19,10 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  Spinner,
 } from "@erpora/ui";
 import { type ReactNode, useState } from "react";
+import { EmptyNotice } from "../components/notices";
 import { NavIcon } from "./nav-icon";
 
 const TITLE = { ns: "platform", key: "notifications.title" } as const;
@@ -117,7 +117,7 @@ export function NotificationsPanel({
   if (n.status === "loading") {
     body = (
       <div role="status" className="flex justify-center p-6">
-        <LoadingIcon aria-label={t("shell.loading")} />
+        <Spinner aria-label={t("shell.loading")} />
       </div>
     );
   } else if (n.status === "error") {
@@ -132,7 +132,7 @@ export function NotificationsPanel({
       </div>
     );
   } else if (n.items.length === 0) {
-    body = <EmptyState icon="bell" title={t("notifications.empty")} />;
+    body = <EmptyNotice icon="bell" title={t("notifications.empty")} />;
   } else {
     body = <Rows n={n} onNavigate={onNavigate} onFailure={run} />;
   }

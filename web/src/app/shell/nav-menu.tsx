@@ -10,7 +10,6 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  EmptyState,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -27,6 +26,7 @@ import {
   useSidebar,
 } from "@erpora/ui";
 import { useEffect, useState } from "react";
+import { EmptyNotice } from "../components/notices";
 import { NavIcon } from "./nav-icon";
 
 type NavItem = Extract<NavNode, { type: "item" }>;
@@ -212,7 +212,7 @@ export function NavMenu({
           )}
         </SidebarMenu>
         {moduleNodes.length === 0 ? (
-          <EmptyState className="p-3 group-data-[collapsible=icon]:hidden" title={emptyTitle} />
+          <EmptyNotice className="p-3 group-data-[collapsible=icon]:hidden" title={emptyTitle} />
         ) : null}
       </SidebarGroupContent>
     </SidebarGroup>

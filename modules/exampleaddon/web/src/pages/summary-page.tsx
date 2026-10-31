@@ -10,7 +10,7 @@ import {
   usePageActions,
   useTenantId,
 } from "@erpora/platform-web";
-import { Alert, AlertDescription, AlertTitle, Button, Skeleton } from "@erpora/ui";
+import { Alert, AlertDescription, AlertTitle, Button, LoadingButton, Skeleton } from "@erpora/ui";
 import { useQuery } from "@tanstack/react-query";
 import "../i18n/keys.gen";
 import { fetchSummary, toApiError } from "../summary-api";
@@ -66,7 +66,7 @@ export function SummaryPage() {
                 message={{ ns: "platform", key: describeApiError(toApiError(query.error)).key }}
               />
             </p>
-            <Button
+            <LoadingButton
               variant="outline"
               size="sm"
               loading={query.isFetching}
@@ -75,7 +75,7 @@ export function SummaryPage() {
               }}
             >
               <Message message={retryLabel} />
-            </Button>
+            </LoadingButton>
           </AlertDescription>
         </Alert>
       ) : (

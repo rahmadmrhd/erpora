@@ -1,12 +1,38 @@
 import { Message, usePageChrome } from "@erpora/platform-web";
 import { SidebarProvider, Skeleton } from "@erpora/ui";
 import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { type CSSProperties, Suspense, useEffect, useRef, useState } from "react";
 import { RouteErrorPage } from "../pages/pages";
 import { AppSidebar } from "./app-sidebar";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
+
+// Persistensi keadaan sidebar (K-17) dikerjakan shell: Sidebar shadcn persis registry menyimpan di cookie, sehingga
+// shell mengendalikan `open` dan menyimpannya di localStorage (kunci dan nilai sama seperti sebelum resync).
+const SIDEBAR_STORAGE_KEY = "erpora.sidebar";
+
+function readSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "collapsed";
+  } catch {
+    return true;
+  }
+}
+
+function writeSidebarOpen(open: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, open ? "expanded" : "collapsed");
+  } catch {
+    // penyimpanan diblokir: keadaan tetap berlaku untuk sesi ini
+  }
+}
+
+// Lebar sidebar K-15 (14,25 rem / 3,25 rem); bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
+const SIDEBAR_STYLE = {
+  "--sidebar-width": "14.25rem",
+  "--sidebar-width-icon": "3.25rem",
+} as CSSProperties;
 
 function ContentSkeleton() {
   return (
@@ -54,9 +80,18 @@ function RouteAnnouncer({ main }: { main: React.RefObject<HTMLElement | null> })
 export function AppShell() {
   const { scroll } = usePageChrome();
   const main = useRef<HTMLElement>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(readSidebarOpen);
   const resetKey = useRouterState({ select: (s) => s.location.href });
   return (
-    <SidebarProvider className="h-svh overflow-hidden">
+    <SidebarProvider
+      className="h-svh overflow-hidden"
+      style={SIDEBAR_STYLE}
+      open={sidebarOpen}
+      onOpenChange={(open) => {
+        setSidebarOpen(open);
+        writeSidebarOpen(open);
+      }}
+    >
       {/* biome-ignore lint/a11y/useValidAnchor: skip link (K-33): tautan ke #content dengan fokus langsung ke <main> tanpa mengubah hash router */}
       <a
         href="#content"

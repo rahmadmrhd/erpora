@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { CurrentUserSource } from "@erpora/platform-web";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderApp } from "../test-utils";
 
@@ -124,7 +124,9 @@ describe("UserMenu", () => {
     );
     expect(localStorage.getItem("erpora.locale")).toBe("en");
     expect(document.documentElement.lang).toBe("en");
-    expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
+    // BreadcrumbPage shadcn berperan link (aria-disabled): batasi ke navigasi utama
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    expect(within(nav).getByRole("link", { name: "Home" })).toBeInTheDocument();
   });
 
   test("avatarUrl tidak aman (eksternal) tidak dirender sebagai gambar", async () => {
