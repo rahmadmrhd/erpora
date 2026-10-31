@@ -2,6 +2,10 @@
   "cli": "4.21.5",
   "synced": false,
   "components": {
+    "alert": {
+      "file": "alert.tsx",
+      "sha256": "d659116bde404c50ad02f63a910e0625bc23506b351af0926db2571531c374e7"
+    },
     "alert-dialog": {
       "file": "alert-dialog.tsx",
       "sha256": "4a8e3369812448578b7d167bd8e03d515168d7d11d4c767652394b1406b3b2f0"
@@ -10,9 +14,21 @@
       "file": "avatar.tsx",
       "sha256": "874db977414ed2d5ce27e1e97a8c11d75bd37dd5d2c7b0446c57ff469d9788cb"
     },
+    "breadcrumb": {
+      "file": "breadcrumb.tsx",
+      "sha256": "2e4221f6b93953602f090c6d1de8f941fd84206641bb81910a36014e1f6230d7"
+    },
     "button": {
       "file": "button.tsx",
       "sha256": "9473172f3d6c2c1b7c5ab54054bbe030a8c079a6952604172ceff50fde7d6f9c"
+    },
+    "collapsible": {
+      "file": "collapsible.tsx",
+      "sha256": "eb4ee2a9ddb3c566c509753a79e4f4c9425d9f8474d55f61f8c8694928b6a509"
+    },
+    "dialog": {
+      "file": "dialog.tsx",
+      "sha256": "530b218674627eff96c25b83c55c2d6d27480a2e97881940cb5e9cd768dab3ae"
     },
     "dropdown-menu": {
       "file": "dropdown-menu.tsx",
@@ -36,7 +52,7 @@
     },
     "sheet": {
       "file": "sheet.tsx",
-      "sha256": "fd12a8812ab87b076b774808fc4bd3ba4bd21bbf1ffd915e7ddcf003cd29518c"
+      "sha256": "7e9d576e6fbbf5a3f5f8658a2c14555695f3da455d309776c07c1b654717da2b"
     },
     "sidebar": {
       "file": "sidebar.tsx",
@@ -45,6 +61,10 @@
     "skeleton": {
       "file": "skeleton.tsx",
       "sha256": "b9208c42c031d37665f15adb405f0238c58bcdb98b49d0030ac3c5620c2ee969"
+    },
+    "table": {
+      "file": "table.tsx",
+      "sha256": "0f2bcfdcb99c4e18bdce0a4413956d52e5c57ee4d14a4c83698eda6bc6bd03b6"
     },
     "tooltip": {
       "file": "tooltip.tsx",
