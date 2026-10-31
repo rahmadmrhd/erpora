@@ -79,8 +79,8 @@ function useElementHeight(ref: RefObject<HTMLElement | null>): number {
 export const dockChunks = {
   deskMenu: () => import("./dock-desk-menu"),
   reset(): void {
-    LazyDeskMenuPopover.reset();
-    LazyOverflowDeskSub.reset();
+    LazyDeskMenuPopover.reset(true);
+    LazyOverflowDeskSub.reset(true);
   },
 };
 const LazyDeskMenuPopover = retryableLazy(() =>
@@ -174,7 +174,10 @@ function PinnedDeskIcon({
   const [pending, setPending] = useState(false);
   const focused = useRef(false);
   const restoreFocus = useCallback((el: HTMLButtonElement | null) => {
-    if (el && focused.current) {
+    if (!el) return;
+    // Popover asli terpasang: `defaultOpen` hanya berlaku sekali (jangan membuka lagi bila dipasang ulang nanti).
+    setPending(false);
+    if (focused.current) {
       focused.current = false;
       el.focus();
     }

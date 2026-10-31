@@ -12,14 +12,28 @@ type AnyComponent = ComponentType<any>;
  */
 export function retryableLazy<C extends AnyComponent>(
   load: () => Promise<{ default: C }>,
-): ((props: ComponentProps<C>) => React.JSX.Element) & { reset(): void } {
-  let Current: AnyComponent = lazy(load);
+): ((props: ComponentProps<C>) => React.JSX.Element) & { reset(force?: boolean): void } {
+  // Percobaan terakhir ditolak? Hanya dalam keadaan itu `reset()` membuat komponen lazy baru: bila percobaan terakhir
+  // berhasil (atau sedang berjalan), reset tidak berbuat apa pun agar bagian yang sudah pulih tidak ter-remount
+  // (fokus dan popover terbuka tetap) oleh batas galat lain yang ikut mencoba lagi.
+  let failed = false;
+  const create = (): AnyComponent =>
+    lazy(() =>
+      load().catch((error: unknown) => {
+        failed = true;
+        throw error;
+      }),
+    );
+  let Current = create();
   const Wrapper = (props: ComponentProps<C>) => {
     const Component = Current;
     return <Component {...props} />;
   };
-  Wrapper.reset = (): void => {
-    Current = lazy(load);
+  // `force` (uji) membuat ulang komponen walau percobaan terakhir tidak gagal.
+  Wrapper.reset = (force = false): void => {
+    if (!failed && !force) return;
+    failed = false;
+    Current = create();
   };
   return Wrapper;
 }

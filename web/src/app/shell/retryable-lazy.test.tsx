@@ -83,4 +83,27 @@ describe("retryableLazy", () => {
       err.mockRestore();
     }
   });
+
+  test("reset tanpa kegagalan tidak membuat ulang komponen: tidak ter-remount dan chunk tidak dimuat ulang (I-2)", async () => {
+    let loads = 0;
+    const Lazy = retryableLazy(() => {
+      loads += 1;
+      return Promise.resolve({ default: () => <input aria-label="isian" /> });
+    });
+    const ui = (n: number) => (
+      <Suspense fallback={null}>
+        <p>{n}</p>
+        <Lazy />
+      </Suspense>
+    );
+    const { rerender } = render(ui(1));
+    const input = await screen.findByLabelText("isian");
+    input.focus();
+    Lazy.reset(); // dipanggil batas galat lain yang ikut mencoba lagi
+    rerender(ui(2));
+    await waitFor(() => expect(screen.getByText("2")).toBeInTheDocument());
+    expect(screen.getByLabelText("isian")).toBe(input);
+    expect(input).toHaveFocus();
+    expect(loads).toBe(1);
+  });
 });
