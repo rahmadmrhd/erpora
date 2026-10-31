@@ -65,4 +65,11 @@ const (
 	CodeMigrationsMismatch   = "migrations_mismatch"
 	CodeInvalidContract      = "invalid_contract"
 	CodeI18nMismatch         = "i18n_mismatch"
+
+	// Kode Desk (revisi M3a, design.md Komponen 5).
+	CodeDeskDuplicateID       = "desk_duplicate_id"
+	CodeDeskUnknownPermission = "desk_unknown_permission"
+	CodeDeskInvalidTo         = "desk_invalid_to"
+	CodeDeskLabelUnknown      = "desk_label_unknown"
+	CodeDeskDashboardLocked   = "desk_dashboard_locked"
 )
