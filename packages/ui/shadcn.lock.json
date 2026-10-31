@@ -38,6 +38,10 @@
       "file": "collapsible.tsx",
       "sha256": "eb4ee2a9ddb3c566c509753a79e4f4c9425d9f8474d55f61f8c8694928b6a509"
     },
+    "command": {
+      "file": "command.tsx",
+      "sha256": "145f62eede02d394e36146a904f2871bb6a51cff4ec92bc22ef062ae90d1d307"
+    },
     "dialog": {
       "file": "dialog.tsx",
       "sha256": "530b218674627eff96c25b83c55c2d6d27480a2e97881940cb5e9cd768dab3ae"
