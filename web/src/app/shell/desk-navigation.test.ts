@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { makeDashboardItem, makeDesk, makeDeskGroup, makeDeskItem } from "@erpora/platform-web";
+import {
+  makeDashboardItem,
+  makeDesk,
+  makeDeskGroup,
+  makeDeskItem,
+} from "@erpora/platform-web/testing";
 import { deskDashboardPath } from "./desk-navigation";
 
 describe("deskDashboardPath", () => {

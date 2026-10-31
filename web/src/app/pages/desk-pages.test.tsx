@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  type Desk,
-  makeDashboardItem,
-  makeDesk,
-  makeDeskItem,
-  SHOW_DESKS_STATE,
-} from "@erpora/platform-web";
+import { type Desk, SHOW_DESKS_STATE } from "@erpora/platform-web";
+import { makeDashboardItem, makeDesk, makeDeskItem } from "@erpora/platform-web/testing";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DashboardPage } from "./dashboard-page";

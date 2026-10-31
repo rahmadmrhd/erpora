@@ -31,12 +31,6 @@ export {
   writeDeskChoice,
 } from "./storage";
 export { resolveDeskSwitchTarget } from "./switch-target";
-export {
-  makeDashboardItem,
-  makeDesk,
-  makeDeskGroup,
-  makeDeskItem,
-} from "./testing";
 export type {
   Desk,
   DeskList,

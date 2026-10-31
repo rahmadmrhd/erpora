@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { type Desk, type NotificationSource, registerFixedItem } from "@erpora/platform-web";
 import {
-  type Desk,
   makeDashboardItem,
   makeDesk,
   makeDeskGroup,
   makeDeskItem,
-  type NotificationSource,
-  registerFixedItem,
-} from "@erpora/platform-web";
+} from "@erpora/platform-web/testing";
 import { SidebarTrigger } from "@erpora/ui";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

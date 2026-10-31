@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { type Desk, makeDashboardItem, makeDesk, makeDeskItem } from "@erpora/platform-web";
+import type { Desk } from "@erpora/platform-web";
+import { makeDashboardItem, makeDesk, makeDeskItem } from "@erpora/platform-web/testing";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Dock, fitDockCount } from "./dock";

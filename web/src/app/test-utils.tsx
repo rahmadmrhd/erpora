@@ -23,12 +23,14 @@ import {
   getActiveLocale,
   makeBootstrap,
   makeBootstrapModule,
+  usePageActions,
+} from "@erpora/platform-web";
+import {
   makeDashboardItem,
   makeDesk,
   makeDeskGroup,
   makeDeskItem,
-  usePageActions,
-} from "@erpora/platform-web";
+} from "@erpora/platform-web/testing";
 import { focusManager, QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, render } from "@testing-library/react";

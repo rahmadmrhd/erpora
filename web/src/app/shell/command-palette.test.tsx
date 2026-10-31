@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import type { Desk } from "@erpora/platform-web";
 import {
-  type Desk,
   makeDashboardItem,
   makeDesk,
   makeDeskGroup,
   makeDeskItem,
-} from "@erpora/platform-web";
+} from "@erpora/platform-web/testing";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CommandPalette } from "./command-palette";
