@@ -278,9 +278,13 @@ export function DeskPanel({ variant }: { variant: PanelVariant }) {
         </SidebarHeader>
       ) : null}
       <SidebarContent>
-        <nav aria-label={ui("sidebar.label")} id={DESK_PANEL_ID} className="flex flex-col gap-2">
+        <nav
+          aria-label={ui("sidebar.label")}
+          id={DESK_PANEL_ID}
+          className="flex min-w-0 flex-col gap-2"
+        >
           <FixedGroup />
-          <SidebarSeparator />
+          <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
           <DeskMenu variant={variant} />
         </nav>
       </SidebarContent>

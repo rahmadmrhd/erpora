@@ -94,6 +94,15 @@ describe("DeskPanel: isi dan urutan", () => {
     expect(screen.queryByRole("button", { name: /^Menu akun/ })).toBeNull();
   });
 
+  test("pemisah tidak meluap secara horizontal: lebar penuh + mx-2 ditimpa w-auto (regresi bilah gulir horizontal)", async () => {
+    renderShell(<DeskPanel variant="pinned" />, { desks });
+    const nav = await ready();
+    const separator = nav.querySelector('[data-slot="sidebar-separator"]') as HTMLElement;
+    expect(separator.className).toContain("mx-2");
+    expect(separator.className).toContain("data-[orientation=horizontal]:w-auto");
+    expect(separator.className).not.toContain("data-[orientation=horizontal]:w-full");
+  });
+
   test("Floating dan sheet: logo di kepala dan pengguna di dasar", async () => {
     for (const variant of ["floating", "sheet"] as const) {
       const { unmount } = renderShell(<DeskPanel variant={variant} />, { desks });
@@ -242,7 +251,14 @@ describe("DeskPanel: menu Desk", () => {
       sidebar: { open: false, onOpenChange: () => {} },
     });
     const nav = await ready();
-    await user.click(await within(nav).findByRole("button", { name: "Reports" }));
+    // Chunk popover dimuat malas: tunggu pemicu popover asli menggantikan cadangan sebelum diklik.
+    await waitFor(() =>
+      expect(within(nav).getByRole("button", { name: "Reports" })).toHaveAttribute(
+        "aria-haspopup",
+        "dialog",
+      ),
+    );
+    await user.click(within(nav).getByRole("button", { name: "Reports" }));
     expect(await screen.findByRole("link", { name: "Sales" })).toBeInTheDocument();
   });
 
