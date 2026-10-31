@@ -144,7 +144,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
   - `task web:check`, `task lint arch check:gowork-off test`, `task contracts:check`; jalankan `task dev:setup` dan `web/dev-api.ts`, buka aplikasi dan pastikan Dock memuat Desk `Platform`, `example`, `exampleaddon`; tanyakan ke user bila ada kejanggalan tampilan.
 
 - [ ] 11. Dokumentasi (Kelas beban: Haiku)
-  - [ ] 11.1 PRD, ADR, dan catatan keputusan
+  - [x] 11.1 PRD, ADR, dan catatan keputusan
     - ADR-0006 dan PRD-000 (daftar slug 25 menjadi 26, tambah `desks`); ADR-0011 (komponen persis shadcn, mekanisme kunci snapshot D-1, supersede sebagian); PRD-000 Q40: catatan hasil serta pencatatan D-1 sampai D-10 yang menyimpang dari tulisan sebelumnya (nama `platform.desks.update` bukan `desk.update`; R1.3 menjadi kunci snapshot; selisih ukuran 36 vs 34 px). `requirements.md` R1.3 dan R13.1 sudah diubah pada 31 Okt 2026 (bersamaan penulisan tasks); di sini cukup pastikan PRD-000 Q40 memuat keputusan yang sama.
     - _Requirements: 21.4, 21.5_
   - [ ] 11.2 Panduan developer
@@ -260,6 +260,13 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 **Pemakaian dimigrasi.** `packages/*` tidak memakai komposit lama; `modules/example` dan `modules/exampleaddon` (`Button loading` → `LoadingButton`, `EmptyState` → `Empty`); `web/src/app/**`: `EmptyState`/`ErrorPage` → `EmptyNotice`/`ErrorNotice` (`web/src/app/components/notices.tsx`, komposisi `Empty`; judul galat tetap `<h1>`), `BadgeStatus` → `StatusBadge`, `LoadingIcon` → `Spinner`, `DialogContent size="wide"` → `className="sm:max-w-4xl"`, `variant="primary"` → `default`. Kontrak `PageAction.variant` (`packages/platform-web`) tetap `"primary"` dan dipetakan ke `default` di `page-actions-view` agar API modul tidak berubah.
 
 **Gate (31 Okt 2026).** `shadcn-check` OK (28 berkas); typecheck, lint, `deps` hijau; `bun test` 1162 lulus, 14 dilewati, 0 gagal (1176 tes, 101 berkas; baseline 1050/14/0); JS awal 190,3 KB gzip (batas 200 KB; baseline 189,6 KB). `task web:check` berhenti di `i18n:generate --check` (berkas `keys.gen.ts` example, exampleaddon, dan `platform-web/src/i18n/keys.platform.gen.ts` basi akibat katalog jalur backend), bukan akibat jalur ini. `bun audit` melaporkan 1 kerentanan moderat `minimatch` melalui `@stoplight/spectral-core`/`openapi-typescript` (`@erpora/web`), bukan dari dependensi baru (`next-themes` bersih); tidak diubah.
+
+### 11.1 Hasil (31 Okt 2026)
+
+- **ADR baru `docs/adr/0015-komponen-persis-shadcn-dan-kunci-snapshot.md`** (Accepted) memuat aturan komponen persis shadcn, kunci snapshot, dan dua penyimpangan terdaftar (patch label dan token). Spec menyebut "ADR-0011"; ADR-0011 sudah berstatus Accepted untuk keputusan M3a, sehingga keputusan baru diberi nomor 0015 dan ADR-0011 ditandai **sebagian Superseded** (keputusan 1 oleh ADR-0015; keputusan 3 `navigation[]` dicabut oleh PRD-000 Q40 butir 21). Penyimpangan penamaan ini perlu dikonfirmasi pemilik produk.
+- **PRD-000 Q40** ditambah butir 17 sampai 23: mekanisme kunci snapshot (R1.3), patch label dan token (R1.1), pemasangan komponen (`drawer` tidak dipasang, `command` disetujui, `sonner` dengan `next-themes`), permission `platform.desks.update` (bukan `desk.update`), model Desk di manifest tanpa `navigation` (D-2, D-3, D-5, D-9), penyimpanan `sessionStorage` dan `localStorage` tanpa cookie (D-10), dan keputusan desain yang tidak menyimpang (D-6, D-7, D-8, ambang dan Dock bawaan). Selisih 36 px dan 34 px sudah ada di butir (16).
+- **Verifikasi slug 26 (tanpa perubahan):** ADR-0006 butir 7 dan PRD-000 Q37 menyebut 26 slug dengan `desks`; `internal/platform/modules/registry/reserved.go` memuat `ui`, `sdk`, dan `desks`.
+- Berkas diubah: `docs/adr/0015-*.md` (baru), `docs/adr/0011-*.md` (status), `docs/prd/PRD-000-inisialisasi-project.md` (Q40).
 
 ## Task Dependency Graph
 
