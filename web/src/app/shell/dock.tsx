@@ -126,10 +126,13 @@ function OverflowItem({ desk, onSelect }: { desk: Desk; onSelect: (desk: Desk) =
  */
 export function DockDeskList({
   onSelected,
+  onMenuOpenChange,
   initialFocusRef,
 }: {
   /** Dipanggil setelah Desk dipilih (pil Floating menutup diri). */
   onSelected?: () => void;
+  /** Dipanggil saat menu "+N" (dirender di portal, di luar DOM daftar) dibuka atau ditutup. */
+  onMenuOpenChange?: (open: boolean) => void;
   /** Diisi dengan fungsi yang memfokuskan ikon Desk saat ini (atau pertama). */
   initialFocusRef?: RefObject<(() => void) | null>;
 }) {
@@ -207,7 +210,7 @@ export function DockDeskList({
       ))}
       {hidden.length > 0 ? (
         <li>
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={onMenuOpenChange}>
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"

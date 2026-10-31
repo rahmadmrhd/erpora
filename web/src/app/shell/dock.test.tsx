@@ -32,6 +32,25 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
+const originalResizeObserver = globalThis.ResizeObserver;
+function restoreResizeObserver() {
+  globalThis.ResizeObserver = originalResizeObserver;
+}
+/** Memalsukan `ResizeObserver` agar daftar Desk terukur setinggi `height` px (memaksa +N bila tak cukup). */
+function mockHeight(height: number) {
+  globalThis.ResizeObserver = class {
+    constructor(private cb: ResizeObserverCallback) {}
+    observe(target: Element) {
+      this.cb(
+        [{ target, contentRect: { height } } as unknown as ResizeObserverEntry],
+        this as unknown as ResizeObserver,
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 describe("fitDockCount", () => {
   test("semua muat: tanpa +N", () => {
     expect(fitDockCount({ total: 3, availableHeight: 200, itemSize: 40, gap: 4 })).toBe(3);
@@ -122,23 +141,7 @@ describe("Dock (Pinned)", () => {
   });
 
   describe("+N saat tinggi tidak cukup", () => {
-    const original = globalThis.ResizeObserver;
-    afterEach(() => {
-      globalThis.ResizeObserver = original;
-    });
-    function mockHeight(height: number) {
-      globalThis.ResizeObserver = class {
-        constructor(private cb: ResizeObserverCallback) {}
-        observe(target: Element) {
-          this.cb(
-            [{ target, contentRect: { height } } as unknown as ResizeObserverEntry],
-            this as unknown as ResizeObserver,
-          );
-        }
-        unobserve() {}
-        disconnect() {}
-      } as unknown as typeof ResizeObserver;
-    }
+    afterEach(restoreResizeObserver);
 
     test("menampilkan sebagian ikon dan sisanya di menu +N yang berfungsi", async () => {
       mockHeight(84); // 2 slot: 1 ikon + +N
@@ -249,5 +252,39 @@ describe("DockFloating", () => {
     const el = wrapper();
     expect(el.className).toContain("duration-280");
     expect(el.className).toContain("motion-reduce:transition-none");
+  });
+
+  describe("menu +N di portal (I-4)", () => {
+    afterEach(restoreResizeObserver);
+
+    test("blur ke isi menu dan pointer meninggalkan pil tidak menutup pil selama menu terbuka", async () => {
+      mockHeight(84); // 1 ikon + +N
+      const user = userEvent.setup();
+      const { router } = await renderFloating();
+      press();
+      const more = await screen.findByRole("button", { name: "+2 Desk lainnya" });
+      await user.click(more);
+      const menu = await screen.findByRole("menu");
+      // Isi menu dirender di portal (di luar DOM pil): fokus dan pointer ke sana bukan "keluar" dari pil.
+      fireEvent.focusOut(more, { relatedTarget: menu });
+      fireEvent.mouseLeave(wrapper());
+      await new Promise((r) => setTimeout(r, 400));
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+      await user.click(await screen.findByRole("menuitem", { name: "Example" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/example"));
+      await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
+    });
+
+    test("Escape menutup menu +N lebih dulu dan pil tetap terbuka", async () => {
+      mockHeight(84);
+      const user = userEvent.setup();
+      await renderFloating();
+      press();
+      await user.click(await screen.findByRole("button", { name: "+2 Desk lainnya" }));
+      await screen.findByRole("menu");
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+    });
   });
 });

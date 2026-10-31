@@ -30,6 +30,22 @@ export function DockFloating() {
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openedByKeyboard = useRef(false);
+  // Menu "+N" terbuka: isinya di portal (di luar DOM pil) sehingga fokus dan pointer ke sana bukan "keluar" dari pil.
+  const menuOpen = useRef(false);
+  const hovered = useRef(false);
+  const onMenuOpenChange = useCallback((isOpen: boolean) => {
+    if (isOpen) {
+      menuOpen.current = true;
+      return;
+    }
+    // Penutupan ditunda satu tick agar Escape yang menutup menu tidak sekaligus menutup pil (penangan window
+    // berjalan setelah Radix).
+    setTimeout(() => {
+      menuOpen.current = false;
+      // Menu ditutup dari luar pil (klik di luar): bila pointer tidak di atas pil, tutup seperti meninggalkannya.
+      if (!hovered.current) scheduleLeave();
+    }, 0);
+  }, []);
 
   const clearLeave = () => {
     if (leaveTimer.current !== null) {
@@ -37,6 +53,11 @@ export function DockFloating() {
       leaveTimer.current = null;
     }
   };
+
+  function scheduleLeave() {
+    clearLeave();
+    leaveTimer.current = setTimeout(() => hide(false), LEAVE_DELAY_MS);
+  }
 
   const show = useCallback(() => {
     clearLeave();
@@ -51,6 +72,7 @@ export function DockFloating() {
 
   const hide = useCallback((restoreFocus: boolean) => {
     clearLeave();
+    menuOpen.current = false;
     setOpen(false);
     const target = returnFocusRef.current;
     returnFocusRef.current = null;
@@ -68,7 +90,7 @@ export function DockFloating() {
         }
         return;
       }
-      if (open && event.key === "Escape") hide(true);
+      if (open && event.key === "Escape" && !menuOpen.current) hide(true);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -95,13 +117,18 @@ export function DockFloating() {
         data-state={open ? "open" : "closed"}
         aria-hidden={open ? undefined : true}
         inert={!open}
-        onMouseEnter={clearLeave}
-        onMouseLeave={() => {
-          if (pillRef.current?.contains(document.activeElement)) return;
+        onMouseEnter={() => {
+          hovered.current = true;
           clearLeave();
-          leaveTimer.current = setTimeout(() => hide(false), LEAVE_DELAY_MS);
+        }}
+        onMouseLeave={() => {
+          hovered.current = false;
+          if (menuOpen.current) return;
+          if (pillRef.current?.contains(document.activeElement)) return;
+          scheduleLeave();
         }}
         onBlur={(event) => {
+          if (menuOpen.current) return;
           const next = event.relatedTarget;
           if (next instanceof Node && event.currentTarget.contains(next)) return;
           // Fokus keluar pil (ke elemen lain atau jendela): tutup tanpa merebut fokus kembali.
@@ -114,7 +141,11 @@ export function DockFloating() {
           aria-label={t("dock.label")}
           className="flex max-h-[calc(100svh-2rem)] w-14 flex-col items-center gap-2 rounded-2xl border border-sidebar-border bg-sidebar py-2 text-sidebar-foreground shadow-lg"
         >
-          <DockDeskList onSelected={() => hide(false)} initialFocusRef={focusRef} />
+          <DockDeskList
+            onSelected={() => hide(false)}
+            onMenuOpenChange={onMenuOpenChange}
+            initialFocusRef={focusRef}
+          />
         </nav>
       </div>
     </>
