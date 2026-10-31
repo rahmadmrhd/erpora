@@ -13,13 +13,18 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import {
+  applyPatches,
   buildLock,
   componentName,
+  HOOK_PREFIX,
+  HOOKS_DIR,
   LOCK_PATH,
   listComponentFiles,
   loadLock,
+  loadPatches,
   normalizeCn,
   PACKAGE_DIR,
+  PATCHES_PATH,
   type ShadcnLock,
   UI_DIR,
 } from "./shadcn-check";
@@ -160,9 +165,12 @@ function readPackageJson(): Pkg {
 
 function prune(cli: string): void {
   const previous = loadLock(LOCK_PATH);
-  const present = new Set(listComponentFiles(UI_DIR).map(componentName));
+  const present = new Set([
+    ...listComponentFiles(UI_DIR).map(componentName),
+    ...listComponentFiles(HOOKS_DIR).map((f) => HOOK_PREFIX + componentName(f)),
+  ]);
   const kept = Object.keys(previous.components).filter((n) => present.has(n));
-  const lock = buildLock(UI_DIR, cli, { only: kept, previous });
+  const lock = buildLock(UI_DIR, cli, { only: kept, previous, hooksDir: HOOKS_DIR });
   writeJson(LOCK_PATH, lock);
   const dropped = Object.keys(previous.components).filter((n) => !present.has(n));
   console.log(
@@ -177,18 +185,32 @@ function sync(names: string[], cli: string): void {
 
   run([process.execPath, "run", "shadcn", "add", ...names, "-o", "-y"], PACKAGE_DIR);
 
-  // 1) normalisasi `from "cn"` hanya pada berkas yang disentuh CLI (komponen menyimpang lain tak diubah)
+  // 1) normalisasi `from "cn"` lalu patch deklaratif, hanya pada berkas yang disentuh CLI (komponen
+  //    menyimpang lain tak diubah). Patch gagal (string asal hilang) = sync gagal keras: registry berubah.
   const treeAfterCli = snapshotTree(join(PACKAGE_DIR, "src"));
   const uiPrefix = "components/ui/";
-  const touchedUi = changedPaths(treeBefore, treeAfterCli)
+  const hookPrefix = "hooks/";
+  const changed = changedPaths(treeBefore, treeAfterCli);
+  const touchedUi = changed
     .filter((p) => p.startsWith(uiPrefix) && !p.slice(uiPrefix.length).includes("/"))
     .map((p) => p.slice(uiPrefix.length))
     .filter((f) => listComponentFiles(UI_DIR).includes(f));
-  for (const file of touchedUi) {
-    const path = join(UI_DIR, file);
+  const touchedHooks = changed
+    .filter((p) => p.startsWith(hookPrefix) && !p.slice(hookPrefix.length).includes("/"))
+    .map((p) => p.slice(hookPrefix.length))
+    .filter((f) => listComponentFiles(HOOKS_DIR).includes(f));
+  const patches = loadPatches(PATCHES_PATH);
+  const touchedItems: [string, string][] = [
+    ...touchedUi.map((f): [string, string] => [componentName(f), join(UI_DIR, f)]),
+    ...touchedHooks.map((f): [string, string] => [
+      HOOK_PREFIX + componentName(f),
+      join(HOOKS_DIR, f),
+    ]),
+  ];
+  for (const [key, path] of touchedItems) {
     const src = readFileSync(path, "utf8");
-    const normalized = normalizeCn(src);
-    if (normalized !== src) writeFileSync(path, normalized);
+    const out = applyPatches(key, normalizeCn(src), patches);
+    if (out !== src) writeFileSync(path, out);
   }
 
   // 2) hapus `cn`, pin dependensi baru, rekonsiliasi lockfile
@@ -211,14 +233,16 @@ function sync(names: string[], cli: string): void {
   }
 
   // 3) kunci snapshot: komponen diminta + dependensi registry yang ikut tertimpa
-  const only = [...new Set([...names, ...touchedUi.map(componentName)])];
+  const only = [...new Set([...names, ...touchedItems.map(([key]) => key)])];
   const previous = existsSync(LOCK_PATH) ? loadLock(LOCK_PATH) : undefined;
-  const lock: ShadcnLock = buildLock(UI_DIR, cli, { only, previous });
+  const lock: ShadcnLock = buildLock(UI_DIR, cli, { only, previous, hooksDir: HOOKS_DIR });
   writeJson(LOCK_PATH, lock);
 
   // 4) laporan
   const treeAfter = snapshotTree(join(PACKAGE_DIR, "src"));
-  const outside = changedPaths(treeBefore, treeAfter).filter((p) => !p.startsWith(uiPrefix));
+  const outside = changedPaths(treeBefore, treeAfter).filter(
+    (p) => !p.startsWith(uiPrefix) && !p.startsWith(hookPrefix),
+  );
   console.log(`\nshadcn-sync: CLI ${cli}; komponen terkunci: ${only.join(", ")}.`);
   if (stripped.removed) console.log("  - dependensi `cn` dihapus dari package.json.");
   if (pinnedAll.length > 0) console.log(`  - dipin ke versi pasti: ${pinnedAll.join(", ")}.`);

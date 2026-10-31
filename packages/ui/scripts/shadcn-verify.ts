@@ -7,7 +7,14 @@
 // `shadcn add <k> --dry-run --diff` (CLI terpin; tidak menulis berkas) dan melaporkan selisih sebagai
 // kabar drift. Kode keluar selalu 0: drift bukan kegagalan build; pembaruan lewat `task shadcn:sync`.
 import { join } from "node:path";
-import { LOCK_PATH, loadLock, PACKAGE_DIR } from "./shadcn-check";
+import {
+  type LabelPatch,
+  LOCK_PATH,
+  loadLock,
+  loadPatches,
+  PACKAGE_DIR,
+  PATCHES_PATH,
+} from "./shadcn-check";
 import { parseComponentNames } from "./shadcn-sync";
 
 const BOX_LINE = /^│ │ ?(.*)$/;
@@ -19,7 +26,15 @@ const CN_IMPORT_LINE = /^[+-]import \{ cn \} from "(?:cn|@erpora\/ui\/lib\/utils
  * Mengambil baris selisih (+/-) dari keluaran `shadcn add --dry-run --diff`, tanpa header diff dan
  * tanpa pertukaran impor `cn`. Daftar kosong = identik dengan registry (di luar impor `cn`).
  */
-export function driftLines(output: string): string[] {
+export function driftLines(output: string, patches: LabelPatch[] = []): string[] {
+  // Baris yang berasal dari patch terdaftar bukan drift: sisi registry ('+') = find, sisi lokal ('-') = replace.
+  const patchLines = (text: string): string[] =>
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l !== "");
+  const registrySide = new Set(patches.flatMap((p) => patchLines(p.find)));
+  const localSide = new Set(patches.flatMap((p) => patchLines(p.replace)));
   const out: string[] = [];
   for (const raw of output.split(/\r?\n/)) {
     const m = BOX_LINE.exec(raw);
@@ -28,10 +43,15 @@ export function driftLines(output: string): string[] {
     if (HEADER.test(line)) continue;
     if (!(line.startsWith("+") || line.startsWith("-"))) continue;
     if (CN_IMPORT_LINE.test(line)) continue;
+    const body = line.slice(1).trim();
+    if (line.startsWith("+") && registrySide.has(body)) continue;
+    if (line.startsWith("-") && localSide.has(body)) continue;
     out.push(line);
   }
   return out;
 }
+
+const patches = loadPatches(PATCHES_PATH);
 
 async function diffOne(name: string): Promise<{ name: string; drift: string[]; error?: string }> {
   const proc = Bun.spawn([process.execPath, "run", "shadcn", "add", name, "--dry-run", "--diff"], {
@@ -45,7 +65,7 @@ async function diffOne(name: string): Promise<{ name: string; drift: string[]; e
     proc.exited,
   ]);
   if (code !== 0) return { name, drift: [], error: (stderr || stdout).trim().split("\n").pop() };
-  return { name, drift: driftLines(stdout) };
+  return { name, drift: driftLines(stdout, patches) };
 }
 
 async function main(argv: string[]): Promise<number> {

@@ -140,3 +140,29 @@ describe("driftLines (shadcn:verify)", () => {
     expect(driftLines(box([]))).toEqual([]);
   });
 });
+
+describe("driftLines dengan patch terdaftar", () => {
+  const patches = [
+    {
+      component: "dialog",
+      find: '<span className="sr-only">Close</span>',
+      replace: '<span className="sr-only"><UiLabel k="actions.close" /></span>',
+    },
+  ];
+  const box = (lines: string[]): string => lines.map((l) => `│ │ ${l}`).join("\n");
+
+  test("baris hasil patch (lokal) dan string asal patch (registry) tidak dianggap drift", () => {
+    const out = box([
+      "@@ -1,2 +1,2 @@",
+      '-<span className="sr-only"><UiLabel k="actions.close" /></span>',
+      '+<span className="sr-only">Close</span>',
+    ]);
+    expect(driftLines(out, patches)).toEqual([]);
+    expect(driftLines(out)).toHaveLength(2);
+  });
+
+  test("selisih lain tetap dilaporkan", () => {
+    const out = box(["-const a = 1", "+const a = 2"]);
+    expect(driftLines(out, patches)).toEqual(["-const a = 1", "+const a = 2"]);
+  });
+});

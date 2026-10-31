@@ -188,3 +188,122 @@ describe("buildLock", () => {
     expect(second.synced).toBe(true);
   });
 });
+
+// ---- Patch label deklaratif dan kunci hooks (keputusan pemilik produk 31 Okt 2026) ----
+
+import {
+  applyPatches,
+  type LabelPatch,
+  patchProblems,
+} from "../../packages/ui/scripts/shadcn-check";
+
+const PATCH: LabelPatch = {
+  component: "dialog",
+  find: '<span className="sr-only">Close</span>',
+  replace: '<span className="sr-only"><UiLabel k="actions.close" /></span>',
+  reason: "label via useUiLabel",
+};
+const RAW = `${CN_LOCAL}export const x = <span className="sr-only">Close</span>\n`;
+
+describe("applyPatches", () => {
+  test("mengganti string asal pada komponen yang cocok", () => {
+    const out = applyPatches("dialog", RAW, [PATCH]);
+    expect(out).toContain('<UiLabel k="actions.close" />');
+    expect(out).not.toContain(">Close<");
+  });
+
+  test("idempoten: patch yang sudah terpasang tidak diterapkan dua kali", () => {
+    const once = applyPatches("dialog", RAW, [PATCH]);
+    expect(applyPatches("dialog", once, [PATCH])).toBe(once);
+  });
+
+  test("patch komponen lain diabaikan", () => {
+    expect(applyPatches("sheet", RAW, [PATCH])).toBe(RAW);
+  });
+
+  test("string asal tidak ditemukan (registry berubah) melempar dengan nama komponen", () => {
+    expect(() => applyPatches("dialog", CN_LOCAL, [PATCH])).toThrow(/dialog/);
+  });
+
+  test("jumlah kemunculan harus sama dengan count (default 1)", () => {
+    const twice = `${RAW}${RAW}`;
+    expect(() => applyPatches("dialog", twice, [PATCH])).toThrow(/2/);
+    expect(applyPatches("dialog", twice, [{ ...PATCH, count: 2 }]).match(/UiLabel/g)).toHaveLength(
+      2,
+    );
+  });
+
+  test("patch yang string asalnya bagian dari pengganti (sisipan impor) idempoten", () => {
+    const imp: LabelPatch = {
+      component: "dialog",
+      find: 'import * as React from "react"',
+      replace: 'import * as React from "react"\nimport { UiLabel } from "../../labels"',
+    };
+    const src = 'import * as React from "react"\nconst a = 1\n';
+    const once = applyPatches("dialog", src, [imp]);
+    expect(once).toContain('import { UiLabel } from "../../labels"');
+    expect(applyPatches("dialog", once, [imp])).toBe(once);
+  });
+});
+
+describe("patchProblems", () => {
+  test("patch terpasang: tidak ada masalah", () => {
+    expect(patchProblems("dialog", applyPatches("dialog", RAW, [PATCH]), [PATCH])).toEqual([]);
+  });
+
+  test("patch tidak terpasang: masalah menyebut komponen dan task shadcn:sync", () => {
+    const res = patchProblems("dialog", RAW, [PATCH]);
+    expect(res).toHaveLength(1);
+    expect(res[0]).toContain("dialog");
+    expect(res[0]).toContain("task shadcn:sync");
+  });
+});
+
+describe("kunci hooks dan patch pada checkLock/buildLock", () => {
+  const putHook = (name: string, content: string): void => {
+    mkdirSync(join(root, "hooks"), { recursive: true });
+    writeFileSync(join(root, "hooks", name), content);
+  };
+  const hooksDir = (): string => join(root, "hooks");
+
+  test("hook dikunci dengan kunci hooks/<nama>; berkas berubah gagal", () => {
+    put("button.tsx", CN_LOCAL);
+    putHook("use-mobile.ts", "export const a = 1\n");
+    const lock = buildLock(ui, "4.21.5", { hooksDir: hooksDir() });
+    expect(Object.keys(lock.components)).toEqual(["button", "hooks/use-mobile"]);
+    expect(lock.components["hooks/use-mobile"]?.file).toBe("use-mobile.ts");
+    expect(checkLock(ui, lock, { hooksDir: hooksDir() }).problems).toEqual([]);
+    putHook("use-mobile.ts", "export const a = 2\n");
+    const res = checkLock(ui, lock, { hooksDir: hooksDir() });
+    expect(res.problems).toHaveLength(1);
+    expect(res.problems[0]).toContain("hooks/use-mobile");
+  });
+
+  test("hook tanpa entri kunci gagal", () => {
+    put("button.tsx", CN_LOCAL);
+    const lock = buildLock(ui, "4.21.5", { hooksDir: hooksDir() });
+    putHook("use-mobile.ts", "x");
+    expect(checkLock(ui, lock, { hooksDir: hooksDir() }).problems[0]).toContain("hooks/use-mobile");
+  });
+
+  test("patch tidak terpasang pada berkas yang hash-nya cocok tetap gagal", () => {
+    put("dialog.tsx", RAW);
+    const lock = buildLock(ui, "4.21.5"); // kunci dibuat dari berkas tanpa patch
+    const res = checkLock(ui, lock, { patches: [PATCH] });
+    expect(res.problems).toHaveLength(1);
+    expect(res.problems[0]).toContain("task shadcn:sync");
+  });
+
+  test("patch terpasang dan hash cocok lolos", () => {
+    put("dialog.tsx", applyPatches("dialog", RAW, [PATCH]));
+    const lock = buildLock(ui, "4.21.5");
+    expect(checkLock(ui, lock, { patches: [PATCH] }).problems).toEqual([]);
+  });
+
+  test("patch menunjuk komponen tanpa berkas gagal", () => {
+    put("button.tsx", CN_LOCAL);
+    const lock = buildLock(ui, "4.21.5");
+    const res = checkLock(ui, lock, { patches: [PATCH] });
+    expect(res.problems.some((p) => p.includes("dialog"))).toBe(true);
+  });
+});
