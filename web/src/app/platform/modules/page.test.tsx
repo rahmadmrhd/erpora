@@ -282,7 +282,7 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     );
   });
 
-  test("G-9: bila tombol pemicu sudah hilang saat dialog ditutup, fokus pindah ke judul halaman (bukan body)", async () => {
+  test("G-9: bila tombol pemicu sudah hilang saat dialog ditutup, fokus pindah ke wadah halaman (bukan body; judul halaman hanya di breadcrumb)", async () => {
     const user = userEvent.setup();
     const { setAdminApi } = await open([shop()], {
       postStatus: 404,
@@ -297,8 +297,12 @@ describe("dialog konfirmasi dan eksekusi (R13.3, R13.5)", () => {
     expect(screen.queryByRole("button", { name: "Aksi untuk Shop" })).toBeNull();
     await user.click(close);
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
-    await waitFor(() => expect(document.activeElement?.tagName).toBe("H1"));
-    expect(document.activeElement?.textContent).toBe("Modul");
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement?.tagName).toBe("DIV");
+    expect(document.activeElement).toHaveTextContent("Daftar modul");
+    expect(screen.queryAllByRole("heading", { level: 1 }).map((h) => h.textContent)).not.toContain(
+      "Modul",
+    );
   });
 
   test("M-1: Aktifkan modul nonaktif tidak memuat katalog namespace modul (404 di backend); label dari nama/key API", async () => {

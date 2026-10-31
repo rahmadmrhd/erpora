@@ -1,4 +1,4 @@
-import { Message, useDesks, useTranslation } from "@erpora/platform-web";
+import { useDesks, useTranslation } from "@erpora/platform-web";
 import { Skeleton } from "@erpora/ui";
 import type { ReactNode } from "react";
 import { EmptyNotice } from "../components/notices";
@@ -55,9 +55,6 @@ export function DashboardPage({ deskId }: { deskId: string }) {
   }
   return (
     <div className="flex min-h-full flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold">
-        <Message message={desk.label} />
-      </h1>
       <DashboardSlots />
     </div>
   );

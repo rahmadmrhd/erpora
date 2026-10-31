@@ -16,7 +16,6 @@ declare module "./types" {
       "desk.dashboard": {};
       "desk.modules": {};
       "desk.title": {};
-      "desks.description": {};
       "desks.empty.description": {};
       "desks.empty.title": {};
       "desks.loadError.description": {};
@@ -178,7 +177,6 @@ declare module "./types" {
       "modules.status.missing": {};
       "modules.status.uninstalled": {};
       "modules.status.upgrade_pending": {};
-      "modules.title": {};
       "modules.version.binary": { version: string | number };
       "modules.version.installed": { version: string | number };
       "modules.version.notInstalled": {};

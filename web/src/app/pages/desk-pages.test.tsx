@@ -222,9 +222,10 @@ describe("DashboardPage (R14)", () => {
     expect(await screen.findByTestId("dashboard-loading")).toBeInTheDocument();
   });
 
-  test("Desk ada: judul Desk, wilayah slot widget, dan Empty karena belum ada widget", async () => {
+  test("Desk ada: tanpa judul halaman (K9), wilayah slot widget, dan Empty karena belum ada widget", async () => {
     renderPage({ desks, routes: [{ path: "/", component: dash("example") }] });
-    expect(await screen.findByRole("heading", { name: "Catatan Contoh" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Widget Dashboard" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.getByRole("region", { name: "Widget Dashboard" })).toBeInTheDocument();
     expect(screen.getByText("Dashboard Belum Tersedia")).toBeInTheDocument();
   });

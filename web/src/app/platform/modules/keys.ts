@@ -9,7 +9,6 @@ type NoArgs = Record<never, never>;
 const a = <A extends object = NoArgs>(): A => undefined as unknown as A;
 
 export const MODULE_KEYS = {
-  "modules.title": a(),
   "modules.description": a(),
   "modules.empty": a(),
   "modules.required": a(),

@@ -14,12 +14,13 @@ function open() {
 }
 
 describe("halaman /example-addon (ringkasan)", () => {
-  test("menampilkan judul dan ringkasan noteCount dari API terketik", async () => {
+  test("menampilkan ringkasan noteCount dari API terketik", async () => {
     const f = installFetch(() => json({ data: { noteCount: 3 } }));
     restore = f.restore;
     await open();
-    expect(await screen.findByRole("heading", { level: 1, name: "Ringkasan" })).toBeInTheDocument();
     expect(await screen.findByText("3 catatan")).toBeInTheDocument();
+    // Judul halaman hanya di breadcrumb (K9): konten tidak memuat heading.
+    expect(screen.queryAllByRole("heading")).toHaveLength(0);
     expect(f.calls.map((c) => c.url)).toEqual(["/api/example-addon/summary"]);
   });
 

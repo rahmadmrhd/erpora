@@ -99,9 +99,6 @@ export function NotesPage() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">
-          <Message message={msg("example", "page.notes.title")} />
-        </h1>
         <p className="text-sm text-muted-foreground">
           <Message message={msg("example", "page.notes.description")} />
         </p>

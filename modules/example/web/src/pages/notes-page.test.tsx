@@ -36,13 +36,14 @@ function open() {
 }
 
 describe("halaman /example (daftar catatan)", () => {
-  test("memuat catatan lewat API terketik dan menampilkan judul, kolom, baris, dan ringkasan jumlah", async () => {
+  test("memuat catatan lewat API terketik dan menampilkan kolom, baris, dan ringkasan jumlah", async () => {
     const f = installFetch(() => json(listBody(notes)));
     restore = f.restore;
     await open();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Catatan" })).toBeInTheDocument();
     const table = await screen.findByRole("table");
+    // Judul halaman hanya di breadcrumb (K9): konten tidak memuat heading.
+    expect(screen.queryAllByRole("heading")).toHaveLength(0);
     expect(
       within(table)
         .getAllByRole("columnheader")

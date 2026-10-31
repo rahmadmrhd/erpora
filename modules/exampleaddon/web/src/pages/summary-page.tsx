@@ -45,9 +45,6 @@ export function SummaryPage() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">
-          <Message message={msg("example-addon", "page.summary.title")} />
-        </h1>
         <p className="text-sm text-muted-foreground">
           <Message message={msg("example-addon", "page.summary.description")} />
         </p>

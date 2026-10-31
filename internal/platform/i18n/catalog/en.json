@@ -189,7 +189,6 @@
     "unknown": "An unknown error occurred"
   },
   "modules": {
-    "title": "Modules",
     "description": "Compiled modules and their status for this tenant.",
     "empty": "No modules yet.",
     "required": "Required",
@@ -336,7 +335,6 @@
   },
   "desks": {
     "title": "Desks",
-    "description": "Choose a Desk to start working.",
     "empty": {
       "title": "No Desks yet",
       "description": "You do not have access to any Desk. Contact your administrator if this is unexpected."

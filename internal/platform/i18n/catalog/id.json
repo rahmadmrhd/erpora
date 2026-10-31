@@ -189,7 +189,6 @@
     "unknown": "Terjadi kesalahan yang tidak dikenali"
   },
   "modules": {
-    "title": "Modul",
     "description": "Daftar modul terkompilasi dan statusnya untuk tenant ini.",
     "empty": "Belum ada modul.",
     "required": "Wajib",
@@ -336,7 +335,6 @@
   },
   "desks": {
     "title": "Desk",
-    "description": "Pilih Desk untuk mulai bekerja.",
     "empty": {
       "title": "Belum ada Desk",
       "description": "Anda belum memiliki akses ke Desk mana pun. Hubungi administrator bila ini tidak seharusnya."
