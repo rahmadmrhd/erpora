@@ -2,6 +2,7 @@ package gen
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -276,5 +277,47 @@ func TestMakeModule_DeskDeclaredAndNoNavigationOrIndexRoute(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Modul tanpa --frontend tidak punya Desk (R11.1: hanya modul ber-web/ yang wajib) dan katalognya tidak membawa
+// kunci yatim yang hanya dipakai Desk atau halaman web (desk.*, nav.*, page.*).
+func TestMakeModule_WithoutFrontendHasNoDeskAndNoOrphanI18nKeys(t *testing.T) {
+	root := fixtureRepo(t)
+	plan, err := MakeModule(root, ModuleOptions{Name: "stock-opname", Publisher: "acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mf, err := module.ParseManifest([]byte(opContent(t, plan.Ops, "modules/stockopname/module.json")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if problems := manifest.Validate(mf); len(problems) != 0 {
+		t.Fatalf("manifest tidak valid: %+v", problems)
+	}
+	if mf.Desk != nil {
+		t.Errorf("Desk = %+v, want nil untuk modul tanpa --frontend", mf.Desk)
+	}
+	if raw := opContent(t, plan.Ops, "modules/stockopname/module.json"); strings.Contains(raw, `"desk"`) {
+		t.Errorf("module.json tidak boleh memuat desk: %s", raw)
+	}
+	cats := fstest.MapFS{"id.json": {Data: []byte(opContent(t, plan.Ops, "modules/stockopname/i18n/id.json"))}}
+	if ps := registry.CheckDesk(mf, cats); len(ps) != 0 {
+		t.Errorf("CheckDesk (modul tanpa frontend tidak wajib desk): %+v", ps)
+	}
+	for _, loc := range []string{"id", "en"} {
+		raw := opContent(t, plan.Ops, "modules/stockopname/i18n/"+loc+".json")
+		var cat map[string]any
+		if err := json.Unmarshal([]byte(raw), &cat); err != nil {
+			t.Fatalf("katalog %s bukan JSON valid: %v\n%s", loc, err, raw)
+		}
+		if len(cat) != 1 || cat["errors"] == nil {
+			t.Errorf("katalog %s harus hanya memuat errors (kunci desk/nav/page yatim): %v", loc, cat)
+		}
+	}
+	for _, path := range opPaths(plan.Ops) {
+		if strings.Contains(path, "/web/") {
+			t.Errorf("tanpa --frontend tidak boleh ada berkas web: %s", path)
+		}
 	}
 }
