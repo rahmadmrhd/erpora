@@ -43,54 +43,54 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - Ganti `variant="primary"`, `size="md"`, `BadgeStatus`, `EmptyState`, `ErrorPage`, `Kbd`, `LoadingIcon` di `packages/*`, `modules/*/web`, dan `web/` ke API baru. `bun run --filter '*' typecheck`, `lint`, `deps` (F4: `ui` tetap daun), dan `bun test` lolos; laporkan tes yang dihapus. Entry JS awal ≤ 200 KB gzip; bagian berat dimuat malas.
     - _Requirements: 1.7, 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 3. Checkpoint — komponen
+- [x] 3. Checkpoint — komponen
   - Jalankan `task web:check` (termasuk `shadcn-check`); pastikan tak ada pemakaian varian lama tersisa (`grep` `variant="primary"`, `size="md"`), laporan build mencetak ukuran JS awal, dan jumlah tes dibandingkan baseline 1.1. Tanyakan ke user bila anggaran mendekati batas.
 
-- [ ] 4. Manifest `desk` dan validasi registry (Kelas beban: Sonnet; 4.5 Haiku)
-  - [ ] 4.1 Tulis test skema, manifest, dan registry (merah dulu)
+- [x] 4. Manifest `desk` dan validasi registry (Kelas beban: Sonnet; 4.5 Haiku)
+  - [x] 4.1 Tulis test skema, manifest, dan registry (merah dulu)
     - `contracts/validate_test.go` (pola `TestValidate_I18nSection`): `desk` valid lolos; ditolak: tanpa `label`/`icon`/`menus`, `menus` > 100, `to` bermuatan skema/host atau `//`, `permission` kosong, grup bersarang dua tingkat, properti tak dikenal. `sdk/module` test `checkMatchesRaw` untuk `Desk`. `registry` test kode baru: `desk_duplicate_id`, `desk_unknown_permission`, `desk_invalid_to`, `desk_label_unknown`, `desk_dashboard_locked`. `reserved_test`: 26 slug, subtest `desks`. `modcheck` test aturan `DESK`: modul dengan `web/` tanpa `desk` ditolak (menyebut berkas dan kunci); modul tanpa `web/` lolos.
     - **Validates: Requirements 10.2, 11.2, 11.3, 11.4**
-  - [ ] 4.2 Skema, struct Go, dan pembangkit TS
+  - [x] 4.2 Skema, struct Go, dan pembangkit TS
     - `contracts/module.schema.json` (`desk`, `$defs/deskMenu`, `additionalProperties:false`), `sdk/module/manifest.go` (`Desk`, `DeskDashboard`, `DeskMenu`; tag `json`), `task erpora -- contracts:generate` membangkitkan `manifest.gen.ts` yang memuat `desk`; `task contracts:check` lolos. Tidak ada perubahan breaking pada manifest yang ada.
     - _Requirements: 11.1, 11.2_
-  - [ ] 4.3 Validasi registry dan slug tercadang
+  - [x] 4.3 Validasi registry dan slug tercadang
     - `internal/platform/modules/registry/desk.go` (lima kode galat baru di `errors.go`; `desk_label_unknown` memakai `CatalogSource`), `reserved.go`: tambah `desks` (25 menjadi 26) dan perbarui `rules_test.go`; **hanya** `internal/app` merakit modul (D7) dan `internal/platform/**` tidak mengimpor `modules/**` (D2).
     - _Requirements: 10.2, 11.2, 11.3_
-  - [ ] 4.4 Aturan `DESK` di `module:check`
+  - [x] 4.4 Aturan `DESK` di `module:check`
     - `internal/devtools/modcheck/check.go`: modul berdirektori `web/` wajib `desk`; semua temuan registry di 4.3 dilaporkan dengan berkas dan kunci; Dashboard dibangkitkan, tidak boleh dideklarasikan.
     - _Requirements: 11.3, 11.4_
-  - [ ] 4.5 Manifest modul referensi
+  - [x] 4.5 Manifest modul referensi
     - `modules/example/module.json`: `desk` (label `desk.title`, ikon `file-text`, menu `notes` → `/notes`, permission `example.notes.read`); `modules/exampleaddon/module.json`: menu `summary` → `/summary`, permission `example-addon.summary.read`. Tambah kunci i18n (`desk.title`, `nav.notes`, `nav.summary`) pada katalog `id`/`en` tiap modul; `task erpora -- module:check` lolos untuk keduanya.
     - _Requirements: 11.1, 11.6, 19.1_
 
-- [ ] 5. Backend Desk (Kelas beban: Sonnet)
-  - [ ] 5.1 Migrasi, store, dan allowlist (test dulu)
+- [x] 5. Backend Desk (Kelas beban: Sonnet)
+  - [x] 5.1 Migrasi, store, dan allowlist (test dulu)
     - Test integrasi (`-tags integration`, PostgreSQL via tunnel, `-p 2`): `migrations/control/0004_desk_overrides.sql` (skema `design.md` §6) naik dan turun; `store.ListSite(ctx, tenant)` mengisolasi tenant (tenant A tidak melihat baris tenant B); CHECK menolak `desk_id` tidak valid dan `scope` selain `site|user`. Implementasi `internal/platform/desks/store/store.go` (`Store{control database.ControlDB}`, metode menerima `tenancy.TenantID` eksplisit, semua kueri menyaring `tenant_id`; **hanya baca**); tambahkan ke allowlist D3b (`internal/archcheck/rules.go`) beserta tesnya. Tanpa `AutoMigrate`.
     - _Requirements: 13.4, 13.5, 20.1_
-  - [ ] 5.2 Tulis test `desks.Service` (merah dulu)
+  - [x] 5.2 Tulis test `desks.Service` (merah dulu)
     - Tabel tes: modul nonaktif tidak membentuk Desk; menu tanpa izin tidak dikirim; grup tanpa anak dibuang; Desk dibuang bila tak ada menu non-Dashboard yang diizinkan (Dashboard tidak dihitung, D-5); Dashboard selalu item pertama dan `locked`; merge timpaan (sembunyi/urut) tidak pernah menyembunyikan Dashboard; urutan: Platform pertama lalu urutan registry; `ownerDesk` terisi; ETag stabil untuk isi sama dan **berubah bila izin berubah**; `List` tidak menerima `tenantId`/`userId` (tenant dari `tenancy.FromContext`, tanpa tenant → galat). Tes IDOR kontrak: dua principal dengan izin berbeda mendapat respons berbeda tanpa kebocoran silang.
     - **Validates: Requirements 11.7, 12.2, 12.3, 12.4, 12.5, 12.6, 20.1**
-  - [ ] 5.3 Implementasi `internal/platform/desks`
+  - [x] 5.3 Implementasi `internal/platform/desks`
     - `desk.go` (tipe), `merge.go` (terapkan `config{hidden,order}`, validasi skema `config`, abaikan `hidden` yang memuat Dashboard), `platform.go` (Desk Platform sebagai `module.Desk` Go: menu `Modul` → `/modules`, permission `platform.modules.read`; label di katalog `platform`), `service.go` (`List(ctx) (View, error)`; ETag SHA-256 atas JSON akhir). Penyaringan hanya lewat `runtime.Authorizer.Allow`.
     - _Requirements: 11.4, 11.5, 12.1, 12.2, 12.3, 12.4, 12.5, 13.5_
-  - [ ] 5.4 Endpoint, kontrak, dan perakitan
+  - [x] 5.4 Endpoint, kontrak, dan perakitan
     - `internal/platform/desks/api.go` (pola `i18n/admin`: `atomic.Pointer[Backend]`, `Bind`, 503 `not_ready`; `GET /api/platform/desks`, `httpserver.CheckETag`, `Cache-Control: private, no-cache`, `Vary: Cookie, Authorization`; amplop `{"data":{"desks":[...],"revision":"<etag>"}}`). Daftarkan di `buildRegistry` (`platformAPIs.Desks`) dengan `PlatformCapabilities` + `platform.desks.read` dan `platform.desks.update`; `Bind` di `assemble.go`. `contracts/openapi/platform.yaml`: path `/desks` (`operationId: listDesks`, `x-erp-permission: platform.desks.read`, respons 200 dengan `example`, 304, 403, 503), skema `Desk`/`DeskMenuItem`/`DeskMenuGroup`/`DesksEnvelope`, `x-erp-classification: internal`; `task erpora -- contracts:generate`; perbarui `inspect_routes.golden` (`-update`). Tes handler: 200, 304 (`If-None-Match`), 403, 503, dan route **tidak** ada di `public_routes.txt`. Endpoint tidak menerima id; bila ditambah kelak wajib tes IDOR A vs B.
     - _Requirements: 12.1, 12.5, 12.6, 12.7, 12.8, 13.1, 13.3, 20.1, 21.1_
 
 - [ ] 6. Checkpoint — backend
   - `task lint arch check:gowork-off test`, `task contracts:check`, `task test:integration` (VPS via tunnel; jangan memulai container di laptop); `module:check` untuk `example` dan `exampleaddon`; tanyakan ke user bila ada kegagalan di luar perubahan ini.
 
-- [ ] 7. Logika Desk di klien dan SDK modul (Kelas beban: Sonnet; 7.4 Haiku untuk dokumentasi kode saja)
-  - [ ] 7.1 Tulis test `resolveDesk`, `matchMenu`, dan penyimpanan (merah dulu)
+- [x] 7. Logika Desk di klien dan SDK modul (Kelas beban: Sonnet; 7.4 Haiku untuk dokumentasi kode saja)
+  - [x] 7.1 Tulis test `resolveDesk`, `matchMenu`, dan penyimpanan (merah dulu)
     - `packages/platform-web/src/desk/*.test.ts` dengan `fast-check`: kandidat yang tidak ada di daftar server tidak pernah dipilih; urutan tahap 1–5 dan hasil `step`; tahap 4–5 hanya bila `page` ada; kandidat yang tidak memuat `page` dilewati; nilai storage berbahaya (tidak cocok `^[a-z0-9:-]{1,64}$`, terlalu panjang, bukan string) diabaikan tanpa galat; `matchMenu`: Dashboard (`/<slug>`) cocok hanya persis, item lain cocok pada `path === to` atau `to + "/"`, terpanjang menang, `/example2` tidak cocok dengan `/example`; storage melempar (mode privat) → perilaku bawaan tanpa galat.
     - **Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.6, 9.7, 20.2, 20.3**
-  - [ ] 7.2 Implementasi fungsi murni dan klien API
+  - [x] 7.2 Implementasi fungsi murni dan klien API
     - `src/desk/{types,resolver,match-menu,storage,api}.ts`: tipe `Desk`, `DeskMenuItem`, `DeskMenuGroup`, `DeskList`; `resolveDesk`, `matchMenu`; storage `sessionStorage["erpora.desk.tab"]` dan `localStorage["erpora.desk"]` (try/catch, hanya id); `useDesks` memakai TanStack Query dengan `If-None-Match` lewat klien terketik `@erpora/platform-contracts`.
     - _Requirements: 9.1, 9.2, 9.4, 12.8_
-  - [ ] 7.3 Provider, validasi navigasi, preferensi, sumber pengguna
+  - [x] 7.3 Provider, validasi navigasi, preferensi, sumber pengguna
     - `src/desk/{provider,validation}.tsx` (`DeskProvider`: `currentDeskId`, `setCurrentDesk`, `showDesks` dari state riwayat; `useDeskValidation` validasi Desk pada tiap perubahan lokasi tanpa muat ulang), `src/prefs/index.ts` (kunci `erpora.dock`, bawaan `floating`), `src/sources/current-user.tsx` (`defaultDesk: null` pada sumber sementara).
     - _Requirements: 4.6, 9.3, 9.5, 9.7, 10.5_
-  - [ ] 7.4 SDK modul: hapus `navigation`, tolak rute indeks
+  - [x] 7.4 SDK modul: hapus `navigation`, tolak rute indeks
     - `packages/module-sdk/src/{types,define-module,routing}.ts`: `FrontendModule.navigation` dihapus; `attachModuleRoutes` menolak rute indeks (`path: "/"`) dengan `ModuleDefinitionError`; `@erpora/module-sdk/testing` mendapat `assertDeskRoutes(module, manifestDesk)` (setiap `to` ada di rute terdaftar). `platform-web/src/registry`: hapus `selectNavigation`. Tes tiap perubahan (test dulu).
     - _Requirements: 10.8, 11.3_
 
@@ -132,11 +132,11 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - Kunci baru di namespace `ui` dan `platform` (`id` dan `en`) untuk semua teks shell baru; `task i18n:generate`, `task i18n:check --strict`, dan `i18n:generate --check` lolos.
     - _Requirements: 19.1_
 
-- [ ] 9. Modul referensi dan templat generator (Kelas beban: Haiku untuk 9.1; Sonnet untuk 9.2)
-  - [ ] 9.1 Frontend `example` dan `exampleaddon`
+- [x] 9. Modul referensi dan templat generator (Kelas beban: Haiku untuk 9.1; Sonnet untuk 9.2)
+  - [x] 9.1 Frontend `example` dan `exampleaddon`
     - Hapus `navigation` dari `defineModule`; rute indeks lama bergeser ke `/example/notes` dan `/example-addon/summary` (indeks menjadi Dashboard bawaan shell); perbarui tes modul dengan `assertDeskRoutes`; `bun test` dan `typecheck` modul lolos.
     - _Requirements: 10.8, 11.1, 11.6, 14.1_
-  - [ ] 9.2 Templat `make:module --frontend` dan golden
+  - [x] 9.2 Templat `make:module --frontend` dan golden
     - `internal/devtools/templates/module/*`: tambahkan `desk` ke `module.json` templat, hapus `navigation` dan rute indeks dari templat web, perbarui golden generator dan tesnya; hasil generate lolos `module:check`. `task test:generator` dijalankan di 12.2 (±12 menit; Docker + Bun).
     - _Requirements: 11.6, 21.1_
 
@@ -177,6 +177,71 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
 - [ ] 13. Final checkpoint — Ensure all tests pass
   - Semua gate hijau dan tak ada temuan terbuka; laporkan terpisah: yang dikerjakan, yang menunggu konfirmasi (beserta alasan dan rekomendasi), dan yang sengaja tidak dikerjakan (API tulis timpaan, halaman Desks lengkap, Start Guide, Manage Dock/Edit Sidebar, Layout Compact/Full Width, Tiptap, Comments, sidebar kustom diperluas). Blok M3b boleh dimulai setelah ini.
 
+- [ ] 14. Putaran perbaikan 2 (31 Okt 2026): keputusan K1–K14 dan temuan review
+  - Sumber: `requirements.md` bagian "Keputusan putaran perbaikan 31 Okt 2026 (K1–K14)", PRD-000 Q40 butir 24, `design.md` D-1a dan D-11 sampai D-14. Dikerjakan sebelum checkpoint akhir 13 (13 diperiksa ulang setelah grup ini). Pertanyaan P-1 dan P-3 menunggu pemilik produk; sub-tugas yang bergantung padanya (14.1, 14.9) ditandai di bawah. Penyimpangan lain dari spek ditanyakan dulu.
+  - Model dan kelas beban: pekerjaan shell (14.1 sampai 14.11) dan backend (14.14, 14.20, 14.21) membutuhkan penilaian; perubahan dokumen dan mekanis (14.13, 14.15 templat, 14.25, 14.26) dapat dikerjakan lebih ringan. Gunakan satu agent per kelas beban dalam satu putaran.
+
+  - [ ] 14.1 K1: halaman Desks tanpa sidebar, Dock, atau panel (chrome khusus, D-13)
+    - Tes dulu: `/` menampilkan navbar khusus (logo, Search, lonceng, avatar) tanpa Dock, panel, atau breadcrumb Home; kisi kartu gaya `DeskList`; teks lewat i18n. Implementasi: `DesksPage` menyatakan varian chrome `desks` lewat konteks shell.
+    - Bergantung P-1 untuk judul `<h1>` halaman Desks.
+    - _Requirements: 10.3, 10.6, 10.9, 22.4_
+  - [ ] 14.2 K2: sorotan aktif tanpa outline atau cincin; latar `sidebar-accent`/`accent` pada ikon Desk aktif dan item menu aktif
+    - _Requirements: 4.1, 5.4_
+  - [ ] 14.3 K3: animasi sidebar Pinned (ciut/buka panel) dan panel Notifikasi mulus; tanpa lompatan layout atau meluncur melintasi Dock; hormati `prefers-reduced-motion`
+    - _Requirements: 5.6, 15.1, 19.2_
+  - [ ] 14.4 K4: verifikasi tidak ada scrollbar horizontal di sidebar pada Pinned, Floating, dan sheet di bawah 1024 px (tes dan pemeriksaan browser dengan `web/dev-api.ts`)
+    - _Requirements: 5.10_
+  - [ ] 14.5 K5: divider vertikal antara toggle sidebar dan breadcrumb di navbar
+    - _Requirements: 8.1_
+  - [ ] 14.6 K6: mode Pinned memindahkan Search, Notifikasi (dengan lencana), dan ToDo ke Dock tepat di bawah logo, lalu divider, ikon Desk, dan avatar di dasar; panel Pinned hanya label Desk dan menu Desk; Floating tetap. Tes urutan dan peran ARIA.
+    - _Requirements: 5.2, 4.1_
+  - [ ] 14.7 K7: garis pembatas vertikal Settings setinggi penuh dialog (tidak terpotong)
+    - _Requirements: 17.6_
+  - [ ] 14.8 K8: mode Pinned, klik ikon Desk (termasuk Desk aktif) membuka popover menu Desk bergaya item sidebar; memilih item menavigasi dan menetapkan Desk. Tes keyboard.
+    - _Requirements: 4.2, 4.9_
+  - [ ] 14.9 K9: langkah terakhir breadcrumb tebal dan lebih besar, dibungkus `<h1>` di luar `BreadcrumbPage` (shadcn tidak diubah); judul visual di konten dihapus; tes satu h1 per halaman. Bergantung P-3 (judul galat `ErrorNotice` menjadi `<h2>`) dan P-1.
+    - _Requirements: 7.9, 22.1, 22.2, 22.3, 22.5_
+  - [ ] 14.10 K10: pindah Desk memakai `resolveDeskSwitchTarget` (`packages/platform-web/src/desk/switch-target.ts`, sudah ada dengan `switch-target.test.ts`, belum di-commit saat catatan ini ditulis) pada ikon Dock Floating, item Pindah Desk di popover logo, dan entri lintas Desk di palet; klik nama Desk di breadcrumb dan kartu Desks tetap ke Dashboard. Commit berkas itu bersama pemakaiannya.
+    - _Requirements: 4.2, 6.5, 18.4_
+  - [ ] 14.11 K11: panel Notifikasi memakai jebakan fokus; klik di luar dan Escape tetap menutup; fokus kembali ke pemicu. Tes keyboard.
+    - _Requirements: 15.4, 19.3_
+  - [ ] 14.12 K12: patch perilaku sidebar; cookie `sidebar_state` diganti `localStorage["erpora.sidebar"]` lewat `packages/ui/shadcn.patches.json` (resync `sidebar` dengan `task shadcn:sync -- sidebar`, perbarui kunci); tes alat (patch terpasang, teks `find` yang hilang gagal keras) dan tes shell (tidak ada penulisan cookie); perbarui `packages/ui/README.md` bagian patch.
+    - _Requirements: 1.1, 9.1, 20.2_
+  - [ ] 14.13 K13: CLI shadcn tetap lewat `bunx shadcn@4.21.5` (keputusan pemilik produk 31 Okt 2026, D-11). Tidak ada pekerjaan kode; MINOR-1 sudah ditutup sebagai risiko diterima. Pemantauan `bun audit` ikut gate 14.27.
+    - _Requirements: 1.9_
+  - [ ] 14.14 K14: Desk tanpa menu berizin disembunyikan (bukan dinonaktifkan). Pastikan tes `desks.Service` dan frontend mencakup kasus ini. Catatan M3b (filter izin pemilihan menu Desk kustom) tidak dikerjakan di revisi ini.
+    - _Requirements: 12.2_
+  - [ ] 14.15 I-1: templat `make:module` tanpa `--frontend` tidak menghasilkan `desk` di `module.json` (kondisi Frontend di `module.json.tmpl`); tes generator; koreksi `docs/module-sdk/generators.md`. `task test:generator` dijalankan di 14.27.
+    - _Requirements: 11.6, 21.1_
+  - [ ] 14.16 I-2: preferensi zona waktu dipakai formatter tanggal dan waktu (`packages/platform-web/src/format/time.ts`, `resolveTimezone()`/`useTimezone()`), berlaku seketika; tes.
+    - _Requirements: 17.3, 17.4_
+  - [ ] 14.17 I-3: `biome.json` tidak boleh mematikan `noDangerouslySetInnerHtml*` untuk `packages/ui/src/components/ui/*.tsx` dan `src/hooks/*.ts`; selesaikan perubahan setengah jadi di working tree (`biome.json`, `web/tools/lint-rule.test.ts`); tes regresi.
+    - _Requirements: 20.4_
+  - [ ] 14.18 I-4: Dock Floating; menu "+N" di portal memicu `onBlur`/`onMouseLeave` yang menutup pil; abaikan blur dan leave ke dalam konten menu; tes.
+    - _Requirements: 4.5_
+  - [ ] 14.19 Minor 1: panel Notifikasi tidak menutupi Dock saat panel menu diciutkan (offset = max(tepi kanan Dock, tepi kanan kontainer terlihat)); tes.
+    - _Requirements: 15.1_
+  - [ ] 14.20 Minor 2: klien Desk memakai tipe lokal dan cast; hapus `toDesksClient` dan ambil tipe dari `PlatformComponents` (`platform.gen.ts`).
+    - _Requirements: 12.1, 12.7_
+  - [ ] 14.21 Minor 3: kontrak OpenAPI `/desks` mendokumentasikan `400 tenant_unresolved`; `task contracts:check`; bangkitkan ulang TS.
+    - _Requirements: 12.7_
+  - [ ] 14.22 Minor 4: `DashboardPage` menangani status `error` (galat muat dan tombol coba lagi).
+    - _Requirements: 14.4_
+  - [ ] 14.23 Minor 5: hapus duplikasi `deskDashboardPath` dan `findActiveItem` di shell; pakai `deskDashboardPath` dan `matchMenu` dari `@erpora/platform-web`.
+    - _Requirements: 9.3_
+  - [ ] 14.24 Minor 6: barrel `packages/platform-web/src/desk/index.ts` tidak mengekspor helper uji (`makeDesk`, `makeDeskItem`, `makeDashboardItem`, `makeDeskGroup`); pindahkan ke entry pengujian.
+    - _Requirements: 21.1_
+  - [ ] 14.25 Minor 7: dokumen konsisten. Daftar D3b di `CLAUDE.md`/`AGENTS.md` sudah sama dengan `internal/archcheck/rules.go`; perbarui komentar `BadgeStatus` di `web/src/app/platform/modules/modules-table.tsx:24`; periksa ulang sisa rujukan lama.
+    - _Requirements: 21.4_
+  - [ ] 14.26 Minor 8: `shadcn-verify` tanpa argumen ikut memeriksa kunci `hooks/use-mobile`; petakan ke komponen asal (`sidebar`) atau lewati.
+    - _Requirements: 1.3_
+  - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (saat ini 197,7 KB).
+    - _Requirements: 21.1, 3.4_
+  - [ ] 14.28 Review akhir putaran: satu agent baru (diff putaran ini dan spec, tanpa kesimpulan implementer) untuk (a) kesesuaian spec/PRD dan regresi; (b) skill `security-audit` terfokus pada perubahan: penyimpanan klien (`erpora.sidebar`, `erpora.desk`), `resolveDeskSwitchTarget`, popover dan panel, patch perilaku, `shadcn:sync`/`bunx`. Bukan audit seluruh codebase.
+    - _Requirements: 20.5, 21.5_
+  - [ ] 14.29 Putaran perbaikan dari 14.28: temuan sesuai spek dikerjakan implementer yang sama; di luar spek ditanyakan dulu; satu review atas diff perbaikan saja, diulang hanya bila ada temuan Critical/Important baru.
+    - _Requirements: 21.5_
+
 ## Notes
 
 - **Traceability:** setiap sub-task mereferensi nomor requirement (`R.n`) di `requirements.md`; grup 1 dan 2 menutup Requirement 1 sampai 3, grup 4 Requirement 11, grup 5 Requirement 12 dan 13, grup 7 Requirement 9, grup 8 Requirement 4 sampai 8 dan 14 sampai 19, grup 9 Requirement 10 dan 11, grup 11 dan 12 Requirement 20 dan 21.
@@ -187,6 +252,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
 - **Anggaran bundle:** JS awal baseline 189,6 KB gzip (batas 200 KB). Dock Floating, Settings, palet, Drawer, dan panel Notifikasi **harus** dimuat malas; `Command` dan `Drawer` hanya di chunk malas; periksa `module-lazy.test.ts` dan laporan anggaran di setiap checkpoint.
 - **Windows dan lingkungan:** gate menjalankan `bun test` dari root; `-race` dilewati lokal (CI Linux tetap); path repo tanpa spasi; jangan menambah perintah Taskfile yang memakai utilitas Unix; Docker hanya di VPS.
 - **Di luar cakupan (M3b dan seterusnya):** API tulis timpaan dan antarmuka edit Desk, halaman Desks lengkap (kustomisasi, folder/grup, Desk kustom, `/desks/<slug>`), Start Guide, Manage Dock dan Edit Sidebar, Layout Compact/Full Width (M3d), Tiptap dan Comments (M3d), daftar/tree/kanban/dashboard builder/PWA (M3c, M3e, M3f, M3g), identitas dan `authz` nyata (PRD-001), sidebar kustom diperluas (tidak dijadwalkan).
+- **Putaran perbaikan 2 (31 Okt 2026):** keputusan K1–K14 pemilik produk dicatat di `requirements.md` (tabel keputusan), PRD-000 Q40 butir 24, `design.md` D-11 sampai D-14, dan ADR-0015. K13 diputuskan tetap `bunx`, tanpa perubahan kode. Pertanyaan P-1 (judul h1 halaman Desks) dan P-3 (judul galat sebagai `<h2>`) belum diputuskan. Grup 14 belum dikerjakan; grup 6, 10, 12, dan 13 belum dicentang karena belum ada bukti gate backend lengkap, checkpoint fitur, verifikasi browser, dan review akhir.
 
 ## Catatan hasil
 
@@ -243,6 +309,8 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 
 **Keputusan pemilik produk (31 Okt 2026, lewat pertanyaan interaktif):** dipasang `empty`, `spinner`, `kbd`, `radio-group`, `input`, `tabs`, `card`, `select`; **tidak dipasang** `command` (cmdk), `drawer` (vaul), `scroll-area`, `toggle-group`, `switch` (breadcrumb ponsel memakai `Sheet side="bottom"`); teks Inggris tertanam ditangani patch label deklaratif; `sonner` dipasang apa adanya dengan `next-themes` terpin dan `theme` ditimpa di pembungkus; ukuran kontrol 36 px diterima.
 
+**Koreksi (31 Okt 2026, putaran perbaikan 2; D-1b dan PRD-000 Q40 butir 19):** keputusan di atas bahwa `command` (cmdk) tidak dipasang **dibatalkan** oleh pemilik produk. `command` (cmdk 1.1.1) disetujui dan dipasang (commit `c146d37`) hanya di chunk malas palet. `drawer` tetap tidak dipasang.
+
 ### 2.1 sampai 2.6 Hasil (31 Okt 2026)
 
 **Alat (tambahan atas 1.3).** `packages/ui/shadcn.patches.json` memuat patch deklaratif `{component, find, replace, count?, reason}`; `shadcn-sync` menerapkannya setelah normalisasi `cn` (gagal keras bila string asal tidak ditemukan sebanyak `count`, mendeteksi perubahan registry); hash di `shadcn.lock.json` dihitung SETELAH patch; `shadcn-check` memverifikasi hash dan bahwa setiap patch terpasang. Kunci kini mencakup `src/hooks/*.ts` (kunci `hooks/use-mobile`). Kunci `synced: true` sejak 2.4 (28 berkas), jadi `shadcn-check` wajib di `web:check`. Perbaikan galat 1.3: `shadcn-sync` kini benar-benar menghapus dependensi `cn` yang ditulis CLI (sebelumnya dibandingkan dengan keadaan sebelum CLI sehingga tidak tertulis).
@@ -291,6 +359,41 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 
 **Gate (31 Okt 2026).** `task web:check` (`ERP_REQUIRE_BUN=1`) hijau: `bun test` 1359 lulus, 0 gagal; JS awal 197,7 KB gzip dari 200 KB (grup strip ikon dimuat malas menurunkan 1,0 KB); `task i18n:check -- --strict` dan `i18n:generate --check` hijau (8.12). **Belum terverifikasi:** tampilan browser (transisi pil, posisi pembatas, hot-edge, strip ikon); offset panel Notifikasi pada Pinned yang diciutkan (container sidebar berada di luar layar sehingga offset 0 dan panel dapat menutupi Dock).
 
+### 3 Checkpoint komponen (bukti, 31 Okt 2026)
+
+- `shadcn-check` OK (28 berkas, catatan 2.6). Pemakaian varian lama sudah dimigrasi (catatan 2.6).
+- `task web:check` (`ERP_REQUIRE_BUN=1`) hijau tercatat pada catatan 8.3 sampai 8.5: `bun test` 1359 lulus, 0 gagal; JS awal 197,7 KB gzip dari 200 KB. Dicentang berdasarkan catatan tersebut.
+
+### 4 Hasil (commit grup 4)
+
+- 4.1 `934a276`: tes merah skema, manifest, registry, slug, dan aturan DESK `module:check`.
+- 4.2 `366dfda`: properti `desk` pada `contracts/module.schema.json`, struct Go di `sdk/module`, dan tipe TS hasil `contracts:generate`.
+- 4.3 `64e974c`: `internal/platform/modules/registry/desk.go`, kode galat `desk_*`, dan slug tercadang `desks` (26 slug).
+- 4.4 `b595f7a`: aturan `DESK` di `internal/devtools/modcheck/check.go`.
+- 4.5 `675ab4e`: `desk` dan kunci `desk.title` pada `modules/example` dan `modules/exampleaddon`.
+- Jumlah tes dan hasil `module:check` tidak tercatat di commit; gate lengkap dicatat di checkpoint 6 (belum dicentang).
+
+### 5 Hasil (commit grup 5)
+
+- 5.1 `5ebb6df`: migrasi `migrations/control/0004_desk_overrides.sql`, `internal/platform/desks/store/store.go` (hanya baca `ListSite`), dan allowlist D3b di `internal/archcheck/rules.go`. Hasil tes integrasi PostgreSQL tidak tercatat di commit.
+- 5.2 `49d8025`: tes merah `desks.Service` (izin, modul nonaktif, Dashboard, timpaan, ETag, IDOR kontrak).
+- 5.3 `8e5982b`: `internal/platform/desks/{desk,merge,platform,service}.go` (penyaringan `Authorizer.Allow`, merge timpaan, Dashboard terkunci, ETag isi).
+- 5.4 `c9bfafa`: `internal/platform/desks/api.go`, `GET /api/platform/desks`, kapabilitas `platform.desks.read` dan `platform.desks.update`, kontrak `contracts/openapi/platform.yaml`, dan perakitan.
+- Verifikasi integrasi dan `inspect_routes.golden` belum tercatat terpisah; checkpoint 6 belum dicentang.
+
+### 7 Hasil (commit grup 7)
+
+- 7.1 `fe3d629`: tes merah `resolveDesk`, `matchMenu`, dan penyimpanan Desk.
+- 7.2 `ee60226`: `packages/platform-web/src/desk/{types,resolver,match-menu,storage,api}.ts`; kunci prefs `erpora.dock` dan `erpora.desk`.
+- 7.3 `44a3dd5`: `provider.tsx`, `validation.ts`, dan `default_desk` pada sumber pengguna (`defaultDesk`, bernilai `null` pada sumber sementara).
+- 7.4 `ef39661`: `navigation` dihapus dari `FrontendModule`, rute indeks ditolak, `assertDeskRoutes` di `packages/module-sdk/src/testing.ts`, dan `selectNavigation` dihapus.
+- `resolveDeskSwitchTarget` (`switch-target.ts`, K10) berada di luar grup ini dan belum di-commit pada saat catatan ini ditulis; ditangani di 14.10.
+
+### 9 Hasil (commit grup 9)
+
+- 9.1 `9385e26`: `modules/example` dan `modules/exampleaddon` tanpa `navigation`; rute bergeser ke `/example/notes` dan `/example-addon/summary`.
+- 9.2 `bfab76f`: templat `make:module --frontend` memakai `desk` dari manifest, tanpa `navigation` dan rute indeks. Templat `module.json` juga menghasilkan `desk` tanpa `--frontend` (temuan I-1, 14.15). `task test:generator` belum tercatat (dijalankan di 12.2 dan 14.27).
+
 ## Task Dependency Graph
 
 ```json
@@ -316,7 +419,14 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
     { "id": 17, "tasks": ["12.2", "12.3"] },
     { "id": 18, "tasks": ["12.4"] },
     { "id": 19, "tasks": ["12.5"] },
-    { "id": 20, "tasks": ["13"] }
+    { "id": 20, "tasks": ["13"] },
+    { "id": 21, "tasks": ["14.12", "14.13", "14.14", "14.15", "14.16", "14.17", "14.20", "14.21", "14.22", "14.23", "14.24", "14.26"] },
+    { "id": 22, "tasks": ["14.10", "14.18", "14.19", "14.25"] },
+    { "id": 23, "tasks": ["14.1", "14.2", "14.5", "14.7", "14.8", "14.9"] },
+    { "id": 24, "tasks": ["14.3", "14.4", "14.6", "14.11"] },
+    { "id": 25, "tasks": ["14.27"] },
+    { "id": 26, "tasks": ["14.28"] },
+    { "id": 27, "tasks": ["14.29"] }
   ]
 }
 ```
