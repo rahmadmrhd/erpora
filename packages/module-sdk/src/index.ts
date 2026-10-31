@@ -23,14 +23,8 @@ export {
   createRoute,
   Link,
   lazyRouteComponent,
+  listModuleRoutePaths,
   Outlet,
   useNavigate,
 } from "./routing";
-export type {
-  Crumb,
-  FrontendModule,
-  MessageRef,
-  NavigationEntry,
-  NavigationGroup,
-  NavigationItem,
-} from "./types";
+export type { Crumb, FrontendModule, MessageRef } from "./types";

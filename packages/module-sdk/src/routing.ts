@@ -8,7 +8,8 @@ import {
   type Route,
   type RouteComponent,
 } from "@tanstack/react-router";
-import type { Crumb } from "./types";
+import { ModuleDefinitionError } from "./define-module";
+import type { Crumb, FrontendModule } from "./types";
 
 /**
  * Satu-satunya tempat tipe route didefinisikan untuk modul (M3a K-28): modul tidak pernah menerima `AnyRoute`
@@ -99,12 +100,24 @@ export type AnyModuleChildRoute = Route<
 
 /**
  * Menempelkan anak modul ke base route (dipakai shell setelah `registerRoutes`). Satu pintu sehingga tipe route
- * generik TanStack tidak bocor ke pemanggil.
+ * generik TanStack tidak bocor ke pemanggil. Rute indeks (`path: "/"`) ditolak dengan `ModuleDefinitionError`:
+ * indeks `/<slug>` adalah Dashboard bawaan shell (M3a revisi R10.8).
  */
 export function attachModuleRoutes(
   base: ModuleBaseRoute,
   children: readonly AnyModuleChildRoute[],
 ): AnyRoute {
+  const basePath = (base.options as { path?: string }).path ?? "?";
+  for (const child of children) {
+    const path = (child.options as { path?: string }).path;
+    if (path === "/" || path === "") {
+      throw new ModuleDefinitionError(
+        basePath,
+        "registerRoutes",
+        `rute indeks (path "${path}") tidak diizinkan: indeks ${basePath} adalah Dashboard bawaan shell; gunakan halaman bernama (mis. "/notes")`,
+      );
+    }
+  }
   return (base as AnyRoute).addChildren(children as unknown as AnyRoute[]);
 }
 
@@ -116,3 +129,32 @@ export {
   Outlet,
   useNavigate,
 } from "@tanstack/react-router";
+
+type RouteLike = { options: { path?: string }; children?: unknown };
+
+function childrenOf(route: RouteLike): RouteLike[] {
+  const c = route.children;
+  if (Array.isArray(c)) return c as RouteLike[];
+  if (c && typeof c === "object") return Object.values(c) as RouteLike[];
+  return [];
+}
+
+function collectPaths(routes: readonly RouteLike[], prefix: string, out: Set<string>): void {
+  for (const r of routes) {
+    const own = r.options.path ?? "";
+    const full = `${prefix}${own.startsWith("/") || own === "" ? own : `/${own}`}`;
+    if (full !== "") out.add(full);
+    collectPaths(childrenOf(r), full, out);
+  }
+}
+
+/**
+ * Path halaman yang didaftarkan `registerRoutes` modul, relatif base route (mis. `/notes`, `/notes/archived`),
+ * termasuk rute bersarang; tanpa indeks. Dipakai pengujian (`assertDeskRoutes`) dan analisis dampak (path terdampak).
+ */
+export function listModuleRoutePaths(module: FrontendModule): string[] {
+  const base = createModuleBaseRoute(createAppRootRoute(), module.slug);
+  const out = new Set<string>();
+  collectPaths(module.registerRoutes(base) as unknown as RouteLike[], "", out);
+  return [...out].sort();
+}
