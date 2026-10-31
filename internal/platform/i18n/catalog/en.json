@@ -10,6 +10,11 @@
       "label": "Language"
     }
   },
+  "desk": {
+    "title": "Platform",
+    "modules": "Modules",
+    "dashboard": "Dashboard"
+  },
   "nav": {
     "home": "Home",
     "menu": "Menu",

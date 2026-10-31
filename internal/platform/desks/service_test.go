@@ -330,7 +330,8 @@ func TestList_DeskAndMenuShape(t *testing.T) {
 	if m := plat.Menus[1]; m.ID != "modules" || m.To != "/platform/modules" || m.OwnerDesk != "platform" {
 		t.Errorf("menu platform = %+v", m)
 	}
-	// bentuk JSON: grup tidak membawa to/ownerDesk, item membawanya
+	// bentuk JSON: grup itu sendiri tidak membawa to/ownerDesk (hanya anaknya)
+	g.Children = nil
 	raw, _ := json.Marshal(g)
 	if strings.Contains(string(raw), `"to"`) || strings.Contains(string(raw), "ownerDesk") || !strings.Contains(string(raw), `"type":"group"`) {
 		t.Errorf("JSON grup = %s", raw)
