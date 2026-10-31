@@ -41,6 +41,7 @@ type manifestSpec struct {
 	deps               []module.Dependency
 	strategy           string // default "none"
 	i18n               any    // bagian "i18n" manifest (nil = tanpa)
+	desk               any    // bagian "desk" manifest (nil = tanpa)
 }
 
 // newFake membuat fakeModule dari manifest JSON inline yang valid terhadap schema.
@@ -69,6 +70,9 @@ func newFake(s manifestSpec, register func(r module.Registrar) error) fakeModule
 	}
 	if s.i18n != nil {
 		doc["i18n"] = s.i18n
+	}
+	if s.desk != nil {
+		doc["desk"] = s.desk
 	}
 	b, err := json.Marshal(doc)
 	if err != nil {
