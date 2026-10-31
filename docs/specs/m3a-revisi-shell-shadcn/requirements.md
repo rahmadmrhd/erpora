@@ -34,7 +34,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE setiap komponen shadcn di `packages/ui/src/components/ui` SHALL identik dengan hasil `shadcn add <komponen>` versi terpin, dengan **empat** penyimpangan yang diizinkan: (a) jalur impor `cn` (`from "cn"` menjadi `from "@erpora/ui/lib/utils"`), (b) **patch token terdaftar** yang mengganti warna palet langsung bawaan registry dengan token semantik DS agar memenuhi R2.2 (mis. `bg-black/50` menjadi `bg-overlay`, `text-white` menjadi `text-destructive-foreground`), dan (c) **patch label terdaftar** yang mengganti teks Inggris tertanam di registry (mis. "Close", "More", "Loading", `aria-label="breadcrumb"`) dengan `useUiLabel(...)` agar memenuhi aturan i18n (R1.7, R19.1). (d) **patch perilaku terdaftar** yang mengganti perilaku bawaan registry yang bertentangan dengan keputusan produk: sidebar tidak menulis cookie `sidebar_state` dan menyimpan keadaannya hanya di `localStorage["erpora.sidebar"]` (K12, 31 Okt 2026). Patch dideklarasikan di berkas deklaratif (`packages/ui/shadcn.patches.json`), diterapkan oleh `shadcn:sync`, dan diverifikasi `shadcn-check`; penyimpangan lain dilarang. _(Diputuskan 31 Okt 2026 atas persetujuan pemilik produk setelah audit komponen: registry shadcn menulis teks Inggris dan warna palet langsung yang bertabrakan dengan aturan i18n dan token proyek; patch token disetujui terpisah pada hari yang sama; patch perilaku (d) disetujui pemilik produk pada putaran perbaikan 2, 31 Okt 2026.)_
+1. THE setiap komponen shadcn di `packages/ui/src/components/ui` SHALL identik dengan hasil `shadcn add <komponen>` versi terpin, dengan **empat** penyimpangan yang diizinkan: (a) jalur impor `cn` (`from "cn"` menjadi `from "@erpora/ui/lib/utils"`), (b) **patch token terdaftar** yang mengganti warna palet langsung bawaan registry dengan token semantik DS agar memenuhi R2.2 (mis. `bg-black/50` menjadi `bg-overlay`, `text-white` menjadi `text-destructive-foreground`), dan (c) **patch label terdaftar** yang mengganti teks Inggris tertanam di registry (mis. "Close", "More", "Loading", `aria-label="breadcrumb"`) dengan `useUiLabel(...)` agar memenuhi aturan i18n (R1.7, R19.1). (d) **patch perilaku terdaftar** yang menghapus penulisan cookie `sidebar_state` oleh `Sidebar` shadcn (K12, 31 Okt 2026). Patch hanya menghapus perilaku registry; penyimpanan keadaan sidebar ke `localStorage["erpora.sidebar"]` ditulis oleh shell lewat `onOpenChange` (`sidebar-state.ts`), bukan oleh patch. Patch dideklarasikan di berkas deklaratif (`packages/ui/shadcn.patches.json`), diterapkan oleh `shadcn:sync`, dan diverifikasi `shadcn-check`; penyimpangan lain dilarang. _(Diputuskan 31 Okt 2026 atas persetujuan pemilik produk setelah audit komponen: registry shadcn menulis teks Inggris dan warna palet langsung yang bertabrakan dengan aturan i18n dan token proyek; patch token disetujui terpisah pada hari yang sama; patch perilaku (d) disetujui pemilik produk pada putaran perbaikan 2, 31 Okt 2026.)_
 2. THE nama varian dan ukuran SHALL mengikuti bawaan shadcn (mis. `Button`: `default|destructive|outline|secondary|ghost|link`, `default|xs|sm|lg|icon|icon-xs|icon-sm|icon-lg`); varian dan ukuran buatan sendiri (`primary`, `md`) SHALL dihapus.
 3. THE pemeriksaan otomatis (skrip `bun`, dijalankan dalam `task web:check`, tanpa jaringan) SHALL membandingkan hash setiap berkas di `components/ui` dengan **kunci snapshot** `packages/ui/shadcn.lock.json` (hash isi setelah normalisasi jalur impor `cn`) dan gagal bila ada selisih, berkas tanpa kunci, atau kunci tanpa berkas; THE pembaruan komponen SHALL hanya lewat `task shadcn:sync` yang memperbarui kunci, dan `task shadcn:verify` (daring, di luar `web:check`) SHALL melaporkan selisih snapshot terhadap registry hidup sebagai kabar drift, bukan kegagalan build. _(Diubah 31 Okt 2026 atas persetujuan pemilik produk, `design.md` D-1: registry shadcn tidak berversi sehingga pembandingan langsung ke registry membuat CI tidak deterministik.)_
 4. THE kebutuhan DS yang tidak punya padanan shadcn (indikator `loading` pada tombol, badge bernada status) SHALL berada di lapisan pembungkus di luar `components/ui` (mis. `components/extended`), dan SHALL membungkus komponen shadcn tanpa mengubah berkasnya.
@@ -82,6 +82,8 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 7. THE Dock SHALL dapat dioperasikan dengan keyboard (peran `navigation`/`toolbar` yang benar, panah untuk berpindah, Enter untuk memilih) dan setiap ikon SHALL punya nama aksesibel.
 8. THE urutan ikon SHALL mengikuti urutan Desk dari backend (Requirement 12); pengaturan urutan oleh pengguna adalah M3b.
 9. WHEN mode Pinned dan pengguna mengklik ikon Desk (termasuk Desk yang sedang aktif), THE Dock SHALL membuka popover di sisi kanan ikon berisi daftar menu Desk itu bergaya item sidebar (Dashboard, menu, dan grup yang dapat dibuka); memilih item menavigasi ke item itu dan menetapkan Desk itu sebagai Desk saat ini. Desk tidak berpindah sebelum item dipilih (K8, 31 Okt 2026).
+10. THE ukuran tombol, ikon, dan jarak ikon Dock Pinned SHALL sama dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama untuk keduanya (K15, 1 Nov 2026).
+11. THE ikon di Dock Pinned SHALL memiliki sorotan latar saat hover seperti item sidebar (K17, 1 Nov 2026).
 
 ### Requirement 5: Panel menu
 
@@ -111,6 +113,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 3. THE popover SHALL memuat: **Pindah Desk** (daftar Desk yang diizinkan), **Semua Desk** (membuka halaman Desks), **Edit sidebar** (dinonaktifkan dengan keterangan sampai M3b), **Bantuan dan pintasan**, **Tentang** (versi aplikasi dari bootstrap). Isi popover disetujui 31 Okt 2026.
 4. THE popover SHALL dibangun dari `Popover` atau `DropdownMenu` shadcn tanpa mengubah berkasnya dan dapat dioperasikan dengan keyboard.
 5. THE item Pindah Desk pada popover SHALL memakai aturan pindah Desk yang sama dengan ikon Dock Floating (K10, 31 Okt 2026).
+6. WHILE halaman Desks tampil, THE dropdown logo SHALL tidak memuat item **Pindah Desk** dan **Semua Desk**; pada halaman lain popover tetap memuat seluruh item (K18, 1 Nov 2026).
 
 ### Requirement 7: Breadcrumb bertahap
 
@@ -238,7 +241,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE avatar SHALL tampil di dasar Dock (Pinned) atau di dasar panel bersama nama dan email (Floating) dan membuka menu berisi **Settings**, **Reload**, dan **Logout**.
+1. THE avatar SHALL tampil di dasar Dock (Pinned) atau di dasar panel bersama nama dan email (Floating) dan membuka menu berisi **Settings**, **Reload**, dan **Logout**. Pada Dock Pinned, avatar SHALL diperbesar, berkontras jelas, dan terpusat horizontal (K16, 1 Nov 2026).
 2. THE Logout dan aksi akun yang bergantung identitas SHALL dinonaktifkan dengan keterangan sampai PRD-001 menyediakannya (sama seperti M3a).
 3. THE menu SHALL tidak berisi "My Space" (tidak ada konsepnya di ERPora).
 
@@ -248,12 +251,13 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**.
+1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**. Pada mode mobile, navigasi kiri SHALL menjadi tab horizontal di atas konten (K19, 1 Nov 2026).
 2. THE **Appearance** SHALL memuat **Tema** (Otomatis/Terang/Gelap, berupa kartu pratinjau) dan **Dock** (Pinned/Floating, berupa kartu pratinjau); **Layout** (Compact/Full Width) ditunda ke M3d bersama form (keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 3. THE **Preferences** SHALL memuat **Bahasa** memakai runtime `i18n-platform` dan **Zona waktu** (isi minimal ini keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 4. THE perubahan SHALL tersimpan otomatis per pengguna dan berlaku seketika; penyimpanan SHALL memakai `localStorage` untuk preferensi UI (tema, mode Dock, keadaan panel, bahasa) dan SHALL tidak menyimpan data sensitif.
 5. THE dialog SHALL dimuat malas dan dibangun dari `Dialog` shadcn; Settings SHALL dapat dibuka dari menu pengguna dan dari pintasan keyboard.
 6. THE garis pembatas vertikal antara navigasi kiri dan konten SHALL setinggi penuh dialog Settings, tidak terpotong (K7, 31 Okt 2026).
+7. THE dialog Settings SHALL diperbesar secara nyata di desktop (K19, 1 Nov 2026).
 
 ### Requirement 18: Awesomebar dan pintasan
 
@@ -309,8 +313,8 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 1. THE konten utama halaman SHALL tidak menampilkan judul halaman tersendiri (h1 atau judul visual) yang mengulang breadcrumb (K9, 31 Okt 2026).
 2. THE langkah terakhir breadcrumb (halaman saat ini) SHALL menjadi satu-satunya judul visual halaman dan SHALL tampil lebih besar dan tebal (R7.9).
 3. THE setiap halaman yang memakai breadcrumb SHALL memuat tepat satu `<h1>`, yaitu langkah terakhir breadcrumb, demi aksesibilitas; deskripsi halaman (paragraf muted) SHALL tetap boleh ada.
-4. THE halaman Desks (R10.9) yang tidak punya breadcrumb SHALL mengikuti keputusan P-1 (lihat tabel di bagian akhir) sampai diputuskan.
-5. THE halaman galat yang memakai judul `<h1>` SHALL diselaraskan dengan AC 3 sesuai keputusan P-3.
+4. THE halaman Desks (R10.9) yang tidak punya breadcrumb SHALL memuat tepat satu `<h1>` tersembunyi visual (`sr-only`) bertuliskan "Desks", tanpa judul visual (keputusan P-1, 1 Nov 2026).
+5. THE judul halaman galat (`ErrorNotice`) SHALL berupa `<h2>` agar satu `<h1>` per halaman terpenuhi (keputusan P-3, 1 Nov 2026).
 
 ## Keputusan atas pertanyaan terbuka (31 Okt 2026, disetujui pemilik produk)
 
@@ -326,7 +330,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 | 8 | Layout Compact/Full Width di Settings (R17.2) | Ditunda ke M3d (sementara, dapat ditinjau ulang) |
 | 9 | Isi minimal Preferences (R17.3) | Bahasa dan Zona waktu (sementara, dapat ditinjau ulang) |
 
-## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14)
+## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14) dan 1 Nov 2026 (K15–K19)
 
 Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan review). Keputusan ini **menang atas teks requirement lama** di atas bila berbeda. Setiap butir sudah diterapkan ke requirement yang disebut pada tabel, dan dicatat di PRD-000 Q40 butir 24 serta ADR-0015. Pemilik produk menyetujui seluruh butir (K13 pada 31 Okt 2026 memutuskan CLI tetap `bunx`, tanpa perubahan requirement).
 
@@ -346,13 +350,18 @@ Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan r
 | K12 | Cookie `sidebar_state` yang ditulis sidebar shadcn dihapus lewat patch perilaku terdaftar; keadaan sidebar hanya di `localStorage["erpora.sidebar"]`. | R1.1 (d), R9.1, R20.2 |
 | K13 | CLI shadcn tetap lewat `bunx shadcn@4.21.5` (versi terpin), sesuai PRD-000 Q39 butir 5; devDependency tidak dipakai. Temuan MINOR-1 (CLI via `bunx` tanpa lockfile) ditutup sebagai risiko yang diterima. | R1.9 (tidak berubah) |
 | K14 | Desk yang tidak punya menu berizin disembunyikan dari pengguna itu (menyembunyikan, bukan menonaktifkan). Catatan M3b: pemilihan menu saat membuat Desk kustom difilter menurut izin pembuat atau role/user target; menu tak berizin tetap tampil di daftar tersedia tetapi tidak dapat ditambahkan. | R12.2 |
+| K15 | Ukuran tombol, ikon, dan jarak ikon Dock Pinned disamakan dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama (uji browser pemilik produk, 1 Nov 2026). | R4.10 (baru) |
+| K16 | Avatar di Dock Pinned diperbesar, kontras jelas, dan terpusat. | R16.1 |
+| K17 | Ikon di Dock Pinned memiliki sorotan latar saat hover, seperti item sidebar. | R4.11 (baru) |
+| K18 | Dropdown logo di halaman Desks tidak memuat "Pindah Desk" dan "Semua Desk"; di halaman lain tetap lengkap. | R6.6 (baru) |
+| K19 | Dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten. | R17.1, R17.7 (baru) |
 
 **Temuan review yang sesuai spek** (dikerjakan): I-1 (R11.6), I-2 (R17.3 dan R17.4, tanpa perubahan teks), I-3 (R20.4, tanpa perubahan teks), I-4 (R4.5, tanpa perubahan teks), Minor 1 (R15.1), Minor 2 sampai 8 (tanpa perubahan requirement; dilacak di `tasks.md` grup 14).
 
-**Pertanyaan terbuka** (menunggu keputusan pemilik produk; belum diputuskan oleh dokumen ini):
+**Pertanyaan** (status 1 Nov 2026):
 
 | # | Pertanyaan | Rekomendasi | Status |
 | - | ---------- | ----------- | ------ |
-| P-1 | Halaman Desks tidak punya breadcrumb (K1), sehingga tidak ada langkah terakhir yang menjadi h1 (K9, R22.3). Apa judul `<h1>` halaman Desks? | `<h1>` tersembunyi visual (`sr-only`) bertuliskan label halaman Desks, tanpa judul visual, agar satu h1 per halaman tetap terpenuhi. | Terbuka |
+| P-1 | Halaman Desks tidak punya breadcrumb (K1), sehingga tidak ada langkah terakhir yang menjadi h1 (K9, R22.3). Apa judul `<h1>` halaman Desks? | `<h1>` tersembunyi visual (`sr-only`) bertuliskan label halaman Desks, tanpa judul visual, agar satu h1 per halaman tetap terpenuhi. | Diputuskan 1 Nov 2026 (pemilik produk menyetujui rekomendasi) |
 | P-2 | Cara memasang CLI shadcn (`bunx` atau devDependency terpin). | Tetap `bunx` sesuai Q39 butir 5 | Ditutup 31 Okt 2026 (K13): tetap `bunx`, keputusan pemilik produk |
-| P-3 | Halaman galat (`ErrorNotice`) memakai judul `<h1>` (catatan 2.6). Dengan K9 satu h1 per halaman, apakah judul galat turun menjadi `<h2>`? | Ya, turun menjadi `<h2>` agar satu h1 per halaman terpenuhi. | Terbuka: butuh konfirmasi |
+| P-3 | Halaman galat (`ErrorNotice`) memakai judul `<h1>` (catatan 2.6). Dengan K9 satu h1 per halaman, apakah judul galat turun menjadi `<h2>`? | Ya, turun menjadi `<h2>` agar satu h1 per halaman terpenuhi. | Diputuskan 1 Nov 2026 (pemilik produk menyetujui rekomendasi) |
