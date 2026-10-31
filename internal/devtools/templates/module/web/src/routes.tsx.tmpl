@@ -8,15 +8,17 @@ import { crumb } from "@erpora/platform-web";
 import "./i18n/keys.gen";
 
 /**
- * Route modul: anak langsung base route `/[[.Slug]]` (sudah berguard oleh shell). Komponen halaman dimuat malas
- * (`import()` di sini) sehingga kodenya menjadi chunk terpisah dan tidak ada di JS awal.
+ * Route modul: anak langsung base route `/[[.Slug]]` (sudah berguard oleh shell). Indeks (`/`) adalah Dashboard
+ * bawaan shell dan dilarang didaftarkan modul; halaman modul didaftarkan sebagai anak (mis. `/items`) dan dirujuk
+ * oleh `desk.menus[].to` di module.json. Komponen halaman dimuat malas (`import()` di sini) sehingga kodenya
+ * menjadi chunk terpisah dan tidak ada di JS awal.
  */
 export function registerRoutes(base: ModuleBaseRoute): readonly AnyModuleChildRoute[] {
-  const index = createRoute({
+  const items = createRoute({
     getParentRoute: () => base,
-    path: "/",
-    staticData: { crumb: crumb("[[.Slug]]", "page.home.title") },
-    component: lazyRouteComponent(() => import("./pages/home-page"), "HomePage"),
+    path: "/items",
+    staticData: { crumb: crumb("[[.Slug]]", "page.items.title") },
+    component: lazyRouteComponent(() => import("./pages/items-page"), "ItemsPage"),
   });
-  return [index];
+  return [items];
 }

@@ -13,5 +13,12 @@
   "capabilities": ["inventory.items.read", "inventory.items.approve"],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
-  "offline": { "mode": "online-only" }
+  "offline": { "mode": "online-only" },
+  "desk": {
+    "label": "desk.title",
+    "icon": "boxes",
+    "menus": [
+      { "id": "items", "label": "nav.items", "to": "/items", "permission": "inventory.items.read" }
+    ]
+  }
 }

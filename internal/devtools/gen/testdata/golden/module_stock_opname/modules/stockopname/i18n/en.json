@@ -1,11 +1,14 @@
 {
+  "desk": {
+    "title": "Stock Opname"
+  },
   "nav": {
-    "home": "Stock Opname"
+    "items": "List"
   },
   "page": {
-    "home": {
-      "title": "Stock Opname",
-      "description": "Home page of the Stock Opname module. Replace it with your own page."
+    "items": {
+      "title": "List",
+      "description": "Example page of the Stock Opname module. Replace it with your own page."
     }
   },
   "errors": {

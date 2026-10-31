@@ -1,11 +1,14 @@
 {
+  "desk": {
+    "title": "Inventory"
+  },
   "nav": {
-    "home": "Inventory"
+    "items": "List"
   },
   "page": {
-    "home": {
-      "title": "Inventory",
-      "description": "Home page of the Inventory module. Replace it with your own page."
+    "items": {
+      "title": "List",
+      "description": "Example page of the Inventory module. Replace it with your own page."
     }
   },
   "errors": {

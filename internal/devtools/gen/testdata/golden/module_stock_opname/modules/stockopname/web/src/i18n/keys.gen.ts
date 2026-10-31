@@ -4,10 +4,11 @@ export {};
 declare module "@erpora/platform-web" {
   interface I18nCatalogs {
     "stock-opname": {
+      "desk.title": {};
       "errors.bad_request": {};
-      "nav.home": {};
-      "page.home.description": {};
-      "page.home.title": {};
+      "nav.items": {};
+      "page.items.description": {};
+      "page.items.title": {};
     };
   }
 }
