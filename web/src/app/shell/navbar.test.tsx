@@ -1,10 +1,18 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { act, configure, getConfig, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderApp } from "../test-utils";
 import { installLayoutMock, type LayoutMock } from "./navbar-test-support";
 
 let layout: LayoutMock | null = null;
+
+// Pemuatan awal (modul, katalog i18n) lambat saat mesin sibuk: batas findBy/waitFor 1 dtk membuat tes ini tak stabil.
+let previousTimeout = 1000;
+beforeAll(() => {
+  previousTimeout = getConfig().asyncUtilTimeout;
+  configure({ asyncUtilTimeout: 4000 });
+});
+afterAll(() => configure({ asyncUtilTimeout: previousTimeout }));
 
 beforeEach(() => {
   localStorage.clear();
@@ -62,7 +70,7 @@ describe("Navbar: breadcrumb Home › Desk › halaman", () => {
     const bc = await breadcrumb();
     await user.click(await within(bc).findByRole("button", { name: "Beranda" }));
     // Halaman Desks tampil di "/" dan penentuan Desk dilewati: Desk tersimpan (alpha) tidak mengalihkan ke /alpha.
-    expect(await screen.findByRole("heading", { name: /^Desk/ })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Alpha Desk" })).toBeInTheDocument(); // kartu Desk
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("alpha");
     await new Promise((r) => setTimeout(r, 100));
     expect(history.location.pathname).toBe("/");
@@ -86,6 +94,63 @@ describe("Navbar: breadcrumb Home › Desk › halaman", () => {
       expect(within(bc).getByText(t)).toBeInTheDocument();
     }
     expect(within(bc).queryByRole("button", { name: "Tampilkan jalur lengkap" })).toBeNull();
+  });
+});
+
+describe("Navbar: pembatas toggle sidebar dan breadcrumb (K5)", () => {
+  test("Separator vertikal ada tepat di antara tombol collapse dan breadcrumb, bertinggi pas (bukan h-full)", async () => {
+    renderApp({ path: "/alpha/home" });
+    const header = await screen.findByRole("banner");
+    await breadcrumb();
+    const leading = header.querySelector('[data-slot="navbar-leading"]');
+    expect(leading).not.toBeNull();
+    const separator = leading?.querySelector('[data-slot="separator"]');
+    expect(separator).not.toBeNull();
+    expect(separator).toHaveAttribute("data-orientation", "vertical");
+    // Tinggi harus dipasang pada varian orientasi (data-[orientation=vertical]:h-*) agar menggantikan h-full bawaan
+    // shadcn; `h-4` polos kalah spesifisitas sehingga garis runtuh menjadi 0 px di dalam flex berinduk tak berukuran.
+    expect(separator?.className).toContain("data-[orientation=vertical]:h-5");
+    expect(separator?.className.split(/\s+/)).not.toContain("h-4");
+    // Urutan DOM: tombol collapse, pembatas, lalu breadcrumb.
+    const trigger = within(header).getByRole("button", { name: "Ciutkan atau perluas sidebar" });
+    const nav = header.querySelector('nav[data-slot="breadcrumb"]');
+    expect(
+      trigger.compareDocumentPosition(separator as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      (separator as Element).compareDocumentPosition(nav as Element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
+
+describe("Navbar: judul halaman = breadcrumb terakhir (K9)", () => {
+  test("breadcrumb terakhir dibungkus h1 tunggal, lebih besar dan tebal, tetap aria-current=page", async () => {
+    renderApp({ path: "/alpha/reports/sales" });
+    const bc = await breadcrumb();
+    await within(bc).findByText("Penjualan");
+    const headings = within(screen.getByRole("banner")).getAllByRole("heading", { level: 1 });
+    expect(headings).toHaveLength(1);
+    const page = within(headings[0] as HTMLElement).getByText("Penjualan");
+    expect(page).toHaveAttribute("aria-current", "page");
+    expect(page.dataset.slot).toBe("breadcrumb-page");
+    expect(page.className).toContain("text-base");
+    expect(page.className).toContain("font-semibold");
+    expect(page.className).not.toContain("font-normal");
+    // Langkah sebelumnya tidak ikut menjadi heading.
+    expect(within(bc).getAllByRole("heading")).toHaveLength(1);
+  });
+
+  test("terpotong: tetap di dalam h1, elipsis teks dan tooltip judul penuh", async () => {
+    layout = installLayoutMock({ navWidth: 60 });
+    renderApp({ path: "/alpha/reports/sales" });
+    await breadcrumb();
+    const page = await waitFor(() => {
+      const el = document.querySelector('header h1 [aria-current="page"]') as HTMLElement | null;
+      expect(el?.className).toContain("truncate");
+      return el as HTMLElement;
+    });
+    expect(page.className).toContain("font-semibold");
   });
 });
 

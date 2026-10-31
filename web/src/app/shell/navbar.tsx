@@ -38,6 +38,12 @@ import { useRouteCrumbs } from "./route-crumbs";
 const HEADER_CLASS =
   "sticky top-0 z-10 flex h-(--navbar-height) shrink-0 items-center gap-2.5 border-b bg-background px-3.5";
 
+/**
+ * Tinggi pembatas dipasang pada varian orientasi agar menggantikan `h-full` bawaan shadcn (`h-4` polos kalah
+ * spesifisitas, dan `h-full` di dalam flex berinduk tak berukuran runtuh menjadi 0 px: K5).
+ */
+const SEPARATOR_CLASS = "data-[orientation=vertical]:h-5";
+
 const NO_DESK_LABEL: MessageRef = { ns: "platform", key: "app.name" };
 
 /** Melaporkan teks terjemahan satu crumb berpesan (komponen per crumb sehingga jumlah hook tetap per komponen). */
@@ -74,7 +80,7 @@ function DefaultLeading() {
           </span>
         </TooltipContent>
       </Tooltip>
-      <Separator orientation="vertical" className="h-4" />
+      <Separator orientation="vertical" className={SEPARATOR_CLASS} />
     </>
   );
 }
@@ -262,7 +268,7 @@ function DefaultFallbackLeading() {
   return (
     <>
       <SidebarTrigger aria-label={t("sidebar.toggle")} />
-      <Separator orientation="vertical" className="h-4" />
+      <Separator orientation="vertical" className={SEPARATOR_CLASS} />
     </>
   );
 }
