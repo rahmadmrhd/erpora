@@ -1,5 +1,6 @@
 import { useTranslation } from "@erpora/platform-web";
 import {
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -9,6 +10,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  useIsMobile,
 } from "@erpora/ui";
 import { useEffect, useState } from "react";
 import { useReturnFocus } from "../overlay-focus";
@@ -48,47 +50,62 @@ export function SettingsDialog({
     if (open) setSection(initialSection ?? "appearance");
   }, [open, initialSection]);
 
+  // Di bawah 768 px (ponsel) navigasi menjadi tab horizontal di atas konten; di atasnya kolom vertikal di kiri.
+  // Orientasi ikut `Tabs` (peran, `aria-orientation`, dan tombol panah) tanpa mengubah berkas shadcn.
+  const vertical = !useIsMobile();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        className="h-[calc(100svh-1rem)] max-w-[calc(100%-1rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-4xl md:h-[min(40rem,calc(100svh-2rem))] xl:max-w-5xl"
         onCloseAutoFocus={focus.onCloseAutoFocus}
       >
-        <DialogHeader className="border-b px-6 py-4">
+        <DialogHeader className="border-b px-4 py-4 md:px-6">
           <DialogTitle>{t("settings.title")}</DialogTitle>
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
         <Tabs
-          orientation="vertical"
+          orientation={vertical ? "vertical" : "horizontal"}
           value={section}
           onValueChange={(v) => {
             if (isSection(v)) setSection(v);
           }}
-          className="grid min-h-0 gap-0 md:h-[min(26rem,calc(100svh-9rem))] md:grid-cols-[12rem_1fr]"
+          className={cn(
+            "min-h-0 gap-0",
+            vertical && "grid md:grid-cols-[14rem_1fr] md:grid-rows-[minmax(0,1fr)]",
+          )}
         >
           {/* Garis pembatas ada di kolom navigasi (sel grid yang meregang setinggi area dialog), bukan di daftar tab:
-              `TabsList` shadcn vertikal bertinggi `fit` sehingga garisnya terpotong setinggi isinya. */}
+              `TabsList` shadcn vertikal bertinggi `fit` sehingga garisnya terpotong setinggi isinya. Pada ponsel
+              kolom ini menjadi baris tab yang dapat digulir ke samping (garis di bawahnya). */}
           <div
             data-slot="settings-nav"
-            className="min-h-0 overflow-y-auto border-b md:border-r md:border-b-0"
+            className={cn(
+              "min-h-0 shrink-0",
+              vertical ? "overflow-y-auto md:border-r" : "overflow-x-auto border-b pb-1",
+            )}
           >
             <TabsList
               variant="line"
               aria-label={t("settings.navLabel")}
-              className="h-fit w-full gap-1 p-3 md:items-start md:justify-start"
+              className={cn(
+                vertical
+                  ? "h-fit w-full gap-1 p-3 md:items-start md:justify-start"
+                  : "w-max min-w-full justify-start gap-1 px-3",
+              )}
             >
-              <TabsTrigger value="appearance" className="justify-start">
-                {t("settings.sections.appearance")}
-              </TabsTrigger>
-              <TabsTrigger value="preferences" className="justify-start">
-                {t("settings.sections.preferences")}
-              </TabsTrigger>
-              <TabsTrigger value="shortcuts" className="justify-start">
-                {t("settings.sections.shortcuts")}
-              </TabsTrigger>
+              {SECTIONS.map((value) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className={vertical ? "justify-start" : "flex-none"}
+                >
+                  {t(`settings.sections.${value}`)}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
-          <div className="min-h-0 overflow-y-auto p-6">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
             <TabsContent value="appearance">
               <AppearanceSection />
             </TabsContent>

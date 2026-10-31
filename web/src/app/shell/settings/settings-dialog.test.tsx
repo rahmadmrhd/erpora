@@ -11,8 +11,16 @@ beforeEach(() => {
   Object.defineProperty(navigator, "languages", { value: [], configurable: true });
 });
 
+const DESKTOP_WIDTH = 1280;
+const PHONE_WIDTH = 375;
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", { value: width, configurable: true, writable: true });
+}
+
 afterEach(() => {
   localStorage.clear();
+  setViewportWidth(DESKTOP_WIDTH);
 });
 
 function Host({ initialSection }: { initialSection?: SettingsSection }) {
@@ -65,6 +73,45 @@ describe("SettingsDialog: struktur", () => {
     expect(list.className).not.toContain("border-r");
     expect(column.parentElement).toBe(
       screen.getByRole("dialog").querySelector('[data-slot="tabs"]'),
+    );
+  });
+
+  test("desktop: dialog besar, navigasi tab vertikal di kiri dan konten kanan menggulir sendiri", async () => {
+    setViewportWidth(DESKTOP_WIDTH);
+    await openSettings();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("sm:max-w-4xl");
+    expect(dialog.className).toContain("xl:max-w-5xl");
+    expect(dialog.className).toContain("h-[min(40rem,calc(100svh-2rem))]");
+    const list = screen.getByRole("tablist");
+    expect(list).toHaveAttribute("aria-orientation", "vertical");
+    const tabs = dialog.querySelector('[data-slot="tabs"]') as HTMLElement;
+    expect(tabs.dataset.orientation).toBe("vertical");
+    expect(tabs.className).toContain("md:grid-cols-[14rem_1fr]");
+    expect(screen.getByRole("tabpanel").parentElement?.className).toContain("overflow-y-auto");
+  });
+
+  test("ponsel: navigasi menjadi tab horizontal di atas konten (dapat digulir), dialog hampir layar penuh", async () => {
+    setViewportWidth(PHONE_WIDTH);
+    const { user } = await openSettings();
+    const dialog = screen.getByRole("dialog");
+    const list = screen.getByRole("tablist");
+    expect(list).toHaveAttribute("aria-orientation", "horizontal");
+    const column = list.parentElement as HTMLElement;
+    expect(column.dataset.slot).toBe("settings-nav");
+    expect(column.className).toContain("overflow-x-auto");
+    expect(column.className).toContain("border-b");
+    expect(column.className).not.toContain("border-r");
+    expect(dialog.className).toContain("max-w-[calc(100%-1rem)]");
+    expect(dialog.className).toContain("h-[calc(100svh-1rem)]");
+    const tabs = dialog.querySelector('[data-slot="tabs"]') as HTMLElement;
+    expect(tabs.dataset.orientation).toBe("horizontal");
+    // Panah kiri/kanan berpindah bagian (orientasi horizontal).
+    act(() => screen.getByRole("tab", { name: "Tampilan" }).focus());
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Preferensi" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
   });
 
