@@ -464,6 +464,24 @@ describe("DockFloating", () => {
       await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
     });
 
+    test("keyboard murni: Escape di menu +N tidak menutup pil walau menunggu lebih lama dari jeda leave", async () => {
+      mockHeight(84);
+      const user = userEvent.setup();
+      await renderFloating();
+      press();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Platform" })).toHaveFocus());
+      await user.keyboard("{ArrowDown}");
+      const more = screen.getByRole("button", { name: "+2 Desk lainnya" });
+      expect(more).toHaveFocus();
+      await user.keyboard("{Enter}");
+      await screen.findByRole("menu");
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+      await new Promise((r) => setTimeout(r, 500));
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+      expect(more).toHaveFocus();
+    });
+
     test("Escape menutup menu +N lebih dulu dan pil tetap terbuka", async () => {
       mockHeight(84);
       const user = userEvent.setup();

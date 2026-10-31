@@ -54,9 +54,15 @@ export function DockFloating() {
     }
   };
 
+  // Penutupan karena "meninggalkan" pil dibatalkan bila saat jeda habis fokus ada di dalam pil atau menu +N terbuka
+  // (pengguna keyboard: Escape pada menu +N mengembalikan fokus ke tombol +N di dalam pil).
   function scheduleLeave() {
     clearLeave();
-    leaveTimer.current = setTimeout(() => hide(false), LEAVE_DELAY_MS);
+    leaveTimer.current = setTimeout(() => {
+      leaveTimer.current = null;
+      if (menuOpen.current || pillRef.current?.contains(document.activeElement)) return;
+      hide(false);
+    }, LEAVE_DELAY_MS);
   }
 
   const show = useCallback(() => {
