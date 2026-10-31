@@ -300,13 +300,13 @@ Kontrol yang dirujuk: `docs/security/security-guidelines.md` (ASVS 5.0.0 L2), PR
 | 19, 20 | Keamanan; Pengujian |
 | 21 | Pengujian; Migrasi dan dokumentasi |
 
-## Pertanyaan terbuka (untuk dikonfirmasi sebelum `/spec-task`)
+## Keputusan atas pertanyaan terbuka (31 Okt 2026, disetujui pemilik produk)
 
-| # | Pertanyaan | Usulan |
-| - | ---------- | ------ |
-| 1 | D-1: kesamaan komponen diperiksa terhadap kunci snapshot (mengubah R1.3) | Setuju; `shadcn:verify` daring hanya melaporkan drift |
-| 2 | D-2: menu di manifest, `navigation` dihapus dari `defineModule` | Setuju |
-| 3 | D-4: permission bernama `platform.desks.update` (bukan `desk.update`) | Setuju |
-| 4 | D-5: Dashboard tidak dihitung pada aturan "minimal satu menu diizinkan" | Setuju |
-| 5 | D-10: sessionStorage (per tab) + localStorage, tanpa cookie | Setuju |
-| 6 | Kunci Dock bawaan Floating, ambang sheet < 1024 px, ambang ponsel breadcrumb < 480 px | Setuju |
+| # | Pertanyaan | Keputusan |
+| - | ---------- | --------- |
+| 1 | D-1: kesamaan komponen diperiksa terhadap kunci snapshot (mengubah R1.3) | Disetujui; `shadcn:verify` daring hanya melaporkan drift. R1.3 sudah diubah |
+| 2 | D-2: menu di manifest, `navigation` dihapus dari `defineModule` | Disetujui |
+| 3 | D-4: permission bernama `platform.desks.update` (bukan `desk.update`) | Disetujui. R13.1 sudah diubah |
+| 4 | D-5: Dashboard tidak dihitung pada aturan "minimal satu menu diizinkan" | Disetujui |
+| 5 | D-10: sessionStorage (per tab) + localStorage, tanpa cookie | Disetujui |
+| 6 | Dock bawaan Floating, ambang sheet < 1024 px, ambang ponsel breadcrumb < 480 px | Disetujui |
