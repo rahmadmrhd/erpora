@@ -1,3 +1,5 @@
+import { isValidTimezone, resolveTimezone } from "../prefs";
+
 const SECOND = 1;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
@@ -32,13 +34,24 @@ export function formatRelativeTime(iso: string, locale: string, now: number = Da
   return rtf.format(Math.round(diff / YEAR), "year");
 }
 
-/** Tanggal dan jam lokal ringkas dari ISO 8601 UTC; masukan tidak valid dikembalikan apa adanya. */
-export function formatDateTime(iso: string, locale: string): string {
+/**
+ * Tanggal dan jam ringkas dari ISO 8601 UTC pada zona waktu `timeZone` (IANA). Tanpa argumen zona (atau zona tidak
+ * valid) dipakai zona efektif `resolveTimezone()`: pilihan pengguna di Settings, selain itu zona peramban. Masukan
+ * tanggal tidak valid dikembalikan apa adanya; locale tidak valid memakai "en". Fungsi murni per pemanggilan: untuk
+ * tampilan yang harus berubah seketika saat zona diganti, panggil lewat `useDateTimeFormatter`.
+ */
+export function formatDateTime(iso: string, locale: string, timeZone?: string): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso;
+  const zone = isValidTimezone(timeZone) ? timeZone : resolveTimezone();
+  const options: Intl.DateTimeFormatOptions = {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: zone,
+  };
   try {
-    return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(t);
+    return new Intl.DateTimeFormat(locale, options).format(t);
   } catch {
-    return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(t);
+    return new Intl.DateTimeFormat("en", options).format(t);
   }
 }

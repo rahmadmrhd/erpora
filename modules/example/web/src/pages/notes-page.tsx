@@ -1,10 +1,10 @@
 import {
   describeApiError,
-  formatDateTime,
   getActiveLocale,
   Message,
   type MessageArgs,
   msg,
+  useDateTimeFormatter,
   useDb,
   useMessage,
   usePageActions,
@@ -94,6 +94,7 @@ export function NotesPage() {
   ]);
 
   const locale = getActiveLocale() ?? "id";
+  const formatDateTime = useDateTimeFormatter(); // mengikuti zona waktu Settings seketika
 
   return (
     <div className="flex flex-col gap-4 p-6">
