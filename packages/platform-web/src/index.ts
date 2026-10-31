@@ -3,6 +3,7 @@
 export * from "./api";
 export * from "./bootstrap";
 export * from "./db";
+export * from "./desk";
 export * from "./format";
 export * from "./i18n";
 export * from "./msg";

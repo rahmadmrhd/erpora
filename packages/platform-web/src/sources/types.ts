@@ -34,6 +34,11 @@ export interface CurrentUser {
 /** Sumber identitas, terpisah dari komponen; implementasi sungguhan datang bersama PRD-001 (M3a K-4). */
 export interface CurrentUserSource {
   readonly capabilities: { readonly manageAccount: boolean; readonly signOut: boolean };
+  /**
+   * Id Desk bawaan pengguna (`default_desk`, M3a R9.1 tahap 3). `null`/tidak ada = belum tersedia (sampai PRD-001);
+   * nilai ini tidak tepercaya: dipakai hanya bila ada di daftar Desk server.
+   */
+  readonly defaultDesk?: string | null;
   /** `null` berarti anonim. */
   get(signal?: AbortSignal): Promise<CurrentUser | null>;
   /** Path internal halaman akun; `null` bila tidak tersedia. */
