@@ -128,7 +128,12 @@
   },
   "dashboard": {
     "title": "Dashboard Belum Tersedia",
-    "description": "Dashboard akan hadir pada pembaruan berikutnya."
+    "description": "Dashboard akan hadir pada pembaruan berikutnya.",
+    "slots": "Widget Dashboard",
+    "unavailable": {
+      "title": "Dashboard tidak tersedia",
+      "description": "Desk ini tidak ada atau Anda tidak memiliki akses."
+    }
   },
   "pageActions": {
     "more": "Aksi lainnya"
@@ -308,5 +313,21 @@
         "unknown": "{event}"
       }
     }
+  },
+  "desks": {
+    "title": "Desk",
+    "description": "Pilih Desk untuk mulai bekerja.",
+    "empty": {
+      "title": "Belum ada Desk",
+      "description": "Anda belum memiliki akses ke Desk mana pun. Hubungi administrator bila ini tidak seharusnya."
+    },
+    "loadError": {
+      "title": "Daftar Desk tidak dapat dimuat",
+      "description": "Terjadi kesalahan saat memuat Desk. Coba lagi."
+    }
+  },
+  "todo": {
+    "title": "ToDo",
+    "description": "Daftar tugas akan hadir pada pembaruan berikutnya."
   }
 }

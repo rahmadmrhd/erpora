@@ -6,10 +6,19 @@ declare module "./types" {
     platform: {
       "app.name": {};
       "dashboard.description": {};
+      "dashboard.slots": {};
       "dashboard.title": {};
+      "dashboard.unavailable.description": {};
+      "dashboard.unavailable.title": {};
       "desk.dashboard": {};
       "desk.modules": {};
       "desk.title": {};
+      "desks.description": {};
+      "desks.empty.description": {};
+      "desks.empty.title": {};
+      "desks.loadError.description": {};
+      "desks.loadError.title": {};
+      "desks.title": {};
       "dock.label": {};
       "dock.more": { count: string | number };
       "errors.bad_request": {};
@@ -227,6 +236,8 @@ declare module "./types" {
       "theme.label": {};
       "theme.light": {};
       "theme.system": {};
+      "todo.description": {};
+      "todo.title": {};
       "user.anonymous": {};
       "user.manageAccount": {};
       "user.menu": {};

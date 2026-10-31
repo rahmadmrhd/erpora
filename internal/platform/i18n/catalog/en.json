@@ -128,7 +128,12 @@
   },
   "dashboard": {
     "title": "Dashboard Not Available Yet",
-    "description": "The dashboard will arrive in an upcoming update."
+    "description": "The dashboard will arrive in an upcoming update.",
+    "slots": "Dashboard widgets",
+    "unavailable": {
+      "title": "Dashboard unavailable",
+      "description": "This Desk does not exist or you do not have access."
+    }
   },
   "pageActions": {
     "more": "More actions"
@@ -308,5 +313,21 @@
         "unknown": "{event}"
       }
     }
+  },
+  "desks": {
+    "title": "Desks",
+    "description": "Choose a Desk to start working.",
+    "empty": {
+      "title": "No Desks yet",
+      "description": "You do not have access to any Desk. Contact your administrator if this is unexpected."
+    },
+    "loadError": {
+      "title": "The Desk list could not be loaded",
+      "description": "An error occurred while loading Desks. Try again."
+    }
+  },
+  "todo": {
+    "title": "ToDo",
+    "description": "The task list will arrive in a later update."
   }
 }

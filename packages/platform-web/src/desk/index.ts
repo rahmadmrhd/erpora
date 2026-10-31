@@ -7,7 +7,7 @@ export {
   toDesksClient,
   useDesksQuery,
 } from "./api";
-export { deskContains, matchMenu } from "./match-menu";
+export { deskContains, deskDashboardPath, matchMenu } from "./match-menu";
 export {
   type DeskContextValue,
   DeskProvider,

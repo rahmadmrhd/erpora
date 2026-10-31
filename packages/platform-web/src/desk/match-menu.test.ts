@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { deskContains, matchMenu } from "./match-menu";
+import { deskContains, deskDashboardPath, matchMenu } from "./match-menu";
 import { makeDashboardItem, makeDesk, makeDeskGroup, makeDeskItem } from "./testing";
 
 const example = makeDesk("example", [
@@ -100,5 +100,22 @@ describe("deskContains", () => {
     expect(deskContains(example, "/example/other")).toBe(false);
     expect(deskContains(addon, "/example/notes")).toBe(true);
     expect(deskContains(addon, "/example2")).toBe(false);
+  });
+});
+
+describe("deskDashboardPath", () => {
+  test("item terkunci (Dashboard) menang, bahkan bila bukan yang pertama", () => {
+    const d = makeDesk("x", [
+      makeDeskItem("x", "a", "/x/a"),
+      makeDeskItem("x", "dash", "/x", { locked: true }),
+    ]);
+    expect(deskDashboardPath(d)).toBe("/x");
+  });
+
+  test("tanpa item terkunci: item pertama (dalam grup pun); Desk kosong: null", () => {
+    expect(
+      deskDashboardPath(makeDesk("x", [makeDeskGroup("x", "g", [makeDeskItem("x", "a", "/x/a")])])),
+    ).toBe("/x/a");
+    expect(deskDashboardPath(makeDesk("x"))).toBeNull();
   });
 });

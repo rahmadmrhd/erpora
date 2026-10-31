@@ -8,20 +8,7 @@ import {
 } from "@erpora/platform-web";
 import { Button } from "@erpora/ui";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { EmptyNotice, ErrorNotice } from "../components/notices";
-
-/** Beranda: dashboard kosong (menunggu M3f). */
-export function DashboardPage() {
-  const { t } = useTranslation("platform");
-  return (
-    <EmptyNotice
-      className="min-h-[60vh] justify-center"
-      icon="layout-dashboard"
-      title={t("dashboard.title")}
-      description={t("dashboard.description")}
-    />
-  );
-}
+import { ErrorNotice } from "../components/notices";
 
 export function NotFoundPage() {
   const { t } = useTranslation("platform");
@@ -82,7 +69,7 @@ export function ModuleInactivePage({ status }: { status: ModuleStatus | undefine
       description={t(inactiveMessageKey(status))}
       actions={
         <Button asChild variant="outline">
-          <Link to="/settings/modules">{t("moduleInactive.openSettings")}</Link>
+          <Link to="/platform/modules">{t("moduleInactive.openSettings")}</Link>
         </Button>
       }
     />

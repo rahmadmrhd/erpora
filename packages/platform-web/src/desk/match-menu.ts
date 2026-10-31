@@ -44,3 +44,12 @@ export function matchMenu(
   }
   return { owner: best?.ownerDesk ?? null, containing };
 }
+
+/**
+ * Path Dashboard Desk: `to` item terkunci (Dashboard `/<slug>`); bila tidak ada, item pertama; `null` bila Desk
+ * kosong. Dipakai pintu masuk `/` dan kartu Desk untuk menuju Desk.
+ */
+export function deskDashboardPath(desk: Desk): string | null {
+  const all = leaves(desk);
+  return (all.find((i) => i.locked === true) ?? all[0])?.to ?? null;
+}
