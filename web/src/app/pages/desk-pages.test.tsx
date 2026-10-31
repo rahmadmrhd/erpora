@@ -193,7 +193,9 @@ describe("DesksPage (R10.6)", () => {
     expect(tile).toHaveClass("size-16", "rounded-2xl");
     expect(tile?.querySelector("svg")).not.toBeNull();
     expect(link.className).toContain("hover:bg-accent");
-    expect(link.className).not.toContain("ring");
+    // Indikator fokus keyboard tetap ada (WCAG 1.4.11): cincin penuh `ring`, bukan hanya latar yang kontrasnya rendah.
+    expect(link).toHaveClass("focus-visible:ring-2", "focus-visible:ring-ring");
+    expect(link.className).not.toContain("focus-visible:outline-none");
     const grid = screen.getByTestId("desk-grid");
     expect(grid).toHaveClass("flex-wrap", "justify-center");
     expect(grid.firstElementChild).toHaveClass("w-32");

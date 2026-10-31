@@ -18,7 +18,7 @@ const TILE = "w-32";
 
 /**
  * Kartu Desk gaya ERP DS `DeskList`: ubin ikon 64px `rounded-2xl` (token semantik `muted`/`foreground` dengan
- * border; Desk belum punya warna kustom) dan nama 14px medium. Sorotan hover/fokus memakai latar, bukan outline (K2).
+ * border; Desk belum punya warna kustom) dan nama 14px medium. Hover memakai latar (K2 mengatur sorotan aktif, bukan indikator fokus); fokus keyboard tetap bercincin `ring` (WCAG 1.4.11).
  */
 function DeskCard({ desk, onChoose }: { desk: Desk; onChoose: (id: string) => void }) {
   const Icon = resolveIcon(desk.icon) ?? resolveIcon("layout-dashboard");
@@ -29,7 +29,7 @@ function DeskCard({ desk, onChoose }: { desk: Desk; onChoose: (id: string) => vo
     <Link
       to={to}
       onClick={() => onChoose(desk.id)}
-      className="flex w-full flex-col items-center gap-2 rounded-2xl p-3 text-center outline-none transition-colors hover:bg-accent focus-visible:bg-accent"
+      className="flex w-full flex-col items-center gap-2 rounded-2xl p-3 text-center outline-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex size-16 items-center justify-center rounded-2xl border bg-muted text-foreground">
         {Icon ? <Icon aria-hidden="true" className="size-8" /> : null}
