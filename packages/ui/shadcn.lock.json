@@ -1,6 +1,6 @@
 {
   "cli": "4.21.5",
-  "synced": false,
+  "synced": true,
   "components": {
     "alert": {
       "file": "alert.tsx",
@@ -14,6 +14,10 @@
       "file": "avatar.tsx",
       "sha256": "874db977414ed2d5ce27e1e97a8c11d75bd37dd5d2c7b0446c57ff469d9788cb"
     },
+    "badge": {
+      "file": "badge.tsx",
+      "sha256": "d4ebe94a7fe54f46936f788d8c38001f73e34894d3beecd18f57599770c083a9"
+    },
     "breadcrumb": {
       "file": "breadcrumb.tsx",
       "sha256": "2e4221f6b93953602f090c6d1de8f941fd84206641bb81910a36014e1f6230d7"
@@ -21,6 +25,14 @@
     "button": {
       "file": "button.tsx",
       "sha256": "9473172f3d6c2c1b7c5ab54054bbe030a8c079a6952604172ceff50fde7d6f9c"
+    },
+    "card": {
+      "file": "card.tsx",
+      "sha256": "9142b3e2aa551519de1cb752c87fd62fe462bed7ea2cba0b63ce7d65b7c450a0"
+    },
+    "checkbox": {
+      "file": "checkbox.tsx",
+      "sha256": "c986a3cb41b187d1741f8d16c93aff4601335ce2a2dae07572b4700d3b35a47b"
     },
     "collapsible": {
       "file": "collapsible.tsx",
@@ -34,6 +46,10 @@
       "file": "dropdown-menu.tsx",
       "sha256": "94420ad08aa6900d820653da4db2f101a9432232a7f9d5be402d454de612cce2"
     },
+    "empty": {
+      "file": "empty.tsx",
+      "sha256": "53d025bc0ab3e65c9032e9865299b8834e6b8cdf6fca9071a76530f9ecc11150"
+    },
     "hooks/use-mobile": {
       "file": "use-mobile.ts",
       "sha256": "ad0936f84f1df79d3697bfbff9c18f8ad58431c1cbaf2359c6a853b0fcc9f28b"
@@ -42,9 +58,25 @@
       "file": "input.tsx",
       "sha256": "ad770b8ab5f3ef2c32c2901306d349f3aa65faf035f455a821305293bb24a496"
     },
+    "kbd": {
+      "file": "kbd.tsx",
+      "sha256": "784515fbba57d633046cb4b9460626aa8de0a860cd30a8527bea5a0fd2c2c86d"
+    },
+    "label": {
+      "file": "label.tsx",
+      "sha256": "bb0f62784bde9eafd797e60c0ca7593dc9430661d9b4b9b7652c069fe2ac57f3"
+    },
     "popover": {
       "file": "popover.tsx",
       "sha256": "c14f45d207cb7f43c88de7864dc84e3697a95ba89d9c484057501461b5ca132b"
+    },
+    "radio-group": {
+      "file": "radio-group.tsx",
+      "sha256": "db369980ea86eae9705813026d85912f767a852a70248e2dd56c8ea1c8aebeb1"
+    },
+    "select": {
+      "file": "select.tsx",
+      "sha256": "2600f4f970f30358e6232b2c15826dd96c363f9f03a435c49fd9ec6ac9e7baf1"
     },
     "separator": {
       "file": "separator.tsx",
@@ -62,13 +94,25 @@
       "file": "skeleton.tsx",
       "sha256": "b9208c42c031d37665f15adb405f0238c58bcdb98b49d0030ac3c5620c2ee969"
     },
+    "sonner": {
+      "file": "sonner.tsx",
+      "sha256": "a3868f2a8aafd8e2dc96b7ae145009939e9d8723cbb5a4b61d7b7d9bed9df478"
+    },
+    "spinner": {
+      "file": "spinner.tsx",
+      "sha256": "90c91aee1fcbacec996b4b42e182a5eeef52db26849dd57c796b4ddebd83bdba"
+    },
     "table": {
       "file": "table.tsx",
       "sha256": "0f2bcfdcb99c4e18bdce0a4413956d52e5c57ee4d14a4c83698eda6bc6bd03b6"
     },
+    "tabs": {
+      "file": "tabs.tsx",
+      "sha256": "740a6713fa45e7d9b11ab9faadf823ad1dedcabf2ecdc3118317090ad5c8d445"
+    },
     "tooltip": {
       "file": "tooltip.tsx",
-      "sha256": "65957f9c87c80f5a37e05e0d645719bb74992d61113fe727728d17c12fd3fe7e"
+      "sha256": "9039cf1b497fcaea17f0de5e5985fc1454fc460b5535940c21aa7c79fee51bb0"
     }
   }
 }

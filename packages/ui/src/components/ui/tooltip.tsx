@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { cn } from "@erpora/ui/lib/utils"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
