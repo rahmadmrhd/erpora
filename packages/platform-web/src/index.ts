@@ -10,6 +10,7 @@ export * from "./msg";
 export * from "./page";
 export * from "./permissions";
 export * from "./prefs";
+export * from "./prefs/hooks";
 export * from "./registry";
 export * from "./sources";
 export * from "./tenancy";
