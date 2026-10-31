@@ -53,7 +53,7 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
   const canSignOut = source.capabilities.signOut;
   const hint = t("user.unavailable");
 
-  // Di Dock (U2) avatar 32 px mengisi tombol, dengan cincin tipis dan latar secondary agar kontras terhadap sidebar.
+  // Di Dock (K16, R16.1) avatar 32 px mengisi tombol, dengan cincin tipis dan latar secondary agar kontras terhadap sidebar.
   const dock = variant === "dock";
   const avatar = (
     <Avatar

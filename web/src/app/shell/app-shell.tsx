@@ -53,7 +53,7 @@ const LazySettingsDialog = retryableLazy(() =>
   import("./settings/settings-dialog").then((m) => ({ default: m.SettingsDialog })),
 );
 
-// Lebar panel K-15 (14,25 rem / 3,25 rem); lebar rel Dock mengikuti strip ikon (U1); bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
+// Lebar panel (keputusan M3a "K-15": 14,25 rem / 3,25 rem); lebar rel Dock mengikuti strip ikon (K15, R4.10); bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
 const SHELL_STYLE = {
   "--sidebar-width": "14.25rem",
   "--sidebar-width-icon": "3.25rem",

@@ -88,7 +88,7 @@ describe("UserMenu", () => {
   });
 });
 
-describe("UserMenu varian dock (U2)", () => {
+describe("UserMenu varian dock (K16)", () => {
   test("avatar 32 px berkontras (latar secondary, cincin tipis), mengisi tombol terpusat, dan tombol dapat difokus", async () => {
     renderShell(<UserMenu variant="dock" />, { user: source() });
     const trigger = await screen.findByRole("button", { name: /^Menu akun/ });

@@ -121,7 +121,7 @@ describe("Dock (Pinned)", () => {
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("billing");
   });
 
-  describe("ukuran, jarak, dan hover seragam dengan strip ikon Floating (U1, U3)", () => {
+  describe("ukuran, jarak, dan hover seragam dengan strip ikon Floating (K15, K17)", () => {
     test("semua tombol Dock berukuran 32 px (size-8), ikon 16 px, jarak 4 px, dan hover latar sidebar-accent", async () => {
       expect(DOCK_ITEM_SIZE).toBe(32);
       expect(DOCK_GAP).toBe(4);

@@ -65,7 +65,7 @@ describe("DesksNavbar (K1)", () => {
     await waitFor(() => expect(bell).toHaveAccessibleDescription("7"));
   });
 
-  test("logo membuka popover logo tanpa Pindah Desk dan Semua Desk (U4); Bantuan membuka Settings", async () => {
+  test("logo membuka popover logo tanpa Pindah Desk dan Semua Desk (K18); Bantuan membuka Settings", async () => {
     const openSettings = mock(() => {});
     const user = userEvent.setup();
     renderShell(<DesksNavbar />, { desks, actions: { openSettings } });

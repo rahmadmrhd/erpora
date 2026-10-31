@@ -54,7 +54,7 @@ describe("LogoPopover", () => {
     expect(names[4]).toBe("Tentang");
   });
 
-  test("varian navbar (halaman Desks) tidak memuat Pindah Desk dan Semua Desk; sisanya tetap (U4)", async () => {
+  test("varian navbar (halaman Desks) tidak memuat Pindah Desk dan Semua Desk; sisanya tetap (K18)", async () => {
     await open("navbar");
     const menu = await screen.findByRole("menu");
     const names = within(menu)
