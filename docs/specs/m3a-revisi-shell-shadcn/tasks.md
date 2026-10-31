@@ -8,38 +8,38 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
 
 ## Tasks
 
-- [ ] 1. Prasyarat dan alat shadcn (Kelas beban: Sonnet; 1.1 Haiku)
-  - [ ] 1.1 Verifikasi baseline
+- [x] 1. Prasyarat dan alat shadcn (Kelas beban: Sonnet; 1.1 Haiku)
+  - [x] 1.1 Verifikasi baseline
     - Pastikan branch bersih dan M3a ter-merge (PR #17); jalankan `bun install --frozen-lockfile`, `task web:check`, `task lint arch check:gowork-off test` dan catat di "Catatan hasil": jumlah tes frontend, jumlah tes Go, ukuran JS awal gzip (acuan 189,6 KB), versi CLI shadcn terpin (`packages/ui/package.json`). Bila ada yang merah sebelum perubahan, **berhenti dan laporkan**.
     - _Requirements: 21.1_
-  - [ ] 1.2 Tulis test alat `shadcn-check` (merah dulu)
+  - [x] 1.2 Tulis test alat `shadcn-check` (merah dulu)
     - `web/tools/shadcn-check.test.ts` (fungsi murni dengan pohon sementara): (a) berkas sama dengan kunci lolos; (b) berkas diubah satu karakter gagal dan pesan menyebut nama komponen serta `task shadcn:sync`; (c) berkas ada tanpa entri kunci gagal; (d) entri kunci tanpa berkas gagal; (e) normalisasi: `from "cn"` dan `from "@erpora/ui/lib/utils"` menghasilkan hash yang sama; (f) berkas di luar `src/components/ui` (mis. `extended/`) diabaikan.
     - **Validates: Requirements 1.1, 1.3**
-  - [ ] 1.3 Implementasi `shadcn-sync`, `shadcn-check`, `shadcn-verify`
+  - [x] 1.3 Implementasi `shadcn-sync`, `shadcn-check`, `shadcn-verify`
     - `packages/ui/scripts/shadcn-sync.ts` (`bun run shadcn add <k> -o -y` memakai CLI terpin, ganti `from "cn"` menjadi `from "@erpora/ui/lib/utils"`, hapus dependensi `cn`, pin ulang versi dependensi baru, tulis `shadcn.lock.json`), `shadcn-check.ts` (fungsi murni untuk hash dan perbandingan; I/O di skrip; tanpa jaringan), `shadcn-verify.ts` (daring, `--dry-run --diff` per komponen; keluaran laporan drift, kode keluar 0). `Taskfile.yml`: `shadcn:sync`, `shadcn:verify`, dan `shadcn-check` masuk `web:check`; tanpa `rm`/`cp`/`sed`. Bila alias `cn` di CLI berubah perilakunya, catat di `design.md` D-1.
     - _Requirements: 1.1, 1.3, 1.9, 21.1_
-  - [ ] 1.4 Audit padanan komponen dan paket konfirmasi (**berhenti untuk konfirmasi pemilik produk**)
+  - [x] 1.4 Audit padanan komponen dan paket konfirmasi (**berhenti untuk konfirmasi pemilik produk**)
     - Jalankan `shadcn add <k> --dry-run` untuk `empty`, `spinner`, `kbd`, `command`, `drawer`, `scroll-area`, `toggle-group`, `radio-group`, `input`, `tabs`, `switch`, `card`, `select`, dan periksa apakah `badge` terbaru punya varian bernada status. Tulis hasil di "Catatan hasil": ada/tidak, ukuran, dependensi yang ditarik, dan padanan Frappe UI serta DS untuk **tiap** komponen (perbandingan dan pro/kontra, aturan konfirmasi komponen R1.6).
     - Sajikan ke pemilik produk satu per satu; hanya komponen yang disetujui yang boleh dipasang di 2.4. Komponen yang tidak disetujui diganti rancangan alternatif di `design.md` sebelum lanjut.
     - _Requirements: 1.5, 1.6_
 
-- [ ] 2. Komponen `@erpora/ui` persis shadcn (Kelas beban: Sonnet; 2.2 sampai 2.4 Haiku bila spesifikasi tabel komponen cukup)
-  - [ ] 2.1 Perbarui tes komponen ke perilaku shadcn (merah dulu)
+- [x] 2. Komponen `@erpora/ui` persis shadcn (Kelas beban: Sonnet; 2.2 sampai 2.4 Haiku bila spesifikasi tabel komponen cukup)
+  - [x] 2.1 Perbarui tes komponen ke perilaku shadcn (merah dulu)
     - Ubah `*.test.tsx` di `packages/ui/src/components/ui/` ke API shadcn terbaru: peran ARIA dan keyboard Radix; **jangan** menguji kelas Tailwind internal. Hapus tes varian/ukuran lama (`primary`, `md`, `loading` pada Button) dan laporkan jumlah tes yang dihapus beserta alasan. Tambah tes untuk `extended/loading-button` (`aria-busy`, `Spinner`, tombol nonaktif saat loading) dan `extended/status-badge` (`tone` memetakan ke kelas token `status-*`, label dari children).
     - **Validates: Requirements 3.2, 3.3**
-  - [ ] 2.2 Resync kelompok besar
+  - [x] 2.2 Resync kelompok besar
     - `task shadcn:sync -- sidebar avatar alert-dialog dropdown-menu popover`; tulis ulang pemakaian `sidebar` di shell sementara cukup agar `tsc` paket `ui` lolos (penulisan ulang shell di grup 8). Perbarui kunci snapshot.
     - _Requirements: 1.1, 1.9_
-  - [ ] 2.3 Resync kelompok sedang dan migrasi varian
+  - [x] 2.3 Resync kelompok sedang dan migrasi varian
     - `task shadcn:sync -- button dialog table breadcrumb collapsible alert sheet`; varian `primary` menjadi `default`, ukuran `md` menjadi `default`, `icon` menjadi `icon`, tanpa prop `loading`.
     - _Requirements: 1.1, 1.2_
-  - [ ] 2.4 Resync kelompok kecil dan pasang komponen baru yang **sudah disetujui** di 1.4
+  - [x] 2.4 Resync kelompok kecil dan pasang komponen baru yang **sudah disetujui** di 1.4
     - `task shadcn:sync -- badge checkbox label tooltip separator skeleton sonner` ditambah komponen baru dari 1.4 (kemungkinan `command`, `drawer`, `spinner`, `empty`, `kbd`, `scroll-area`, `toggle-group`/`radio-group`, `input`, `tabs`, `switch`, `card`, `select`). Pin versi dependensi yang ditulis CLI.
     - _Requirements: 1.1, 1.5, 1.6, 1.9_
-  - [ ] 2.5 Token `theme.css` dan lapisan pembungkus
+  - [x] 2.5 Token `theme.css` dan lapisan pembungkus
     - `src/styles/theme.css`: variabel semantik shadcn bernilai DS (terang/gelap), tanpa menyentuh tinggi kontrol (selisih 36 vs 34 px dicatat di `design.md`); `theme.test.ts` yang ada tetap lolos (paritas gelap, kontras ≥ 4,5:1, tanpa palet langsung). `src/components/extended/{loading-button,status-badge}.tsx` membungkus `Button`+`Spinner` dan `Badge` tanpa mengubah berkas shadcn (bila 1.4 menemukan `Badge` punya varian setara, `status-badge` cukup memetakan ke varian itu). Perbarui `src/index.ts` (ekspor lapisan pembungkus, hapus `BadgeStatus`/`EmptyState`/`ErrorPage`/`Kbd`/`LoadingIcon`).
     - _Requirements: 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5_
-  - [ ] 2.6 Migrasi seluruh pemakaian
+  - [x] 2.6 Migrasi seluruh pemakaian
     - Ganti `variant="primary"`, `size="md"`, `BadgeStatus`, `EmptyState`, `ErrorPage`, `Kbd`, `LoadingIcon` di `packages/*`, `modules/*/web`, dan `web/` ke API baru. `bun run --filter '*' typecheck`, `lint`, `deps` (F4: `ui` tetap daun), dan `bun test` lolos; laporkan tes yang dihapus. Entry JS awal ≤ 200 KB gzip; bagian berat dimuat malas.
     - _Requirements: 1.7, 3.1, 3.2, 3.3, 3.4_
 
@@ -241,7 +241,25 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 4. `packages/ui/README.md` bagian "Memasang komponen baru" (adaptasi di tempat, 3 langkah manual) kini kedaluwarsa dan akan diganti panduan `shadcn:sync` pada 11.2.
 5. Registry ini memakai `radix-ui` tunggal (sudah terpasang 1.8.1): tidak ada paket Radix terpisah baru; dependensi baru bersih hanya `cmdk` (bila `command` disetujui) dan `next-themes` (bila `sonner` di-resync).
 
-**Keputusan pemilik produk per komponen:** _(diisi setelah konfirmasi; daftar pasang/tunda/tolak di atas adalah rekomendasi, belum disetujui)_
+**Keputusan pemilik produk (31 Okt 2026, lewat pertanyaan interaktif):** dipasang `empty`, `spinner`, `kbd`, `radio-group`, `input`, `tabs`, `card`, `select`; **tidak dipasang** `command` (cmdk), `drawer` (vaul), `scroll-area`, `toggle-group`, `switch` (breadcrumb ponsel memakai `Sheet side="bottom"`); teks Inggris tertanam ditangani patch label deklaratif; `sonner` dipasang apa adanya dengan `next-themes` terpin dan `theme` ditimpa di pembungkus; ukuran kontrol 36 px diterima.
+
+### 2.1 sampai 2.6 Hasil (31 Okt 2026)
+
+**Alat (tambahan atas 1.3).** `packages/ui/shadcn.patches.json` memuat patch deklaratif `{component, find, replace, count?, reason}`; `shadcn-sync` menerapkannya setelah normalisasi `cn` (gagal keras bila string asal tidak ditemukan sebanyak `count`, mendeteksi perubahan registry); hash di `shadcn.lock.json` dihitung SETELAH patch; `shadcn-check` memverifikasi hash dan bahwa setiap patch terpasang. Kunci kini mencakup `src/hooks/*.ts` (kunci `hooks/use-mobile`). Kunci `synced: true` sejak 2.4 (28 berkas), jadi `shadcn-check` wajib di `web:check`. Perbaikan galat 1.3: `shadcn-sync` kini benar-benar menghapus dependensi `cn` yang ditulis CLI (sebelumnya dibandingkan dengan keadaan sebelum CLI sehingga tidak tertulis).
+
+**Patch terdaftar (21).** (a) Label: `dialog`/`sheet` (sr-only "Close" → `actions.close`; footer `Button` "Close"), `breadcrumb` (`aria-label="breadcrumb"` → `breadcrumb.label`, sr-only "More" → `breadcrumb.more`), `sidebar` (judul/deskripsi Sheet mobile → `sidebar.title`/`sidebar.description`; tiga "Toggle Sidebar" → `sidebar.toggle`), `spinner` (`aria-label="Loading"` → `status.loading`). Memakai `UiLabel` (komponen baru di `labels.tsx`) atau `useUiLabel()(...)` inline pada atribut; tanpa kunci baru. (b) Palet langsung (R2.2, `theme.test.ts` melarang `text-white`/`bg-black/50` di komponen): `bg-black/50` → `bg-overlay` pada `alert-dialog`, `dialog`, `sheet`; `bg-destructive text-white` → `bg-destructive text-destructive-foreground` pada `button` dan `badge`. Nilai overlay mengikuti token DS (0,8), bukan 0,5 bawaan shadcn (keputusan 4). Patch kelas palet memperluas mekanisme patch label ke token DS; dicatat sebagai perluasan, dalam semangat keputusan pemilik produk (token DS mengalahkan nilai bawaan shadcn).
+
+**`theme.css`.** CLI tidak mengubah `theme.css` (16 variabel sidebar sudah ada); hanya menghapus CSS `LoadingIcon` (`erpora-loading-dot`, tak terpakai). Aturan reduced-motion global yang ada menutup `animate-pulse` (Skeleton) dan `animate-spin` (Spinner). `theme.test.ts` lolos tanpa perubahan (kontras, paritas gelap, tanpa palet langsung).
+
+**Konfigurasi.** `biome.json` (akar repo) mendapat override: berkas registry `packages/ui/src/components/ui/*.tsx` (bukan `*.test.tsx`) dan `src/hooks/*.ts` tidak diformat/di-lint (gaya registry tanpa titik koma; kebenaran dijaga `shadcn-check`).
+
+**Perubahan perilaku akibat shadcn persis** (diterima, perlu diketahui agent shell): `Sidebar` tidak lagi merender `<nav>` dan tidak menyimpan ke `localStorage` (registry memakai cookie `sidebar_state`; `SIDEBAR_STORAGE_KEY` dihapus; shell lama kini mengendalikan `open`/`onOpenChange` dan membungkus isi dengan `<nav aria-label>`); lebar bawaan 16/3 rem ditimpa lewat prop `style` Provider (K-15 14,25/3,25 rem); pintasan Ctrl/Cmd+B tetap aktif saat fokus di kolom isian (bentrok dengan tebal di editor Tiptap M3d, tak bisa dimatikan tanpa mengubah berkas); `SidebarMenuButton` tidak menulis `aria-current` (Link TanStack menulisnya); `BreadcrumbPage` berperan `link` ber-`aria-disabled` dan `BreadcrumbEllipsis` `aria-hidden` (pemicu menu wajib punya `aria-label`); `Alert` hanya `default`/`destructive` dan selalu `role="alert"` (beri `role="status"` bila tak mendesak); `AlertDialog` menutup dengan Esc (Radix) dan tak ada lagi `hideX`/`size="wide"` pada `Dialog` (pakai `showCloseButton`, `className`); `Skeleton` tanpa `aria-hidden`; `TableHead` tanpa `scope`; `useIsMobile` membaca `window.innerWidth` setelah efek (render pertama non-mobile); `Tooltip` `delayDuration` bawaan 0.
+
+**Tes yang dihapus atau diubah (alasan).** Dihapus bersama komposit buatan sendiri: 17 tes `BadgeStatus` (3), `EmptyState` (4), `ErrorPage` (4), `Kbd` lama (2), `LoadingIcon` (4); digantikan `StatusBadge` (3 tes baru), `Empty`/`Kbd`/`Spinner` (tes baru). `ui/sonner.test.tsx` (4) dipindah ke `extended/toaster.test.tsx` (3). Button: tes `loading` (1), peringatan dev `size=icon` tanpa `aria-label` (2), kelas token `h-control-*` (varian/ukuran `primary`/`md`) diganti tes API shadcn dan `LoadingButton` (4 tes). Tes yang menguji kelas Tailwind internal atau adaptasi DS yang hilang dihapus: Alert varian `warning/info/success` dan outline (5), Avatar ukuran/kelas (2→1), Breadcrumb gaya tautan (1), Dialog `hideX`, lebar, overlay (3→1), Sheet `data-side` (1), Skeleton `aria-hidden`/reduced-motion (2→1), Table gaya/`scope` (2→1), Tooltip jeda 300 ms dan permukaan (1), Sidebar `<nav>` bernama, peringatan dev, Ctrl+B di input, persistensi localStorage (3), dan assertion kelas lencana/item aktif (K-16) (diganti tes keadaan terkendali 1); AlertDialog Esc dibalik. Jumlah blok `test()` di `packages/ui`: 159 sebelum, 161 sesudah (di luar tes alat shadcn).
+
+**Pemakaian dimigrasi.** `packages/*` tidak memakai komposit lama; `modules/example` dan `modules/exampleaddon` (`Button loading` → `LoadingButton`, `EmptyState` → `Empty`); `web/src/app/**`: `EmptyState`/`ErrorPage` → `EmptyNotice`/`ErrorNotice` (`web/src/app/components/notices.tsx`, komposisi `Empty`; judul galat tetap `<h1>`), `BadgeStatus` → `StatusBadge`, `LoadingIcon` → `Spinner`, `DialogContent size="wide"` → `className="sm:max-w-4xl"`, `variant="primary"` → `default`. Kontrak `PageAction.variant` (`packages/platform-web`) tetap `"primary"` dan dipetakan ke `default` di `page-actions-view` agar API modul tidak berubah.
+
+**Gate (31 Okt 2026).** `shadcn-check` OK (28 berkas); typecheck, lint, `deps` hijau; `bun test` 1162 lulus, 14 dilewati, 0 gagal (1176 tes, 101 berkas; baseline 1050/14/0); JS awal 190,3 KB gzip (batas 200 KB; baseline 189,6 KB). `task web:check` berhenti di `i18n:generate --check` (berkas `keys.gen.ts` example, exampleaddon, dan `platform-web/src/i18n/keys.platform.gen.ts` basi akibat katalog jalur backend), bukan akibat jalur ini. `bun audit` melaporkan 1 kerentanan moderat `minimatch` melalui `@stoplight/spectral-core`/`openapi-typescript` (`@erpora/web`), bukan dari dependensi baru (`next-themes` bersih); tidak diubah.
 
 ## Task Dependency Graph
 
