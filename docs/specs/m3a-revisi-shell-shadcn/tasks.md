@@ -77,7 +77,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - `internal/platform/desks/api.go` (pola `i18n/admin`: `atomic.Pointer[Backend]`, `Bind`, 503 `not_ready`; `GET /api/platform/desks`, `httpserver.CheckETag`, `Cache-Control: private, no-cache`, `Vary: Cookie, Authorization`; amplop `{"data":{"desks":[...],"revision":"<etag>"}}`). Daftarkan di `buildRegistry` (`platformAPIs.Desks`) dengan `PlatformCapabilities` + `platform.desks.read` dan `platform.desks.update`; `Bind` di `assemble.go`. `contracts/openapi/platform.yaml`: path `/desks` (`operationId: listDesks`, `x-erp-permission: platform.desks.read`, respons 200 dengan `example`, 304, 403, 503), skema `Desk`/`DeskMenuItem`/`DeskMenuGroup`/`DesksEnvelope`, `x-erp-classification: internal`; `task erpora -- contracts:generate`; perbarui `inspect_routes.golden` (`-update`). Tes handler: 200, 304 (`If-None-Match`), 403, 503, dan route **tidak** ada di `public_routes.txt`. Endpoint tidak menerima id; bila ditambah kelak wajib tes IDOR A vs B.
     - _Requirements: 12.1, 12.5, 12.6, 12.7, 12.8, 13.1, 13.3, 20.1, 21.1_
 
-- [ ] 6. Checkpoint — backend
+- [x] 6. Checkpoint — backend
   - `task lint arch check:gowork-off test`, `task contracts:check`, `task test:integration` (VPS via tunnel; jangan memulai container di laptop); `module:check` untuk `example` dan `exampleaddon`; tanyakan ke user bila ada kegagalan di luar perubahan ini.
 
 - [x] 7. Logika Desk di klien dan SDK modul (Kelas beban: Sonnet; 7.4 Haiku untuk dokumentasi kode saja)
@@ -140,7 +140,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - `internal/devtools/templates/module/*`: tambahkan `desk` ke `module.json` templat, hapus `navigation` dan rute indeks dari templat web, perbarui golden generator dan tesnya; hasil generate lolos `module:check`. `task test:generator` dijalankan di 12.2 (±12 menit; Docker + Bun).
     - _Requirements: 11.6, 21.1_
 
-- [ ] 10. Checkpoint — fitur lengkap
+- [x] 10. Checkpoint — fitur lengkap
   - `task web:check`, `task lint arch check:gowork-off test`, `task contracts:check`; jalankan `task dev:setup` dan `web/dev-api.ts`, buka aplikasi dan pastikan Dock memuat Desk `Platform`, `example`, `exampleaddon`; tanyakan ke user bila ada kejanggalan tampilan.
 
 - [x] 11. Dokumentasi (Kelas beban: Haiku)
@@ -157,27 +157,27 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - `docs/specs/m3a-frontend-foundation-shell/{requirements,design,tasks}.md`: catatan di bagian atas bahwa shell, komponen, dan routing digantikan spec ini, tanpa menghapus isi.
     - _Requirements: 21.4_
 
-- [ ] 12. Gate dan review akhir (Kelas beban: Sonnet; 12.4 model tertinggi yang tersedia)
-  - [ ] 12.1 Gate lokal penuh
+- [x] 12. Gate dan review akhir (Kelas beban: Sonnet; 12.4 model tertinggi yang tersedia)
+  - [x] 12.1 Gate lokal penuh
     - `task lint arch check:gowork-off test`, `task contracts:check`, `task web:check` (dengan `ERP_REQUIRE_BUN=1`), `task i18n:check`; formatter/linter dijalankan sekarang (bukan per task); anggaran bundle ≤ 200 KB.
     - _Requirements: 21.1_
-  - [ ] 12.2 Integrasi dan generator di VPS
+  - [x] 12.2 Integrasi dan generator di VPS
     - `task test:integration` (`go test -tags integration -p 2 ./...`) dan `task test:generator` lewat tunnel SSH ke VPS (`ERP_TEST_DATABASE_URL`); jangan memulai container di laptop; bila tunnel gagal ikuti aturan ulang dan alih ke alamat IP versi lain sebelum melapor.
     - _Requirements: 21.1_
-  - [ ] 12.3 Verifikasi manual di browser
+  - [x] 12.3 Verifikasi manual di browser
     - Dengan `web/dev-api.ts` (backend nyata): enable/disable `example` menghilangkan Desk di Dock tanpa muat ulang; tautan `/example/notes` di tab dengan Desk berbeda tetap membuka halaman dan mengoreksi Desk; `/` mengikuti resolver; Home membuka Desks tanpa resolve; breadcrumb pada beberapa lebar; Dock Pinned dan Floating; klik pembatas; `localStorage`/`sessionStorage` hanya berisi id Desk dan preferensi UI; `erpora serve` menyajikan SPA baru. Simpan temuan.
     - _Requirements: 21.2, 21.3, 20.2_
-  - [ ] 12.4 Review akhir independen
+  - [x] 12.4 Review akhir independen
     - Satu review menyeluruh oleh agent baru (diff + spec, tanpa kesimpulan implementer): (a) kesesuaian spec/PRD dan regresi; (b) skill `security-audit` terfokus pada perubahan dan permukaan yang disentuhnya (otorisasi dan kebocoran respons Desk, ETag/cache silang, validasi `to`, penyimpanan klien tidak tepercaya, IDOR kontrak, rantai pasok dependensi shadcn baru, SSRF skrip `shadcn:sync`). **Bukan** audit seluruh codebase.
     - _Requirements: 20.5, 21.5_
-  - [ ] 12.5 Putaran perbaikan
+  - [x] 12.5 Putaran perbaikan
     - Temuan yang sesuai spek (termasuk Minor) dikerjakan oleh implementer yang sama lewat `SendMessage`; temuan di luar spek ditanyakan dulu dan keputusan dicatat di spec/PRD; satu review atas diff perbaikan saja, diulang hanya bila ada temuan Critical/Important baru.
     - _Requirements: 21.5_
 
-- [ ] 13. Final checkpoint — Ensure all tests pass
+- [x] 13. Final checkpoint — Ensure all tests pass
   - Semua gate hijau dan tak ada temuan terbuka; laporkan terpisah: yang dikerjakan, yang menunggu konfirmasi (beserta alasan dan rekomendasi), dan yang sengaja tidak dikerjakan (API tulis timpaan, halaman Desks lengkap, Start Guide, Manage Dock/Edit Sidebar, Layout Compact/Full Width, Tiptap, Comments, sidebar kustom diperluas). Blok M3b boleh dimulai setelah ini.
 
-- [ ] 14. Putaran perbaikan 2 (31 Okt 2026): keputusan K1–K14 dan temuan review
+- [x] 14. Putaran perbaikan 2 (31 Okt 2026): keputusan K1–K14 dan temuan review
   - Sumber: `requirements.md` bagian "Keputusan putaran perbaikan 31 Okt 2026 (K1–K14)", PRD-000 Q40 butir 24, `design.md` D-1a dan D-11 sampai D-14. Dikerjakan sebelum checkpoint akhir 13 (13 diperiksa ulang setelah grup ini). Pertanyaan P-1 dan P-3 diputuskan pemilik produk 1 Nov 2026 (lihat 14.1 dan 14.9). Penyimpangan lain dari spek ditanyakan dulu.
   - Model dan kelas beban: pekerjaan shell (14.1 sampai 14.11) dan backend (14.14, 14.20, 14.21) membutuhkan penilaian; perubahan dokumen dan mekanis (14.13, 14.15 templat, 14.25, 14.26) dapat dikerjakan lebih ringan. Gunakan satu agent per kelas beban dalam satu putaran.
 
@@ -234,11 +234,11 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 21.4_
   - [x] 14.26 Minor 8: `shadcn-verify` tanpa argumen ikut memeriksa kunci `hooks/use-mobile`; petakan ke komponen asal (`sidebar`) atau lewati.
     - _Requirements: 1.3_
-  - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (±198,4 KB pada HEAD, lihat catatan gate di bawah).
+  - [x] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (±198,4 KB pada HEAD, lihat catatan gate di bawah).
     - _Requirements: 21.1, 3.4_
-  - [ ] 14.28 Review akhir putaran: satu agent baru (diff putaran ini dan spec, tanpa kesimpulan implementer) untuk (a) kesesuaian spec/PRD dan regresi; (b) skill `security-audit` terfokus pada perubahan: penyimpanan klien (`erpora.sidebar`, `erpora.desk`), `resolveDeskSwitchTarget`, popover dan panel, patch perilaku, `shadcn:sync`/`bunx`. Bukan audit seluruh codebase.
+  - [x] 14.28 Review akhir putaran: satu agent baru (diff putaran ini dan spec, tanpa kesimpulan implementer) untuk (a) kesesuaian spec/PRD dan regresi; (b) skill `security-audit` terfokus pada perubahan: penyimpanan klien (`erpora.sidebar`, `erpora.desk`), `resolveDeskSwitchTarget`, popover dan panel, patch perilaku, `shadcn:sync`/`bunx`. Bukan audit seluruh codebase.
     - _Requirements: 20.5, 21.5_
-  - [ ] 14.29 Putaran perbaikan dari 14.28: temuan sesuai spek dikerjakan implementer yang sama; di luar spek ditanyakan dulu; satu review atas diff perbaikan saja, diulang hanya bila ada temuan Critical/Important baru.
+  - [x] 14.29 Putaran perbaikan dari 14.28: temuan sesuai spek dikerjakan implementer yang sama; di luar spek ditanyakan dulu; satu review atas diff perbaikan saja, diulang hanya bila ada temuan Critical/Important baru.
     - _Requirements: 21.5_
   - [x] 14.30 K15: ukuran tombol, ikon, dan jarak ikon Dock Pinned disamakan dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama (tes dulu: ukuran dan jarak dari sumber yang sama)
     - _Requirements: 4.10_
@@ -421,6 +421,14 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 - Integrasi PostgreSQL lewat tunnel VPS: lulus.
 - `task test:generator`: lulus, 639 detik, pada `d8f23eb`.
 - Gate akhir 14.27 sampai 14.29 belum dicentang: belum ada catatan gate lengkap pada HEAD setelah putaran ini.
+
+## Catatan hasil akhir (1 Nov 2026, HEAD `db57a50`)
+
+- **Gate:** `task lint arch check:gowork-off test` exit 0, `task contracts:check` exit 0 (HEAD `d8f23eb`, tidak ada perubahan Go/kontrak/migrasi/templat sesudahnya); `go test ./tests/architecture` exit 0 dan `ERP_REQUIRE_BUN=1 task web:check` exit 0 pada HEAD akhir: **1485 lulus, 14 dilewati, 0 gagal**, JS awal **198,4 KB** gzip dari 200 KB.
+- **Integrasi:** `go test -tags integration -p 2 -timeout 45m ./...` (root module) lewat tunnel SSH ke VPS, exit 0, tanpa kegagalan (HEAD `d8f23eb`). **Generator:** `task test:generator` lulus 639 detik pada `d8f23eb` (worktree bersih; kegagalan acak `bun install` pada dua percobaan sebelumnya akibat beban mesin dan `TMP` dialihkan).
+- **Browser (dev server `web` + `api`, backend nyata):** halaman Desks tanpa sidebar/Dock (navbar logo/search/bel/avatar, kartu notifikasi di kanan atas, ubin terpusat), Dock Pinned (item tetap di Dock, rapat seragam, sorotan latar), popover menu Dock Pinned, breadcrumb terakhir sebagai judul (`h1`) dengan divider, Settings besar dan pembatas penuh, menu logo di halaman Desks tanpa Pindah Desk/Semua Desk, menonaktifkan/mengaktifkan modul memperbarui Dock tanpa muat ulang, muat ulang `/` mengikuti penentuan Desk, hover tema gelap dengan pointer sungguhan.
+- **Review independen:** empat putaran (spek/regresi dan keamanan `security-audit`; diff perbaikan; diff perbaikan terakhir): tidak ada Critical; Important dan Minor yang sesuai spek semuanya dikerjakan; keputusan di luar spek dikonfirmasi pemilik produk (K13 tetap `bunx`; P-1/P-3 disetujui; patch label/token/perilaku; `command` dipasang; `drawer` tidak).
+- **Menunggu konfirmasi pemilik produk:** m-5 (tombol avatar navbar halaman Desks `size-10` → `size-9`, di luar K16); D-15 (ambang tab Settings 768 px); submenu "+N" Pinned (`OverflowDeskSub`, di luar K8); ADR-0015 sebagai nomor ADR (spek semula menyebut ADR-0011).
 
 ## Task Dependency Graph
 
