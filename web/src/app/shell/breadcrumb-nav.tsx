@@ -18,6 +18,7 @@ import {
   useUiLabel,
 } from "@erpora/ui";
 import { Fragment, lazy, type ReactNode, Suspense, useState } from "react";
+import { CURRENT_PAGE_CLASS } from "./navbar-measure";
 
 /**
  * Satu langkah jejak halaman. Hanya langkah yang bukan halaman saat ini yang dapat diaktifkan: `to` (tautan
@@ -73,18 +74,24 @@ function CurrentPage({
   const truncated = maxWidth !== null;
   const page = (
     <BreadcrumbPage
-      className={truncated ? "block truncate" : undefined}
+      className={truncated ? `block truncate ${CURRENT_PAGE_CLASS}` : CURRENT_PAGE_CLASS}
       style={truncated ? { maxWidth } : undefined}
     >
       {segment.label}
     </BreadcrumbPage>
   );
-  if (!truncated) return page;
+  // K9: halaman saat ini adalah satu-satunya judul halaman (h1); BreadcrumbPage shadcn tetap persis, dibungkus di luar.
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{page}</TooltipTrigger>
-      <TooltipContent>{segment.text}</TooltipContent>
-    </Tooltip>
+    <h1 className="m-0 min-w-0">
+      {truncated ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{page}</TooltipTrigger>
+          <TooltipContent>{segment.text}</TooltipContent>
+        </Tooltip>
+      ) : (
+        page
+      )}
+    </h1>
   );
 }
 
@@ -177,7 +184,8 @@ export interface BreadcrumbNavProps {
 }
 
 /**
- * Breadcrumb bertahap (R7): menggambar `plan` dari `fitBreadcrumb`. Langkah terakhir (halaman saat ini) bukan tautan;
+ * Breadcrumb bertahap (R7): menggambar `plan` dari `fitBreadcrumb`. Langkah terakhir (halaman saat ini) bukan tautan,
+ * lebih besar dan tebal, dibungkus `<h1>` (judul halaman tunggal, K9);
  * tahap terpotong memberi elipsis teks dan tooltip judul penuh. Pengukuran dan pemilihan tahap dilakukan `Navbar`.
  */
 export function BreadcrumbNav({ segments, plan, narrow, className }: BreadcrumbNavProps) {

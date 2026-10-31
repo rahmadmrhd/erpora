@@ -71,16 +71,28 @@ export function useNavbarBox(header: HTMLElement | null, leading: HTMLElement | 
   return box;
 }
 
-/** Mengukur lebar teks dengan elemen sementara di dalam `container` (mewarisi huruf navbar) lalu menghapusnya. */
+/**
+ * Huruf halaman saat ini (breadcrumb terakhir, satu-satunya judul visual: K9). Dipakai `BreadcrumbNav` dan probe
+ * pengukuran sehingga lebar yang direncanakan `fitBreadcrumb` sama dengan lebar yang digambar.
+ */
+export const CURRENT_PAGE_CLASS = "text-base font-semibold";
+
+const PROBE_BASE_CLASS = "invisible pointer-events-none absolute top-0 left-0 whitespace-nowrap";
+const PROBE_STEP_CLASS = "text-sm font-normal";
+
+/**
+ * Mengukur lebar teks dengan elemen sementara di dalam `container` (mewarisi huruf navbar) lalu menghapusnya. Teks
+ * terakhir adalah halaman saat ini dan diukur dengan `CURRENT_PAGE_CLASS`; yang lain dengan huruf langkah biasa.
+ */
 export function measureTexts(container: HTMLElement, texts: readonly string[]): number[] {
   const probe = document.createElement("span");
-  probe.className =
-    "invisible pointer-events-none absolute top-0 left-0 text-sm font-normal whitespace-nowrap";
   probe.setAttribute("aria-hidden", "true");
   probe.dataset.fitProbe = "";
   container.append(probe);
+  const last = texts.length - 1;
   try {
-    return texts.map((text) => {
+    return texts.map((text, i) => {
+      probe.className = `${PROBE_BASE_CLASS} ${i === last ? CURRENT_PAGE_CLASS : PROBE_STEP_CLASS}`;
       probe.textContent = text;
       return probe.getBoundingClientRect().width;
     });

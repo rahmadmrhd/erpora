@@ -50,6 +50,11 @@ describe("BreadcrumbNav: tahap utuh", () => {
     const current = within(nav).getByText("Detail");
     expect(current).toHaveAttribute("aria-current", "page");
     expect(current.closest("a")).toBeNull();
+    // K9: halaman saat ini dibungkus h1 (satu-satunya heading jejak), lebih besar dan tebal.
+    expect(current.closest("h1")).not.toBeNull();
+    expect(within(nav).getAllByRole("heading")).toHaveLength(1);
+    expect(current.className).toContain("text-base");
+    expect(current.className).toContain("font-semibold");
     // utuh: tidak ada elipsis
     expect(within(nav).queryByRole("button", { name: "Tampilkan jalur lengkap" })).toBeNull();
   });
