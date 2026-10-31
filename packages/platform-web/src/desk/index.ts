@@ -32,6 +32,7 @@ export {
   readTabDesk,
   writeDeskChoice,
 } from "./storage";
+export { resolveDeskSwitchTarget } from "./switch-target";
 export {
   makeDashboardItem,
   makeDesk,
