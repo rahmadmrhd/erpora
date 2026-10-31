@@ -1,7 +1,7 @@
 # ADR-0015: Komponen `@erpora/ui` persis registry shadcn dengan kunci snapshot
 
 - **Status:** Accepted. Menggantikan sebagian keputusan 1 dan konsekuensi "adaptasi manual" pada [ADR-0011](0011-kontrak-ui-extension-dan-design-system.md).
-- **Tanggal:** 2026-10-31
+- **Tanggal:** 2026-10-31 (keputusan komponen ini dicatat di ADR-0015, bukan ADR-0011; disetujui pemilik produk 2026-11-01, lihat PRD-000 Q40 butir 26)
 - **Sumber:** PRD-000 Q40 butir 1 (diubah oleh butir 17 sampai 19); spec `docs/specs/m3a-revisi-shell-shadcn/` (requirements R1.1, R1.3, R1.6, R2.2; design D-1, D-1a, D-1b; tasks 1.3, 1.4, grup 2). Keputusan disetujui pemilik produk pada 31 Okt 2026.
 - **Diperbarui 2026-10-31 (putaran perbaikan 2):** penyimpangan terdaftar bertambah satu menjadi empat (patch perilaku, K12), CLI shadcn tetap lewat `bunx` terpin (K13, keputusan 31 Okt 2026, tanpa perubahan). Sumber: PRD-000 Q40 butir 24; spec `m3a-revisi-shell-shadcn` requirements R1.1, bagian "Keputusan putaran perbaikan" (K12, K13); design D-1a, D-11.
 
