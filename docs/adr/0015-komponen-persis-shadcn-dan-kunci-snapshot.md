@@ -3,6 +3,7 @@
 - **Status:** Accepted. Menggantikan sebagian keputusan 1 dan konsekuensi "adaptasi manual" pada [ADR-0011](0011-kontrak-ui-extension-dan-design-system.md).
 - **Tanggal:** 2026-10-31
 - **Sumber:** PRD-000 Q40 butir 1 (diubah oleh butir 17 sampai 19); spec `docs/specs/m3a-revisi-shell-shadcn/` (requirements R1.1, R1.3, R1.6, R2.2; design D-1, D-1a, D-1b; tasks 1.3, 1.4, grup 2). Keputusan disetujui pemilik produk pada 31 Okt 2026.
+- **Diperbarui 2026-10-31 (putaran perbaikan 2):** penyimpangan terdaftar bertambah satu menjadi empat (patch perilaku, K12), CLI shadcn menjadi devDependency terpin (K13, bukan `bunx`). Sumber: PRD-000 Q40 butir 24; spec `m3a-revisi-shell-shadcn` requirements R1.1, R1.9, bagian "Keputusan putaran perbaikan" (K12, K13); design D-1a, D-11.
 
 ## Konteks
 
@@ -21,10 +22,11 @@
 
 ## Keputusan
 
-1. **Komponen persis registry.** Setiap komponen di `packages/ui/src/components/ui` identik dengan hasil `shadcn add <komponen>` pada CLI terpin `shadcn@4.21.5` (registry `new-york-v4`), kecuali tiga penyimpangan terdaftar:
+1. **Komponen persis registry.** Setiap komponen di `packages/ui/src/components/ui` identik dengan hasil `shadcn add <komponen>` pada CLI terpin `shadcn@4.21.5` (registry `new-york-v4`), kecuali empat penyimpangan terdaftar:
    - (a) jalur impor `cn`: `from "cn"` menjadi `from "@erpora/ui/lib/utils"`, dilakukan oleh `shadcn:sync`;
    - (b) **patch label**: teks Inggris tertanam diganti `UiLabel` atau `useUiLabel(...)`;
-   - (c) **patch token**: warna palet langsung diganti token semantik DS (`bg-black/50` menjadi `bg-overlay` dengan opasitas 0,8 mengikuti DS; `text-white` menjadi `text-destructive-foreground`).
+   - (c) **patch token**: warna palet langsung diganti token semantik DS (`bg-black/50` menjadi `bg-overlay` dengan opasitas 0,8 mengikuti DS; `text-white` menjadi `text-destructive-foreground`);
+   - (d) **patch perilaku** (K12, 31 Okt 2026): cookie `sidebar_state` yang ditulis `Sidebar` shadcn diganti penulisan `localStorage["erpora.sidebar"]` (nilai `open` boolean). Tanpa patch ini, shell menulis cookie yang bertentangan dengan R9.1 dan D-10.
    Patch bersifat deklaratif (`find`, `replace`, jumlah kemunculan tetap) dan gagal keras bila teks asal tidak ditemukan. Patch dicatat dengan alasan di `shadcn.patches.json`.
 2. **Kunci snapshot.** Kesamaan diperiksa offline terhadap `packages/ui/shadcn.lock.json`, yang berisi hash SHA-256 isi setiap berkas di `components/ui` dan `src/hooks/*.ts` setelah normalisasi `cn` dan patch. `task shadcn:check` berjalan di `web:check` dan gagal bila ada berkas berbeda dari kunci, berkas tanpa kunci, kunci tanpa berkas, atau patch yang belum terpasang. Kunci hanya diperbarui lewat `task shadcn:sync -- <komponen>`. `task shadcn:verify` (daring, di luar `web:check`) hanya melaporkan drift terhadap registry hidup dan selalu keluar dengan kode 0.
 3. **Nama dan ukuran bawaan shadcn.** Varian dan ukuran mengikuti shadcn (`Button`: `default|destructive|outline|secondary|ghost|link`; ukuran `default|xs|sm|lg|icon*`). Varian dan ukuran buatan sendiri (`primary`, `md`) dihapus.
@@ -33,6 +35,7 @@
 6. **Lembar bawah tanpa `drawer`.** Komponen `drawer` (vaul) tidak dipasang. Lembar bawah memakai `Sheet side="bottom"`.
 7. **Komponen baru dikonfirmasi dahulu.** Setiap komponen baru dari registry hanya dipasang setelah pemilik produk menyetujui, dengan perbandingan terhadap padanan Frappe UI dan DS (R1.6).
 8. **Ukuran kontrol.** Tinggi kontrol shadcn 36 px diterima walau DS menetapkan 34 px. Kepadatan hanya dapat diatur lewat token.
+9. **CLI sebagai devDependency terpin (K13, 31 Okt 2026).** CLI `shadcn` (`4.21.5`) menjadi devDependency `packages/ui` tanpa rentang versi dan dipanggil dari biner lokal oleh `shadcn:sync`, `shadcn:check`, dan `shadcn:verify`, bukan lewat `bunx`. Versi di `shadcn.lock.json` (`cli`) harus sama dengan versi devDependency. Keputusan ini mengganti keputusan `bunx` pada commit `a8fba4d` (31 Okt 2026). Alasan pemilik produk: `bunx` mengambil paket saat skrip berjalan (rapuh di Windows, tidak terkunci lockfile). Konsekuensi `bun audit` dipantau sebagai risiko (P-2 di spec revisi).
 
 ## Konsekuensi
 
@@ -41,8 +44,8 @@
   - Setiap sinkronisasi perlu meninjau patch. Bila registry mengubah teks yang dipatch, sinkronisasi gagal dan harus diperbarui secara sadar.
   - Kunci tidak melihat perubahan upstream sampai `shadcn:verify` dijalankan secara manual.
   - Dependensi baru masuk: `cmdk` 1.1.1 (palet, hanya chunk malas) dan `next-themes` 0.4.6 (ditarik `sonner` 2.0.8; `theme` ditimpa di pembungkus `Toaster`).
-  - Perilaku bawaan shadcn yang berbeda dari M3a (misalnya `Sidebar` menyimpan `sidebar_state` di cookie, bukan `localStorage`) diterima dan dicatat di `docs/specs/m3a-revisi-shell-shadcn/tasks.md` (catatan 2.1 sampai 2.6).
-  - `shadcn-sync` menjalankan CLI lewat `bunx` dengan argumen nama polos saja, sehingga URL, namespace registry, dan flag ditolak. Ini membatasi risiko rantai pasok dan SSRF.
+  - Perilaku bawaan shadcn yang bertentangan dengan keputusan produk (`Sidebar` menulis cookie `sidebar_state`) dihapus lewat patch perilaku (K12, 31 Okt 2026), bukan diterima. Perilaku bawaan lain yang berbeda dari M3a tetap dicatat di `docs/specs/m3a-revisi-shell-shadcn/tasks.md` (catatan 2.1 sampai 2.6).
+  - `shadcn-sync` menjalankan CLI devDependency terpin (K13, bukan `bunx`) dengan argumen nama polos saja, sehingga URL, namespace registry, dan flag ditolak. Ini membatasi risiko rantai pasok dan SSRF. Rantai dependensi CLI kembali masuk `bun.lock`; advisori `bun audit` yang muncul dipantau (P-2 di spec revisi).
 - **Pekerjaan lanjutan wajib:**
   - Setiap komponen baru tetap melewati konfirmasi pemilik produk sebelum `shadcn:sync`.
   - Setiap sinkronisasi memperbarui `shadcn.lock.json` dalam commit yang sama dengan komponennya.

@@ -1,6 +1,6 @@
 # ADR-011: Kontrak UI extension dan design system
 
-- **Status:** Accepted; **sebagian Superseded**: keputusan 1 (komponen disalin lalu diadaptasi di tempat) digantikan oleh [ADR-0015](0015-komponen-persis-shadcn-dan-kunci-snapshot.md) pada 2026-10-31. Keputusan 3 (`navigation[]` di `defineModule`) dicabut oleh PRD-000 Q40 butir 21 (31 Okt 2026): menu Desk berasal dari manifest `desk`. Sisa keputusan tetap berlaku.
+- **Status:** Accepted; **diperbarui dan diperbaiki oleh [ADR-0015](0015-komponen-persis-shadcn-dan-kunci-snapshot.md)** pada 2026-10-31 (keputusan 1 dan konsekuensi "adaptasi manual" tidak berlaku lagi). **Sebagian Superseded**: keputusan 1 (komponen disalin lalu diadaptasi di tempat) digantikan oleh [ADR-0015](0015-komponen-persis-shadcn-dan-kunci-snapshot.md) pada 2026-10-31. Keputusan 3 (`navigation[]` di `defineModule`) dicabut oleh PRD-000 Q40 butir 21 (31 Okt 2026): menu Desk berasal dari manifest `desk`. Sisa keputusan tetap berlaku.
 - **Tanggal:** 2026-10-29
 - **Sumber:** PRD-000 Q33 (pendekatan UI dan batas blok M3), Q36 (keputusan M3a, PK-1 sampai PK-6), Q38 (keputusan pelaksanaan M3a: entry sekunder F2, anggaran); spec `docs/specs/m3a-frontend-foundation-shell/` (design K-1 sampai K-34)
 
