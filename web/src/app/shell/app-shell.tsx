@@ -6,7 +6,6 @@ import { RouteErrorPage } from "../pages/pages";
 import { CollapseEdge } from "./collapse-edge";
 import { useCommandPaletteHotkey } from "./command-palette-hotkey";
 import { DeskPanel, PanelSheet } from "./desk-panel";
-import { Dock } from "./dock";
 import { useGlobalShortcuts } from "./global-shortcuts";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
@@ -15,6 +14,18 @@ import { type ShellChrome, ShellChromeProvider } from "./shell-chrome";
 import { type SettingsSection, type ShellActions, ShellActionsProvider } from "./shell-context";
 import { readSidebarOpen, writeSidebarOpen } from "./sidebar-state";
 import { useIsCompact } from "./use-compact";
+
+// Dock Pinned dimuat malas (NFR-04); sementara memuat, rel kosong selebar Dock menjaga tata letak (tanpa lompatan).
+const LazyDock = lazy(() => import("./dock").then((m) => ({ default: m.Dock })));
+
+function DockPlaceholder() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative z-20 h-full w-(--dock-width) shrink-0 border-r border-sidebar-border bg-sidebar"
+    />
+  );
+}
 
 // Dock Floating (pil, hot-edge, pintasan) dimuat malas: bagian berat di luar bundel awal (NFR-04).
 const LazyDockFloating = lazy(() =>
@@ -190,7 +201,11 @@ export function AppShell() {
             <PanelSheet />
           ) : (
             <>
-              {dockMode === "pinned" ? <Dock /> : null}
+              {dockMode === "pinned" ? (
+                <Suspense fallback={<DockPlaceholder />}>
+                  <LazyDock />
+                </Suspense>
+              ) : null}
               <Sidebar
                 collapsible={dockMode === "pinned" ? "offcanvas" : "icon"}
                 className={dockMode === "pinned" ? PINNED_PANEL_CLASS : undefined}
