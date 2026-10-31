@@ -26,7 +26,7 @@ describe("EmptyNotice (komposisi Empty shadcn)", () => {
 });
 
 describe("ErrorNotice (halaman galat dari Empty shadcn)", () => {
-  test("judul berperan heading level 1, deskripsi, dan aksi; status menjadi data-status", () => {
+  test("judul berperan heading level 2 (satu h1 per halaman: breadcrumb), deskripsi, dan aksi; status menjadi data-status", () => {
     const { container } = render(
       <ErrorNotice
         status={404}
@@ -36,7 +36,7 @@ describe("ErrorNotice (halaman galat dari Empty shadcn)", () => {
       />,
     );
     expect(
-      screen.getByRole("heading", { level: 1, name: "Halaman tidak ditemukan" }),
+      screen.getByRole("heading", { level: 2, name: "Halaman tidak ditemukan" }),
     ).toBeVisible();
     expect(screen.getByText("Periksa alamatnya.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Beranda" })).toBeInTheDocument();

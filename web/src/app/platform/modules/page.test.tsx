@@ -148,7 +148,7 @@ describe("mode hanya-baca dan galat daftar (R13.2)", () => {
   test("403 pada daftar menampilkan ErrorPage 403 di dalam halaman", async () => {
     await open([shop()], { listStatus: 403 });
     expect(
-      await screen.findByRole("heading", { level: 1, name: "403: Tidak diizinkan" }),
+      await screen.findByRole("heading", { level: 2, name: "403: Tidak diizinkan" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
   });

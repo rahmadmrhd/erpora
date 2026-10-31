@@ -43,7 +43,8 @@ export function EmptyNotice({
 }
 
 /**
- * Halaman galat (403/404/500/503): komposisi `Empty` dengan judul `<h1>` (menggantikan komposit `ErrorPage` lama).
+ * Halaman galat (403/404/500/503): komposisi `Empty` dengan judul `<h2>` (menggantikan komposit `ErrorPage` lama). Hanya ada satu `<h1>` per halaman:
+ * breadcrumb terakhir (K9, P-3).
  * `status` hanya penanda `data-status`.
  */
 export function ErrorNotice({
@@ -62,7 +63,7 @@ export function ErrorNotice({
   return (
     <Empty data-status={status} className={cn("min-h-[60vh] justify-center", className)}>
       <EmptyHeader>
-        <h1 className="text-4xl font-semibold text-foreground">{title}</h1>
+        <h2 className="text-4xl font-semibold text-foreground">{title}</h2>
         {description ? <EmptyDescription>{description}</EmptyDescription> : null}
       </EmptyHeader>
       {actions ? <EmptyContent>{actions}</EmptyContent> : null}

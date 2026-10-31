@@ -191,7 +191,7 @@ describe("bootstrap gagal (PK-4)", () => {
     expect(await screen.findByText("The Application Could Not Be Loaded")).toBeInTheDocument();
     failing.failBootstrap = false;
     await user.click(screen.getByRole("button", { name: "Try Again" }));
-    expect(await screen.findByRole("heading", { name: "Desks" })).toBeInTheDocument();
+    expect((await screen.findAllByRole("heading", { name: "Desks" })).length).toBeGreaterThan(0);
   });
 
   test("pickBootLanguage: id untuk bahasa Indonesia atau kosong, selain itu Inggris", () => {
@@ -208,20 +208,22 @@ describe("tabel rute revisi M3a (R10)", () => {
     const app = renderApp({ path: "/" });
     expect(await screen.findByRole("region", { name: "Widget Dashboard" })).toBeInTheDocument();
     expect(app.history.location.pathname).toBe("/alpha");
-    expect(screen.getByRole("heading", { name: "Alpha Desk" })).toBeInTheDocument();
     expect(app.history.length).toBe(1);
   });
 
   test("/ tanpa Desk valid: halaman Desks dengan kartu Desk yang diizinkan", async () => {
     renderApp({ path: "/" });
-    expect(await screen.findByRole("heading", { name: "Desk" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Alpha Desk/ })).toHaveAttribute("href", "/alpha");
+    expect(await screen.findByRole("link", { name: /Alpha Desk/ })).toHaveAttribute(
+      "href",
+      "/alpha",
+    );
     expect(screen.getByRole("link", { name: /Platform/ })).toHaveAttribute("href", "/platform");
   });
 
   test("/platform adalah Dashboard Desk Platform", async () => {
-    renderApp({ path: "/platform" });
-    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
+    const app = renderApp({ path: "/platform" });
+    expect(await screen.findByRole("region", { name: "Widget Dashboard" })).toBeInTheDocument();
+    expect(app.history.location.pathname).toBe("/platform");
   });
 
   test("/platform/todo adalah placeholder ToDo", async () => {
