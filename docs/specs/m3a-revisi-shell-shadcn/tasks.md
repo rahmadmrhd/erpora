@@ -150,7 +150,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
   - [x] 11.2 Panduan developer
     - `docs/module-sdk/{frontend,generators,creating-a-module}.md` (properti `desk`, rute `/<slug>`, tanpa `navigation`, `assertDeskRoutes`), `packages/ui/README.md` (alur `shadcn:sync`/`check`/`verify`, aturan "persis shadcn", lapisan `extended`).
     - _Requirements: 21.4_
-  - [ ] 11.3 `CLAUDE.md` dan `AGENTS.md`
+  - [x] 11.3 `CLAUDE.md` dan `AGENTS.md`
     - Ubah **keduanya identik**: aturan komponen persis shadcn (satu-satunya selisih impor `cn`, DS lewat token, kebutuhan tambahan di `components/extended`), `task shadcn:sync|verify`, URL berawalan slug dan `/` sebagai pintu masuk; `TestAgentsMDMatchesClaudeMD` lolos.
     - _Requirements: 21.4_
   - [ ] 11.4 Tandai spec M3a sebagian digantikan
