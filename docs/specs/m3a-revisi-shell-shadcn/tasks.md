@@ -208,7 +208,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 1.1, 9.1, 20.2_
   - [x] 14.13 K13: CLI shadcn tetap lewat `bunx shadcn@4.21.5` (keputusan pemilik produk 31 Okt 2026, D-11). Tidak ada pekerjaan kode; MINOR-1 sudah ditutup sebagai risiko diterima. Pemantauan `bun audit` ikut gate 14.27.
     - _Requirements: 1.9_
-  - [ ] 14.14 K14: Desk tanpa menu berizin disembunyikan (bukan dinonaktifkan). Pastikan tes `desks.Service` dan frontend mencakup kasus ini. Catatan M3b (filter izin pemilihan menu Desk kustom) tidak dikerjakan di revisi ini.
+  - [x] 14.14 K14: Desk tanpa menu berizin disembunyikan (bukan dinonaktifkan). Pastikan tes `desks.Service` dan frontend mencakup kasus ini. Catatan M3b (filter izin pemilihan menu Desk kustom) tidak dikerjakan di revisi ini.
     - _Requirements: 12.2_
   - [x] 14.15 I-1: templat `make:module` tanpa `--frontend` tidak menghasilkan `desk` di `module.json` (kondisi Frontend di `module.json.tmpl`); tes generator; koreksi `docs/module-sdk/generators.md`. `task test:generator` dijalankan di 14.27.
     - _Requirements: 11.6, 21.1_
@@ -234,21 +234,21 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 21.4_
   - [x] 14.26 Minor 8: `shadcn-verify` tanpa argumen ikut memeriksa kunci `hooks/use-mobile`; petakan ke komponen asal (`sidebar`) atau lewati.
     - _Requirements: 1.3_
-  - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (saat ini 197,7 KB).
+  - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (±198,3 KB pada HEAD, lihat catatan gate di bawah).
     - _Requirements: 21.1, 3.4_
   - [ ] 14.28 Review akhir putaran: satu agent baru (diff putaran ini dan spec, tanpa kesimpulan implementer) untuk (a) kesesuaian spec/PRD dan regresi; (b) skill `security-audit` terfokus pada perubahan: penyimpanan klien (`erpora.sidebar`, `erpora.desk`), `resolveDeskSwitchTarget`, popover dan panel, patch perilaku, `shadcn:sync`/`bunx`. Bukan audit seluruh codebase.
     - _Requirements: 20.5, 21.5_
   - [ ] 14.29 Putaran perbaikan dari 14.28: temuan sesuai spek dikerjakan implementer yang sama; di luar spek ditanyakan dulu; satu review atas diff perbaikan saja, diulang hanya bila ada temuan Critical/Important baru.
     - _Requirements: 21.5_
-  - [ ] 14.30 K15: ukuran tombol, ikon, dan jarak ikon Dock Pinned disamakan dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama (tes dulu: ukuran dan jarak dari sumber yang sama)
+  - [x] 14.30 K15: ukuran tombol, ikon, dan jarak ikon Dock Pinned disamakan dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama (tes dulu: ukuran dan jarak dari sumber yang sama)
     - _Requirements: 4.10_
-  - [ ] 14.31 K16: avatar di Dock Pinned diperbesar, kontras jelas, dan terpusat horizontal (tes kelas/peran, pemeriksaan browser)
+  - [x] 14.31 K16: avatar di Dock Pinned diperbesar, kontras jelas, dan terpusat horizontal (tes kelas/peran, pemeriksaan browser)
     - _Requirements: 16.1_
-  - [ ] 14.32 K17: ikon di Dock Pinned memiliki sorotan latar saat hover seperti item sidebar; hormati fokus keyboard (tes)
+  - [x] 14.32 K17: ikon di Dock Pinned memiliki sorotan latar saat hover seperti item sidebar; hormati fokus keyboard (tes)
     - _Requirements: 4.11_
-  - [ ] 14.33 K18: dropdown logo di halaman Desks tidak memuat "Pindah Desk" dan "Semua Desk"; di halaman lain tetap lengkap (tes rute)
+  - [x] 14.33 K18: dropdown logo di halaman Desks tidak memuat "Pindah Desk" dan "Semua Desk"; di halaman lain tetap lengkap (tes rute)
     - _Requirements: 6.6_
-  - [ ] 14.34 K19: dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten (tes dan pemeriksaan browser; JS awal tetap ≤ 200 KB gzip)
+  - [x] 14.34 K19: dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten (tes dan pemeriksaan browser; JS awal tetap ≤ 200 KB gzip)
     - _Requirements: 17.1, 17.7_
 
 ## Notes
@@ -402,6 +402,23 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 
 - 9.1 `9385e26`: `modules/example` dan `modules/exampleaddon` tanpa `navigation`; rute bergeser ke `/example/notes` dan `/example-addon/summary`.
 - 9.2 `bfab76f`: templat `make:module --frontend` memakai `desk` dari manifest, tanpa `navigation` dan rute indeks. Templat `module.json` juga menghasilkan `desk` tanpa `--frontend` (temuan I-1, 14.15). `task test:generator` belum tercatat (dijalankan di 12.2 dan 14.27).
+
+### 14.14 dan 14.30 sampai 14.34 Hasil (commit, 1 Nov 2026)
+
+- 14.14 (K14): tes `TestList_DeskDroppedWithoutAllowedNonDashboardMenu` di `internal/platform/desks/service_test.go` ditambahkan pada `49d8025` (tes merah `desks.Service`). Saya menjalankannya ulang pada HEAD: lulus.
+- 14.30 (K15) dan 14.31 (K16), 14.32 (K17): `5b18c1e` (ukuran, jarak, dan hover Dock Pinned seragam dengan strip ikon Floating; avatar Dock diperbesar dan berkontras; pesan commit U1, U2, U3).
+- 14.33 (K18): `6b9c3f0` (popover logo di halaman Desks tanpa Pindah Desk dan Semua Desk; pesan commit U4).
+- 14.34 (K19): `003f8a0` (dialog Settings lebih besar; navigasi menjadi tab horizontal di ponsel).
+- Verifikasi browser untuk K15 sampai K19 belum tercatat terpisah; centang didasarkan pada commit di atas.
+
+### Catatan gate putaran perbaikan 2 (dilaporkan koordinator; belum diverifikasi ulang oleh penulis dokumen)
+
+- Frontend HEAD `d8f23eb` (sebelum putaran ini): `bun test` 1472 lulus, 0 gagal.
+- JS awal gzip: ±198,3 KB dari 200 KB (sebelumnya 197,7 KB pada 8.3 sampai 8.5).
+- Go dan kontrak: hijau.
+- Integrasi PostgreSQL lewat tunnel VPS: lulus.
+- `task test:generator`: lulus, 639 detik, pada `d8f23eb`.
+- Gate akhir 14.27 sampai 14.29 belum dicentang: belum ada catatan gate lengkap pada HEAD setelah putaran ini.
 
 ## Task Dependency Graph
 
