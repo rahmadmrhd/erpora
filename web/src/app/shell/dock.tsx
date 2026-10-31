@@ -20,7 +20,6 @@ import {
 import {
   type ComponentProps,
   type KeyboardEvent,
-  lazy,
   type RefObject,
   Suspense,
   useCallback,
@@ -33,6 +32,7 @@ import { useDeskNavigation } from "./desk-navigation";
 import { DockFixedItems } from "./dock-fixed-items";
 import { LogoPopover } from "./logo-popover";
 import { NavIcon } from "./nav-icon";
+import { retryableLazy } from "./retryable-lazy";
 import { ShellBoundary } from "./shell-boundary";
 import { UserMenu } from "./user-menu";
 
@@ -78,12 +78,19 @@ function useElementHeight(ref: RefObject<HTMLElement | null>): number {
 }
 
 // Popover menu Desk (K8) dimuat malas dan dipra-muat saat Dock Pinned terpasang (bukan bagian bundel awal).
-const importDeskMenu = () => import("./dock-desk-menu");
-const LazyDeskMenuPopover = lazy(() =>
-  importDeskMenu().then((m) => ({ default: m.DeskMenuPopover })),
+// `dockChunks` adalah titik sambung uji (pemuat chunk dapat diganti, `reset` membuat ulang komponen malas).
+export const dockChunks = {
+  deskMenu: () => import("./dock-desk-menu"),
+  reset(): void {
+    LazyDeskMenuPopover.reset();
+    LazyOverflowDeskSub.reset();
+  },
+};
+const LazyDeskMenuPopover = retryableLazy(() =>
+  dockChunks.deskMenu().then((m) => ({ default: m.DeskMenuPopover })),
 );
-const LazyOverflowDeskSub = lazy(() =>
-  importDeskMenu().then((m) => ({ default: m.OverflowDeskSub })),
+const LazyOverflowDeskSub = retryableLazy(() =>
+  dockChunks.deskMenu().then((m) => ({ default: m.OverflowDeskSub })),
 );
 
 /**
@@ -165,18 +172,47 @@ function PinnedDeskIcon({
   tabIndex: number;
   onFocus: () => void;
 }) {
+  // Klik saat chunk popover belum termuat dicatat dan membuka popover begitu termuat; fokus ikut dipindahkan ke
+  // tombol asli (React tidak mengirim blur saat tombol cadangan dilepas).
+  const [pending, setPending] = useState(false);
+  const focused = useRef(false);
+  const restoreFocus = useCallback((el: HTMLButtonElement | null) => {
+    if (el && focused.current) {
+      focused.current = false;
+      el.focus();
+    }
+  }, []);
   return (
     <ShellBoundary
       label="ikon Desk"
+      onRetry={LazyDeskMenuPopover.reset}
       fallback={(retry) => <DeskLoadFailed retry={retry} tabIndex={tabIndex} onFocus={onFocus} />}
     >
       <Suspense
         fallback={
-          <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
+          <DeskIconButton
+            desk={desk}
+            active={active}
+            tabIndex={tabIndex}
+            onFocus={() => {
+              focused.current = true;
+              onFocus();
+            }}
+            onBlur={() => {
+              focused.current = false;
+            }}
+            onClick={() => setPending(true)}
+          />
         }
       >
-        <LazyDeskMenuPopover desk={desk}>
-          <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
+        <LazyDeskMenuPopover desk={desk} defaultOpen={pending}>
+          <DeskIconButton
+            ref={restoreFocus}
+            desk={desk}
+            active={active}
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+          />
         </LazyDeskMenuPopover>
       </Suspense>
     </ShellBoundary>
@@ -330,6 +366,7 @@ export function DockDeskList({
                 <ShellBoundary
                   key={d.id}
                   label="menu Desk"
+                  onRetry={LazyOverflowDeskSub.reset}
                   fallback={(retry) => (
                     <DropdownMenuItem
                       onSelect={(event) => {
@@ -365,7 +402,8 @@ export function DockDeskList({
 export function Dock() {
   const { t } = useTranslation("platform");
   useEffect(() => {
-    void importDeskMenu();
+    // Pra-muat best-effort: kegagalannya ditangani lazy saat ikon dirender (batas galat + coba lagi).
+    dockChunks.deskMenu().catch(() => {});
   }, []);
   return (
     <nav

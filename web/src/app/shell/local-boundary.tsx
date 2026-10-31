@@ -44,8 +44,11 @@ export class LocalBoundary extends Component<Props, { failed: boolean }> {
   }
 
   override componentDidUpdate(prev: Props): void {
-    if (this.state.failed && prev.resetKey !== this.props.resetKey)
+    if (this.state.failed && prev.resetKey !== this.props.resetKey) {
+      // Berpindah halaman = percobaan ulang otomatis (mis. query galat dan chunk malas dimuat ulang).
+      this.props.onRetry?.();
       this.setState({ failed: false });
+    }
   }
 
   retry = (): void => {

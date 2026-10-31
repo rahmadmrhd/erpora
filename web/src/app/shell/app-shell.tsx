@@ -1,7 +1,7 @@
 import { Message, useDockMode, usePageChrome, useTheme } from "@erpora/platform-web";
 import { Sidebar, SidebarProvider, Skeleton } from "@erpora/ui";
 import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
-import { type CSSProperties, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { RouteErrorPage } from "../pages/pages";
 import { CollapseEdge } from "./collapse-edge";
 import { useCommandPaletteHotkey } from "./command-palette-hotkey";
@@ -9,6 +9,7 @@ import { DeskPanel, PanelSheet } from "./desk-panel";
 import { useGlobalShortcuts } from "./global-shortcuts";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
+import { retryableLazy } from "./retryable-lazy";
 import { useRouteTitle } from "./route-crumbs";
 import { ShellBoundary } from "./shell-boundary";
 import { type ShellChrome, ShellChromeProvider } from "./shell-chrome";
@@ -17,7 +18,7 @@ import { readSidebarOpen, writeSidebarOpen } from "./sidebar-state";
 import { useIsCompact } from "./use-compact";
 
 // Dock Pinned dimuat malas (NFR-04); sementara memuat, rel kosong selebar Dock menjaga tata letak (tanpa lompatan).
-const LazyDock = lazy(() => import("./dock").then((m) => ({ default: m.Dock })));
+const LazyDock = retryableLazy(() => import("./dock").then((m) => ({ default: m.Dock })));
 
 function DockPlaceholder() {
   return (
@@ -29,25 +30,25 @@ function DockPlaceholder() {
 }
 
 // Dock Floating (pil, hot-edge, pintasan) dimuat malas: bagian berat di luar bundel awal (NFR-04).
-const LazyDockFloating = lazy(() =>
+const LazyDockFloating = retryableLazy(() =>
   import("./dock-floating").then((m) => ({ default: m.DockFloating })),
 );
 
 // Palet perintah (cmdk) hanya ada di chunk malas ini; pintasan Ctrl+K hidup di bundel awal dan memuatnya saat pertama dipakai.
-const LazyCommandPalette = lazy(() =>
+const LazyCommandPalette = retryableLazy(() =>
   import("./command-palette").then((m) => ({ default: m.CommandPalette })),
 );
 
 // Navbar halaman Desks (K1) hanya ada di chunk malas ini; fallback setinggi navbar agar tidak ada lompatan tata letak.
-const LazyDesksNavbar = lazy(() =>
+const LazyDesksNavbar = retryableLazy(() =>
   import("./desks-navbar").then((m) => ({ default: m.DesksNavbar })),
 );
 
 // Panel Notifikasi dan dialog Settings dimuat malas saat pertama dibuka (bagian berat di luar bundel awal).
-const LazyNotificationPanel = lazy(() =>
+const LazyNotificationPanel = retryableLazy(() =>
   import("./notification-panel").then((m) => ({ default: m.NotificationPanel })),
 );
-const LazySettingsDialog = lazy(() =>
+const LazySettingsDialog = retryableLazy(() =>
   import("./settings/settings-dialog").then((m) => ({ default: m.SettingsDialog })),
 );
 
@@ -203,7 +204,7 @@ export function AppShell() {
           ) : (
             <>
               {dockMode === "pinned" ? (
-                <ShellBoundary label="dock" fallback={<DockPlaceholder />}>
+                <ShellBoundary label="dock" fallback={<DockPlaceholder />} onRetry={LazyDock.reset}>
                   <Suspense fallback={<DockPlaceholder />}>
                     <LazyDock />
                   </Suspense>
@@ -217,7 +218,11 @@ export function AppShell() {
               </Sidebar>
               <CollapseEdge mode={dockMode} />
               {dockMode === "floating" ? (
-                <ShellBoundary label="dock floating" fallback={null}>
+                <ShellBoundary
+                  label="dock floating"
+                  fallback={null}
+                  onRetry={LazyDockFloating.reset}
+                >
                   <Suspense fallback={null}>
                     <LazyDockFloating />
                   </Suspense>
@@ -228,7 +233,12 @@ export function AppShell() {
           <div className="relative flex min-w-0 flex-1 flex-col bg-background">
             {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
             {desksChrome ? (
-              <LocalBoundary label="navbar" resetKey={resetKey} fallback={<DesksNavbarFallback />}>
+              <LocalBoundary
+                label="navbar"
+                resetKey={resetKey}
+                fallback={<DesksNavbarFallback />}
+                onRetry={LazyDesksNavbar.reset}
+              >
                 <Suspense fallback={<DesksNavbarFallback />}>
                   <LazyDesksNavbar />
                 </Suspense>
@@ -263,7 +273,11 @@ export function AppShell() {
             </main>
           </div>
           {palette.mounted ? (
-            <ShellBoundary label="palet perintah" fallback={null}>
+            <ShellBoundary
+              label="palet perintah"
+              fallback={null}
+              onRetry={LazyCommandPalette.reset}
+            >
               <Suspense fallback={null}>
                 <LazyCommandPalette
                   open={palette.open}
@@ -273,7 +287,11 @@ export function AppShell() {
             </ShellBoundary>
           ) : null}
           {notifications.mounted ? (
-            <ShellBoundary label="panel notifikasi" fallback={null}>
+            <ShellBoundary
+              label="panel notifikasi"
+              fallback={null}
+              onRetry={LazyNotificationPanel.reset}
+            >
               <Suspense fallback={null}>
                 <LazyNotificationPanel
                   open={notifications.open}
@@ -283,7 +301,7 @@ export function AppShell() {
             </ShellBoundary>
           ) : null}
           {settings.mounted ? (
-            <ShellBoundary label="pengaturan" fallback={null}>
+            <ShellBoundary label="pengaturan" fallback={null} onRetry={LazySettingsDialog.reset}>
               <Suspense fallback={null}>
                 <LazySettingsDialog
                   open={settings.open}

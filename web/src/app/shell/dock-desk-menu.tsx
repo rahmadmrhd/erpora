@@ -59,8 +59,17 @@ function DeskMenuContent({ desk, onSelect }: { desk: Desk; onSelect: () => void 
  * membuka popover, bukan langsung berpindah; memilih item menavigasi ke item itu dan menetapkan Desk ini sebagai
  * Desk saat ini. `children` adalah tombol ikon pemicunya. Dimuat malas oleh `Dock`.
  */
-export function DeskMenuPopover({ desk, children }: { desk: Desk; children: ReactElement }) {
-  const [open, setOpen] = useState(false);
+export function DeskMenuPopover({
+  desk,
+  defaultOpen = false,
+  children,
+}: {
+  desk: Desk;
+  /** Terbuka sejak dipasang (klik ikon yang terjadi saat chunk ini masih dimuat). */
+  defaultOpen?: boolean;
+  children: ReactElement;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   const { setCurrentDesk } = useCurrentDesk();
   const label = useMessage(desk.label);
   return (

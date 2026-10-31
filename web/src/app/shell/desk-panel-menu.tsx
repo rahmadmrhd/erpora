@@ -19,12 +19,18 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@erpora/ui";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { NavIcon } from "./nav-icon";
+import { retryableLazy } from "./retryable-lazy";
 
-const LazyIconStripGroup = lazy(() =>
+const LazyIconStripGroup = retryableLazy(() =>
   import("./icon-strip-group").then((m) => ({ default: m.IconStripGroup })),
 );
+
+/** Memuat ulang chunk grup strip ikon setelah gagal (dipanggil batas galat menu Desk saat mencoba lagi). */
+export function resetDeskMenuChunks(): void {
+  LazyIconStripGroup.reset();
+}
 
 const trim = (p: string): string => (p.length > 1 && p.endsWith("/") ? p.slice(0, -1) : p);
 

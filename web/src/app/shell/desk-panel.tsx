@@ -22,7 +22,7 @@ import {
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { DESK_PANEL_ID } from "./collapse-edge";
-import { DeskMenuTree } from "./desk-panel-menu";
+import { DeskMenuTree, resetDeskMenuChunks } from "./desk-panel-menu";
 import { FixedGroup } from "./fixed-group";
 import { LogoPopover } from "./logo-popover";
 import { ShellBoundary } from "./shell-boundary";
@@ -91,7 +91,11 @@ function DeskMenu({ variant }: { variant: PanelVariant }) {
   }
 
   return (
-    <ShellBoundary label="menu Desk" fallback={(retry) => <DeskMenuLoadError retry={retry} />}>
+    <ShellBoundary
+      label="menu Desk"
+      onRetry={resetDeskMenuChunks}
+      fallback={(retry) => <DeskMenuLoadError retry={retry} />}
+    >
       <SidebarGroup>
         <SidebarGroupLabel>
           <Message message={desk.label} />
