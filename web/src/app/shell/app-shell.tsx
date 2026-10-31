@@ -1,37 +1,28 @@
-import { Message, usePageChrome } from "@erpora/platform-web";
-import { SidebarProvider, Skeleton } from "@erpora/ui";
+import { Message, useDockMode, usePageChrome } from "@erpora/platform-web";
+import { Sidebar, SidebarProvider, Skeleton } from "@erpora/ui";
 import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
-import { type CSSProperties, Suspense, useEffect, useRef, useState } from "react";
+import { type CSSProperties, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { RouteErrorPage } from "../pages/pages";
-import { AppSidebar } from "./app-sidebar";
+import { CollapseEdge } from "./collapse-edge";
+import { DeskPanel, PanelSheet } from "./desk-panel";
+import { Dock } from "./dock";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
+import { type ShellActions, ShellActionsProvider } from "./shell-context";
+import { readSidebarOpen, writeSidebarOpen } from "./sidebar-state";
+import { useIsCompact } from "./use-compact";
 
-// Persistensi keadaan sidebar (K-17) dikerjakan shell: Sidebar shadcn persis registry menyimpan di cookie, sehingga
-// shell mengendalikan `open` dan menyimpannya di localStorage (kunci dan nilai sama seperti sebelum resync).
-const SIDEBAR_STORAGE_KEY = "erpora.sidebar";
+// Dock Floating (pil, hot-edge, pintasan) dimuat malas: bagian berat di luar bundel awal (NFR-04).
+const LazyDockFloating = lazy(() =>
+  import("./dock-floating").then((m) => ({ default: m.DockFloating })),
+);
 
-function readSidebarOpen(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "collapsed";
-  } catch {
-    return true;
-  }
-}
-
-function writeSidebarOpen(open: boolean): void {
-  try {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, open ? "expanded" : "collapsed");
-  } catch {
-    // penyimpanan diblokir: keadaan tetap berlaku untuk sesi ini
-  }
-}
-
-// Lebar sidebar K-15 (14,25 rem / 3,25 rem); bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
-const SIDEBAR_STYLE = {
+// Lebar panel K-15 (14,25 rem / 3,25 rem) dan Dock 3,5 rem; bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
+const SHELL_STYLE = {
   "--sidebar-width": "14.25rem",
   "--sidebar-width-icon": "3.25rem",
+  "--dock-width": "3.5rem",
 } as CSSProperties;
 
 function ContentSkeleton() {
@@ -74,69 +65,114 @@ function RouteAnnouncer({ main }: { main: React.RefObject<HTMLElement | null> })
 }
 
 /**
- * Kerangka aplikasi: sidebar, navbar, dan area konten bergulir (`usePageChrome().scroll`) dengan batas Suspense dan
- * galat sehingga galat satu halaman tidak merobohkan sidebar dan navbar (R14.5).
+ * Kerangka aplikasi (R4, R5): Dock + panel menu (Pinned) atau panel menu + Dock Floating (pil), navbar, dan area
+ * konten bergulir (`usePageChrome().scroll`) dengan batas Suspense dan galat sehingga galat satu halaman tidak
+ * merobohkan panel dan navbar (R14.5). Di bawah 1024 px panel menjadi `Sheet` (tombol menu) tanpa memandang mode Dock.
+ * Keadaan ciut panel disimpan di `localStorage` (`erpora.sidebar`); keadaan Sheet tidak disimpan.
  */
 export function AppShell() {
   const { scroll } = usePageChrome();
   const main = useRef<HTMLElement>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(readSidebarOpen);
+  const compact = useIsCompact();
+  const dockMode = useDockMode();
+  const [panelOpen, setPanelOpen] = useState(readSidebarOpen);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const resetKey = useRouterState({ select: (s) => s.location.href });
+
+  // Kembali ke lebar besar: Sheet yang masih terbuka ditutup agar tidak muncul lagi saat menyempit.
+  useEffect(() => {
+    if (!compact) setSheetOpen(false);
+  }, [compact]);
+
+  const actions = useMemo<ShellActions>(
+    () => ({
+      openPalette: () => {},
+      openNotifications: () => {},
+      openSettings: () => {},
+      reload: () => window.location.reload(),
+    }),
+    [],
+  );
+
   return (
     <SidebarProvider
       className="h-svh overflow-hidden"
-      style={SIDEBAR_STYLE}
-      open={sidebarOpen}
+      style={SHELL_STYLE}
+      open={compact ? sheetOpen : panelOpen}
       onOpenChange={(open) => {
-        setSidebarOpen(open);
+        if (compact) {
+          setSheetOpen(open);
+          return;
+        }
+        setPanelOpen(open);
         writeSidebarOpen(open);
       }}
     >
-      {/* biome-ignore lint/a11y/useValidAnchor: skip link (K-33): tautan ke #content dengan fokus langsung ke <main> tanpa mengubah hash router */}
-      <a
-        href="#content"
-        className="sr-only z-50 rounded-md bg-background px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
-        onClick={(e) => {
-          // Tanpa mengubah hash URL (router klien): fokus langsung ke <main>.
-          e.preventDefault();
-          main.current?.focus();
-        }}
-      >
-        <Message message={{ ns: "platform", key: "shell.skipToContent" }} />
-      </a>
-      <AppSidebar />
-      <div className="relative flex min-w-0 flex-1 flex-col bg-background">
-        {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
-        <LocalBoundary label="navbar" resetKey={resetKey} fallback={<NavbarFallback />}>
-          <Suspense fallback={<NavbarFallback />}>
-            <Navbar />
+      <ShellActionsProvider value={actions}>
+        {/* biome-ignore lint/a11y/useValidAnchor: skip link (K-33): tautan ke #content dengan fokus langsung ke <main> tanpa mengubah hash router */}
+        <a
+          href="#content"
+          className="sr-only z-50 rounded-md bg-background px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+          onClick={(e) => {
+            // Tanpa mengubah hash URL (router klien): fokus langsung ke <main>.
+            e.preventDefault();
+            main.current?.focus();
+          }}
+        >
+          <Message message={{ ns: "platform", key: "shell.skipToContent" }} />
+        </a>
+        {compact ? (
+          <PanelSheet />
+        ) : (
+          <>
+            {dockMode === "pinned" ? <Dock /> : null}
+            <Sidebar
+              collapsible={dockMode === "pinned" ? "offcanvas" : "icon"}
+              className={dockMode === "pinned" ? "left-(--dock-width)" : undefined}
+            >
+              <DeskPanel variant={dockMode} />
+            </Sidebar>
+            <CollapseEdge mode={dockMode} />
+            {dockMode === "floating" ? (
+              <Suspense fallback={null}>
+                <LazyDockFloating />
+              </Suspense>
+            ) : null}
+          </>
+        )}
+        <div className="relative flex min-w-0 flex-1 flex-col bg-background">
+          {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
+          <LocalBoundary label="navbar" resetKey={resetKey} fallback={<NavbarFallback />}>
+            <Suspense fallback={<NavbarFallback />}>
+              <Navbar />
+            </Suspense>
+          </LocalBoundary>
+          <main
+            id="content"
+            ref={main}
+            tabIndex={-1}
+            className={
+              scroll
+                ? "min-h-0 flex-1 overflow-auto outline-none"
+                : "min-h-0 flex-1 overflow-hidden outline-none"
+            }
+          >
+            <CatchBoundary
+              getResetKey={() => resetKey}
+              errorComponent={({ error, reset }) => <RouteErrorPage error={error} reset={reset} />}
+            >
+              <Suspense fallback={<ContentSkeleton />}>
+                <Outlet />
+              </Suspense>
+            </CatchBoundary>
+          </main>
+        </div>
+        <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
+          <Suspense fallback={null}>
+            <RouteAnnouncer main={main} />
           </Suspense>
         </LocalBoundary>
-        <main
-          id="content"
-          ref={main}
-          tabIndex={-1}
-          className={
-            scroll
-              ? "min-h-0 flex-1 overflow-auto outline-none"
-              : "min-h-0 flex-1 overflow-hidden outline-none"
-          }
-        >
-          <CatchBoundary
-            getResetKey={() => resetKey}
-            errorComponent={({ error, reset }) => <RouteErrorPage error={error} reset={reset} />}
-          >
-            <Suspense fallback={<ContentSkeleton />}>
-              <Outlet />
-            </Suspense>
-          </CatchBoundary>
-        </main>
-      </div>
-      <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
-        <Suspense fallback={null}>
-          <RouteAnnouncer main={main} />
-        </Suspense>
-      </LocalBoundary>
+      </ShellActionsProvider>
     </SidebarProvider>
   );
 }
