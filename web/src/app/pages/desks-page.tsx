@@ -11,8 +11,10 @@ import { resolveIcon, Skeleton } from "@erpora/ui";
 import { EmptyNotice } from "../components/notices";
 import { useShellChrome } from "../shell/shell-chrome";
 
-const GRID =
-  "grid w-full grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+// Ubin berlebar tetap (w-32) dalam wadah max-w-4xl: 2 kolom di layar sempit sampai 6 kolom di layar lebar, dan baris
+// terakhir yang tidak penuh tetap terpusat (`justify-center`), seperti DeskList ERP DS dan halaman Desks ERPNext.
+const GRID = "flex w-full flex-wrap justify-center gap-4";
+const TILE = "w-32";
 
 /**
  * Kartu Desk gaya ERP DS `DeskList`: ubin ikon 64px `rounded-2xl` (token semantik `muted`/`foreground` dengan
@@ -27,7 +29,7 @@ function DeskCard({ desk, onChoose }: { desk: Desk; onChoose: (id: string) => vo
     <Link
       to={to}
       onClick={() => onChoose(desk.id)}
-      className="flex flex-col items-center gap-2 rounded-2xl p-3 text-center outline-none transition-colors hover:bg-accent focus-visible:bg-accent"
+      className="flex w-full flex-col items-center gap-2 rounded-2xl p-3 text-center outline-none transition-colors hover:bg-accent focus-visible:bg-accent"
     >
       <span className="flex size-16 items-center justify-center rounded-2xl border bg-muted text-foreground">
         {Icon ? <Icon aria-hidden="true" className="size-8" /> : null}
@@ -40,7 +42,7 @@ function DeskCard({ desk, onChoose }: { desk: Desk; onChoose: (id: string) => vo
 }
 
 /**
- * Halaman Desks (R10.6, K1): kisi kartu Desk yang diizinkan di tengah halaman, tanpa judul visual (judul hanya
+ * Halaman Desks (R10.6, K1): kisi kartu Desk yang diizinkan terpusat secara horizontal di bagian atas-tengah halaman (di bawah navbar), tanpa judul visual (judul hanya
  * untuk pembaca layar), atau keadaan kosong. Tidak punya URL sendiri: dirender oleh `DeskEntry` di `/`.
  * Kustomisasi, folder/grup, dan pengelolaan adalah M3b.
  */
@@ -52,12 +54,14 @@ export function DesksPage() {
   const { setCurrentDesk } = useCurrentDesk();
   const usable = desks.filter((d) => deskDashboardPath(d) !== null);
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center gap-4 p-6">
+    <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center justify-start gap-4 p-6 pt-16 sm:pt-24">
       <h1 className="sr-only">{t("desks.title")}</h1>
       {status === "loading" ? (
         <div className={GRID} aria-hidden="true">
           {["a", "b", "c", "d"].map((k) => (
-            <Skeleton key={k} className="mx-auto size-16 rounded-2xl" />
+            <div key={k} className={`${TILE} flex justify-center p-3`}>
+              <Skeleton className="size-16 rounded-2xl" />
+            </div>
           ))}
         </div>
       ) : usable.length === 0 ? (
@@ -68,9 +72,9 @@ export function DesksPage() {
           description={t("desks.empty.description")}
         />
       ) : (
-        <ul className={GRID}>
+        <ul className={GRID} data-testid="desk-grid">
           {usable.map((d) => (
-            <li key={d.id} className="flex justify-center">
+            <li key={d.id} className={TILE}>
               <DeskCard desk={d} onChoose={setCurrentDesk} />
             </li>
           ))}

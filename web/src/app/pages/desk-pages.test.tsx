@@ -194,6 +194,9 @@ describe("DesksPage (R10.6)", () => {
     expect(tile?.querySelector("svg")).not.toBeNull();
     expect(link.className).toContain("hover:bg-accent");
     expect(link.className).not.toContain("ring");
+    const grid = screen.getByTestId("desk-grid");
+    expect(grid).toHaveClass("flex-wrap", "justify-center");
+    expect(grid.firstElementChild).toHaveClass("w-32");
     expect(screen.getAllByRole("list")).toHaveLength(1);
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
