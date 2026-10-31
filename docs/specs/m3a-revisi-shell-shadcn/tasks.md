@@ -250,6 +250,8 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 6.6_
   - [x] 14.34 K19: dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten (tes; pemeriksaan browser sudah dilakukan koordinator 1 Nov 2026, lihat catatan; JS awal tetap ≤ 200 KB gzip)
     - _Requirements: 17.1, 17.7_
+  - [ ] 14.35 K20: klik ikon Desk di Dock mode Floating membuka popover menu Desk seperti K8 di Pinned, bukan memindah Desk langsung; `switchDesk` tetap dipakai popover logo dan palet. Tes dulu (perilaku popover Floating), lalu implementasi.
+    - _Requirements: 4.2, 4.9_
 
 ## Notes
 
@@ -428,7 +430,8 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 - **Integrasi:** `go test -tags integration -p 2 -timeout 45m ./...` (root module) lewat tunnel SSH ke VPS, exit 0, tanpa kegagalan (HEAD `d8f23eb`). **Generator:** `task test:generator` lulus 639 detik pada `d8f23eb` (worktree bersih; kegagalan acak `bun install` pada dua percobaan sebelumnya akibat beban mesin dan `TMP` dialihkan).
 - **Browser (dev server `web` + `api`, backend nyata):** halaman Desks tanpa sidebar/Dock (navbar logo/search/bel/avatar, kartu notifikasi di kanan atas, ubin terpusat), Dock Pinned (item tetap di Dock, rapat seragam, sorotan latar), popover menu Dock Pinned, breadcrumb terakhir sebagai judul (`h1`) dengan divider, Settings besar dan pembatas penuh, menu logo di halaman Desks tanpa Pindah Desk/Semua Desk, menonaktifkan/mengaktifkan modul memperbarui Dock tanpa muat ulang, muat ulang `/` mengikuti penentuan Desk, hover tema gelap dengan pointer sungguhan.
 - **Review independen:** empat putaran (spek/regresi dan keamanan `security-audit`; diff perbaikan; diff perbaikan terakhir): tidak ada Critical; Important dan Minor yang sesuai spek semuanya dikerjakan; keputusan di luar spek dikonfirmasi pemilik produk (K13 tetap `bunx`; P-1/P-3 disetujui; patch label/token/perilaku; `command` dipasang; `drawer` tidak).
-- **Menunggu konfirmasi pemilik produk:** m-5 (tombol avatar navbar halaman Desks `size-10` → `size-9`, di luar K16); D-15 (ambang tab Settings 768 px); submenu "+N" Pinned (`OverflowDeskSub`, di luar K8); ADR-0015 sebagai nomor ADR (spek semula menyebut ADR-0011).
+- **Disetujui pemilik produk 1 Nov 2026 (ditutup):** (a) avatar navbar halaman Desks `size-9`, seragam dengan lonceng (m-5; di luar K16); (b) ambang tab Settings mobile 768 px (D-15 ditutup sebagai keputusan final); (c) submenu `+N` (`OverflowDeskSub`) sebagai tambahan K8, pada Pinned dan Floating; (d) keputusan komponen dicatat di ADR-0015, bukan ADR-0011 (spek semula menyebut ADR-0011).
+- **K20 (1 Nov 2026):** klik ikon Desk di Dock mode Floating membuka popover menu Desk seperti K8. Sub-tugas 14.35 belum memiliki commit pada saat catatan ini ditulis; belum dicentang.
 
 ## Task Dependency Graph
 
@@ -460,7 +463,7 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
     { "id": 22, "tasks": ["14.10", "14.18", "14.19", "14.25"] },
     { "id": 23, "tasks": ["14.1", "14.2", "14.5", "14.7", "14.8", "14.9"] },
     { "id": 24, "tasks": ["14.3", "14.4", "14.6", "14.11"] },
-    { "id": 25, "tasks": ["14.30", "14.31", "14.32", "14.33", "14.34"] },
+    { "id": 25, "tasks": ["14.30", "14.31", "14.32", "14.33", "14.34", "14.35"] },
     { "id": 26, "tasks": ["14.27"] },
     { "id": 27, "tasks": ["14.28"] },
     { "id": 28, "tasks": ["14.29"] }
