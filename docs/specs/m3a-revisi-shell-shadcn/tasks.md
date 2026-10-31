@@ -437,6 +437,9 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 - **K21 (1 Nov 2026, 14.36):** strip ikon Floating terpusat horizontal (jarak kiri = kanan) dan avatar 32 px berkontras dan terpusat seperti Dock Pinned; saat panel terbuka tetap `sm`. Keputusan pemilik produk dari tangkapan layar mode Floating diciutkan (PRD-000 Q40 butir 27). Commit `9f9e2c9`.
 - **Verifikasi HEAD `9f9e2c9` (1 Nov 2026):** Go, kontrak, integrasi (VPS lewat tunnel), dan `task test:generator` (642 detik) hijau. Satu kegagalan acak `bun install` ENOENT copyfile pada generator tidak berulang. `web:check` final dicatat koordinator.
 
+- **Verifikasi akhir pada HEAD `59f7eed` (1 Nov 2026):** `task lint arch check:gowork-off test`, `task contracts:check`, `go test -tags integration -p 2 -timeout 45m ./...` (tunnel VPS) dan `task test:generator` (642 s; satu percobaan sebelumnya gagal acak `bun install` ENOENT copyfile, tidak berulang) dijalankan pada HEAD `9f9e2c9` (perubahan sesudahnya hanya dokumen): semuanya hijau. `go test ./tests/architecture` dan `ERP_REQUIRE_BUN=1 task web:check` pada `59f7eed`: **1492 lulus, 14 dilewati, 0 gagal**, JS awal **198,4 KB** gzip.
+- **Browser (HEAD akhir):** K21 terukur: semua 7 tombol strip ikon Floating 32 px dengan jarak kiri 9,5 px dan kanan 10,5 px (terpusat), avatar 32 px; K20: klik ikon Desk di pil Floating membuka popover menu (rute tidak berubah), memilih "Summary" menavigasi ke `/example-addon/summary`, menetapkan Desk `example-addon`, dan menutup pil.
+
 ## Task Dependency Graph
 
 ```json
