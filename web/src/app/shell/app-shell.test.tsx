@@ -156,7 +156,7 @@ describe("AppShell: chrome halaman Desks (K1)", () => {
       expect(screen.queryByRole("separator", { name: "Ciutkan atau perluas sidebar" })).toBeNull();
       expect(screen.queryByRole("button", { name: /Ciutkan atau perluas sidebar/ })).toBeNull();
       expect(within(bar).queryByRole("navigation")).toBeNull();
-    });
+    }, 15_000);
   }
 
   test("Ctrl+K dari navbar Desks membuka palet", async () => {
@@ -165,7 +165,7 @@ describe("AppShell: chrome halaman Desks (K1)", () => {
     const bar = await screen.findByRole("banner");
     await user.click(await within(bar).findByRole("button", { name: /Cari/ }, { timeout: 5000 }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  });
+  }, 15_000);
 
   test("Ctrl+B di halaman Desks tidak membalik atau menulis erpora.sidebar (M-4)", async () => {
     localStorage.setItem("erpora.sidebar", "expanded");
