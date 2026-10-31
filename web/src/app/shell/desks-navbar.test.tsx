@@ -65,13 +65,16 @@ describe("DesksNavbar (K1)", () => {
     await waitFor(() => expect(bell).toHaveAccessibleDescription("7"));
   });
 
-  test("logo membuka popover logo yang sama (Semua Desk menuju / dengan penanda showDesks)", async () => {
+  test("logo membuka popover logo tanpa Pindah Desk dan Semua Desk (U4); Bantuan membuka Settings", async () => {
+    const openSettings = mock(() => {});
     const user = userEvent.setup();
-    const { router } = renderShell(<DesksNavbar />, { desks });
+    renderShell(<DesksNavbar />, { desks, actions: { openSettings } });
     await user.click(await screen.findByRole("button", { name: /Menu aplikasi/ }));
-    expect(await screen.findByRole("menuitem", { name: "Pindah Desk" })).toBeInTheDocument();
-    await user.click(screen.getByRole("menuitem", { name: "Semua Desk" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    expect(await screen.findByRole("menuitem", { name: "Tentang" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Pindah Desk" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Semua Desk" })).toBeNull();
+    await user.click(screen.getByRole("menuitem", { name: "Bantuan dan pintasan" }));
+    expect(openSettings).toHaveBeenCalledWith("shortcuts");
   });
 
   test("avatar membuka menu pengguna dengan Pengaturan di bawah tombol", async () => {

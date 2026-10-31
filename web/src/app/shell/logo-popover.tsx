@@ -56,7 +56,8 @@ function Mark() {
  * Logo dan nama proyek yang membuka popover tingkat aplikasi (R6): Pindah Desk, Semua Desk, Edit sidebar
  * (nonaktif sampai M3b), Bantuan dan pintasan, Tentang (versi dari bootstrap). `dock`: hanya logo di atas Dock
  * Pinned; `panel`: logo dan nama sebagai kepala panel (Floating dan Sheet); `navbar`: logo dan nama di kiri navbar
- * halaman Desks (K1, tanpa Dock/panel). Popover yang sama pada semua varian.
+ * halaman Desks (K1, tanpa Dock/panel) tanpa "Pindah Desk" dan "Semua Desk" (U4: pengguna sudah di halaman Desks).
+ * Selain itu popover sama pada semua varian.
  */
 export function LogoPopover({ variant }: { variant: "dock" | "panel" | "navbar" }) {
   const { t } = useTranslation("platform");
@@ -74,30 +75,34 @@ export function LogoPopover({ variant }: { variant: "dock" | "panel" | "navbar" 
       align="start"
       className="w-60"
     >
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          <Icon name="layers" />
-          {t("logoMenu.switchDesk")}
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
-          <DropdownMenuRadioGroup
-            value={deskId ?? ""}
-            onValueChange={(id) => {
-              const desk = desks.find((d) => d.id === id);
-              if (desk) switchDesk(desk);
-            }}
-          >
-            {desks.map((d) => (
-              <DeskRadioItem key={d.id} desk={d} />
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-      <DropdownMenuItem onSelect={goToDesks}>
-        <Icon name="layout-dashboard" />
-        {t("logoMenu.allDesks")}
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
+      {variant === "navbar" ? null : (
+        <>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Icon name="layers" />
+              {t("logoMenu.switchDesk")}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuRadioGroup
+                value={deskId ?? ""}
+                onValueChange={(id) => {
+                  const desk = desks.find((d) => d.id === id);
+                  if (desk) switchDesk(desk);
+                }}
+              >
+                {desks.map((d) => (
+                  <DeskRadioItem key={d.id} desk={d} />
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem onSelect={goToDesks}>
+            <Icon name="layout-dashboard" />
+            {t("logoMenu.allDesks")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      )}
       <DisabledHint hint={hint}>
         <DropdownMenuItem disabled aria-describedby={hintId}>
           <Icon name="pencil" />

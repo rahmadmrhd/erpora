@@ -19,7 +19,10 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-async function open(variant: "dock" | "panel" = "panel", opts: ShellHarnessOptions = {}) {
+async function open(
+  variant: "dock" | "panel" | "navbar" = "panel",
+  opts: ShellHarnessOptions = {},
+) {
   const user = userEvent.setup();
   const result = renderShell(<LogoPopover variant={variant} />, { desks, ...opts });
   const trigger = await screen.findByRole("button", { name: /Menu aplikasi/ });
@@ -49,6 +52,20 @@ describe("LogoPopover", () => {
     expect(names[2]).toContain("Edit sidebar");
     expect(names[3]).toBe("Bantuan dan pintasan");
     expect(names[4]).toBe("Tentang");
+  });
+
+  test("varian navbar (halaman Desks) tidak memuat Pindah Desk dan Semua Desk; sisanya tetap (U4)", async () => {
+    await open("navbar");
+    const menu = await screen.findByRole("menu");
+    const names = within(menu)
+      .getAllByRole("menuitem")
+      .map((i) => i.textContent?.trim());
+    expect(names).toHaveLength(3);
+    expect(names[0]).toContain("Edit sidebar");
+    expect(names[1]).toBe("Bantuan dan pintasan");
+    expect(names[2]).toBe("Tentang");
+    expect(screen.queryByRole("menuitem", { name: "Pindah Desk" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Semua Desk" })).toBeNull();
   });
 
   test("Edit sidebar nonaktif dengan keterangan M3b", async () => {
