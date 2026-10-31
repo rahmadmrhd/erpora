@@ -95,3 +95,27 @@ describe("attachModuleRoutes menolak rute indeks (R10.8)", () => {
     expect(() => attachModuleRoutes(base, [child, index])).toThrow(ModuleDefinitionError);
   });
 });
+
+describe("attachModuleRoutes dengan indeks milik shell", () => {
+  test("opsi index memasang Dashboard di /<slug> tanpa ditolak, di samping anak modul", async () => {
+    const root = createAppRootRoute();
+    const base = createModuleBaseRoute(root, "example");
+    const notes = createRoute({ getParentRoute: () => base, path: "/notes" });
+    const index = createRoute({ getParentRoute: () => base, path: "/" });
+    const tree = root.addChildren([attachModuleRoutes(base, [notes], { index })]);
+    const router = createRouter({
+      routeTree: tree,
+      history: createMemoryHistory({ initialEntries: ["/example"] }),
+      context: { queryClient: new QueryClient() },
+    });
+    await router.load();
+    expect(router.state.matches.at(-1)?.routeId).toBe(index.id);
+  });
+
+  test("opsi index harus berupa rute indeks", () => {
+    const root = createAppRootRoute();
+    const base = createModuleBaseRoute(root, "example");
+    const notRoot = createRoute({ getParentRoute: () => base, path: "/notes" });
+    expect(() => attachModuleRoutes(base, [], { index: notRoot })).toThrow(ModuleDefinitionError);
+  });
+});

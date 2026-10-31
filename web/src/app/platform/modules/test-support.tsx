@@ -1,4 +1,4 @@
-// Pembantu uji halaman /settings/modules (bukan bagian bundel): server tiruan stateful untuk API modul, katalog nyata,
+// Pembantu uji halaman /platform/modules (bukan bagian bundel): server tiruan stateful untuk API modul, katalog nyata,
 // dan perakitan provider minimal (tanpa router/shell).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -276,7 +276,6 @@ export function fixtureFrontend(): FrontendModule[] {
       key: "acme.shop",
       slug: "shop",
       version: "1.0.0",
-      navigation: [{ type: "item", id: "home", label: { ns: "shop", key: "nav.home" }, to: "/" }],
       registerRoutes: () => [],
       offline: defaultOfflinePolicy,
     }),

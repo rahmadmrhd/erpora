@@ -101,11 +101,13 @@ export type AnyModuleChildRoute = Route<
 /**
  * Menempelkan anak modul ke base route (dipakai shell setelah `registerRoutes`). Satu pintu sehingga tipe route
  * generik TanStack tidak bocor ke pemanggil. Rute indeks (`path: "/"`) ditolak dengan `ModuleDefinitionError`:
- * indeks `/<slug>` adalah Dashboard bawaan shell (M3a revisi R10.8).
+ * indeks `/<slug>` adalah Dashboard bawaan shell (M3a revisi R10.8). Hanya shell yang memasang indeks itu, lewat
+ * `shell.index` (tidak diperiksa terhadap penolakan di atas).
  */
 export function attachModuleRoutes(
   base: ModuleBaseRoute,
   children: readonly AnyModuleChildRoute[],
+  shell: { readonly index?: AnyModuleChildRoute } = {},
 ): AnyRoute {
   const basePath = (base.options as { path?: string }).path ?? "?";
   for (const child of children) {
@@ -118,7 +120,19 @@ export function attachModuleRoutes(
       );
     }
   }
-  return (base as AnyRoute).addChildren(children as unknown as AnyRoute[]);
+  const all = [...children];
+  if (shell.index !== undefined) {
+    const path = (shell.index.options as { path?: string }).path;
+    if (path !== "/") {
+      throw new ModuleDefinitionError(
+        basePath,
+        "index",
+        'rute indeks milik shell harus ber-path "/"',
+      );
+    }
+    all.push(shell.index);
+  }
+  return (base as AnyRoute).addChildren(all as unknown as AnyRoute[]);
 }
 
 export {

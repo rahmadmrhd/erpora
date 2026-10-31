@@ -18,7 +18,8 @@ import type { Desk, DeskList } from "./types";
  * Penanda state navigasi (bukan URL, R10.5): `navigate({ to: "/", state: SHOW_DESKS_STATE })` membuat `/` menampilkan
  * halaman Desks dengan melewati penentuan Desk; muat ulang menghapusnya dari konteks efektif (penentuan biasa).
  */
-export const SHOW_DESKS_STATE = Object.freeze({ showDesks: true });
+// Tipe tidak `Readonly` agar dapat dipakai sebagai opsi `state` navigasi router (yang bertipe objek mutabel).
+export const SHOW_DESKS_STATE = Object.freeze({ showDesks: true }) as { showDesks: true };
 
 /** `true` hanya untuk objek dengan `showDesks === true` (state riwayat tidak dipercaya). */
 export function isShowDesksState(state: unknown): boolean {

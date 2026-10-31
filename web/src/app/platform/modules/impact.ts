@@ -1,7 +1,7 @@
 // Dampak aksi modul (M3a K-6, PK-1): dihitung di klien dari status, dependensi, dan navigasi modul frontend; backend tetap
 // otoritas dan menolak dengan kode yang sama. Antarmuka (`Impact`) sengaja terisolasi sehingga dapat diganti hasil `plan`
 // server tanpa mengubah dialog.
-import type { FrontendModule, MessageRef, NavigationEntry } from "@erpora/module-sdk";
+import { type FrontendModule, listModuleRoutePaths } from "@erpora/module-sdk";
 import type { ModuleOp, ModuleStatus, ModuleView } from "./types";
 
 export type BlockerCode =
@@ -19,8 +19,8 @@ export interface Blocker {
 }
 
 export type Effect =
-  | { kind: "menu_hidden"; labels: readonly MessageRef[] }
-  | { kind: "menu_shown"; labels: readonly MessageRef[] }
+  | { kind: "menu_hidden" }
+  | { kind: "menu_shown" }
   | { kind: "routes_inactive"; paths: readonly string[] }
   | { kind: "routes_active"; paths: readonly string[] }
   | { kind: "api_closed"; prefix: string; code: "module_disabled" | "module_not_found" }
@@ -102,21 +102,13 @@ function requiredDependents(
     .filter((m) => m.dependencies.some((d) => d.module === target.key && !d.optional));
 }
 
-function navigationOf(fe: FrontendModule | undefined): { labels: MessageRef[]; paths: string[] } {
-  if (!fe) return { labels: [], paths: [] };
-  const labels: MessageRef[] = [];
-  const paths: string[] = [];
-  const add = (to: string) => {
-    const p = `/${fe.slug}${to === "/" ? "" : to}`;
-    if (!paths.includes(p)) paths.push(p);
-  };
-  const walk = (entry: NavigationEntry) => {
-    labels.push(entry.label);
-    if (entry.type === "item") add(entry.to);
-    else for (const c of entry.children) add(c.to);
-  };
-  for (const e of fe.navigation) walk(e);
-  return { labels, paths };
+/**
+ * Halaman modul frontend yang terdampak: Dashboard `/<slug>` (dibangkitkan shell) dan rute terdaftar
+ * (`/<slug>/<halaman>`). `null` bila modul tidak punya frontend (tidak ada efek menu/halaman).
+ */
+function pagesOf(fe: FrontendModule | undefined): string[] | null {
+  if (!fe) return null;
+  return [`/${fe.slug}`, ...listModuleRoutePaths(fe).map((p) => `/${fe.slug}${p}`)];
 }
 
 export interface ImpactInput {
@@ -205,14 +197,14 @@ export function computeImpact({ op, target, modules, frontend, options }: Impact
     );
   }
 
-  const nav = navigationOf(frontend.find((f) => f.key === target.key));
+  const pages = pagesOf(frontend.find((f) => f.key === target.key));
   const showUi = () => {
-    if (nav.labels.length > 0) effects.push({ kind: "menu_shown", labels: nav.labels });
-    if (nav.paths.length > 0) effects.push({ kind: "routes_active", paths: nav.paths });
+    if (pages === null) return;
+    effects.push({ kind: "menu_shown" }, { kind: "routes_active", paths: pages });
   };
   const hideUi = () => {
-    if (nav.labels.length > 0) effects.push({ kind: "menu_hidden", labels: nav.labels });
-    if (nav.paths.length > 0) effects.push({ kind: "routes_inactive", paths: nav.paths });
+    if (pages === null) return;
+    effects.push({ kind: "menu_hidden" }, { kind: "routes_inactive", paths: pages });
   };
 
   switch (op) {

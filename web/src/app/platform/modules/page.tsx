@@ -9,7 +9,7 @@ import {
   useTenantId,
   useTranslation,
 } from "@erpora/platform-web";
-import { Alert, AlertDescription, AlertTitle, Button, LoadingButton, Skeleton } from "@erpora/ui";
+import { Alert, AlertDescription, AlertTitle, LoadingButton, Skeleton } from "@erpora/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { EmptyNotice, ErrorNotice } from "../../components/notices";
@@ -22,7 +22,7 @@ import { ModulesTable } from "./modules-table";
 import type { ModuleOp, ModuleView } from "./types";
 
 /**
- * Halaman `/settings/modules` (lazy; R13): tabel modul dengan status, dampak aksi, eksekusi (200/202 + polling), dan
+ * Halaman `/platform/modules` (lazy; R13): tabel modul dengan status, dampak aksi, eksekusi (200/202 + polling), dan
  * riwayat. Mode hanya-baca bila `features.modulesAdminApi` tidak aktif (atau mutasi membalas 404).
  */
 export function ModulesPage() {

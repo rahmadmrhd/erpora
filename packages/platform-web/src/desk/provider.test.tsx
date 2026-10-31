@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { createClient, type PlatformPaths } from "@erpora/platform-contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { StaticBootstrapProvider } from "../bootstrap";
 import { makeBootstrap } from "../bootstrap/testing";
@@ -244,5 +244,42 @@ describe("useDeskValidation", () => {
     const { result } = validate("/example/notes");
     expect(result.current.cur.deskId).toBeNull();
     expect(result.current.page.deskId).toBeNull();
+  });
+});
+
+describe("DeskProvider mengikuti revisi bootstrap", () => {
+  test("revisi bootstrap berubah (modul diaktifkan/dinonaktifkan): daftar Desk dimuat ulang tanpa muat ulang halaman", async () => {
+    let calls = 0;
+    const client = createClient<PlatformPaths>({
+      fetch: (async () => {
+        calls += 1;
+        const list = calls === 1 ? desks : desks.slice(0, 1);
+        return new Response(JSON.stringify({ data: { desks: list, revision: `r${calls}` } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ETag: `"e${calls}"` },
+        });
+      }) as unknown as typeof fetch,
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (revision: number) => (
+      <QueryClientProvider client={queryClient}>
+        <StaticBootstrapProvider value={makeBootstrap({ revision })}>
+          <DeskProvider client={client}>
+            <Probe />
+          </DeskProvider>
+        </StaticBootstrapProvider>
+      </QueryClientProvider>
+    );
+    function Probe() {
+      const { desks: list } = useDesks();
+      return <p data-testid="ids">{list.map((d) => d.id).join(",")}</p>;
+    }
+    const view = render(ui(1));
+    await waitFor(() => expect(view.getByTestId("ids").textContent).toBe("platform,example"));
+    view.rerender(ui(1));
+    expect(calls).toBe(1);
+    view.rerender(ui(2));
+    await waitFor(() => expect(view.getByTestId("ids").textContent).toBe("platform"));
+    expect(calls).toBe(2);
   });
 });

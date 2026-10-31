@@ -1,4 +1,4 @@
-// Kunci terketik `platform:modules.*` (halaman /settings/modules; M3a grup 14). Satu sumber: `MODULE_KEYS` (nilai = bentuk
+// Kunci terketik `platform:modules.*` (halaman /platform/modules; M3a grup 14). Satu sumber: `MODULE_KEYS` (nilai = bentuk
 // argumen pesan). Ditulis tangan sampai generator `i18n:generate` tersedia; `keys.test.ts` menjaga himpunan kunci dan argumen
 // sama persis dengan subpohon `modules` di internal/platform/i18n/catalog/{id,en}.json.
 import { type ArgsOf, useTranslation } from "@erpora/platform-web";

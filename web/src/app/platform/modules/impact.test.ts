@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defaultOfflinePolicy, defineModule } from "@erpora/module-sdk";
+import { createRoute, defaultOfflinePolicy, defineModule } from "@erpora/module-sdk";
 import { availableOps, computeImpact, type Effect, transitionAllowed } from "./impact";
 import { forSeeds, type Rng } from "./seeded";
 import type { ModuleOp, ModuleStatus, ModuleView } from "./types";
@@ -246,23 +246,10 @@ describe("computeImpact: efek", () => {
       key: "a.shop",
       slug: "shop",
       version: "1.0.0",
-      navigation: [
-        { type: "item", id: "home", label: { ns: "shop", key: "nav.home" }, to: "/" },
-        {
-          type: "group",
-          id: "rep",
-          label: { ns: "shop", key: "nav.rep" },
-          children: [
-            {
-              type: "item",
-              id: "s",
-              label: { ns: "shop", key: "nav.sales" },
-              to: "/reports/sales",
-            },
-          ],
-        },
+      registerRoutes: (base) => [
+        createRoute({ getParentRoute: () => base, path: "/notes" }),
+        createRoute({ getParentRoute: () => base, path: "/reports/sales" }),
       ],
-      registerRoutes: () => [],
       offline: defaultOfflinePolicy,
     }),
   ];
@@ -272,19 +259,12 @@ describe("computeImpact: efek", () => {
     const r = computeImpact({ op: "disable", target: t, modules: [t], frontend });
     const kinds = r.effects.map((e) => e.kind);
     expect(kinds).toEqual(["menu_hidden", "routes_inactive", "api_closed", "data_kept"]);
-    const hidden = r.effects.find((e) => e.kind === "menu_hidden") as Extract<
-      Effect,
-      { kind: "menu_hidden" }
-    >;
-    expect(hidden.labels).toEqual([
-      { ns: "shop", key: "nav.home" },
-      { ns: "shop", key: "nav.rep" },
-    ]);
+    expect(r.effects).toContainEqual({ kind: "menu_hidden" });
     const routes = r.effects.find((e) => e.kind === "routes_inactive") as Extract<
       Effect,
       { kind: "routes_inactive" }
     >;
-    expect(routes.paths).toEqual(["/shop", "/shop/reports/sales"]);
+    expect(routes.paths).toEqual(["/shop", "/shop/notes", "/shop/reports/sales"]);
     expect(r.effects).toContainEqual({
       kind: "api_closed",
       prefix: "/api/shop",

@@ -14,7 +14,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 const repoRoot = join(import.meta.dir, "../../../..");
 
@@ -39,7 +39,7 @@ export const i18n = createTestI18n({
 
 export interface HarnessRoute {
   path: string;
-  component: ComponentType;
+  component: () => ReactNode;
 }
 
 export interface RenderPageOptions {

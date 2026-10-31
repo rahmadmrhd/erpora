@@ -1,7 +1,7 @@
 import type { ApiError, ApiResult, PlatformPaths, TypedClient } from "@erpora/platform-contracts";
-import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
-import { useTenantId } from "../bootstrap";
+import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
+import { useBootstrap } from "../bootstrap";
 import { safeInternalHref } from "../sources/href";
 import { scopedKey } from "../tenancy";
 import { isValidDeskId } from "./storage";
@@ -141,8 +141,17 @@ export function createDesksFetcher(client: DesksClient): () => Promise<DeskList>
  * hanya di memori (tanpa persister): menu adalah data per pengguna.
  */
 export function useDesksQuery(client: TypedClient<PlatformPaths>): UseQueryResult<DeskList> {
-  const tenantId = useTenantId();
+  const { tenantId, revision } = useBootstrap();
+  const queryClient = useQueryClient();
   const fetcher = useMemo(() => createDesksFetcher(toDesksClient(client)), [client]);
+  // Revisi bootstrap berubah = modul diaktifkan/dinonaktifkan/diperbarui: daftar Desk (dan menu) ikut dimuat ulang
+  // tanpa muat ulang halaman (ber-ETag, sehingga murah bila tidak berubah).
+  const seen = useRef(revision);
+  useEffect(() => {
+    if (seen.current === revision) return;
+    seen.current = revision;
+    void queryClient.invalidateQueries({ queryKey: scopedKey(tenantId, "desks") });
+  }, [revision, tenantId, queryClient]);
   return useQuery({
     queryKey: scopedKey(tenantId, "desks"),
     queryFn: fetcher,

@@ -7,6 +7,7 @@ import {
   type CurrentUserSource,
   CurrentUserSourceProvider,
   createPlatformClient,
+  DeskProvider,
   emptyNotificationSource,
   getActiveLocale,
   I18nProvider,
@@ -60,7 +61,7 @@ export interface ProvidersProps {
 /**
  * Urutan provider (design 6.1): QueryClient tunggal, tema (tak bergantung bootstrap sehingga layar boot ikut tema),
  * bootstrap (kerangka dan layar galat dengan kamus bawaan), registry modul, runtime i18n, label `ui`, tooltip, sumber
- * notifikasi dan pengguna, aksi halaman, dan router.
+ * notifikasi dan pengguna, daftar Desk (`DeskProvider`), aksi halaman, dan router.
  */
 export function Providers(props: ProvidersProps) {
   const [queryClient] = useState(() => props.queryClient ?? createAppQueryClient());
@@ -87,12 +88,14 @@ export function Providers(props: ProvidersProps) {
                       <CurrentUserSourceProvider
                         source={props.currentUserSource ?? anonymousUserSource}
                       >
-                        <PageChromeProvider>
-                          <AppRouter history={props.history} />
-                          <Suspense fallback={null}>
-                            <LazyToaster />
-                          </Suspense>
-                        </PageChromeProvider>
+                        <DeskProvider client={client}>
+                          <PageChromeProvider>
+                            <AppRouter history={props.history} />
+                            <Suspense fallback={null}>
+                              <LazyToaster />
+                            </Suspense>
+                          </PageChromeProvider>
+                        </DeskProvider>
                       </CurrentUserSourceProvider>
                     </NotificationSourceProvider>
                   </TooltipProvider>
