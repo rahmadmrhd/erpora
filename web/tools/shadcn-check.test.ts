@@ -45,7 +45,9 @@ describe("normalizeCn dan hashContent", () => {
   });
 
   test("kutip tunggal ikut dinormalkan; modul lain bernama mirip tidak disentuh", () => {
-    expect(normalizeCn("import { cn } from 'cn'")).toBe('import { cn } from "@erpora/ui/lib/utils"');
+    expect(normalizeCn("import { cn } from 'cn'")).toBe(
+      'import { cn } from "@erpora/ui/lib/utils"',
+    );
     expect(normalizeCn('import x from "cn-extra"')).toBe('import x from "cn-extra"');
     expect(normalizeCn('import x from "@scope/cn"')).toBe('import x from "@scope/cn"');
   });

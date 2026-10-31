@@ -187,12 +187,28 @@ tasks:
     desc: Typecheck, lint, dependency rules, test, dan build frontend (anggaran bundle + csp-check)
     cmds:
       - bun install --frozen-lockfile
+      - task: shadcn:check
       - bun run --filter '*' typecheck
       - bun run --filter '*' lint
       - go run -tags devtools ./cmd/erpora i18n:generate --check
       - bun run --filter @erpora/web deps
       - bun test --pass-with-no-tests
       - bun run --filter @erpora/web build
+
+  shadcn:check:
+    desc: Periksa komponen packages/ui/src/components/ui terhadap kunci snapshot shadcn.lock.json (offline; dilewati dengan peringatan selama kunci belum synced)
+    cmds:
+      - bun packages/ui/scripts/shadcn-check.ts
+
+  shadcn:sync:
+    desc: Pasang/timpa komponen shadcn dari registry dengan CLI terpin lalu perbarui kunci (task shadcn:sync -- badge tabs; --prune membuang entri kunci usang)
+    cmds:
+      - bun packages/ui/scripts/shadcn-sync.ts {{.CLI_ARGS}}
+
+  shadcn:verify:
+    desc: Lapor drift kunci snapshot terhadap registry shadcn hidup (daring, tidak masuk web:check, kode keluar 0; task shadcn:verify -- badge)
+    cmds:
+      - bun packages/ui/scripts/shadcn-verify.ts {{.CLI_ARGS}}
 
   web:test:
     desc: Test frontend (bun test dari root; memuat preload DOM happy-dom)
