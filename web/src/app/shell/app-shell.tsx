@@ -177,6 +177,8 @@ export function AppShell() {
       data-shell-chrome={chrome}
       open={compact ? sheetOpen : panelOpen}
       onOpenChange={(open) => {
+        // Halaman Desks tidak punya panel: Ctrl+B bawaan shadcn tidak boleh membalik atau menyimpan keadaan panel.
+        if (desksChrome) return;
         if (compact) {
           setSheetOpen(open);
           return;

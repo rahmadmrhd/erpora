@@ -9,17 +9,6 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-/**
- * Path Dashboard sebuah Desk dengan cadangan `/<id>` untuk Desk tanpa menu (id Desk bawaan = slug modul, D-3).
- * Pencocokannya milik `@erpora/platform-web` (`deskDashboardPath`); fungsi ini hanya menutup kasus `null`.
- *
- * @deprecated Pemanggil baru memakai `deskDashboardPath` dari `@erpora/platform-web` (mengembalikan `null` untuk
- * Desk kosong). Dipertahankan agar palet perintah tidak berubah mendadak.
- */
-export function deskDashboardPath(desk: Desk): string {
-  return platformDeskDashboardPath(desk) ?? `/${desk.id}`;
-}
-
 const trim = (p: string): string => (p.length > 1 && p.endsWith("/") ? p.slice(0, -1) : p);
 
 /**
@@ -40,7 +29,7 @@ export function useDeskNavigation(): {
   const openDesk = useCallback(
     (desk: Desk) => {
       setCurrentDesk(desk.id);
-      void navigate({ to: deskDashboardPath(desk) });
+      void navigate({ to: platformDeskDashboardPath(desk) ?? `/${desk.id}` });
     },
     [navigate, setCurrentDesk],
   );

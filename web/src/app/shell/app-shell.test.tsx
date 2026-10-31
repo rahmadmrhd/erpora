@@ -167,6 +167,19 @@ describe("AppShell: chrome halaman Desks (K1)", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
+  test("Ctrl+B di halaman Desks tidak membalik atau menulis erpora.sidebar (M-4)", async () => {
+    localStorage.setItem("erpora.sidebar", "expanded");
+    renderShell(<AppShell />, { desks, ownOutlet: true, indexComponent: DesksProbe });
+    await screen.findByText("Isi halaman Desks");
+    act(() => {
+      fireEvent.keyDown(window, { key: "b", code: "KeyB", ctrlKey: true });
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(localStorage.getItem("erpora.sidebar")).toBe("expanded");
+  });
+
   test("tanpa halaman yang meminta chrome Desks, shell tetap penuh (Dock/panel dan navbar biasa)", async () => {
     localStorage.setItem("erpora.dock", "pinned");
     renderShell(<AppShell />, {
