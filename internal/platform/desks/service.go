@@ -48,8 +48,8 @@ type Service struct {
 	log       *slog.Logger
 }
 
-// New membuat Service.
-func New(d Deps) *Service {
+// NewService membuat Service.
+func NewService(d Deps) *Service {
 	log := d.Log
 	if log == nil {
 		log = slog.Default()

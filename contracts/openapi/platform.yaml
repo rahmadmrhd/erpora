@@ -44,6 +44,53 @@ paths:
                     locales: [{ code: id, name: Bahasa Indonesia }, { code: en, name: English }]
                     revisions: { ui: 3f9a1c20b7d84e55, platform: 8c01d2e9a4b6f730, example: 11aa22bb33cc44dd }
         '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+  /api/platform/desks:
+    get:
+      operationId: listDesks
+      summary: Daftar Desk dan menu yang boleh dilihat pengguna
+      description: >-
+        Desk per pengguna (revisi M3a, PRD-000 Q40 butir 10-13): Desk Platform lebih dulu, lalu Desk modul menurut
+        urutan registry. Desk modul yang tidak enabled pada tenant tidak muncul; menu yang tidak diizinkan pengguna
+        tidak dikirim; grup tanpa anak dibuang; Desk tanpa menu non-Dashboard yang diizinkan dibuang (Dashboard
+        tidak dihitung). Dashboard dibangkitkan platform sebagai menu pertama setiap Desk (`locked`, `to` = `/<slug>`).
+        Label berupa rujukan pesan i18n (`ns` + `key`) yang diterjemahkan klien. ETag = hash isi respons akhir
+        (bukan revisi modul) sehingga berubah bila izin berubah; respons `Cache-Control: private, no-cache` dan
+        `Vary: Cookie, Authorization` agar tidak dibagikan antar pengguna. Endpoint tidak menerima id.
+      x-erp-permission: platform.desks.read
+      parameters:
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: Daftar Desk yang boleh dilihat pengguna pada tenant ini.
+          headers:
+            ETag: { $ref: 'erp:common#/components/headers/ETag' }
+            Cache-Control: { description: 'private, no-cache', schema: { type: string } }
+            Vary: { description: 'Cookie, Authorization', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DesksEnvelope' }
+              example:
+                data:
+                  desks:
+                    - id: platform
+                      source: platform
+                      label: { ns: platform, key: desk.title }
+                      icon: layers
+                      menus:
+                        - { type: item, id: dashboard, label: { ns: platform, key: desk.dashboard }, to: /platform, icon: layout-dashboard, locked: true, ownerDesk: platform }
+                        - { type: item, id: modules, label: { ns: platform, key: desk.modules }, to: /platform/modules, icon: boxes, ownerDesk: platform }
+                    - id: example
+                      source: module
+                      moduleKey: acme.example
+                      label: { ns: example, key: desk.title }
+                      icon: file-text
+                      menus:
+                        - { type: item, id: dashboard, label: { ns: platform, key: desk.dashboard }, to: /example, icon: layout-dashboard, locked: true, ownerDesk: example }
+                        - { type: item, id: notes, label: { ns: example, key: nav.notes }, to: /example/notes, ownerDesk: example }
+                  revision: 3f9a1c20b7d84e55a1b2c3d4e5f60718
+        '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
   /api/platform/i18n/{locale}/{namespace}:
     x-erp-singleton: true
     get:
@@ -547,6 +594,62 @@ components:
                 revisions:
                   type: object
                   additionalProperties: { type: string }
+    MessageRef:
+      type: object
+      description: Rujukan pesan i18n; klien menerjemahkan dari katalog namespace `ns`.
+      required: [ns, key]
+      properties:
+        ns: { type: string, description: 'Namespace katalog: slug modul atau platform.' }
+        key: { type: string, description: 'Kunci lengkap bertitik, mis. nav.notes.' }
+    DeskMenuItem:
+      type: object
+      required: [type, id, label, to, ownerDesk]
+      properties:
+        type: { type: string, enum: [item] }
+        id: { type: string, description: 'Unik dalam satu Desk; `dashboard` dicadangkan untuk Dashboard bawaan.' }
+        label: { $ref: '#/components/schemas/MessageRef' }
+        to: { type: string, description: 'Path absolut aplikasi (/<slug> untuk Dashboard, /<slug>/<halaman> lainnya).' }
+        icon: { type: string }
+        locked: { type: boolean, description: 'true untuk Dashboard: tidak dapat disembunyikan atau dipindah.' }
+        ownerDesk: { type: string, description: 'Id Desk pemilik item.' }
+    DeskMenuGroup:
+      type: object
+      required: [type, id, label, children]
+      properties:
+        type: { type: string, enum: [group] }
+        id: { type: string }
+        label: { $ref: '#/components/schemas/MessageRef' }
+        icon: { type: string }
+        children: { type: array, minItems: 1, items: { $ref: '#/components/schemas/DeskMenuItem' } }
+    Desk:
+      type: object
+      required: [id, source, label, menus]
+      properties:
+        id: { type: string, description: 'Slug modul atau platform.' }
+        source: { type: string, enum: [module, platform, custom] }
+        moduleKey: { type: string, description: 'Key modul pemilik (kosong untuk Desk platform).' }
+        label: { $ref: '#/components/schemas/MessageRef' }
+        icon: { type: string }
+        menus:
+          type: array
+          description: Dashboard selalu item pertama.
+          items:
+            oneOf:
+              - { $ref: '#/components/schemas/DeskMenuItem' }
+              - { $ref: '#/components/schemas/DeskMenuGroup' }
+    DesksEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [desks, revision]
+          properties:
+            desks: { type: array, items: { $ref: '#/components/schemas/Desk' } }
+            revision:
+              type: string
+              description: 'Hash isi respons (sama dengan ETag tanpa tanda kutip).'
+          x-erp-classification: internal
     I18nOverrideBody:
       type: object
       additionalProperties: false

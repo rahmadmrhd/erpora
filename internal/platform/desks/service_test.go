@@ -134,7 +134,7 @@ func (f *fakeOverrides) ListSite(_ context.Context, t tenancy.TenantID) ([]store
 }
 
 func newService(reg *registry.Registry, st statuses, ov OverrideSource) *Service {
-	return New(Deps{Registry: reg, Status: st, Authz: ctxAuthz{}, Overrides: ov})
+	return NewService(Deps{Registry: reg, Status: st, Authz: ctxAuthz{}, Overrides: ov})
 }
 
 func mustList(t *testing.T, s *Service, ctx context.Context) View {
@@ -539,9 +539,9 @@ func TestList_ResultIsNotSharedBetweenCalls(t *testing.T) {
 	}
 }
 
-func TestNew_NilDepsFailClosed(t *testing.T) {
+func TestNewService_NilDepsFailClosed(t *testing.T) {
 	reg := buildRegistry(t)
-	s := New(Deps{Registry: reg, Status: statuses{}}) // tanpa Authz: tolak semua
+	s := NewService(Deps{Registry: reg, Status: statuses{}}) // tanpa Authz: tolak semua
 	v, err := s.List(ctxFor(tenantA, allPerms()...))
 	if err != nil || len(v.Desks) != 0 {
 		t.Fatalf("tanpa Authorizer: desks=%v err=%v, want kosong", ids(v.Desks), err)

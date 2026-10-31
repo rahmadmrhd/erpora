@@ -21,6 +21,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/api/platform/desks": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Daftar Desk dan menu yang boleh dilihat pengguna
+     * @description Desk per pengguna (revisi M3a, PRD-000 Q40 butir 10-13): Desk Platform lebih dulu, lalu Desk modul menurut urutan registry. Desk modul yang tidak enabled pada tenant tidak muncul; menu yang tidak diizinkan pengguna tidak dikirim; grup tanpa anak dibuang; Desk tanpa menu non-Dashboard yang diizinkan dibuang (Dashboard tidak dihitung). Dashboard dibangkitkan platform sebagai menu pertama setiap Desk (`locked`, `to` = `/<slug>`). Label berupa rujukan pesan i18n (`ns` + `key`) yang diterjemahkan klien. ETag = hash isi respons akhir (bukan revisi modul) sehingga berubah bila izin berubah; respons `Cache-Control: private, no-cache` dan `Vary: Cookie, Authorization` agar tidak dibagikan antar pengguna. Endpoint tidak menerima id.
+     */
+    get: operations["listDesks"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/platform/i18n/{locale}/{namespace}": {
     parameters: {
       query?: never;
@@ -274,6 +294,47 @@ export type components = {
       optional: boolean;
       version: string;
     };
+    Desk: {
+      icon?: string;
+      /** @description Slug modul atau platform. */
+      id: string;
+      label: components["schemas"]["MessageRef"];
+      /** @description Dashboard selalu item pertama. */
+      menus: (components["schemas"]["DeskMenuItem"] | components["schemas"]["DeskMenuGroup"])[];
+      /** @description Key modul pemilik (kosong untuk Desk platform). */
+      moduleKey?: string;
+      /** @enum {string} */
+      source: "module" | "platform" | "custom";
+    };
+    DeskMenuGroup: {
+      children: components["schemas"]["DeskMenuItem"][];
+      icon?: string;
+      id: string;
+      label: components["schemas"]["MessageRef"];
+      /** @enum {string} */
+      type: "group";
+    };
+    DeskMenuItem: {
+      icon?: string;
+      /** @description Unik dalam satu Desk; `dashboard` dicadangkan untuk Dashboard bawaan. */
+      id: string;
+      label: components["schemas"]["MessageRef"];
+      /** @description true untuk Dashboard: tidak dapat disembunyikan atau dipindah. */
+      locked?: boolean;
+      /** @description Id Desk pemilik item. */
+      ownerDesk: string;
+      /** @description Path absolut aplikasi (/<slug> untuk Dashboard, /<slug>/<halaman> lainnya). */
+      to: string;
+      /** @enum {string} */
+      type: "item";
+    };
+    DesksEnvelope: {
+      data: {
+        desks: components["schemas"]["Desk"][];
+        /** @description Hash isi respons (sama dengan ETag tanpa tanda kutip). */
+        revision: string;
+      };
+    };
     Event: {
       /** @description cli:<user>, api:dev, system:reconcile, atau system:migrate. */
       actor: string;
@@ -317,6 +378,13 @@ export type components = {
     /** @description Bentuk error.details pada 412 version_mismatch override (OverrideView terbaru; hilang bila baris belum ada). */
     I18nOverridePreconditionDetails: {
       current: components["schemas"]["I18nOverride"];
+    };
+    /** @description Rujukan pesan i18n; klien menerjemahkan dari katalog namespace `ns`. */
+    MessageRef: {
+      /** @description Kunci lengkap bertitik, mis. nav.notes. */
+      key: string;
+      /** @description Namespace katalog: slug modul atau platform. */
+      ns: string;
     };
     Module: {
       binaryVersion: string;
@@ -538,6 +606,119 @@ export interface operations {
         };
         content?: never;
       };
+    };
+  };
+  listDesks: {
+    parameters: {
+      query?: never;
+      header?: {
+        "If-None-Match"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Daftar Desk yang boleh dilihat pengguna pada tenant ini. */
+      200: {
+        headers: {
+          /** @description private, no-cache */
+          "Cache-Control"?: string;
+          ETag: components["headers"]["common.ETag"];
+          /** @description Cookie, Authorization */
+          Vary?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "data": {
+           *         "desks": [
+           *           {
+           *             "icon": "layers",
+           *             "id": "platform",
+           *             "label": {
+           *               "key": "desk.title",
+           *               "ns": "platform"
+           *             },
+           *             "menus": [
+           *               {
+           *                 "icon": "layout-dashboard",
+           *                 "id": "dashboard",
+           *                 "label": {
+           *                   "key": "desk.dashboard",
+           *                   "ns": "platform"
+           *                 },
+           *                 "locked": true,
+           *                 "ownerDesk": "platform",
+           *                 "to": "/platform",
+           *                 "type": "item"
+           *               },
+           *               {
+           *                 "icon": "boxes",
+           *                 "id": "modules",
+           *                 "label": {
+           *                   "key": "desk.modules",
+           *                   "ns": "platform"
+           *                 },
+           *                 "ownerDesk": "platform",
+           *                 "to": "/platform/modules",
+           *                 "type": "item"
+           *               }
+           *             ],
+           *             "source": "platform"
+           *           },
+           *           {
+           *             "icon": "file-text",
+           *             "id": "example",
+           *             "label": {
+           *               "key": "desk.title",
+           *               "ns": "example"
+           *             },
+           *             "menus": [
+           *               {
+           *                 "icon": "layout-dashboard",
+           *                 "id": "dashboard",
+           *                 "label": {
+           *                   "key": "desk.dashboard",
+           *                   "ns": "platform"
+           *                 },
+           *                 "locked": true,
+           *                 "ownerDesk": "example",
+           *                 "to": "/example",
+           *                 "type": "item"
+           *               },
+           *               {
+           *                 "id": "notes",
+           *                 "label": {
+           *                   "key": "nav.notes",
+           *                   "ns": "example"
+           *                 },
+           *                 "ownerDesk": "example",
+           *                 "to": "/example/notes",
+           *                 "type": "item"
+           *               }
+           *             ],
+           *             "moduleKey": "acme.example",
+           *             "source": "module"
+           *           }
+           *         ],
+           *         "revision": "3f9a1c20b7d84e55a1b2c3d4e5f60718"
+           *       }
+           *     }
+           */
+          "application/json": components["schemas"]["DesksEnvelope"];
+        };
+      };
+      /** @description Tidak berubah (If-None-Match cocok dengan ETag). */
+      304: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      403: components["responses"]["common.PermissionDenied"];
+      503: components["responses"]["common.NotReady"];
     };
   };
   getI18nCatalog: {
