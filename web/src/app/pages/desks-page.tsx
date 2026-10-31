@@ -9,6 +9,7 @@ import {
 } from "@erpora/platform-web";
 import { resolveIcon, Skeleton } from "@erpora/ui";
 import { EmptyNotice } from "../components/notices";
+import { useShellChrome } from "../shell/shell-chrome";
 
 const GRID =
   "grid w-full grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
@@ -44,6 +45,8 @@ function DeskCard({ desk, onChoose }: { desk: Desk; onChoose: (id: string) => vo
  * Kustomisasi, folder/grup, dan pengelolaan adalah M3b.
  */
 export function DesksPage() {
+  // K1: halaman Desks tanpa Dock/panel/sidebar, hanya navbar khusus (dipulihkan saat halaman ditinggalkan).
+  useShellChrome("desks");
   const { t } = useTranslation("platform");
   const { status, desks } = useDesks();
   const { setCurrentDesk } = useCurrentDesk();
