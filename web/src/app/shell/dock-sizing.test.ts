@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buttonVariants, cn } from "@erpora/ui";
-import { DOCK_BUTTON_CLASS, DOCK_GAP, DOCK_ITEM_SIZE } from "./dock-sizing";
+import {
+  DOCK_BUTTON_CLASS,
+  DOCK_ERROR_BUTTON_CLASS,
+  DOCK_GAP,
+  DOCK_ITEM_SIZE,
+} from "./dock-sizing";
 
 // Sumber komponen dibaca dari berkas (bukan `import`) agar aturan F2 (tanpa deep import ke packages/*) tidak terpicu.
 const repoRoot = join(import.meta.dir, "../../../..");
@@ -46,5 +51,20 @@ describe("ukuran Dock setara strip ikon sidebar Floating (K15)", () => {
     expect(menu).not.toBeNull();
     const gap = /\bgap-(\d+)\b/.exec(menu?.[1] ?? "");
     expect(Number(gap?.[1]) * 4).toBe(DOCK_GAP);
+  });
+});
+
+describe("tombol galat Dock (K17)", () => {
+  test("tetap berwarna destructive saat hover di tema terang dan gelap", () => {
+    const merged = cn(
+      buttonVariants({ variant: "ghost", size: "icon", className: DOCK_ERROR_BUTTON_CLASS }),
+    ).split(/\s+/);
+    expect(merged).toContain("text-destructive");
+    expect(merged).toContain("hover:text-destructive");
+    expect(merged).toContain("dark:hover:text-destructive");
+    expect(merged).not.toContain("hover:text-sidebar-accent-foreground");
+    expect(merged).not.toContain("dark:hover:text-sidebar-accent-foreground");
+    // Latar hover tetap sorotan sidebar.
+    expect(merged).toContain("dark:hover:bg-sidebar-accent");
   });
 });

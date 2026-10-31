@@ -30,7 +30,12 @@ import {
 } from "react";
 import { useDeskNavigation } from "./desk-navigation";
 import { DockFixedItems } from "./dock-fixed-items";
-import { DOCK_BUTTON_CLASS, DOCK_GAP, DOCK_ITEM_SIZE } from "./dock-sizing";
+import {
+  DOCK_BUTTON_CLASS,
+  DOCK_ERROR_BUTTON_CLASS,
+  DOCK_GAP,
+  DOCK_ITEM_SIZE,
+} from "./dock-sizing";
 import { LogoPopover } from "./logo-popover";
 import { NavIcon } from "./nav-icon";
 import { retryableLazy } from "./retryable-lazy";
@@ -147,7 +152,7 @@ function DeskLoadFailed({
       tabIndex={tabIndex}
       onFocus={onFocus}
       onClick={retry}
-      className={`${DOCK_BUTTON_CLASS} text-destructive hover:text-destructive`}
+      className={DOCK_ERROR_BUTTON_CLASS}
     >
       {Icon ? <Icon aria-hidden="true" /> : null}
     </Button>
