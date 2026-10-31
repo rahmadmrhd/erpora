@@ -178,62 +178,61 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
   - Semua gate hijau dan tak ada temuan terbuka; laporkan terpisah: yang dikerjakan, yang menunggu konfirmasi (beserta alasan dan rekomendasi), dan yang sengaja tidak dikerjakan (API tulis timpaan, halaman Desks lengkap, Start Guide, Manage Dock/Edit Sidebar, Layout Compact/Full Width, Tiptap, Comments, sidebar kustom diperluas). Blok M3b boleh dimulai setelah ini.
 
 - [ ] 14. Putaran perbaikan 2 (31 Okt 2026): keputusan K1–K14 dan temuan review
-  - Sumber: `requirements.md` bagian "Keputusan putaran perbaikan 31 Okt 2026 (K1–K14)", PRD-000 Q40 butir 24, `design.md` D-1a dan D-11 sampai D-14. Dikerjakan sebelum checkpoint akhir 13 (13 diperiksa ulang setelah grup ini). Pertanyaan P-1 dan P-3 menunggu pemilik produk; sub-tugas yang bergantung padanya (14.1, 14.9) ditandai di bawah. Penyimpangan lain dari spek ditanyakan dulu.
+  - Sumber: `requirements.md` bagian "Keputusan putaran perbaikan 31 Okt 2026 (K1–K14)", PRD-000 Q40 butir 24, `design.md` D-1a dan D-11 sampai D-14. Dikerjakan sebelum checkpoint akhir 13 (13 diperiksa ulang setelah grup ini). Pertanyaan P-1 dan P-3 diputuskan pemilik produk 1 Nov 2026 (lihat 14.1 dan 14.9). Penyimpangan lain dari spek ditanyakan dulu.
   - Model dan kelas beban: pekerjaan shell (14.1 sampai 14.11) dan backend (14.14, 14.20, 14.21) membutuhkan penilaian; perubahan dokumen dan mekanis (14.13, 14.15 templat, 14.25, 14.26) dapat dikerjakan lebih ringan. Gunakan satu agent per kelas beban dalam satu putaran.
 
-  - [ ] 14.1 K1: halaman Desks tanpa sidebar, Dock, atau panel (chrome khusus, D-13)
+  - [x] 14.1 K1: halaman Desks tanpa sidebar, Dock, atau panel (chrome khusus, D-13)
     - Tes dulu: `/` menampilkan navbar khusus (logo, Search, lonceng, avatar) tanpa Dock, panel, atau breadcrumb Home; kisi kartu gaya `DeskList`; teks lewat i18n. Implementasi: `DesksPage` menyatakan varian chrome `desks` lewat konteks shell.
-    - Bergantung P-1 untuk judul `<h1>` halaman Desks.
+    - Judul `<h1>` `sr-only` "Desks" sudah ada di `desks-page.tsx` (P-1, diputuskan 1 Nov 2026).
     - _Requirements: 10.3, 10.6, 10.9, 22.4_
-  - [ ] 14.2 K2: sorotan aktif tanpa outline atau cincin; latar `sidebar-accent`/`accent` pada ikon Desk aktif dan item menu aktif
+  - [x] 14.2 K2: sorotan aktif tanpa outline atau cincin; latar `sidebar-accent`/`accent` pada ikon Desk aktif dan item menu aktif
     - _Requirements: 4.1, 5.4_
-  - [ ] 14.3 K3: animasi sidebar Pinned (ciut/buka panel) dan panel Notifikasi mulus; tanpa lompatan layout atau meluncur melintasi Dock; hormati `prefers-reduced-motion`
+  - [x] 14.3 K3: animasi sidebar Pinned (ciut/buka panel) dan panel Notifikasi mulus; tanpa lompatan layout atau meluncur melintasi Dock; hormati `prefers-reduced-motion`
     - _Requirements: 5.6, 15.1, 19.2_
-  - [ ] 14.4 K4: verifikasi tidak ada scrollbar horizontal di sidebar pada Pinned, Floating, dan sheet di bawah 1024 px (tes dan pemeriksaan browser dengan `web/dev-api.ts`)
+  - [x] 14.4 K4: verifikasi tidak ada scrollbar horizontal di sidebar pada Pinned, Floating, dan sheet di bawah 1024 px (tes dan pemeriksaan browser dengan `web/dev-api.ts`)
     - _Requirements: 5.10_
-  - [ ] 14.5 K5: divider vertikal antara toggle sidebar dan breadcrumb di navbar
+  - [x] 14.5 K5: divider vertikal antara toggle sidebar dan breadcrumb di navbar
     - _Requirements: 8.1_
-  - [ ] 14.6 K6: mode Pinned memindahkan Search, Notifikasi (dengan lencana), dan ToDo ke Dock tepat di bawah logo, lalu divider, ikon Desk, dan avatar di dasar; panel Pinned hanya label Desk dan menu Desk; Floating tetap. Tes urutan dan peran ARIA.
+  - [x] 14.6 K6: mode Pinned memindahkan Search, Notifikasi (dengan lencana), dan ToDo ke Dock tepat di bawah logo, lalu divider, ikon Desk, dan avatar di dasar; panel Pinned hanya label Desk dan menu Desk; Floating tetap. Tes urutan dan peran ARIA.
     - _Requirements: 5.2, 4.1_
-  - [ ] 14.7 K7: garis pembatas vertikal Settings setinggi penuh dialog (tidak terpotong)
+  - [x] 14.7 K7: garis pembatas vertikal Settings setinggi penuh dialog (tidak terpotong)
     - _Requirements: 17.6_
-  - [ ] 14.8 K8: mode Pinned, klik ikon Desk (termasuk Desk aktif) membuka popover menu Desk bergaya item sidebar; memilih item menavigasi dan menetapkan Desk. Tes keyboard.
+  - [x] 14.8 K8: mode Pinned, klik ikon Desk (termasuk Desk aktif) membuka popover menu Desk bergaya item sidebar; memilih item menavigasi dan menetapkan Desk. Tes keyboard.
     - _Requirements: 4.2, 4.9_
-  - [ ] 14.9 K9: langkah terakhir breadcrumb tebal dan lebih besar, dibungkus `<h1>` di luar `BreadcrumbPage` (shadcn tidak diubah); judul visual di konten dihapus; tes satu h1 per halaman. Bergantung P-3 (judul galat `ErrorNotice` menjadi `<h2>`) dan P-1.
+  - [x] 14.9 K9: langkah terakhir breadcrumb tebal dan lebih besar, dibungkus `<h1>` di luar `BreadcrumbPage` (shadcn tidak diubah); judul visual di konten dihapus; tes satu h1 per halaman. Judul galat `ErrorNotice` menjadi `<h2>` (P-3, diputuskan 1 Nov 2026).
     - _Requirements: 7.9, 22.1, 22.2, 22.3, 22.5_
-  - [ ] 14.10 K10: pindah Desk memakai `resolveDeskSwitchTarget` (`packages/platform-web/src/desk/switch-target.ts`, sudah ada dengan `switch-target.test.ts`, belum di-commit saat catatan ini ditulis) pada ikon Dock Floating, item Pindah Desk di popover logo, dan entri lintas Desk di palet; klik nama Desk di breadcrumb dan kartu Desks tetap ke Dashboard. Commit berkas itu bersama pemakaiannya.
-    - _Requirements: 4.2, 6.5, 18.4_
-  - [ ] 14.11 K11: panel Notifikasi memakai jebakan fokus; klik di luar dan Escape tetap menutup; fokus kembali ke pemicu. Tes keyboard.
+  - [x] 14.10 K10: pindah Desk memakai `resolveDeskSwitchTarget` (`packages/platform-web/src/desk/switch-target.ts` dan `switch-target.test.ts`, di-commit pada `cc36661`; dipakai pada `fdc3c98` dan `51b4280`) pada ikon Dock Floating, item Pindah Desk di popover logo, dan entri lintas Desk di palet; klik nama Desk di breadcrumb dan kartu Desks tetap ke Dashboard.    - _Requirements: 4.2, 6.5, 18.4_
+  - [x] 14.11 K11: panel Notifikasi memakai jebakan fokus; klik di luar dan Escape tetap menutup; fokus kembali ke pemicu. Tes keyboard.
     - _Requirements: 15.4, 19.3_
-  - [ ] 14.12 K12: patch perilaku sidebar; cookie `sidebar_state` diganti `localStorage["erpora.sidebar"]` lewat `packages/ui/shadcn.patches.json` (resync `sidebar` dengan `task shadcn:sync -- sidebar`, perbarui kunci); tes alat (patch terpasang, teks `find` yang hilang gagal keras) dan tes shell (tidak ada penulisan cookie); perbarui `packages/ui/README.md` bagian patch.
+  - [x] 14.12 K12: patch perilaku menghapus penulisan cookie `sidebar_state` lewat `packages/ui/shadcn.patches.json` (shell menulis `localStorage["erpora.sidebar"]`; resync `sidebar` dengan `task shadcn:sync -- sidebar`, perbarui kunci); tes alat (patch terpasang, teks `find` yang hilang gagal keras) dan tes shell (tidak ada penulisan cookie); perbarui `packages/ui/README.md` bagian patch.
     - _Requirements: 1.1, 9.1, 20.2_
-  - [ ] 14.13 K13: CLI shadcn tetap lewat `bunx shadcn@4.21.5` (keputusan pemilik produk 31 Okt 2026, D-11). Tidak ada pekerjaan kode; MINOR-1 sudah ditutup sebagai risiko diterima. Pemantauan `bun audit` ikut gate 14.27.
+  - [x] 14.13 K13: CLI shadcn tetap lewat `bunx shadcn@4.21.5` (keputusan pemilik produk 31 Okt 2026, D-11). Tidak ada pekerjaan kode; MINOR-1 sudah ditutup sebagai risiko diterima. Pemantauan `bun audit` ikut gate 14.27.
     - _Requirements: 1.9_
   - [ ] 14.14 K14: Desk tanpa menu berizin disembunyikan (bukan dinonaktifkan). Pastikan tes `desks.Service` dan frontend mencakup kasus ini. Catatan M3b (filter izin pemilihan menu Desk kustom) tidak dikerjakan di revisi ini.
     - _Requirements: 12.2_
-  - [ ] 14.15 I-1: templat `make:module` tanpa `--frontend` tidak menghasilkan `desk` di `module.json` (kondisi Frontend di `module.json.tmpl`); tes generator; koreksi `docs/module-sdk/generators.md`. `task test:generator` dijalankan di 14.27.
+  - [x] 14.15 I-1: templat `make:module` tanpa `--frontend` tidak menghasilkan `desk` di `module.json` (kondisi Frontend di `module.json.tmpl`); tes generator; koreksi `docs/module-sdk/generators.md`. `task test:generator` dijalankan di 14.27.
     - _Requirements: 11.6, 21.1_
-  - [ ] 14.16 I-2: preferensi zona waktu dipakai formatter tanggal dan waktu (`packages/platform-web/src/format/time.ts`, `resolveTimezone()`/`useTimezone()`), berlaku seketika; tes.
+  - [x] 14.16 I-2: preferensi zona waktu dipakai formatter tanggal dan waktu (`packages/platform-web/src/format/time.ts`, `resolveTimezone()`/`useTimezone()`), berlaku seketika; tes.
     - _Requirements: 17.3, 17.4_
-  - [ ] 14.17 I-3: `biome.json` tidak boleh mematikan `noDangerouslySetInnerHtml*` untuk `packages/ui/src/components/ui/*.tsx` dan `src/hooks/*.ts`; selesaikan perubahan setengah jadi di working tree (`biome.json`, `web/tools/lint-rule.test.ts`); tes regresi.
+  - [x] 14.17 I-3: `biome.json` tidak boleh mematikan `noDangerouslySetInnerHtml*` untuk `packages/ui/src/components/ui/*.tsx` dan `src/hooks/*.ts`; selesaikan perubahan setengah jadi di working tree (`biome.json`, `web/tools/lint-rule.test.ts`); tes regresi.
     - _Requirements: 20.4_
-  - [ ] 14.18 I-4: Dock Floating; menu "+N" di portal memicu `onBlur`/`onMouseLeave` yang menutup pil; abaikan blur dan leave ke dalam konten menu; tes.
+  - [x] 14.18 I-4: Dock Floating; menu "+N" di portal memicu `onBlur`/`onMouseLeave` yang menutup pil; abaikan blur dan leave ke dalam konten menu; tes.
     - _Requirements: 4.5_
-  - [ ] 14.19 Minor 1: panel Notifikasi tidak menutupi Dock saat panel menu diciutkan (offset = max(tepi kanan Dock, tepi kanan kontainer terlihat)); tes.
+  - [x] 14.19 Minor 1: panel Notifikasi tidak menutupi Dock saat panel menu diciutkan (offset = max(tepi kanan Dock, tepi kanan kontainer terlihat)); tes.
     - _Requirements: 15.1_
-  - [ ] 14.20 Minor 2: klien Desk memakai tipe lokal dan cast; hapus `toDesksClient` dan ambil tipe dari `PlatformComponents` (`platform.gen.ts`).
+  - [x] 14.20 Minor 2: klien Desk memakai tipe lokal dan cast; hapus `toDesksClient` dan ambil tipe dari `PlatformComponents` (`platform.gen.ts`).
     - _Requirements: 12.1, 12.7_
-  - [ ] 14.21 Minor 3: kontrak OpenAPI `/desks` mendokumentasikan `400 tenant_unresolved`; `task contracts:check`; bangkitkan ulang TS.
+  - [x] 14.21 Minor 3: kontrak OpenAPI `/desks` mendokumentasikan `400 tenant_unresolved`; `task contracts:check`; bangkitkan ulang TS.
     - _Requirements: 12.7_
-  - [ ] 14.22 Minor 4: `DashboardPage` menangani status `error` (galat muat dan tombol coba lagi).
+  - [x] 14.22 Minor 4: `DashboardPage` menangani status `error` (galat muat dan tombol coba lagi).
     - _Requirements: 14.4_
-  - [ ] 14.23 Minor 5: hapus duplikasi `deskDashboardPath` dan `findActiveItem` di shell; pakai `deskDashboardPath` dan `matchMenu` dari `@erpora/platform-web`.
+  - [x] 14.23 Minor 5: hapus duplikasi `deskDashboardPath` dan `findActiveItem` di shell; pakai `deskDashboardPath` dan `matchMenu` dari `@erpora/platform-web`.
     - _Requirements: 9.3_
-  - [ ] 14.24 Minor 6: barrel `packages/platform-web/src/desk/index.ts` tidak mengekspor helper uji (`makeDesk`, `makeDeskItem`, `makeDashboardItem`, `makeDeskGroup`); pindahkan ke entry pengujian.
+  - [x] 14.24 Minor 6: barrel `packages/platform-web/src/desk/index.ts` tidak mengekspor helper uji (`makeDesk`, `makeDeskItem`, `makeDashboardItem`, `makeDeskGroup`); pindahkan ke entry pengujian.
     - _Requirements: 21.1_
-  - [ ] 14.25 Minor 7: dokumen konsisten. Daftar D3b di `CLAUDE.md`/`AGENTS.md` sudah sama dengan `internal/archcheck/rules.go`; perbarui komentar `BadgeStatus` di `web/src/app/platform/modules/modules-table.tsx:24`; periksa ulang sisa rujukan lama.
+  - [x] 14.25 Minor 7: dokumen konsisten. Daftar D3b di `CLAUDE.md`/`AGENTS.md` sudah sama dengan `internal/archcheck/rules.go`; perbarui komentar `BadgeStatus` di `web/src/app/platform/modules/modules-table.tsx:24`; periksa ulang sisa rujukan lama.
     - _Requirements: 21.4_
-  - [ ] 14.26 Minor 8: `shadcn-verify` tanpa argumen ikut memeriksa kunci `hooks/use-mobile`; petakan ke komponen asal (`sidebar`) atau lewati.
+  - [x] 14.26 Minor 8: `shadcn-verify` tanpa argumen ikut memeriksa kunci `hooks/use-mobile`; petakan ke komponen asal (`sidebar`) atau lewati.
     - _Requirements: 1.3_
   - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (saat ini 197,7 KB).
     - _Requirements: 21.1, 3.4_
@@ -241,6 +240,16 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 20.5, 21.5_
   - [ ] 14.29 Putaran perbaikan dari 14.28: temuan sesuai spek dikerjakan implementer yang sama; di luar spek ditanyakan dulu; satu review atas diff perbaikan saja, diulang hanya bila ada temuan Critical/Important baru.
     - _Requirements: 21.5_
+  - [ ] 14.30 K15: ukuran tombol, ikon, dan jarak ikon Dock Pinned disamakan dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama (tes dulu: ukuran dan jarak dari sumber yang sama)
+    - _Requirements: 4.10_
+  - [ ] 14.31 K16: avatar di Dock Pinned diperbesar, kontras jelas, dan terpusat horizontal (tes kelas/peran, pemeriksaan browser)
+    - _Requirements: 16.1_
+  - [ ] 14.32 K17: ikon di Dock Pinned memiliki sorotan latar saat hover seperti item sidebar; hormati fokus keyboard (tes)
+    - _Requirements: 4.11_
+  - [ ] 14.33 K18: dropdown logo di halaman Desks tidak memuat "Pindah Desk" dan "Semua Desk"; di halaman lain tetap lengkap (tes rute)
+    - _Requirements: 6.6_
+  - [ ] 14.34 K19: dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten (tes dan pemeriksaan browser; JS awal tetap ≤ 200 KB gzip)
+    - _Requirements: 17.1, 17.7_
 
 ## Notes
 
@@ -252,7 +261,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
 - **Anggaran bundle:** JS awal baseline 189,6 KB gzip (batas 200 KB). Dock Floating, Settings, palet, Drawer, dan panel Notifikasi **harus** dimuat malas; `Command` dan `Drawer` hanya di chunk malas; periksa `module-lazy.test.ts` dan laporan anggaran di setiap checkpoint.
 - **Windows dan lingkungan:** gate menjalankan `bun test` dari root; `-race` dilewati lokal (CI Linux tetap); path repo tanpa spasi; jangan menambah perintah Taskfile yang memakai utilitas Unix; Docker hanya di VPS.
 - **Di luar cakupan (M3b dan seterusnya):** API tulis timpaan dan antarmuka edit Desk, halaman Desks lengkap (kustomisasi, folder/grup, Desk kustom, `/desks/<slug>`), Start Guide, Manage Dock dan Edit Sidebar, Layout Compact/Full Width (M3d), Tiptap dan Comments (M3d), daftar/tree/kanban/dashboard builder/PWA (M3c, M3e, M3f, M3g), identitas dan `authz` nyata (PRD-001), sidebar kustom diperluas (tidak dijadwalkan).
-- **Putaran perbaikan 2 (31 Okt 2026):** keputusan K1–K14 pemilik produk dicatat di `requirements.md` (tabel keputusan), PRD-000 Q40 butir 24, `design.md` D-11 sampai D-14, dan ADR-0015. K13 diputuskan tetap `bunx`, tanpa perubahan kode. Pertanyaan P-1 (judul h1 halaman Desks) dan P-3 (judul galat sebagai `<h2>`) belum diputuskan. Grup 14 belum dikerjakan; grup 6, 10, 12, dan 13 belum dicentang karena belum ada bukti gate backend lengkap, checkpoint fitur, verifikasi browser, dan review akhir.
+- **Putaran perbaikan 2 (31 Okt 2026):** keputusan K1–K14 pemilik produk dicatat di `requirements.md` (tabel keputusan), PRD-000 Q40 butir 24, `design.md` D-11 sampai D-14, dan ADR-0015. K13 diputuskan tetap `bunx`, tanpa perubahan kode. Pertanyaan P-1 dan P-3 diputuskan pemilik produk 1 Nov 2026 (h1 `sr-only` "Desks"; judul galat `<h2>`). K15–K19 (1 Nov 2026) ditambahkan sebagai 14.30 sampai 14.34. Grup 14 sebagian sudah dikerjakan (centang sesuai commit di `git log`; 14.14 dan 14.27 sampai 14.34 belum); grup 6, 10, 12, dan 13 belum dicentang karena belum ada bukti gate backend lengkap, checkpoint fitur, verifikasi browser, dan review akhir.
 
 ## Catatan hasil
 
@@ -387,7 +396,7 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 - 7.2 `ee60226`: `packages/platform-web/src/desk/{types,resolver,match-menu,storage,api}.ts`; kunci prefs `erpora.dock` dan `erpora.desk`.
 - 7.3 `44a3dd5`: `provider.tsx`, `validation.ts`, dan `default_desk` pada sumber pengguna (`defaultDesk`, bernilai `null` pada sumber sementara).
 - 7.4 `ef39661`: `navigation` dihapus dari `FrontendModule`, rute indeks ditolak, `assertDeskRoutes` di `packages/module-sdk/src/testing.ts`, dan `selectNavigation` dihapus.
-- `resolveDeskSwitchTarget` (`switch-target.ts`, K10) berada di luar grup ini dan belum di-commit pada saat catatan ini ditulis; ditangani di 14.10.
+- `resolveDeskSwitchTarget` (`switch-target.ts`, K10) berada di luar grup ini; kemudian di-commit pada `cc36661` (lihat 14.10).
 
 ### 9 Hasil (commit grup 9)
 
@@ -424,9 +433,10 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
     { "id": 22, "tasks": ["14.10", "14.18", "14.19", "14.25"] },
     { "id": 23, "tasks": ["14.1", "14.2", "14.5", "14.7", "14.8", "14.9"] },
     { "id": 24, "tasks": ["14.3", "14.4", "14.6", "14.11"] },
-    { "id": 25, "tasks": ["14.27"] },
-    { "id": 26, "tasks": ["14.28"] },
-    { "id": 27, "tasks": ["14.29"] }
+    { "id": 25, "tasks": ["14.30", "14.31", "14.32", "14.33", "14.34"] },
+    { "id": 26, "tasks": ["14.27"] },
+    { "id": 27, "tasks": ["14.28"] },
+    { "id": 28, "tasks": ["14.29"] }
   ]
 }
 ```
