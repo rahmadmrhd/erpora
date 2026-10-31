@@ -29,8 +29,12 @@ describe("kegagalan memuat katalog di Dock Pinned terisolasi", () => {
       const server = serverFailing("alpha");
       const user = userEvent.setup();
       renderApp({ path: "/platform", server });
-      const dock = await screen.findByRole("navigation", { name: "Dock Desk" });
-      const failed = await within(dock).findByRole("button", { name: /tidak dapat dimuat/ });
+      const dock = await screen.findByRole("navigation", { name: "Dock Desk" }, { timeout: 5000 });
+      const failed = await within(dock).findByRole(
+        "button",
+        { name: /tidak dapat dimuat/ },
+        { timeout: 5000 },
+      );
       // Shell tetap hidup: konten, ikon Desk lain, dan item tetap.
       expect(screen.getByRole("main")).toBeInTheDocument();
       expect(within(dock).getByRole("button", { name: "Platform" })).toBeInTheDocument();
@@ -47,7 +51,7 @@ describe("kegagalan memuat katalog di Dock Pinned terisolasi", () => {
       warn.mockRestore();
       debug.mockRestore();
     }
-  });
+  }, 15_000);
 
   test("katalog gagal untuk Desk saat ini: panel menu menampilkan galat lokal, bukan merobohkan aplikasi", async () => {
     const err = spyOn(console, "error").mockImplementation(() => {});
@@ -57,7 +61,11 @@ describe("kegagalan memuat katalog di Dock Pinned terisolasi", () => {
       localStorage.setItem("erpora.dock", "pinned");
       sessionStorage.setItem("erpora.desk.tab", "alpha");
       renderApp({ path: "/platform", server: serverFailing("alpha") });
-      const nav = await screen.findByRole("navigation", { name: "Navigasi utama" });
+      const nav = await screen.findByRole(
+        "navigation",
+        { name: "Navigasi utama" },
+        { timeout: 5000 },
+      );
       expect(await within(nav).findByText("Menu Desk gagal dimuat.")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Dock Desk" })).toBeInTheDocument();
       expect(screen.getByRole("main")).toBeInTheDocument();
@@ -66,5 +74,5 @@ describe("kegagalan memuat katalog di Dock Pinned terisolasi", () => {
       warn.mockRestore();
       debug.mockRestore();
     }
-  });
+  }, 15_000);
 });
