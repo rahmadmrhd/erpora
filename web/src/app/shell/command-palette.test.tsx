@@ -232,6 +232,19 @@ describe("CommandPalette: pindah Desk menurut K10 (tetap di rute bila ada di Des
     expect(router.state.location.pathname).toBe("/example/notes");
   });
 
+  test("pindah Desk ke rute yang sama menjaga query dan hash serta tidak menambah entri riwayat (M-1)", async () => {
+    const { user, dialog, router, history } = await open("/example/notes?page=3#x");
+    const lengthBefore = history.length;
+    const deskGroup = within(dialog).getByRole("group", { name: "Desk" });
+    await user.click(optionByText(deskGroup, /Shared/));
+    await waitFor(() => expect(sessionStorage.getItem("erpora.desk.tab")).toBe("shared"));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(router.state.location.pathname).toBe("/example/notes");
+    expect(router.state.location.searchStr).toBe("?page=3");
+    expect(router.state.location.hash).toBe("x");
+    expect(history.length).toBe(lengthBefore);
+  });
+
   test("entri Desk yang tidak memuat rute saat ini: Dashboard Desk tujuan", async () => {
     const { user, dialog, router } = await open("/example/notes");
     await user.click(within(dialog).getByRole("option", { name: /Billing/ }));

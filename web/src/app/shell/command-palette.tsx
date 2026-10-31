@@ -5,7 +5,6 @@ import {
   type DeskMenuItem,
   Message,
   type MessageRef,
-  resolveDeskSwitchTarget,
   useCurrentDesk,
   useDesks,
   useMessage,
@@ -29,8 +28,8 @@ import {
   CommandItem,
   CommandList,
 } from "@erpora/ui/command";
-import { useRouterState } from "@tanstack/react-router";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { useDeskNavigation } from "./desk-navigation";
 
 /** Satu hasil palet: halaman menu sebuah Desk, atau Desk itu sendiri (membuka Dashboard-nya). */
 interface Entry {
@@ -156,8 +155,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation("platform");
   const { desks } = useDesks();
   const { deskId: currentDeskId, setCurrentDesk } = useCurrentDesk();
+  const { switchDesk } = useDeskNavigation();
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (st) => st.location.pathname });
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -177,16 +176,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       const desk = desks.find((d) => d.id === entry.deskId);
       if (desk === undefined) return;
       if (entry.kind === "desk") {
-        // K10: tetap di rute saat ini bila Desk tujuan juga memuatnya, selain itu Dashboard Desk tujuan.
-        setCurrentDesk(desk.id);
-        void navigate({ to: resolveDeskSwitchTarget(pathname, desk) });
+        // K10: tetap di rute saat ini (query dan hash terjaga, tanpa entri riwayat baru) bila Desk tujuan juga
+        // memuatnya, selain itu Dashboard Desk tujuan.
+        switchDesk(desk);
         return;
       }
       if (entry.to === undefined) return;
       if (entry.deskId !== currentDeskId) setCurrentDesk(entry.deskId);
       void navigate({ to: entry.to });
     },
-    [desks, currentDeskId, setCurrentDesk, pathname, navigate, onOpenChange],
+    [desks, currentDeskId, setCurrentDesk, switchDesk, navigate, onOpenChange],
   );
 
   return (
