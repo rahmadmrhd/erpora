@@ -56,13 +56,18 @@ describe("Navbar: breadcrumb Home › Desk › halaman", () => {
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("alpha");
   });
 
-  test("klik Home membuka halaman Desks tanpa resolve (state showDesks, bukan URL)", async () => {
+  test("klik Home membuka halaman Desks tanpa resolve; penanda showDesks dikonsumsi dan tidak tersisa di riwayat", async () => {
     const user = userEvent.setup();
     const { history } = renderApp({ path: "/alpha/home" });
     const bc = await breadcrumb();
     await user.click(await within(bc).findByRole("button", { name: "Beranda" }));
-    await waitFor(() => expect(history.location.pathname).toBe("/"));
-    expect(history.location.state).toMatchObject({ showDesks: true });
+    // Halaman Desks tampil di "/" dan penentuan Desk dilewati: Desk tersimpan (alpha) tidak mengalihkan ke /alpha.
+    expect(await screen.findByRole("heading", { name: /^Desk/ })).toBeInTheDocument();
+    expect(sessionStorage.getItem("erpora.desk.tab")).toBe("alpha");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(history.location.pathname).toBe("/");
+    // R10.5: DeskEntry mengonsumsi penanda showDesks dan menghapusnya dari entri riwayat setelah menampilkan Desks.
+    await waitFor(() => expect(history.location.state).not.toMatchObject({ showDesks: true }));
   });
 
   test("halaman yang tidak masuk Desk mana pun: Home › halaman tanpa segmen Desk (R9.6)", async () => {
