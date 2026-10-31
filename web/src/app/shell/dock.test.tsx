@@ -85,6 +85,18 @@ describe("Dock (Pinned)", () => {
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("billing");
   });
 
+  test("sorotan Desk aktif memakai latar (sidebar-accent), tanpa outline atau cincin (K2)", async () => {
+    sessionStorage.setItem("erpora.desk.tab", "example");
+    renderShell(<Dock />, { desks });
+    const example = await screen.findByRole("button", { name: "Example" });
+    await waitFor(() => expect(example).toHaveAttribute("aria-current", "true"));
+    const classes = example.className.split(/\s+/);
+    expect(classes).toContain("data-[active=true]:bg-sidebar-accent");
+    expect(classes.filter((c) => /(^|:)(ring|outline)(-|$)/.test(c) && c.startsWith("data-"))).toEqual(
+      [],
+    );
+  });
+
   test("hanya satu ikon yang dapat difokus (roving); panah bawah/atas, Home, dan End memindahkan fokus", async () => {
     const user = userEvent.setup();
     renderShell(<Dock />, { desks });

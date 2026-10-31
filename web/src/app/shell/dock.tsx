@@ -99,7 +99,7 @@ function DeskIconButton({
           tabIndex={tabIndex}
           onFocus={onFocus}
           onClick={() => onSelect(desk)}
-          className="size-10 rounded-lg text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:ring-2 data-[active=true]:ring-sidebar-primary [&_svg]:size-5"
+          className="size-10 rounded-lg text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-5"
         >
           <NavIcon name={desk.icon} label={text} />
         </Button>
