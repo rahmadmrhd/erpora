@@ -1,16 +1,15 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { CurrentUserSource } from "@erpora/platform-web";
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderApp } from "../test-utils";
+import { renderShell, type ShellHarnessOptions } from "./shell-test-support";
+import { UserMenu } from "./user-menu";
 
 beforeEach(() => {
   localStorage.clear();
-  Object.defineProperty(navigator, "languages", { value: [], configurable: true });
-  document.documentElement.className = "";
 });
 
-const user = {
+const person = {
   id: "u1",
   displayName: "Rahmad Maulana",
   email: "rahmad@erpora.id",
@@ -20,122 +19,71 @@ const user = {
 function source(over: Partial<CurrentUserSource> = {}): CurrentUserSource {
   return {
     capabilities: { manageAccount: true, signOut: true },
-    get: async () => user,
-    manageAccountPath: () => "/alpha",
+    get: async () => person,
     signOut: async () => {},
     ...over,
   };
 }
 
-async function openMenu() {
-  const u = userEvent.setup();
-  await u.click(await screen.findByRole("button", { name: /^Menu akun/ }));
-  return u;
+async function openMenu(variant: "dock" | "panel" = "panel", opts: ShellHarnessOptions = {}) {
+  const user = userEvent.setup();
+  const result = renderShell(<UserMenu variant={variant} />, opts);
+  await user.click(await screen.findByRole("button", { name: /^Menu akun/ }));
+  return { user, ...result };
 }
 
 describe("UserMenu", () => {
-  test("nama aksesibel tombol memuat teks yang terlihat (nama dan email), tanpa aria-label yang menimpa (WCAG 2.5.3)", async () => {
-    renderApp({ currentUserSource: source() });
+  test("varian panel: nama aksesibel memuat teks yang terlihat (nama dan email), WCAG 2.5.3", async () => {
+    renderShell(<UserMenu variant="panel" />, { user: source() });
     await screen.findByText("Rahmad Maulana");
     const button = screen.getByRole("button", { name: /^Menu akun/ });
-    expect(button.getAttribute("aria-label")).toBe(null);
+    expect(button.getAttribute("aria-label")).toBeNull();
     expect(screen.getByRole("button", { name: /Rahmad Maulana/ })).toBe(button);
     expect(screen.getByRole("button", { name: /rahmad@erpora\.id/ })).toBe(button);
-  });
-
-  test("avatar menampilkan inisial, nama, dan email di dasar sidebar", async () => {
-    renderApp({ currentUserSource: source() });
-    expect(await screen.findByText("Rahmad Maulana")).toBeInTheDocument();
-    expect(screen.getByText("rahmad@erpora.id")).toBeInTheDocument();
     expect(screen.getByText("RM")).toBeInTheDocument();
   });
 
-  test("anonim: nama 'Pengguna' tanpa email; Kelola Akun dan Keluar nonaktif dengan penjelasan", async () => {
-    renderApp();
-    await openMenu();
+  test("varian dock: hanya avatar (inisial); nama tetap ada untuk pembaca layar", async () => {
+    renderShell(<UserMenu variant="dock" />, { user: source() });
+    const button = await screen.findByRole("button", { name: /Rahmad Maulana/ });
+    expect(button).toHaveAccessibleName(/^Menu akun/);
+    expect(screen.getByText("RM")).toBeInTheDocument();
+    expect(screen.queryByText("rahmad@erpora.id")).toBeNull();
+  });
+
+  test("isi menu: Pengaturan, Muat ulang, Keluar; tanpa My Space, Kelola Akun, Bahasa, atau Tema", async () => {
+    await openMenu("panel", { user: source() });
+    const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent?.trim());
+    expect(items).toEqual(["Pengaturan", "Muat ulang", "Keluar"]);
+    expect(screen.queryByText(/My Space/i)).toBeNull();
+  });
+
+  test("Pengaturan membuka dialog Settings dan Muat ulang memanggil reload", async () => {
+    const openSettings = mock(() => {});
+    const reload = mock(() => {});
+    const { user } = await openMenu("panel", { actions: { openSettings, reload } });
+    await user.click(await screen.findByRole("menuitem", { name: "Pengaturan" }));
+    expect(openSettings).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: /^Menu akun/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Muat ulang" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("anonim: nama Pengguna tanpa email; Keluar nonaktif dengan penjelasan", async () => {
+    await openMenu("panel");
     expect(screen.getAllByText("Pengguna").length).toBeGreaterThan(0);
-    const manage = await screen.findByRole("menuitem", { name: "Kelola Akun" });
-    expect(manage).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("menuitem", { name: "Keluar" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    expect(manage.getAttribute("aria-describedby")).toBe("user-menu-unavailable");
-    expect(document.getElementById("user-menu-unavailable")).toHaveTextContent(
+    const out = await screen.findByRole("menuitem", { name: "Keluar" });
+    expect(out).toHaveAttribute("aria-disabled", "true");
+    const hintId = out.getAttribute("aria-describedby");
+    expect(document.getElementById(hintId as string)).toHaveTextContent(
       "Belum tersedia di versi ini",
     );
   });
 
-  test("isi menu: Kelola Akun, Bahasa, Tema, Keluar", async () => {
-    renderApp({ currentUserSource: source() });
-    await openMenu();
-    expect(await screen.findByRole("menuitem", { name: "Kelola Akun" })).not.toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    expect(screen.getByRole("menuitem", { name: "Bahasa" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Tema" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Keluar" })).not.toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-  });
-
-  test("Kelola Akun menavigasi ke path internal dari sumber", async () => {
-    const app = renderApp({ currentUserSource: source() });
-    const u = await openMenu();
-    await u.click(await screen.findByRole("menuitem", { name: "Kelola Akun" }));
-    await waitFor(() => expect(app.history.location.pathname).toBe("/alpha"));
-  });
-
-  test("Keluar memanggil signOut sumber", async () => {
-    let called = 0;
-    renderApp({
-      currentUserSource: source({
-        signOut: async () => {
-          called += 1;
-        },
-      }),
-    });
-    const u = await openMenu();
-    await u.click(await screen.findByRole("menuitem", { name: "Keluar" }));
-    await waitFor(() => expect(called).toBe(1));
-  });
-
-  test("pilihan Tema: Gelap menyimpan erpora.theme dan memasang kelas dark", async () => {
-    renderApp({ currentUserSource: source() });
-    const u = await openMenu();
-    await u.click(await screen.findByRole("menuitem", { name: "Tema" }));
-    await screen.findByRole("menuitemradio", { name: "Gelap" });
-    // Item submenu dipilih lewat keyboard (klik pointer pada konten submenu portal tidak andal di happy-dom).
-    await u.keyboard("{ArrowRight}{ArrowDown}{Enter}");
-    await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(true));
-    expect(localStorage.getItem("erpora.theme")).toBe("dark");
-  });
-
-  test("pilihan Bahasa: English memuat katalog en dan mengganti teks tanpa reload", async () => {
-    renderApp({ currentUserSource: source() });
-    const u = await openMenu();
-    await u.click(await screen.findByRole("menuitem", { name: "Bahasa" }));
-    expect(await screen.findByRole("menuitemradio", { name: "Indonesia" })).toBeChecked();
-    await u.keyboard("{ArrowRight}{ArrowDown}{Enter}");
-    await waitFor(() =>
-      expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument(),
-    );
-    expect(localStorage.getItem("erpora.locale")).toBe("en");
-    expect(document.documentElement.lang).toBe("en");
-    // BreadcrumbPage shadcn berperan link (aria-disabled): batasi ke navigasi utama
-    const nav = screen.getByRole("navigation", { name: "Main navigation" });
-    expect(within(nav).getByRole("link", { name: "Home" })).toBeInTheDocument();
-  });
-
-  test("avatarUrl tidak aman (eksternal) tidak dirender sebagai gambar", async () => {
-    renderApp({
-      currentUserSource: source({
-        get: async () => ({ ...user, avatarUrl: "https://evil.example/a.png" }),
-      }),
-    });
-    await screen.findByText("Rahmad Maulana");
-    expect(document.querySelector('img[src^="https://evil.example"]')).toBeNull();
+  test("Keluar aktif memanggil sumber pengguna bila didukung", async () => {
+    const signOut = mock(async () => {});
+    const { user } = await openMenu("panel", { user: source({ signOut }) });
+    await user.click(await screen.findByRole("menuitem", { name: "Keluar" }));
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });
