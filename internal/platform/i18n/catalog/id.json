@@ -19,7 +19,8 @@
   },
   "dock": {
     "label": "Dock Desk",
-    "more": "+{count} Desk lainnya"
+    "more": "+{count} Desk lainnya",
+    "loadError": "Desk tidak dapat dimuat. Coba lagi."
   },
   "panel": {
     "noDesk": "Pilih Desk di Dock untuk melihat menunya.",

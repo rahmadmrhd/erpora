@@ -19,7 +19,8 @@
   },
   "dock": {
     "label": "Desk dock",
-    "more": "+{count} more Desks"
+    "more": "+{count} more Desks",
+    "loadError": "Desk could not be loaded. Try again."
   },
   "panel": {
     "noDesk": "Choose a Desk in the Dock to see its menu.",

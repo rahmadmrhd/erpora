@@ -10,6 +10,7 @@ import { useGlobalShortcuts } from "./global-shortcuts";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
+import { ShellBoundary } from "./shell-boundary";
 import { type ShellChrome, ShellChromeProvider } from "./shell-chrome";
 import { type SettingsSection, type ShellActions, ShellActionsProvider } from "./shell-context";
 import { readSidebarOpen, writeSidebarOpen } from "./sidebar-state";
@@ -202,9 +203,11 @@ export function AppShell() {
           ) : (
             <>
               {dockMode === "pinned" ? (
-                <Suspense fallback={<DockPlaceholder />}>
-                  <LazyDock />
-                </Suspense>
+                <ShellBoundary label="dock" fallback={<DockPlaceholder />}>
+                  <Suspense fallback={<DockPlaceholder />}>
+                    <LazyDock />
+                  </Suspense>
+                </ShellBoundary>
               ) : null}
               <Sidebar
                 collapsible={dockMode === "pinned" ? "offcanvas" : "icon"}
@@ -214,9 +217,11 @@ export function AppShell() {
               </Sidebar>
               <CollapseEdge mode={dockMode} />
               {dockMode === "floating" ? (
-                <Suspense fallback={null}>
-                  <LazyDockFloating />
-                </Suspense>
+                <ShellBoundary label="dock floating" fallback={null}>
+                  <Suspense fallback={null}>
+                    <LazyDockFloating />
+                  </Suspense>
+                </ShellBoundary>
               ) : null}
             </>
           )}
@@ -258,29 +263,35 @@ export function AppShell() {
             </main>
           </div>
           {palette.mounted ? (
-            <Suspense fallback={null}>
-              <LazyCommandPalette
-                open={palette.open}
-                onOpenChange={(open) => setPalette({ mounted: true, open })}
-              />
-            </Suspense>
+            <ShellBoundary label="palet perintah" fallback={null}>
+              <Suspense fallback={null}>
+                <LazyCommandPalette
+                  open={palette.open}
+                  onOpenChange={(open) => setPalette({ mounted: true, open })}
+                />
+              </Suspense>
+            </ShellBoundary>
           ) : null}
           {notifications.mounted ? (
-            <Suspense fallback={null}>
-              <LazyNotificationPanel
-                open={notifications.open}
-                onOpenChange={(open) => setNotifications({ mounted: true, open })}
-              />
-            </Suspense>
+            <ShellBoundary label="panel notifikasi" fallback={null}>
+              <Suspense fallback={null}>
+                <LazyNotificationPanel
+                  open={notifications.open}
+                  onOpenChange={(open) => setNotifications({ mounted: true, open })}
+                />
+              </Suspense>
+            </ShellBoundary>
           ) : null}
           {settings.mounted ? (
-            <Suspense fallback={null}>
-              <LazySettingsDialog
-                open={settings.open}
-                initialSection={settings.section}
-                onOpenChange={(open) => setSettings((s) => ({ ...s, open }))}
-              />
-            </Suspense>
+            <ShellBoundary label="pengaturan" fallback={null}>
+              <Suspense fallback={null}>
+                <LazySettingsDialog
+                  open={settings.open}
+                  initialSection={settings.section}
+                  onOpenChange={(open) => setSettings((s) => ({ ...s, open }))}
+                />
+              </Suspense>
+            </ShellBoundary>
           ) : null}
           <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
             <Suspense fallback={null}>

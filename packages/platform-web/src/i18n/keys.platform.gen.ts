@@ -23,6 +23,7 @@ declare module "./types" {
       "desks.title": {};
       "desksNavbar.search": {};
       "dock.label": {};
+      "dock.loadError": {};
       "dock.more": { count: string | number };
       "errors.bad_request": {};
       "errors.business_rule_violated": {};

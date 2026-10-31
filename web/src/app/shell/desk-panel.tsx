@@ -25,12 +25,28 @@ import { DESK_PANEL_ID } from "./collapse-edge";
 import { DeskMenuTree } from "./desk-panel-menu";
 import { FixedGroup } from "./fixed-group";
 import { LogoPopover } from "./logo-popover";
+import { ShellBoundary } from "./shell-boundary";
 import { UserMenu } from "./user-menu";
 
 export { findActiveItem } from "./desk-panel-menu";
 
 /** `pinned`: panel di sebelah Dock; `floating`: satu-satunya sidebar (logo di kepala, pengguna di dasar); `sheet`: < 1024 px. */
 export type PanelVariant = "pinned" | "floating" | "sheet";
+
+/** Pengganti menu Desk bila katalog atau chunk-nya gagal dimuat: pesan kecil dan tombol coba lagi. */
+function DeskMenuLoadError({ retry }: { retry: () => void }) {
+  const { t } = useTranslation("platform");
+  return (
+    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+      <p role="alert" className="px-2 text-sm text-muted-foreground">
+        {t("panel.loadError")}
+      </p>
+      <Button type="button" variant="outline" size="sm" className="mx-2 mt-2" onClick={retry}>
+        {t("shell.retry")}
+      </Button>
+    </SidebarGroup>
+  );
+}
 
 /** Label kecil nama Desk dan menu Desk saat ini (R5.2 butir ii); Dashboard selalu item pertama (urutan server). */
 function DeskMenu({ variant }: { variant: PanelVariant }) {
@@ -75,14 +91,16 @@ function DeskMenu({ variant }: { variant: PanelVariant }) {
   }
 
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>
-        <Message message={desk.label} />
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <DeskMenuTree desk={desk} pathname={pathname} iconStrip={iconStrip} />
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <ShellBoundary label="menu Desk" fallback={(retry) => <DeskMenuLoadError retry={retry} />}>
+      <SidebarGroup>
+        <SidebarGroupLabel>
+          <Message message={desk.label} />
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <DeskMenuTree desk={desk} pathname={pathname} iconStrip={iconStrip} />
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </ShellBoundary>
   );
 }
 

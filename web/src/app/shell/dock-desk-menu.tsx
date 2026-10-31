@@ -1,6 +1,13 @@
 import { Link } from "@erpora/module-sdk";
-import { type Desk, Message, useCurrentDesk, useMessage } from "@erpora/platform-web";
 import {
+  type Desk,
+  Message,
+  useCurrentDesk,
+  useMessage,
+  useTranslation,
+} from "@erpora/platform-web";
+import {
+  Button,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSub,
@@ -14,6 +21,22 @@ import { useRouterState } from "@tanstack/react-router";
 import { type ReactElement, useState } from "react";
 import { DeskMenuTree } from "./desk-panel-menu";
 import { NavIcon } from "./nav-icon";
+import { ShellBoundary } from "./shell-boundary";
+
+/** Pengganti isi popover bila katalog atau chunk menu gagal dimuat: pesan kecil dan tombol coba lagi. */
+function DeskMenuError({ retry }: { retry: () => void }) {
+  const { t } = useTranslation("platform");
+  return (
+    <div className="flex flex-col gap-2 px-2 py-1">
+      <p role="alert" className="text-sm text-muted-foreground">
+        {t("panel.loadError")}
+      </p>
+      <Button type="button" variant="outline" size="sm" onClick={retry}>
+        {t("shell.retry")}
+      </Button>
+    </div>
+  );
+}
 
 /**
  * Isi popover: label Desk dan pohon menunya bergaya item sidebar. Dirender hanya saat popover terbuka sehingga
@@ -50,13 +73,15 @@ export function DeskMenuPopover({ desk, children }: { desk: Desk; children: Reac
         aria-label={label}
         className="max-h-[calc(100svh-1rem)] w-60 overflow-y-auto border-sidebar-border bg-sidebar p-2 text-sidebar-foreground"
       >
-        <DeskMenuContent
-          desk={desk}
-          onSelect={() => {
-            setCurrentDesk(desk.id);
-            setOpen(false);
-          }}
-        />
+        <ShellBoundary label="menu Desk" fallback={(retry) => <DeskMenuError retry={retry} />}>
+          <DeskMenuContent
+            desk={desk}
+            onSelect={() => {
+              setCurrentDesk(desk.id);
+              setOpen(false);
+            }}
+          />
+        </ShellBoundary>
       </PopoverContent>
     </Popover>
   );

@@ -11,6 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  resolveIcon,
   Separator,
   Tooltip,
   TooltipContent,
@@ -32,6 +33,7 @@ import { useDeskNavigation } from "./desk-navigation";
 import { DockFixedItems } from "./dock-fixed-items";
 import { LogoPopover } from "./logo-popover";
 import { NavIcon } from "./nav-icon";
+import { ShellBoundary } from "./shell-boundary";
 import { UserMenu } from "./user-menu";
 
 /** Ukuran tombol ikon Dock (`size-10`) dan jarak antartombol (`gap-1`), dalam px. */
@@ -117,6 +119,38 @@ function DeskIconButton({
 }
 
 /**
+ * Pengganti ikon Desk yang katalog atau chunk-nya gagal dimuat: tombol galat kecil (namanya dari katalog `platform`,
+ * bukan katalog Desk itu) yang mencoba lagi bila diklik. Ikut menjadi anggota navigasi panah Dock.
+ */
+function DeskLoadFailed({
+  retry,
+  tabIndex,
+  onFocus,
+}: {
+  retry: () => void;
+  tabIndex: number;
+  onFocus: () => void;
+}) {
+  const { t } = useTranslation("platform");
+  const Icon = resolveIcon("triangle-alert");
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      data-dock-item=""
+      aria-label={t("dock.loadError")}
+      tabIndex={tabIndex}
+      onFocus={onFocus}
+      onClick={retry}
+      className="size-10 rounded-lg text-destructive [&_svg]:size-5"
+    >
+      {Icon ? <Icon aria-hidden="true" /> : null}
+    </Button>
+  );
+}
+
+/**
  * Ikon Desk di Dock Pinned (K8): klik membuka popover menu Desk, bukan langsung berpindah. Sebelum chunk popover
  * termuat, tombol biasa ditampilkan (chunk dipra-muat saat Dock terpasang).
  */
@@ -132,15 +166,20 @@ function PinnedDeskIcon({
   onFocus: () => void;
 }) {
   return (
-    <Suspense
-      fallback={
-        <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
-      }
+    <ShellBoundary
+      label="ikon Desk"
+      fallback={(retry) => <DeskLoadFailed retry={retry} tabIndex={tabIndex} onFocus={onFocus} />}
     >
-      <LazyDeskMenuPopover desk={desk}>
-        <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
-      </LazyDeskMenuPopover>
-    </Suspense>
+      <Suspense
+        fallback={
+          <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
+        }
+      >
+        <LazyDeskMenuPopover desk={desk}>
+          <DeskIconButton desk={desk} active={active} tabIndex={tabIndex} onFocus={onFocus} />
+        </LazyDeskMenuPopover>
+      </Suspense>
+    </ShellBoundary>
   );
 }
 
@@ -248,13 +287,24 @@ export function DockDeskList({
               onFocus={() => setFocusIndex(i)}
             />
           ) : (
-            <DeskIconButton
-              desk={desk}
-              active={desk.id === deskId}
-              tabIndex={i === focusable ? 0 : -1}
-              onFocus={() => setFocusIndex(i)}
-              onClick={() => select(desk)}
-            />
+            <ShellBoundary
+              label="ikon Desk"
+              fallback={(retry) => (
+                <DeskLoadFailed
+                  retry={retry}
+                  tabIndex={i === focusable ? 0 : -1}
+                  onFocus={() => setFocusIndex(i)}
+                />
+              )}
+            >
+              <DeskIconButton
+                desk={desk}
+                active={desk.id === deskId}
+                tabIndex={i === focusable ? 0 : -1}
+                onFocus={() => setFocusIndex(i)}
+                onClick={() => select(desk)}
+              />
+            </ShellBoundary>
           )}
         </li>
       ))}
@@ -276,15 +326,30 @@ export function DockDeskList({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="start">
-              {hidden.map((d) =>
-                variant === "pinned" ? (
-                  <Suspense key={d.id} fallback={<OverflowItem desk={d} onSelect={select} />}>
-                    <LazyOverflowDeskSub desk={d} />
-                  </Suspense>
-                ) : (
-                  <OverflowItem key={d.id} desk={d} onSelect={select} />
-                ),
-              )}
+              {hidden.map((d) => (
+                <ShellBoundary
+                  key={d.id}
+                  label="menu Desk"
+                  fallback={(retry) => (
+                    <DropdownMenuItem
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        retry();
+                      }}
+                    >
+                      {t("dock.loadError")}
+                    </DropdownMenuItem>
+                  )}
+                >
+                  {variant === "pinned" ? (
+                    <Suspense fallback={<OverflowItem desk={d} onSelect={select} />}>
+                      <LazyOverflowDeskSub desk={d} />
+                    </Suspense>
+                  ) : (
+                    <OverflowItem desk={d} onSelect={select} />
+                  )}
+                </ShellBoundary>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </li>
