@@ -1,4 +1,4 @@
-import { Message, useDockMode, usePageChrome } from "@erpora/platform-web";
+import { Message, useDockMode, usePageChrome, useTheme } from "@erpora/platform-web";
 import { Sidebar, SidebarProvider, Skeleton } from "@erpora/ui";
 import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
 import { type CSSProperties, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -6,16 +6,25 @@ import { RouteErrorPage } from "../pages/pages";
 import { CollapseEdge } from "./collapse-edge";
 import { DeskPanel, PanelSheet } from "./desk-panel";
 import { Dock } from "./dock";
+import { useGlobalShortcuts } from "./global-shortcuts";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
-import { type ShellActions, ShellActionsProvider } from "./shell-context";
+import { type SettingsSection, type ShellActions, ShellActionsProvider } from "./shell-context";
 import { readSidebarOpen, writeSidebarOpen } from "./sidebar-state";
 import { useIsCompact } from "./use-compact";
 
 // Dock Floating (pil, hot-edge, pintasan) dimuat malas: bagian berat di luar bundel awal (NFR-04).
 const LazyDockFloating = lazy(() =>
   import("./dock-floating").then((m) => ({ default: m.DockFloating })),
+);
+
+// Panel Notifikasi dan dialog Settings dimuat malas saat pertama dibuka (bagian berat di luar bundel awal).
+const LazyNotificationPanel = lazy(() =>
+  import("./notification-panel").then((m) => ({ default: m.NotificationPanel })),
+);
+const LazySettingsDialog = lazy(() =>
+  import("./settings/settings-dialog").then((m) => ({ default: m.SettingsDialog })),
 );
 
 // Lebar panel K-15 (14,25 rem / 3,25 rem) dan Dock 3,5 rem; bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
@@ -84,15 +93,29 @@ export function AppShell() {
     if (!compact) setSheetOpen(false);
   }, [compact]);
 
+  // Overlay dipasang saat pertama dibuka lalu dipertahankan (animasi tutup tetap berjalan, fokus kembali ke pemicu).
+  const [notifications, setNotifications] = useState({ mounted: false, open: false });
+  const [settings, setSettings] = useState<{
+    mounted: boolean;
+    open: boolean;
+    section?: SettingsSection;
+  }>({ mounted: false, open: false });
+
   const actions = useMemo<ShellActions>(
     () => ({
       openPalette: () => {},
-      openNotifications: () => {},
-      openSettings: () => {},
+      openNotifications: () => setNotifications({ mounted: true, open: true }),
+      openSettings: (section) => setSettings({ mounted: true, open: true, section }),
       reload: () => window.location.reload(),
     }),
     [],
   );
+
+  const { resolved, setPreference } = useTheme();
+  useGlobalShortcuts({
+    toggleTheme: () => setPreference(resolved === "dark" ? "light" : "dark"),
+    showShortcuts: () => actions.openSettings("shortcuts"),
+  });
 
   return (
     <SidebarProvider
@@ -167,6 +190,23 @@ export function AppShell() {
             </CatchBoundary>
           </main>
         </div>
+        {notifications.mounted ? (
+          <Suspense fallback={null}>
+            <LazyNotificationPanel
+              open={notifications.open}
+              onOpenChange={(open) => setNotifications({ mounted: true, open })}
+            />
+          </Suspense>
+        ) : null}
+        {settings.mounted ? (
+          <Suspense fallback={null}>
+            <LazySettingsDialog
+              open={settings.open}
+              initialSection={settings.section}
+              onOpenChange={(open) => setSettings((s) => ({ ...s, open }))}
+            />
+          </Suspense>
+        ) : null}
         <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
           <Suspense fallback={null}>
             <RouteAnnouncer main={main} />
