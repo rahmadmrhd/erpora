@@ -91,19 +91,37 @@ function collectItems(uiDir: string, hooksDir?: string): Map<string, Item> {
 
 const hashPath = (path: string): string => hashContent(readFileSync(path, "utf8"));
 
+/** Jenis patch terdaftar: label (teks Inggris tertanam), token (palet langsung), behavior (perilaku). */
+export type PatchKind = "label" | "token" | "behavior";
+const PATCH_KINDS: readonly PatchKind[] = ["label", "token", "behavior"];
+
 /**
  * Patch deklaratif (`shadcn.patches.json`): penggantian string yang diizinkan atas berkas hasil registry
- * setelah normalisasi `cn`, mis. teks Inggris tertanam menjadi `<UiLabel k="..." />` atau kelas palet
- * langsung menjadi token DS. Hash di kunci dihitung SETELAH patch.
+ * setelah normalisasi `cn`, mis. teks Inggris tertanam menjadi `<UiLabel k="..." />`, kelas palet
+ * langsung menjadi token DS, atau (patch perilaku) penghapusan efek samping registry seperti penulisan
+ * cookie `sidebar_state`. Hash di kunci dihitung SETELAH patch.
  */
 export interface LabelPatch {
   /** Kunci komponen (`dialog`) atau hook (`hooks/use-mobile`). */
   component: string;
+  /** Jenis patch (default `label` bila tak diisi). Patch `behavior` wajib punya `reason`. */
+  kind?: PatchKind;
   find: string;
   replace: string;
   /** Jumlah kemunculan `find` yang diharapkan (default 1). */
   count?: number;
   reason?: string;
+}
+
+/**
+ * Nama konstruksi berbahaya yang dilarang pada berkas registry terkunci (R20.4): `dangerouslySetInnerHTML`
+ * dan penulisan `innerHTML`/`outerHTML`. Biome menegakkan yang pertama; ini lapis kedua yang tak bergantung
+ * pada konfigurasi linter, dan dipakai `shadcn:check` serta `shadcn:sync`.
+ */
+export function forbiddenMarkup(src: string): string[] {
+  return ["dangerouslySetInnerHTML", "innerHTML", "outerHTML"].filter((name) =>
+    new RegExp(String.raw`\b${name}\b`).test(src),
+  );
 }
 
 const countOccurrences = (src: string, needle: string): number =>
@@ -220,7 +238,14 @@ export function checkLock(uiDir: string, lock: ShadcnLock, opts: CheckOptions = 
     }
   }
   for (const [name, item] of items) {
-    problems.push(...patchProblems(name, readFileSync(item.path, "utf8"), opts.patches ?? []));
+    const src = readFileSync(item.path, "utf8");
+    problems.push(...patchProblems(name, src, opts.patches ?? []));
+    for (const bad of forbiddenMarkup(src)) {
+      problems.push(
+        `"${name}" (${item.file}) memuat \`${bad}\`, dilarang di seluruh kode frontend (R20.4); ` +
+          "tambahkan patch perilaku terdaftar atau jangan pasang komponen ini.",
+      );
+    }
   }
   return { skipped: false, problems };
 }
@@ -237,6 +262,14 @@ export function loadPatches(path: string): LabelPatch[] {
       typeof p.replace !== "string"
     ) {
       throw new Error(`${path}: patch butuh component, find, replace (string)`);
+    }
+    if (p.kind !== undefined && !PATCH_KINDS.includes(p.kind)) {
+      throw new Error(
+        `${path}: kind patch "${String(p.kind)}" tidak dikenal (${PATCH_KINDS.join(", ")})`,
+      );
+    }
+    if (p.kind === "behavior" && (typeof p.reason !== "string" || p.reason.trim() === "")) {
+      throw new Error(`${path}: patch behavior untuk "${p.component}" wajib punya reason`);
     }
   }
   return raw.patches;

@@ -16,6 +16,7 @@ import {
   applyPatches,
   buildLock,
   componentName,
+  forbiddenMarkup,
   HOOK_PREFIX,
   HOOKS_DIR,
   LOCK_PATH,
@@ -48,6 +49,20 @@ export function parseComponentNames(args: string[]): string[] {
     if (!names.includes(arg)) names.push(arg);
   }
   return names;
+}
+
+/**
+ * Menolak hasil registry (setelah patch) yang memuat `dangerouslySetInnerHTML`/`innerHTML`/`outerHTML`
+ * (R20.4): sync dibatalkan sebelum kunci ditulis, sehingga komponen semacam itu tidak pernah terkunci.
+ */
+export function assertSafeMarkup(component: string, src: string): void {
+  const bad = forbiddenMarkup(src);
+  if (bad.length > 0) {
+    throw new Error(
+      `komponen "${component}" memuat ${bad.join(", ")}, dilarang di seluruh kode frontend (R20.4). ` +
+        "Kunci tidak ditulis; tinjau berkas, tambahkan patch perilaku terdaftar atau jangan pasang komponen ini.",
+    );
+  }
 }
 
 type Deps = Record<string, string>;
@@ -211,6 +226,7 @@ function sync(names: string[], cli: string): void {
     const src = readFileSync(path, "utf8");
     const out = applyPatches(key, normalizeCn(src), patches);
     if (out !== src) writeFileSync(path, out);
+    assertSafeMarkup(key, out);
   }
 
   // 2) hapus `cn`, pin dependensi baru, rekonsiliasi lockfile

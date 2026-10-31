@@ -7,10 +7,11 @@ dan memuat tema lewat `@import "@erpora/ui/theme.css"` di CSS shell.
 
 ## Aturan
 
-- **Persis shadcn (ADR-0015).** Setiap berkas di `src/components/ui` sama dengan hasil `shadcn add` pada CLI terpin, kecuali tiga
+- **Persis shadcn (ADR-0015).** Setiap berkas di `src/components/ui` sama dengan hasil `shadcn add` pada CLI terpin, kecuali empat
   penyimpangan terdaftar: (a) jalur impor `cn` (`from "cn"` menjadi `from "@erpora/ui/lib/utils"`), (b) **patch label** (teks Inggris
-  tertanam diganti `useUiLabel`), dan (c) **patch token** (palet langsung diganti token semantik DS). Jangan mengedit berkas ini dengan
-  tangan. Perubahan hanya lewat `task shadcn:sync`.
+  tertanam diganti `useUiLabel`), (c) **patch token** (palet langsung diganti token semantik DS), dan (d) **patch perilaku** (efek samping
+  registry yang dihapus, saat ini penulisan cookie `sidebar_state` di `sidebar.tsx`, K12). Jangan mengedit berkas ini dengan tangan.
+  Perubahan hanya lewat `task shadcn:sync`.
 - **Varian dan ukuran bawaan shadcn.** Nama varian dan ukuran mengikuti shadcn (`Button`: `default`, bukan `primary`; ukuran `default`
   dan `xs|sm|lg|icon*`, bukan `md`). Kebutuhan DS dipenuhi lewat token, bukan dengan mengubah komponen.
 - **Kebutuhan DS di `src/components/extended`.** Pembungkus membungkus komponen shadcn tanpa mengubah berkasnya. Saat ini: `LoadingButton`
@@ -61,15 +62,21 @@ task shadcn:sync -- --prune         # buang entri kunci yang berkasnya dihapus s
 - Urutan kerja `shadcn:sync`: `add -o -y` → ganti `from "cn"` menjadi `from "@erpora/ui/lib/utils"` → hapus dependensi `cn` yang ditulis CLI →
   terapkan patch dari `shadcn.patches.json` → pin versi pasti dependensi baru atau yang berubah → `bun install` → tulis `shadcn.lock.json`.
   Hash dihitung setelah patch.
-- **Patch.** Penyimpangan selain jalur `cn` hanya lewat `shadcn.patches.json`: `{ component, find, replace, count?, reason }`. Patch gagal
+- **Patch.** Penyimpangan selain jalur `cn` hanya lewat `shadcn.patches.json`: `{ component, kind, find, replace, count?, reason }` dengan
+  `kind` = `label` | `token` | `behavior`; patch `behavior` wajib beralasan (dimuat `loadPatches`, ditolak bila kosong). Patch gagal
   keras bila teks asal tidak ditemukan sebanyak `count`, sehingga perubahan registry yang memutus patch terlihat. Setiap patch wajib punya alasan
   yang menunjuk aturan (R1.7, R2.2). Patch label memakai `UiLabel` atau `useUiLabel(...)`; kunci barunya ditambahkan ke `uiKeys` dan ke
   `i18n/{id,en}.json`.
 - **Kunci snapshot.** `shadcn.lock.json` menyimpan hash isi setiap berkas di `src/components/ui` dan `src/hooks/*.ts`. `shadcn:check` gagal bila ada
   berkas berbeda dari kunci, berkas tanpa kunci, kunci tanpa berkas, atau patch yang belum terpasang. Jangan menyunting kunci dengan tangan.
+- **Larangan markup berbahaya.** Berkas terkunci tidak boleh memuat `dangerouslySetInnerHTML`, `innerHTML`, atau `outerHTML` (R20.4):
+  `shadcn:check` menolaknya dan `shadcn:sync` dibatalkan sebelum menulis kunci. Biome tetap menjalankan aturan keamanan
+  `noDangerouslySetInnerHtml*` pada `components/ui` dan `hooks` (hanya aturan itu; gaya registry tidak di-lint).
+- **`shadcn:verify` tanpa argumen** memeriksa tiap kunci komponen; kunci `hooks/*` dipetakan ke komponen asalnya (`hooks/use-mobile` ke
+  `sidebar`, lihat `HOOK_ORIGINS`), hook tanpa komponen asal dilewati dengan keterangan.
 - Komponen dan kunci diperbarui dalam **satu commit**, dengan `package.json` dan `bun.lock` bila dependensinya berubah.
 - Ringkas: `shadcn:verify` hanya melaporkan selisih. Pembaruan selalu lewat `shadcn:sync` dan ditinjau sebagai diff.
-- Dampak perilaku dari shadcn persis (cookie `sidebar_state`, `aria-current`, `role="alert"` pada `Alert`, dan lain-lain) dicatat di
+- Dampak perilaku dari shadcn persis (`aria-current`, `role="alert"` pada `Alert`, dan lain-lain) dicatat di
   `docs/specs/m3a-revisi-shell-shadcn/tasks.md` (catatan 2.1 sampai 2.6).
 
 ## Pengujian

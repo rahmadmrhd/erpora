@@ -178,6 +178,31 @@ describe("Sidebar: keadaan terkendali (persistensi dikerjakan shell)", () => {
   });
 });
 
+describe("Sidebar: tanpa cookie (patch perilaku K12)", () => {
+  test("mengalihkan sidebar (terkendali maupun tak terkendali) tidak menulis cookie", async () => {
+    const user = userEvent.setup();
+    const before = document.cookie;
+    const { unmount } = render(<App />);
+    await user.click(screen.getByRole("button", { name: "Ciutkan atau perluas sidebar" }));
+    expect(root()).toHaveAttribute("data-state", "collapsed");
+    expect(document.cookie).toBe(before);
+    expect(document.cookie).not.toContain("sidebar_state");
+    unmount();
+    render(
+      <UiLabelsProvider t={t}>
+        <SidebarProvider open onOpenChange={() => {}}>
+          <Sidebar collapsible="icon">
+            <SidebarContent>x</SidebarContent>
+          </Sidebar>
+          <SidebarTrigger />
+        </SidebarProvider>
+      </UiLabelsProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Ciutkan atau perluas sidebar" }));
+    expect(document.cookie).not.toContain("sidebar_state");
+  });
+});
+
 describe("Sidebar: tooltip, lencana, dan keyboard", () => {
   test("terlipat: fokus pada item menampilkan tooltip nama; diperluas: tidak ada tooltip", async () => {
     const user = userEvent.setup();

@@ -307,3 +307,133 @@ describe("kunci hooks dan patch pada checkLock/buildLock", () => {
     expect(res.problems.some((p) => p.includes("dialog"))).toBe(true);
   });
 });
+
+// ---- Patch perilaku terdaftar (K12) dan larangan markup berbahaya pada berkas terkunci ----
+
+import { readdirSync, readFileSync } from "node:fs";
+import {
+  forbiddenMarkup,
+  loadPatches,
+  PATCHES_PATH,
+  UI_DIR,
+} from "../../packages/ui/scripts/shadcn-check";
+
+describe("loadPatches: jenis patch", () => {
+  const write = (patches: unknown[]): string => {
+    const path = join(root, "patches.json");
+    writeFileSync(path, JSON.stringify({ patches }));
+    return path;
+  };
+  const base = { component: "sidebar", find: "a", replace: "b" };
+
+  test("jenis label, token, dan behavior diterima; tanpa jenis dianggap label", () => {
+    const path = write([
+      { ...base, kind: "label" },
+      { ...base, kind: "token" },
+      { ...base, kind: "behavior", reason: "menghapus cookie sidebar_state (K12)" },
+      base,
+    ]);
+    expect(loadPatches(path).map((p) => p.kind)).toEqual(["label", "token", "behavior", undefined]);
+  });
+
+  test("jenis tak dikenal ditolak", () => {
+    expect(() => loadPatches(write([{ ...base, kind: "misc" }]))).toThrow(/kind/);
+  });
+
+  test("patch behavior wajib punya alasan tercatat", () => {
+    expect(() => loadPatches(write([{ ...base, kind: "behavior" }]))).toThrow(/reason/);
+    expect(() => loadPatches(write([{ ...base, kind: "behavior", reason: "  " }]))).toThrow(
+      /reason/,
+    );
+  });
+});
+
+describe("patch behavior pada applyPatches/patchProblems", () => {
+  const COOKIE_LINE = "document.cookie = cookieValue(openState)";
+  const behavior: LabelPatch = {
+    component: "sidebar",
+    kind: "behavior",
+    find: COOKIE_LINE,
+    replace: "// ERPora (K12): tanpa cookie",
+    reason: "keadaan sidebar hanya di localStorage",
+  };
+  const SRC = `${CN_LOCAL}function f() {\n  ${COOKIE_LINE}\n}\n`;
+
+  test("menerapkan penggantian dan idempoten", () => {
+    const once = applyPatches("sidebar", SRC, [behavior]);
+    expect(once).not.toContain("document.cookie");
+    expect(applyPatches("sidebar", once, [behavior])).toBe(once);
+    expect(patchProblems("sidebar", once, [behavior])).toEqual([]);
+  });
+
+  test("gagal keras bila teks asal tidak ditemukan (registry berubah)", () => {
+    expect(() => applyPatches("sidebar", CN_LOCAL, [behavior])).toThrow(/sidebar/);
+  });
+
+  test("checkLock melaporkan patch behavior yang belum terpasang", () => {
+    put("sidebar.tsx", SRC);
+    const lock = buildLock(ui, "4.21.5");
+    const res = checkLock(ui, lock, { patches: [behavior] });
+    expect(res.problems).toHaveLength(1);
+    expect(res.problems[0]).toContain("sidebar");
+  });
+});
+
+describe("patch terdaftar nyata (shadcn.patches.json)", () => {
+  const patches = loadPatches(PATCHES_PATH);
+
+  test("setiap patch punya jenis dan alasan", () => {
+    for (const p of patches) {
+      expect(p.kind).toBeDefined();
+      expect((p.reason ?? "").trim()).not.toBe("");
+    }
+  });
+
+  test("ada patch behavior yang menghapus penulisan cookie sidebar_state", () => {
+    const behaviors = patches.filter((p) => p.kind === "behavior" && p.component === "sidebar");
+    expect(behaviors.some((p) => p.find.includes("document.cookie"))).toBe(true);
+    expect(behaviors.every((p) => (p.reason ?? "").includes("sidebar"))).toBe(true);
+  });
+
+  test("tidak ada kode yang menulis cookie di komponen shadcn dan shell", () => {
+    const skip = new Set(["node_modules", "dist"]);
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          if (!skip.has(e.name)) walk(full);
+        } else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) files.push(full);
+      }
+    };
+    walk(UI_DIR);
+    walk(join(UI_DIR, "..", "..", "..", "..", "..", "web", "src"));
+    expect(files.length).toBeGreaterThan(10);
+    const offenders = files.filter((f) => /document\.cookie/.test(readFileSync(f, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("forbiddenMarkup", () => {
+  test("mendeteksi dangerouslySetInnerHTML, innerHTML, dan outerHTML", () => {
+    expect(forbiddenMarkup("<div dangerouslySetInnerHTML={{ __html: x }} />")).toEqual([
+      "dangerouslySetInnerHTML",
+    ]);
+    expect(forbiddenMarkup("el.innerHTML = x")).toEqual(["innerHTML"]);
+    expect(forbiddenMarkup("el.outerHTML = x")).toEqual(["outerHTML"]);
+  });
+
+  test("kode biasa bersih", () => {
+    expect(forbiddenMarkup('const a = <div className="x" />')).toEqual([]);
+  });
+
+  test("checkLock menolak berkas terkunci yang memuat markup berbahaya walau hash cocok", () => {
+    const bad = `${CN_LOCAL}export const x = <div dangerouslySetInnerHTML={{ __html: "a" }} />\n`;
+    put("chart.tsx", bad);
+    const lock = synced(buildLock(ui, "4.21.5"));
+    const res = checkLock(ui, lock);
+    expect(res.problems).toHaveLength(1);
+    expect(res.problems[0]).toContain("dangerouslySetInnerHTML");
+    expect(res.problems[0]).toContain("chart");
+  });
+});

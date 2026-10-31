@@ -26,8 +26,8 @@ import {
   TooltipTrigger,
 } from "@erpora/ui/components/ui/tooltip"
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state"
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+// ERPora (K12): tanpa cookie keadaan sidebar; keadaan dikendalikan konsumen lewat prop open (localStorage di shell).
+// (konstanta masa berlaku cookie sidebar dihapus; lihat patch perilaku di shadcn.patches.json)
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
@@ -83,8 +83,8 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      // ERPora (K12): setOpen tidak menulis cookie; keadaan sidebar disimpan konsumen lewat onOpenChange.
+      // (penulisan cookie sidebar dihapus; lihat patch perilaku di shadcn.patches.json)
     },
     [setOpenProp, open]
   )
