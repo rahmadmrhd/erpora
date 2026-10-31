@@ -30,7 +30,7 @@ dan memuat tema lewat `@import "@erpora/ui/theme.css"` di CSS shell.
 - Komponen yang sengaja dimuat malas dipasang sebagai **entry sekunder** (Q38 butir 1, R18.2) agar tidak masuk JS awal:
   - `@erpora/ui/toaster` mengekspor `Toaster` dan `toast` (sonner bergaya token, dari `components/extended/toaster`);
   - `@erpora/ui/command` mengekspor `Command` (shadcn + cmdk 1.1.1) untuk palet perintah.
-  Keduanya tidak diekspor dari barrel, sehingga entry shell tetap di bawah anggaran.
+    Keduanya tidak diekspor dari barrel, sehingga entry shell tetap di bawah anggaran.
 - Entry sekunder diimpor langsung lewat `exports` paket; aturan F2 mengizinkannya, aturan lain tetap berlaku.
 
 ## Kunci terjemahan
