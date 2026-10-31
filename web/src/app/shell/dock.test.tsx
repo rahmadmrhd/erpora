@@ -425,31 +425,120 @@ describe("DockFloating", () => {
     expect(await screen.findByRole("navigation", { name: "Dock Desk" })).toBeInTheDocument();
   });
 
-  test("memilih Desk menutup pil dan menuju Dashboard-nya", async () => {
-    const user = userEvent.setup();
-    const { router } = await renderFloating();
-    press();
-    await user.click(await screen.findByRole("button", { name: "Example" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/example"));
-    await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
-  });
+  describe("popover menu Desk di pil (K20)", () => {
+    /** Popover dimuat malas: tunggu pemicu asli (aria-haspopup) menggantikan cadangan sebelum diklik. */
+    async function readyTrigger(name: string) {
+      const button = await screen.findByRole("button", { name });
+      await waitFor(() => expect(button).toHaveAttribute("aria-haspopup", "dialog"));
+      return button;
+    }
 
-  test("memilih Desk yang memuat rute saat ini bertahan di rute itu (K10)", async () => {
-    const user = userEvent.setup();
-    const shared: Desk[] = [
-      ...desks,
-      makeDesk("addon", [
-        makeDashboardItem("addon", "addon"),
-        makeDeskItem("addon", "notes", "/example/notes", { ownerDesk: "example" }),
-      ]),
-    ];
-    const { router } = renderShell(<DockFloating />, { desks: shared, path: "/example/notes" });
-    await waitFor(() => expect(pill()).toBeInTheDocument());
-    press();
-    await user.click(await screen.findByRole("button", { name: "Addon" }));
-    await waitFor(() => expect(sessionStorage.getItem("erpora.desk.tab")).toBe("addon"));
-    expect(router.state.location.pathname).toBe("/example/notes");
-    await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
+    test("klik ikon membuka popover menu Desk tanpa mengganti Desk atau rute, dan pil tetap terbuka", async () => {
+      const user = userEvent.setup();
+      const { router } = await renderFloating();
+      press();
+      await user.click(await readyTrigger("Example"));
+      const popover = await screen.findByRole("dialog", { name: "Example" });
+      expect(within(popover).getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+        "href",
+        "/example",
+      );
+      expect(router.state.location.pathname).toBe("/");
+      expect(sessionStorage.getItem("erpora.desk.tab")).toBeNull();
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+    });
+
+    test("ikon Desk yang sedang aktif juga membuka popover", async () => {
+      sessionStorage.setItem("erpora.desk.tab", "example");
+      const user = userEvent.setup();
+      await renderFloating();
+      press();
+      const example = await readyTrigger("Example");
+      await waitFor(() => expect(example).toHaveAttribute("aria-current", "true"));
+      await user.click(example);
+      expect(await screen.findByRole("dialog", { name: "Example" })).toBeInTheDocument();
+    });
+
+    test("memilih item menavigasi, menetapkan Desk itu sebagai Desk saat ini, menutup popover dan pil", async () => {
+      const user = userEvent.setup();
+      const { router } = await renderFloating();
+      press();
+      await user.click(await readyTrigger("Example"));
+      const popover = await screen.findByRole("dialog", { name: "Example" });
+      await user.click(within(popover).getByRole("link", { name: "Notes" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/example/notes"));
+      expect(sessionStorage.getItem("erpora.desk.tab")).toBe("example");
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Example" })).toBeNull());
+      await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
+    });
+
+    test("pointer meninggalkan pil dan blur ke popover tidak menutup pil selama popover terbuka", async () => {
+      const user = userEvent.setup();
+      await renderFloating();
+      press();
+      const icon = await readyTrigger("Example");
+      await user.click(icon);
+      const popover = await screen.findByRole("dialog", { name: "Example" });
+      fireEvent.focusOut(icon, { relatedTarget: popover });
+      fireEvent.mouseLeave(wrapper());
+      await new Promise((r) => setTimeout(r, 400));
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+      expect(screen.getByRole("dialog", { name: "Example" })).toBeInTheDocument();
+    });
+
+    test("Escape menutup popover lebih dulu, pil tetap terbuka, dan fokus kembali ke ikon pemicu", async () => {
+      const user = userEvent.setup();
+      await renderFloating();
+      press();
+      const icon = await readyTrigger("Example");
+      await user.click(icon);
+      await screen.findByRole("dialog", { name: "Example" });
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await new Promise((r) => setTimeout(r, 500));
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+      expect(icon).toHaveFocus();
+    });
+
+    test("keyboard murni (tanpa hover): Enter membuka popover dan pil bertahan lebih lama dari jeda leave; Escape lalu tetap terbuka", async () => {
+      const user = userEvent.setup();
+      await renderFloating();
+      press();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Platform" })).toHaveFocus());
+      await readyTrigger("Example");
+      await user.keyboard("{ArrowDown}");
+      const example = screen.getByRole("button", { name: "Example" });
+      expect(example).toHaveFocus();
+      await user.keyboard("{Enter}");
+      await screen.findByRole("dialog", { name: "Example" });
+      await new Promise((r) => setTimeout(r, 500));
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await new Promise((r) => setTimeout(r, 500));
+      expect(wrapper()).toHaveAttribute("data-state", "open");
+      expect(example).toHaveFocus();
+    });
+
+    test("klik di luar menutup popover dan pil", async () => {
+      const user = userEvent.setup();
+      renderShell(
+        <>
+          <button type="button">Luar</button>
+          <DockFloating />
+        </>,
+        { desks },
+      );
+      await waitFor(() => expect(pill()).toBeInTheDocument());
+      press();
+      await user.click(await readyTrigger("Example"));
+      await screen.findByRole("dialog", { name: "Example" });
+      await user.click(screen.getByRole("button", { name: "Luar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"), {
+        timeout: 2000,
+      });
+    });
   });
 
   test("fokus keluar dari pil menutupnya", async () => {
@@ -492,8 +581,17 @@ describe("DockFloating", () => {
       fireEvent.mouseLeave(wrapper());
       await new Promise((r) => setTimeout(r, 400));
       expect(wrapper()).toHaveAttribute("data-state", "open");
-      await user.click(await screen.findByRole("menuitem", { name: "Example" }));
-      await waitFor(() => expect(router.state.location.pathname).toBe("/example"));
+      // Submenu menu Desk (K20, sama dengan Pinned); dimuat malas, tunggu pemicu submenu asli.
+      await waitFor(() =>
+        expect(screen.getByRole("menuitem", { name: "Example" })).toHaveAttribute(
+          "aria-haspopup",
+          "menu",
+        ),
+      );
+      await user.click(screen.getByRole("menuitem", { name: "Example" }));
+      await screen.findByRole("menuitem", { name: "Notes" });
+      await user.keyboard("{ArrowRight}{ArrowDown}{Enter}");
+      await waitFor(() => expect(router.state.location.pathname).toBe("/example/notes"));
       await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
     });
 

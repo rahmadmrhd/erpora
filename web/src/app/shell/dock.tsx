@@ -160,19 +160,25 @@ function DeskLoadFailed({
 }
 
 /**
- * Ikon Desk di Dock Pinned (K8): klik membuka popover menu Desk, bukan langsung berpindah. Sebelum chunk popover
- * termuat, tombol biasa ditampilkan (chunk dipra-muat saat Dock terpasang).
+ * Ikon Desk di Dock Pinned dan pil Floating (K8, K20): klik membuka popover menu Desk, bukan langsung berpindah.
+ * Sebelum chunk popover termuat, tombol biasa ditampilkan (chunk dipra-muat saat Dock terpasang).
  */
-function PinnedDeskIcon({
+function DeskMenuIcon({
   desk,
   active,
   tabIndex,
   onFocus,
+  onMenuOpenChange,
+  onSelected,
 }: {
   desk: Desk;
   active: boolean;
   tabIndex: number;
   onFocus: () => void;
+  /** Popover dibuka atau ditutup (pil Floating tetap terbuka selama popover terbuka). */
+  onMenuOpenChange?: (open: boolean) => void;
+  /** Sebuah item popover dipilih (pil Floating menutup diri). */
+  onSelected?: () => void;
 }) {
   // Klik saat chunk popover belum termuat dicatat dan membuka popover begitu termuat; fokus ikut dipindahkan ke
   // tombol asli (React tidak mengirim blur saat tombol cadangan dilepas).
@@ -210,7 +216,12 @@ function PinnedDeskIcon({
           />
         }
       >
-        <LazyDeskMenuPopover desk={desk} defaultOpen={pending}>
+        <LazyDeskMenuPopover
+          desk={desk}
+          defaultOpen={pending}
+          onOpenChange={onMenuOpenChange}
+          onSelected={onSelected}
+        >
           <DeskIconButton
             ref={restoreFocus}
             desk={desk}
@@ -240,19 +251,13 @@ function OverflowItem({ desk, onSelect }: { desk: Desk; onSelect: (desk: Desk) =
  * dapat difokus pada satu waktu). Dipakai Dock Pinned dan pil Floating.
  */
 export function DockDeskList({
-  variant = "floating",
   onSelected,
   onMenuOpenChange,
   initialFocusRef,
 }: {
-  /**
-   * `pinned`: ikon membuka popover menu Desk (K8); `floating`: ikon langsung berpindah Desk (rute dipertahankan bila
-   * ada di Desk tujuan, K10) dan pil menutup.
-   */
-  variant?: "pinned" | "floating";
-  /** Dipanggil setelah Desk dipilih (pil Floating menutup diri). */
+  /** Dipanggil setelah item menu sebuah Desk dipilih (pil Floating menutup diri). */
   onSelected?: () => void;
-  /** Dipanggil saat menu "+N" (dirender di portal, di luar DOM daftar) dibuka atau ditutup. */
+  /** Dipanggil saat popover Desk atau menu "+N" (dirender di portal, di luar DOM daftar) dibuka atau ditutup. */
   onMenuOpenChange?: (open: boolean) => void;
   /** Diisi dengan fungsi yang memfokuskan ikon Desk saat ini (atau pertama). */
   initialFocusRef?: RefObject<(() => void) | null>;
@@ -320,33 +325,14 @@ export function DockDeskList({
     >
       {shown.map((desk, i) => (
         <li key={desk.id}>
-          {variant === "pinned" ? (
-            <PinnedDeskIcon
-              desk={desk}
-              active={desk.id === deskId}
-              tabIndex={i === focusable ? 0 : -1}
-              onFocus={() => setFocusIndex(i)}
-            />
-          ) : (
-            <ShellBoundary
-              label="ikon Desk"
-              fallback={(retry) => (
-                <DeskLoadFailed
-                  retry={retry}
-                  tabIndex={i === focusable ? 0 : -1}
-                  onFocus={() => setFocusIndex(i)}
-                />
-              )}
-            >
-              <DeskIconButton
-                desk={desk}
-                active={desk.id === deskId}
-                tabIndex={i === focusable ? 0 : -1}
-                onFocus={() => setFocusIndex(i)}
-                onClick={() => select(desk)}
-              />
-            </ShellBoundary>
-          )}
+          <DeskMenuIcon
+            desk={desk}
+            active={desk.id === deskId}
+            tabIndex={i === focusable ? 0 : -1}
+            onFocus={() => setFocusIndex(i)}
+            onMenuOpenChange={onMenuOpenChange}
+            onSelected={onSelected}
+          />
         </li>
       ))}
       {hidden.length > 0 ? (
@@ -383,13 +369,9 @@ export function DockDeskList({
                     </DropdownMenuItem>
                   )}
                 >
-                  {variant === "pinned" ? (
-                    <Suspense fallback={<OverflowItem desk={d} onSelect={select} />}>
-                      <LazyOverflowDeskSub desk={d} />
-                    </Suspense>
-                  ) : (
-                    <OverflowItem desk={d} onSelect={select} />
-                  )}
+                  <Suspense fallback={<OverflowItem desk={d} onSelect={select} />}>
+                    <LazyOverflowDeskSub desk={d} onSelected={onSelected} />
+                  </Suspense>
                 </ShellBoundary>
               ))}
             </DropdownMenuContent>
@@ -419,7 +401,7 @@ export function Dock() {
       <LogoPopover variant="dock" />
       <DockFixedItems />
       <Separator className="w-8" />
-      <DockDeskList variant="pinned" />
+      <DockDeskList />
       <UserMenu variant="dock" />
     </nav>
   );

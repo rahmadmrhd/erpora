@@ -18,7 +18,7 @@ function isDockShortcut(event: KeyboardEvent): boolean {
 /**
  * Dock Floating (R4.4, R4.5): pil vertikal yang diparkir di luar layar dan meluncur dari tepi kiri (transisi 280 ms
  * `cubic-bezier(.4,0,.2,1)`, dimatikan `prefers-reduced-motion`). Pemicu: zona tepi kiri 12 px (hover) dan
- * `Ctrl+Shift+/`. Menutup setelah memilih Desk, `Escape`, pintasan lagi, atau fokus/pointer keluar. Saat tertutup
+ * `Ctrl+Shift+/`. Ikon Desk membuka popover menu Desk (K20, selama popover atau menu +N terbuka pil tetap terbuka). Menutup setelah memilih item menu Desk, `Escape`, pintasan lagi, atau fokus/pointer keluar. Saat tertutup
  * pil `inert` dan `aria-hidden` (tidak dapat difokus dan tersembunyi dari pembaca layar). Komponen ini dimuat malas.
  */
 export function DockFloating() {

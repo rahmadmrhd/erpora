@@ -14,7 +14,7 @@ const trim = (p: string): string => (p.length > 1 && p.endsWith("/") ? p.slice(0
 /**
  * Navigasi antar-Desk dan halaman Desks.
  * - `openDesk`: menetapkan Desk saat ini lalu **selalu** membuka Dashboard-nya (kartu halaman Desks, crumb Desk).
- * - `switchDesk` (K10): pindah Desk dari Dock Floating, popover logo, dan palet; bila rute saat ini juga ada di Desk
+ * - `switchDesk` (K10): pindah Desk dari popover logo ("Pindah Desk") dan palet (ikon Dock Pinned dan pil Floating memakai popover menu, K8 dan K20); bila rute saat ini juga ada di Desk
  *   tujuan (`resolveDeskSwitchTarget`) tetap di rute itu dan hanya Desk saat ini yang berganti.
  * - `goToDesks`: halaman Desks di `/` tanpa penentuan Desk (penanda state `showDesks`).
  */

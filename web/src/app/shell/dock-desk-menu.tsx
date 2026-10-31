@@ -18,7 +18,7 @@ import {
   PopoverTrigger,
 } from "@erpora/ui";
 import { useRouterState } from "@tanstack/react-router";
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 import { DeskMenuTree } from "./desk-panel-menu";
 import { NavIcon } from "./nav-icon";
 import { ShellBoundary } from "./shell-boundary";
@@ -62,14 +62,31 @@ function DeskMenuContent({ desk, onSelect }: { desk: Desk; onSelect: () => void 
 export function DeskMenuPopover({
   desk,
   defaultOpen = false,
+  onOpenChange,
+  onSelected,
   children,
 }: {
   desk: Desk;
   /** Terbuka sejak dipasang (klik ikon yang terjadi saat chunk ini masih dimuat). */
   defaultOpen?: boolean;
+  /** Dipanggil saat popover dibuka atau ditutup (pil Floating memakainya agar tetap terbuka). */
+  onOpenChange?: (open: boolean) => void;
+  /** Dipanggil setelah sebuah item dipilih (pil Floating menutup diri). */
+  onSelected?: () => void;
   children: ReactElement;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpenState] = useState(defaultOpen);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
+  // Ditutup lewat interaksi di luar: fokus mengikuti elemen yang diklik (tidak dikembalikan ke ikon pemicu), sehingga
+  // pil Floating yang fokusnya lalu berada di luar ikut menutup.
+  const dismissedOutside = useRef(false);
+  // Dipasang sudah terbuka (klik saat chunk dimuat): beri tahu pemanggil sekali.
+  useEffect(() => {
+    if (defaultOpen) onOpenChange?.(true);
+  }, []);
   const { setCurrentDesk } = useCurrentDesk();
   const label = useMessage(desk.label);
   return (
@@ -80,6 +97,13 @@ export function DeskMenuPopover({
         align="start"
         sideOffset={8}
         aria-label={label}
+        onInteractOutside={() => {
+          dismissedOutside.current = true;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (dismissedOutside.current) event.preventDefault();
+          dismissedOutside.current = false;
+        }}
         className="max-h-[calc(100svh-1rem)] w-60 overflow-y-auto border-sidebar-border bg-sidebar p-2 text-sidebar-foreground"
       >
         <ShellBoundary label="menu Desk" fallback={(retry) => <DeskMenuError retry={retry} />}>
@@ -88,6 +112,7 @@ export function DeskMenuPopover({
             onSelect={() => {
               setCurrentDesk(desk.id);
               setOpen(false);
+              onSelected?.();
             }}
           />
         </ShellBoundary>
