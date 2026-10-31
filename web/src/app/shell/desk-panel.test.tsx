@@ -235,6 +235,17 @@ describe("DeskPanel: menu Desk", () => {
     expect(stock).toHaveAttribute("aria-current", "page");
   });
 
+  test("strip ikon (Floating terciut): grup membuka popover berisi anaknya (dimuat malas)", async () => {
+    const user = userEvent.setup();
+    renderShell(<DeskPanel variant="floating" />, {
+      desks,
+      sidebar: { open: false, onOpenChange: () => {} },
+    });
+    const nav = await ready();
+    await user.click(await within(nav).findByRole("button", { name: "Reports" }));
+    expect(await screen.findByRole("link", { name: "Sales" })).toBeInTheDocument();
+  });
+
   test("Desk lain: hanya menu Desk saat ini yang tampil", async () => {
     sessionStorage.setItem("erpora.desk.tab", "platform");
     renderShell(<DeskPanel variant="pinned" />, { desks });

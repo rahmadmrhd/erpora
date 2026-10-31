@@ -14,9 +14,6 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   resolveIcon,
   Sheet,
   SheetContent,
@@ -41,12 +38,16 @@ import {
   useUiLabel,
 } from "@erpora/ui";
 import { useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { DESK_PANEL_ID } from "./collapse-edge";
 import { FixedGroup } from "./fixed-group";
 import { LogoPopover } from "./logo-popover";
 import { NavIcon } from "./nav-icon";
 import { UserMenu } from "./user-menu";
+
+const LazyIconStripGroup = lazy(() =>
+  import("./icon-strip-group").then((m) => ({ default: m.IconStripGroup })),
+);
 
 /** `pinned`: panel di sebelah Dock; `floating`: satu-satunya sidebar (logo di kepala, pengguna di dasar); `sheet`: < 1024 px. */
 export type PanelVariant = "pinned" | "floating" | "sheet";
@@ -159,27 +160,9 @@ function GroupNode({
   // Strip ikon (Floating terciut): anak tampil di popover di samping ikon grup (nama grup sebagai tooltip).
   if (iconStrip) {
     return (
-      <SidebarMenuItem>
-        <Popover>
-          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-          <PopoverContent side="right" align="start" className="w-48 p-1">
-            <ul className="flex flex-col gap-0.5">
-              {node.children.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    to={c.to}
-                    activeOptions={{ exact: true }}
-                    aria-current={trim(pathname) === trim(c.to) ? "page" : undefined}
-                    className="flex h-8 items-center rounded-md px-2 text-sm hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium"
-                  >
-                    <Message message={c.label} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </PopoverContent>
-        </Popover>
-      </SidebarMenuItem>
+      <Suspense fallback={<SidebarMenuItem>{trigger}</SidebarMenuItem>}>
+        <LazyIconStripGroup node={node} pathname={pathname} trigger={trigger} />
+      </Suspense>
     );
   }
 
