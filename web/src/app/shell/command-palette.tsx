@@ -5,6 +5,7 @@ import {
   type DeskMenuItem,
   Message,
   type MessageRef,
+  resolveDeskSwitchTarget,
   useCurrentDesk,
   useDesks,
   useMessage,
@@ -28,8 +29,8 @@ import {
   CommandItem,
   CommandList,
 } from "@erpora/ui/command";
+import { useRouterState } from "@tanstack/react-router";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { deskDashboardPath, useDeskNavigation } from "./desk-navigation";
 
 /** Satu hasil palet: halaman menu sebuah Desk, atau Desk itu sendiri (membuka Dashboard-nya). */
 interface Entry {
@@ -40,7 +41,8 @@ interface Entry {
   /** Label grup menu induk (halaman di dalam grup). */
   parent?: MessageRef;
   deskLabel: MessageRef;
-  to: string;
+  /** Tujuan halaman; entri Desk tidak membawanya (tujuan dihitung saat dipilih: `resolveDeskSwitchTarget`, K10). */
+  to?: string;
   icon?: string;
 }
 
@@ -146,15 +148,16 @@ export interface CommandPaletteProps {
 /**
  * Palet perintah (Awesomebar, R18): `Command` shadcn dalam `Dialog`, dimuat malas oleh pemanggil. Sumber lokal: menu
  * Desk saat ini dan semua Desk yang diizinkan; dengan kueri, halaman Desk lain ikut dicari (dikelompokkan menurut
- * Desk). Tanpa kueri backend (pencarian dokumen adalah M3c). Memilih hasil lintas Desk menetapkan Desk lebih dulu
- * (`setCurrentDesk`) lalu menavigasi (R18.4).
+ * Desk). Tanpa kueri backend (pencarian dokumen adalah M3c). Memilih halaman lintas Desk menetapkan Desk lebih dulu
+ * (`setCurrentDesk`) lalu menavigasi ke halaman itu (R18.4); memilih entri Desk memakai aturan pindah Desk K10
+ * (`resolveDeskSwitchTarget`: tetap di rute saat ini bila ada di Desk tujuan, selain itu Dashboard-nya).
  */
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation("platform");
   const { desks } = useDesks();
   const { deskId: currentDeskId, setCurrentDesk } = useCurrentDesk();
-  const { openDesk } = useDeskNavigation();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (st) => st.location.pathname });
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -174,13 +177,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       const desk = desks.find((d) => d.id === entry.deskId);
       if (desk === undefined) return;
       if (entry.kind === "desk") {
-        openDesk(desk);
+        // K10: tetap di rute saat ini bila Desk tujuan juga memuatnya, selain itu Dashboard Desk tujuan.
+        setCurrentDesk(desk.id);
+        void navigate({ to: resolveDeskSwitchTarget(pathname, desk) });
         return;
       }
+      if (entry.to === undefined) return;
       if (entry.deskId !== currentDeskId) setCurrentDesk(entry.deskId);
       void navigate({ to: entry.to });
     },
-    [desks, currentDeskId, setCurrentDesk, openDesk, navigate, onOpenChange],
+    [desks, currentDeskId, setCurrentDesk, pathname, navigate, onOpenChange],
   );
 
   return (
@@ -222,7 +228,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     deskId: desk.id,
                     label: desk.label,
                     deskLabel: desk.label,
-                    to: deskDashboardPath(desk),
                     ...(desk.icon !== undefined ? { icon: desk.icon } : {}),
                   }}
                 />

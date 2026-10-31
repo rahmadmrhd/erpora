@@ -201,3 +201,59 @@ describe("CommandPalette: pemilihan", () => {
     expect(within(again).getByRole("combobox")).toHaveValue("");
   });
 });
+
+describe("CommandPalette: pindah Desk menurut K10 (tetap di rute bila ada di Desk tujuan)", () => {
+  // `shared` memuat halaman /example/notes juga (menu Desk kustom/timpaan); `billing` tidak.
+  const k10Desks: Desk[] = [
+    ...desks,
+    makeDesk("shared", [
+      makeDashboardItem("shared", "shared"),
+      makeDeskItem("shared", "notes", "/example/notes"),
+    ]),
+  ];
+
+  async function open(path: string) {
+    const user = userEvent.setup();
+    const view = renderShell(<CommandPalette open onOpenChange={() => {}} />, {
+      desks: k10Desks,
+      path,
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Palet perintah" });
+    await within(dialog).findByRole("option", { name: /Billing/ });
+    return { user, dialog, ...view };
+  }
+
+  test("entri Desk yang juga memuat rute saat ini: tetap di rute itu, hanya Desk saat ini berganti", async () => {
+    const { user, dialog, router } = await open("/example/notes");
+    const deskGroup = within(dialog).getByRole("group", { name: "Desk" });
+    await user.click(optionByText(deskGroup, /Shared/));
+    await waitFor(() => expect(sessionStorage.getItem("erpora.desk.tab")).toBe("shared"));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(router.state.location.pathname).toBe("/example/notes");
+  });
+
+  test("entri Desk yang tidak memuat rute saat ini: Dashboard Desk tujuan", async () => {
+    const { user, dialog, router } = await open("/example/notes");
+    await user.click(within(dialog).getByRole("option", { name: /Billing/ }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/billing"));
+    expect(sessionStorage.getItem("erpora.desk.tab")).toBe("billing");
+  });
+
+  test("entri Desk saat ini sendiri tidak memindahkan halaman", async () => {
+    const { user, dialog, router } = await open("/example/reports/sales");
+    const deskGroup = within(dialog).getByRole("group", { name: "Desk" });
+    await user.click(optionByText(deskGroup, /Example/));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(router.state.location.pathname).toBe("/example/reports/sales");
+    expect(sessionStorage.getItem("erpora.desk.tab")).toBe("example");
+  });
+
+  test("halaman spesifik (hasil pencarian) tetap menavigasi ke halaman itu walau ada di beberapa Desk", async () => {
+    const { user, dialog, router } = await open("/billing");
+    await user.type(within(dialog).getByRole("combobox"), "modul");
+    await within(dialog).findByRole("group", { name: "Platform" });
+    await user.click(optionByText(dialog, /Modules/));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/platform/modules"));
+    expect(sessionStorage.getItem("erpora.desk.tab")).toBe("platform");
+  });
+});
