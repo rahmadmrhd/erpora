@@ -1,5 +1,5 @@
 /**
- * Satu sumber ukuran Dock (U1): tombol, ikon, dan jarak yang sama dengan item `SidebarMenuButton` di strip ikon
+ * Satu sumber ukuran Dock (K15, R4.10): tombol, ikon, dan jarak yang sama dengan item `SidebarMenuButton` di strip ikon
  * Floating (tombol 32 px = `size-8`, ikon 16 px, jarak `gap-1` = 4 px), dan lebar rel mengikuti lebar strip ikon.
  */
 
@@ -11,8 +11,10 @@ export const DOCK_GAP = 4;
 export const SHELL_DOCK_WIDTH = "var(--sidebar-width-icon)";
 
 /**
- * Kelas tombol Dock: ukuran seragam, ikon 16 px, sorotan hover seperti item sidebar, dan sorotan aktif berupa latar
+ * Kelas tombol Dock: ukuran seragam, ikon 16 px, sorotan hover seperti item sidebar (K17, R4.11, juga di tema gelap), dan sorotan aktif berupa latar
  * (`data-active`, tanpa cincin; K2). Indikator fokus keyboard tetap dari `Button`.
  */
+// `dark:hover:*` menimpa `dark:hover:bg-accent/50` varian ghost `Button` (tailwind-merge menganggap modifier berbeda tidak
+// bertabrakan; di tema gelap aturan itu berspesifisitas lebih tinggi dan mengalahkan sorotan hover dan aktif).
 export const DOCK_BUTTON_CLASS =
-  "size-8 rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-4";
+  "size-8 rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-4";
