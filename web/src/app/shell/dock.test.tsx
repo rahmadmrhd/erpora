@@ -10,6 +10,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { Dock, fitDockCount } from "./dock";
 import { DockFloating } from "./dock-floating";
+import { DOCK_GAP, DOCK_ITEM_SIZE, SHELL_DOCK_WIDTH } from "./dock-sizing";
 import { renderShell } from "./shell-test-support";
 
 const desks: Desk[] = [
@@ -118,6 +119,38 @@ describe("Dock (Pinned)", () => {
       ),
     );
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("billing");
+  });
+
+  describe("ukuran, jarak, dan hover seragam dengan strip ikon Floating (U1, U3)", () => {
+    test("semua tombol Dock berukuran 32 px (size-8), ikon 16 px, jarak 4 px, dan hover latar sidebar-accent", async () => {
+      expect(DOCK_ITEM_SIZE).toBe(32);
+      expect(DOCK_GAP).toBe(4);
+      renderShell(<Dock />, { desks });
+      const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+      await within(nav).findByRole("button", { name: "Platform" });
+      const controls = [
+        ...within(nav).getAllByRole("button"),
+        within(nav).getByRole("link", { name: /ToDo/ }),
+      ];
+      // logo, Cari, Notifikasi, ToDo, 3 Desk, avatar
+      expect(controls.length).toBeGreaterThanOrEqual(8);
+      for (const el of controls) {
+        const classes = el.className.split(/\s+/);
+        expect(classes).toContain("size-8");
+        expect(classes).toContain("[&_svg]:size-4");
+        expect(classes).toContain("hover:bg-sidebar-accent");
+        expect(classes).toContain("hover:text-sidebar-accent-foreground");
+        expect(classes).not.toContain("size-10");
+      }
+      for (const list of nav.querySelectorAll("ul")) expect(list.className).toContain("gap-1");
+    });
+
+    test("lebar rel Dock mengikuti lebar strip ikon (--sidebar-width-icon)", async () => {
+      renderShell(<Dock />, { desks });
+      const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+      expect(nav.className).toContain("w-(--dock-width)");
+      expect(SHELL_DOCK_WIDTH).toBe("var(--sidebar-width-icon)");
+    });
   });
 
   describe("item tetap di Dock (K6)", () => {

@@ -3,12 +3,12 @@ import { type FixedItem, formatBadgeCount, useFixedItems, useMessage } from "@er
 import { Button, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipTrigger } from "@erpora/ui";
 import { useRouterState } from "@tanstack/react-router";
 import { useId } from "react";
+import { DOCK_BUTTON_CLASS } from "./dock-sizing";
 import { runCommand } from "./fixed-group";
 import { NavIcon } from "./nav-icon";
 import { useShellActions } from "./shell-context";
 
-const BUTTON_CLASS =
-  "relative size-10 rounded-lg text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-5";
+const BUTTON_CLASS = `relative ${DOCK_BUTTON_CLASS}`;
 
 /** Satu item tetap sebagai tombol ikon di Dock Pinned: tooltip (label dan pintasan) dan lencana jumlah. */
 function FixedIconButton({ item }: { item: FixedItem }) {

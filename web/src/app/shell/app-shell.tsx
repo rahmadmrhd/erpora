@@ -6,6 +6,7 @@ import { RouteErrorPage } from "../pages/pages";
 import { CollapseEdge } from "./collapse-edge";
 import { useCommandPaletteHotkey } from "./command-palette-hotkey";
 import { DeskPanel, PanelSheet } from "./desk-panel";
+import { SHELL_DOCK_WIDTH } from "./dock-sizing";
 import { useGlobalShortcuts } from "./global-shortcuts";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
@@ -52,11 +53,11 @@ const LazySettingsDialog = retryableLazy(() =>
   import("./settings/settings-dialog").then((m) => ({ default: m.SettingsDialog })),
 );
 
-// Lebar panel K-15 (14,25 rem / 3,25 rem) dan Dock 3,5 rem; bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
+// Lebar panel K-15 (14,25 rem / 3,25 rem); lebar rel Dock mengikuti strip ikon (U1); bawaan registry (16 rem / 3 rem) ditimpa lewat gaya Provider.
 const SHELL_STYLE = {
   "--sidebar-width": "14.25rem",
   "--sidebar-width-icon": "3.25rem",
-  "--dock-width": "3.5rem",
+  "--dock-width": SHELL_DOCK_WIDTH,
 } as CSSProperties;
 
 /**

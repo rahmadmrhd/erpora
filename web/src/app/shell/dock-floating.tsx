@@ -145,7 +145,7 @@ export function DockFloating() {
         <nav
           ref={pillRef}
           aria-label={t("dock.label")}
-          className="flex max-h-[calc(100svh-2rem)] w-14 flex-col items-center gap-2 rounded-2xl border border-sidebar-border bg-sidebar py-2 text-sidebar-foreground shadow-lg"
+          className="flex max-h-[calc(100svh-2rem)] w-(--dock-width) flex-col items-center gap-2 rounded-2xl border border-sidebar-border bg-sidebar py-2 text-sidebar-foreground shadow-lg"
         >
           <DockDeskList
             onSelected={() => hide(false)}

@@ -87,3 +87,22 @@ describe("UserMenu", () => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("UserMenu varian dock (U2)", () => {
+  test("avatar 32 px berkontras (latar secondary, cincin tipis), mengisi tombol terpusat, dan tombol dapat difokus", async () => {
+    renderShell(<UserMenu variant="dock" />, { user: source() });
+    const trigger = await screen.findByRole("button", { name: /^Menu akun/ });
+    const classes = trigger.className.split(/\s+/);
+    expect(classes).toContain("size-8");
+    expect(classes).toContain("hover:bg-sidebar-accent");
+    const avatar = trigger.querySelector('[data-slot="avatar"]') as HTMLElement;
+    expect(avatar).toHaveAttribute("data-size", "default");
+    expect(avatar.className).toContain("ring-1");
+    const fallback = trigger.querySelector('[data-slot="avatar-fallback"]') as HTMLElement;
+    expect(fallback.className).toContain("bg-secondary");
+    expect(fallback.className).toContain("text-secondary-foreground");
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+    expect(trigger.tabIndex).toBe(0);
+  });
+});

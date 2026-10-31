@@ -30,15 +30,12 @@ import {
 } from "react";
 import { useDeskNavigation } from "./desk-navigation";
 import { DockFixedItems } from "./dock-fixed-items";
+import { DOCK_BUTTON_CLASS, DOCK_GAP, DOCK_ITEM_SIZE } from "./dock-sizing";
 import { LogoPopover } from "./logo-popover";
 import { NavIcon } from "./nav-icon";
 import { retryableLazy } from "./retryable-lazy";
 import { ShellBoundary } from "./shell-boundary";
 import { UserMenu } from "./user-menu";
-
-/** Ukuran tombol ikon Dock (`size-10`) dan jarak antartombol (`gap-1`), dalam px. */
-export const DOCK_ITEM_SIZE = 40;
-export const DOCK_GAP = 4;
 
 /**
  * Jumlah ikon Desk yang ditampilkan dari `total` pada tinggi `availableHeight`. Bila semua muat, semuanya; bila
@@ -115,7 +112,7 @@ function DeskIconButton({
           aria-current={active ? "true" : undefined}
           aria-label={text}
           {...rest}
-          className="size-10 rounded-lg text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-5"
+          className={DOCK_BUTTON_CLASS}
         >
           <NavIcon name={desk.icon} label={text} />
         </Button>
@@ -150,7 +147,7 @@ function DeskLoadFailed({
       tabIndex={tabIndex}
       onFocus={onFocus}
       onClick={retry}
-      className="size-10 rounded-lg text-destructive [&_svg]:size-5"
+      className={`${DOCK_BUTTON_CLASS} text-destructive hover:text-destructive`}
     >
       {Icon ? <Icon aria-hidden="true" /> : null}
     </Button>
@@ -356,7 +353,7 @@ export function DockDeskList({
                 aria-label={t("dock.more", { count: hidden.length })}
                 tabIndex={shown.length === focusable ? 0 : -1}
                 onFocus={() => setFocusIndex(shown.length)}
-                className="size-10 rounded-lg text-xs font-medium"
+                className={`${DOCK_BUTTON_CLASS} text-xs font-medium`}
               >
                 {`+${hidden.length}`}
               </Button>

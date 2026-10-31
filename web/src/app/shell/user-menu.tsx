@@ -24,6 +24,7 @@ import {
 } from "@erpora/ui";
 import { useId } from "react";
 import { DisabledHint } from "./disabled-hint";
+import { DOCK_BUTTON_CLASS } from "./dock-sizing";
 import { useShellActions } from "./shell-context";
 
 function Icon({ name }: { name: string }) {
@@ -52,10 +53,20 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
   const canSignOut = source.capabilities.signOut;
   const hint = t("user.unavailable");
 
+  // Di Dock (U2) avatar 32 px mengisi tombol, dengan cincin tipis dan latar secondary agar kontras terhadap sidebar.
+  const dock = variant === "dock";
   const avatar = (
-    <Avatar size="sm" aria-hidden={variant === "panel" ? undefined : "true"}>
+    <Avatar
+      size={dock ? "default" : "sm"}
+      aria-hidden={variant === "panel" ? undefined : "true"}
+      className={dock ? "ring-1 ring-sidebar-border" : undefined}
+    >
       {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
-      <AvatarFallback>{initialsOf(name)}</AvatarFallback>
+      <AvatarFallback
+        className={dock ? "bg-secondary font-medium text-secondary-foreground" : undefined}
+      >
+        {initialsOf(name)}
+      </AvatarFallback>
     </Avatar>
   );
   const identity = (
@@ -114,7 +125,11 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-10 rounded-full">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={dock ? `${DOCK_BUTTON_CLASS} rounded-full` : "size-9 rounded-full"}
+          >
             <span className="sr-only">{`${t("user.menu")} ${name}`}</span>
             {avatar}
           </Button>

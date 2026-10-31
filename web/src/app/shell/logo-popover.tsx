@@ -28,6 +28,7 @@ import {
 import { useId } from "react";
 import { useDeskNavigation } from "./desk-navigation";
 import { DisabledHint } from "./disabled-hint";
+import { DOCK_BUTTON_CLASS } from "./dock-sizing";
 import { useShellActions } from "./shell-context";
 
 function Icon({ name }: { name: string }) {
@@ -140,7 +141,7 @@ export function LogoPopover({ variant }: { variant: "dock" | "panel" | "navbar" 
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-10">
+          <Button variant="ghost" size="icon" className={DOCK_BUTTON_CLASS}>
             <span className="sr-only">{t("logoMenu.label")}</span>
             <Mark />
           </Button>
