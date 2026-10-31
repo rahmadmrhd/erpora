@@ -234,7 +234,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 21.4_
   - [x] 14.26 Minor 8: `shadcn-verify` tanpa argumen ikut memeriksa kunci `hooks/use-mobile`; petakan ke komponen asal (`sidebar`) atau lewati.
     - _Requirements: 1.3_
-  - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (±198,3 KB pada HEAD, lihat catatan gate di bawah).
+  - [ ] 14.27 Gate putaran: `task web:check` (`ERP_REQUIRE_BUN=1`), `task i18n:check -- --strict`, `task lint arch check:gowork-off test`, `task contracts:check`, `task erpora -- module:check` untuk `example` dan `exampleaddon`, `task test:generator` (templat berubah), `task test:integration` bila menyentuh DB; `bun audit` dipantau; JS awal tetap ≤ 200 KB gzip (±198,4 KB pada HEAD, lihat catatan gate di bawah).
     - _Requirements: 21.1, 3.4_
   - [ ] 14.28 Review akhir putaran: satu agent baru (diff putaran ini dan spec, tanpa kesimpulan implementer) untuk (a) kesesuaian spec/PRD dan regresi; (b) skill `security-audit` terfokus pada perubahan: penyimpanan klien (`erpora.sidebar`, `erpora.desk`), `resolveDeskSwitchTarget`, popover dan panel, patch perilaku, `shadcn:sync`/`bunx`. Bukan audit seluruh codebase.
     - _Requirements: 20.5, 21.5_
@@ -242,13 +242,13 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
     - _Requirements: 21.5_
   - [x] 14.30 K15: ukuran tombol, ikon, dan jarak ikon Dock Pinned disamakan dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama (tes dulu: ukuran dan jarak dari sumber yang sama)
     - _Requirements: 4.10_
-  - [x] 14.31 K16: avatar di Dock Pinned diperbesar, kontras jelas, dan terpusat horizontal (tes kelas/peran, pemeriksaan browser)
+  - [x] 14.31 K16: avatar di Dock Pinned diperbesar, kontras jelas, dan terpusat horizontal (tes kelas/peran; pemeriksaan browser sudah dilakukan koordinator 1 Nov 2026, lihat catatan)
     - _Requirements: 16.1_
   - [x] 14.32 K17: ikon di Dock Pinned memiliki sorotan latar saat hover seperti item sidebar; hormati fokus keyboard (tes)
     - _Requirements: 4.11_
   - [x] 14.33 K18: dropdown logo di halaman Desks tidak memuat "Pindah Desk" dan "Semua Desk"; di halaman lain tetap lengkap (tes rute)
     - _Requirements: 6.6_
-  - [x] 14.34 K19: dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten (tes dan pemeriksaan browser; JS awal tetap ≤ 200 KB gzip)
+  - [x] 14.34 K19: dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten (tes; pemeriksaan browser sudah dilakukan koordinator 1 Nov 2026, lihat catatan; JS awal tetap ≤ 200 KB gzip)
     - _Requirements: 17.1, 17.7_
 
 ## Notes
@@ -406,15 +406,17 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 ### 14.14 dan 14.30 sampai 14.34 Hasil (commit, 1 Nov 2026)
 
 - 14.14 (K14): tes `TestList_DeskDroppedWithoutAllowedNonDashboardMenu` di `internal/platform/desks/service_test.go` ditambahkan pada `49d8025` (tes merah `desks.Service`). Saya menjalankannya ulang pada HEAD: lulus.
-- 14.30 (K15) dan 14.31 (K16), 14.32 (K17): `5b18c1e` (ukuran, jarak, dan hover Dock Pinned seragam dengan strip ikon Floating; avatar Dock diperbesar dan berkontras; pesan commit U1, U2, U3).
+- 14.30 (K15), 14.31 (K16), 14.32 (K17): `5b18c1e` (ukuran, jarak, dan hover Dock Pinned seragam dengan strip ikon Floating; avatar Dock diperbesar dan berkontras; pesan commit U1, U2, U3). Perbaikan lanjutan: `15bf2e4` (hover memakai `sidebar-accent` juga di tema gelap; tes kesetaraan ukuran dengan strip ikon, K17 dan K15).
+- Perbaikan Minor putaran ini: `0603975` (I-2, `retryableLazy.reset` hanya membuat ulang bila percobaan terakhir ditolak dan `pending` ikon Dock kembali `false`); `3147f3b` (m-2 dan m-6, label keputusan dan komentar `sidebar-state` mengikuti K15 sampai K18 dan patch K12); `4f3dceb` (tes navbar Desks menunggu tombol Cari hingga 5 detik; hanya tes).
 - 14.33 (K18): `6b9c3f0` (popover logo di halaman Desks tanpa Pindah Desk dan Semua Desk; pesan commit U4).
-- 14.34 (K19): `003f8a0` (dialog Settings lebih besar; navigasi menjadi tab horizontal di ponsel).
-- Verifikasi browser untuk K15 sampai K19 belum tercatat terpisah; centang didasarkan pada commit di atas.
+- 14.34 (K19): `003f8a0` (dialog Settings lebih besar; navigasi menjadi tab horizontal di ponsel). Perbaikan lanjutan: `590019e` (m-3, orientasi tab Settings memakai `useIsNarrow` dengan nilai awal sinkron, sehingga frame pertama di ponsel sudah horizontal).
+- Verifikasi browser (laporan koordinator, 1 Nov 2026; tidak diverifikasi ulang oleh penulis dokumen): K15 (Dock Pinned rapat dan seragam dengan strip Floating); K16 (avatar bulat, jelas, dan terpusat); K17 (hover dengan pointer sungguhan di tema gelap: ikon `oklch(0.269)` terhadap latar rel `oklch(0.205)`); K18 (menu logo di halaman Desks hanya memuat Edit sidebar nonaktif, Bantuan dan pintasan, dan Tentang); K19 (dialog Settings ±1000×620 px dengan pembatas penuh; tab horizontal di ponsel diverifikasi agen pada 375×700).
+- Centang 14.30 sampai 14.34 didasarkan pada commit di atas dan verifikasi browser koordinator.
 
 ### Catatan gate putaran perbaikan 2 (dilaporkan koordinator; belum diverifikasi ulang oleh penulis dokumen)
 
-- Frontend HEAD `d8f23eb` (sebelum putaran ini): `bun test` 1472 lulus, 0 gagal.
-- JS awal gzip: ±198,3 KB dari 200 KB (sebelumnya 197,7 KB pada 8.3 sampai 8.5).
+- Frontend HEAD sebelum putaran Minor m-1 sampai M-6 (laporan koordinator): `bun test` 1483 lulus, 0 gagal. Sebelumnya 1472 lulus, 0 gagal pada `d8f23eb`.
+- JS awal gzip: ±198,4 KB dari 200 KB (sebelumnya ±198,3 KB; 197,7 KB pada 8.3 sampai 8.5).
 - Go dan kontrak: hijau.
 - Integrasi PostgreSQL lewat tunnel VPS: lulus.
 - `task test:generator`: lulus, 639 detik, pada `d8f23eb`.
