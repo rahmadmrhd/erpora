@@ -83,7 +83,7 @@ export function SummaryPage() {
           <p className="text-2xl font-semibold">{noteCount}</p>
           <Button asChild variant="outline" size="sm">
             {/* Tautan antar-modul: slug dari entry paket @erpora/module-example (bukan deep import; aturan F2). */}
-            <Link to={`/${exampleModule.slug}`}>
+            <Link to={`/${exampleModule.slug}/notes`}>
               <Message message={msg("example-addon", "page.summary.view_notes")} />
             </Link>
           </Button>

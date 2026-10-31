@@ -32,7 +32,7 @@ let restore: (() => void) | undefined;
 afterEach(() => restore?.());
 
 function open() {
-  return renderModuleRoute({ module: frontendModule, path: "/example", catalogs });
+  return renderModuleRoute({ module: frontendModule, path: "/example/notes", catalogs });
 }
 
 describe("halaman /example (daftar catatan)", () => {

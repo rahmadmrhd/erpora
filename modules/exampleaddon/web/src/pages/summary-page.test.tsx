@@ -10,7 +10,7 @@ let restore: (() => void) | undefined;
 afterEach(() => restore?.());
 
 function open() {
-  return renderModuleRoute({ module: frontendModule, path: "/example-addon", catalogs });
+  return renderModuleRoute({ module: frontendModule, path: "/example-addon/summary", catalogs });
 }
 
 describe("halaman /example-addon (ringkasan)", () => {
@@ -42,7 +42,7 @@ describe("halaman /example-addon (ringkasan)", () => {
     restore = f.restore;
     await open();
     const link = await screen.findByRole("link", { name: "Lihat catatan" });
-    expect(link).toHaveAttribute("href", "/example");
+    expect(link).toHaveAttribute("href", "/example/notes");
   });
 
   test("aksi halaman 'Segarkan' memuat ulang ringkasan", async () => {
