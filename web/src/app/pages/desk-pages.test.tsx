@@ -6,7 +6,7 @@ import {
   makeDeskItem,
   SHOW_DESKS_STATE,
 } from "@erpora/platform-web";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DashboardPage } from "./dashboard-page";
 import { DeskEntry } from "./desk-entry";
@@ -113,6 +113,69 @@ describe("DeskEntry (R10.3, R10.5)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Coba lagi" }));
     await waitFor(() => expect(n).toBeGreaterThan(1));
     expect(app.router.state.location.pathname).toBe("/");
+  });
+});
+
+describe("penanda showDesks dikonsumsi (R10.5)", () => {
+  test("tampilan Desks dipertahankan, penanda dihapus dari entri riwayat; reload mengikuti penentuan biasa", async () => {
+    sessionStorage.setItem("erpora.desk.tab", "example");
+    const first = renderPage({ desks, routes, state: { ...SHOW_DESKS_STATE } });
+    expect(await screen.findByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    await waitFor(() => expect(first.history.location.state).not.toHaveProperty("showDesks"));
+    // Tampilan tidak berubah walau penanda sudah dihapus dari entri.
+    expect(screen.getByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    expect(first.history.location.pathname).toBe("/");
+    // Muat ulang: aplikasi baru di atas riwayat yang sama (history.state dipertahankan peramban).
+    first.unmount();
+    const reloaded = renderPage({ desks, routes, history: first.history });
+    expect(await screen.findByText("halaman example")).toBeInTheDocument();
+    expect(reloaded.history.location.pathname).toBe("/example");
+  });
+
+  test("hanya penanda yang dihapus; state lain di entri tetap", async () => {
+    const app = renderPage({ desks, routes, state: { ...SHOW_DESKS_STATE, lain: 1 } });
+    expect(await screen.findByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    await waitFor(() => expect(app.history.location.state).not.toHaveProperty("showDesks"));
+    expect(app.history.location.state).toMatchObject({ lain: 1 });
+  });
+
+  test("Home lagi saat Desks tampil: tetap Desks (penanda baru dikonsumsi lagi), tanpa pengalihan", async () => {
+    sessionStorage.setItem("erpora.desk.tab", "example");
+    const app = renderPage({ desks, routes, state: { ...SHOW_DESKS_STATE } });
+    expect(await screen.findByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    await waitFor(() => expect(app.history.location.state).not.toHaveProperty("showDesks"));
+    await act(async () => {
+      await app.router.navigate({ to: "/", state: SHOW_DESKS_STATE as never });
+    });
+    await waitFor(() => expect(app.history.location.state).not.toHaveProperty("showDesks"));
+    expect(screen.getByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    expect(app.history.location.pathname).toBe("/");
+  });
+
+  test("navigasi ke / tanpa penanda saat Desks tampil: kembali ke penentuan biasa", async () => {
+    sessionStorage.setItem("erpora.desk.tab", "example");
+    const app = renderPage({ desks, routes, state: { ...SHOW_DESKS_STATE } });
+    expect(await screen.findByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    await waitFor(() => expect(app.history.location.state).not.toHaveProperty("showDesks"));
+    await act(async () => {
+      await app.router.navigate({ to: "/", search: { a: "1" } as never });
+    });
+    expect(await screen.findByText("halaman example")).toBeInTheDocument();
+  });
+
+  test("Back ke entri Desks (penanda sudah dikonsumsi) mengikuti penentuan biasa", async () => {
+    sessionStorage.setItem("erpora.desk.tab", "example");
+    const app = renderPage({ desks, routes, state: { ...SHOW_DESKS_STATE } });
+    expect(await screen.findByRole("heading", { name: "Desk" })).toBeInTheDocument();
+    await waitFor(() => expect(app.history.location.state).not.toHaveProperty("showDesks"));
+    await act(async () => {
+      await app.router.navigate({ to: "/platform" });
+    });
+    expect(await screen.findByText("halaman platform")).toBeInTheDocument();
+    await act(async () => {
+      app.history.back();
+    });
+    expect(await screen.findByText("halaman example")).toBeInTheDocument();
   });
 });
 

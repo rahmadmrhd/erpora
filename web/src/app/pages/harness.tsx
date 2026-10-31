@@ -46,6 +46,8 @@ export interface RenderPageOptions {
   /** Alamat awal (state riwayat dapat diberikan lewat `state`). */
   path?: string;
   state?: Record<string, unknown>;
+  /** Memakai riwayat yang sudah ada (meniru muat ulang: aplikasi baru, riwayat peramban sama). */
+  history?: ReturnType<typeof createMemoryHistory>;
   desks: readonly Desk[];
   routes: readonly HarnessRoute[];
   /** `fetch` palsu yang menggantikan respons Desk (mis. galat). */
@@ -70,8 +72,8 @@ export function renderPage(opts: RenderPageOptions) {
   const routes = opts.routes.map((r) =>
     createRoute({ getParentRoute: () => root, path: r.path, component: r.component }),
   );
-  const history = createMemoryHistory({ initialEntries: [opts.path ?? "/"] });
-  if (opts.state) history.replace(opts.path ?? "/", opts.state);
+  const history = opts.history ?? createMemoryHistory({ initialEntries: [opts.path ?? "/"] });
+  if (opts.state && !opts.history) history.replace(opts.path ?? "/", opts.state);
   const router = createRouter({
     routeTree: root.addChildren(routes),
     history,

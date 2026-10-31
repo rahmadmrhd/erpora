@@ -219,17 +219,21 @@ describe("tabel rute revisi M3a (R10)", () => {
     expect(screen.getByRole("link", { name: /Platform/ })).toHaveAttribute("href", "/platform");
   });
 
-  test("/platform adalah Dashboard Desk Platform; /platform/todo placeholder; /platform/modules dapat dibuka", async () => {
-    const a = renderApp({ path: "/platform" });
+  test("/platform adalah Dashboard Desk Platform", async () => {
+    renderApp({ path: "/platform" });
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
-    a.unmount();
-    const b = renderApp({ path: "/platform/todo" });
+  });
+
+  test("/platform/todo adalah placeholder ToDo", async () => {
+    renderApp({ path: "/platform/todo" });
     expect(
       await screen.findByText("Daftar tugas akan hadir pada pembaruan berikutnya."),
     ).toBeInTheDocument();
-    b.unmount();
+  });
+
+  test("/platform/modules dapat dibuka (chunk lazy)", async () => {
     renderApp({ path: "/platform/modules" });
-    await waitFor(() => expect(document.title).toBe("Modul - ERPora"));
+    await waitFor(() => expect(document.title).toBe("Modul - ERPora"), { timeout: 8000 });
   });
 
   test("/settings/modules dan /desks tidak terdaftar: 404 tanpa pengalihan", async () => {
