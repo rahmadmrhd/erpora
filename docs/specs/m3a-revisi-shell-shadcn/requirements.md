@@ -82,7 +82,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 7. THE Dock SHALL dapat dioperasikan dengan keyboard (peran `navigation`/`toolbar` yang benar, panah untuk berpindah, Enter untuk memilih) dan setiap ikon SHALL punya nama aksesibel.
 8. THE urutan ikon SHALL mengikuti urutan Desk dari backend (Requirement 12); pengaturan urutan oleh pengguna adalah M3b.
 9. WHEN pengguna mengklik ikon Desk pada mode Pinned atau Floating (termasuk Desk yang sedang aktif), THE Dock SHALL membuka popover di sisi kanan ikon berisi daftar menu Desk itu bergaya item sidebar (Dashboard, menu, dan grup yang dapat dibuka); memilih item menavigasi ke item itu dan menetapkan Desk itu sebagai Desk saat ini. Desk tidak berpindah sebelum item dipilih (K8, 31 Okt 2026).
-10. THE ukuran tombol, ikon, dan jarak ikon Dock Pinned SHALL sama dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama untuk keduanya (K15, 1 Nov 2026).
+10. THE ukuran tombol, ikon, dan jarak ikon Dock Pinned SHALL sama dengan strip ikon Floating (lebih rapat), dengan satu sumber ukuran bersama untuk keduanya (K15, 1 Nov 2026). Pada strip ikon Floating, tombol-tombol (logo, Cari, Notifikasi, ToDo, dan item menu Desk) SHALL terpusat horizontal, dengan jarak kiri sama dengan kanan (K21, 1 Nov 2026).
 11. THE ikon di Dock Pinned SHALL memiliki sorotan latar saat hover seperti item sidebar (K17, 1 Nov 2026).
 12. WHEN tinggi Dock tidak cukup, Desk yang ikonnya tersisih SHALL dapat dibuka lewat submenu `+N` (`OverflowDeskSub`), yang berisi menu Desk bergaya item sidebar seperti popover AC 9; berlaku pada Pinned dan Floating (tambahan K8, disetujui pemilik produk 1 Nov 2026).
 
@@ -242,7 +242,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE avatar SHALL tampil di dasar Dock (Pinned) atau di dasar panel bersama nama dan email (Floating) dan membuka menu berisi **Settings**, **Reload**, dan **Logout**. Pada Dock Pinned, avatar SHALL diperbesar, berkontras jelas, dan terpusat horizontal (K16, 1 Nov 2026).
+1. THE avatar SHALL tampil di dasar Dock (Pinned) atau di dasar panel bersama nama dan email (Floating) dan membuka menu berisi **Settings**, **Reload**, dan **Logout**. Pada Dock Pinned, avatar SHALL diperbesar, berkontras jelas, dan terpusat horizontal (K16, 1 Nov 2026). Pada strip ikon Floating, avatar SHALL berukuran 32 px, berkontras jelas, dan terpusat seperti di Dock Pinned; saat panel terbuka tetap `sm` (K21, 1 Nov 2026).
 2. THE Logout dan aksi akun yang bergantung identitas SHALL dinonaktifkan dengan keterangan sampai PRD-001 menyediakannya (sama seperti M3a).
 3. THE menu SHALL tidak berisi "My Space" (tidak ada konsepnya di ERPora).
 
@@ -331,7 +331,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 | 8 | Layout Compact/Full Width di Settings (R17.2) | Ditunda ke M3d (sementara, dapat ditinjau ulang) |
 | 9 | Isi minimal Preferences (R17.3) | Bahasa dan Zona waktu (sementara, dapat ditinjau ulang) |
 
-## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14) dan 1 Nov 2026 (K15–K20 dan konfirmasi)
+## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14) dan 1 Nov 2026 (K15–K21 dan konfirmasi)
 
 Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan review). Keputusan ini **menang atas teks requirement lama** di atas bila berbeda. Setiap butir sudah diterapkan ke requirement yang disebut pada tabel, dan dicatat di PRD-000 Q40 butir 24 serta ADR-0015. Pemilik produk menyetujui seluruh butir (K13 pada 31 Okt 2026 memutuskan CLI tetap `bunx`, tanpa perubahan requirement).
 
@@ -358,6 +358,7 @@ Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan r
 | K19 | Dialog Settings diperbesar secara nyata di desktop; di mode mobile navigasi kiri menjadi tab horizontal di atas konten. | R17.1, R17.7 (baru) |
 | K20 | Klik ikon Desk di Dock mode Floating membuka popover menu Desk (seperti K8 di Pinned), bukan memindah Desk langsung; `switchDesk` tetap dipakai oleh popover logo dan palet. | R4.2, R4.9 (diubah) |
 | K8 (tambahan) | Submenu `+N` (`OverflowDeskSub`) memuat Desk yang ikonnya tersisih, berlaku pada Pinned dan Floating. | R4.12 (baru) |
+| K21 | Strip ikon Floating (mode diciutkan): tombol logo, Cari, Notifikasi, ToDo, dan item menu Desk terpusat horizontal (jarak kiri sama dengan kanan); avatar pengguna di strip diperbesar menjadi 32 px, berkontras jelas, dan terpusat (saat panel terbuka tetap `sm`). Keputusan pemilik produk dari tangkapan layar mode Floating diciutkan. | R4.10, R16.1 (diperluas ke strip Floating) |
 | Konfirmasi | Pemilik produk menyetujui (1 Nov 2026): (a) avatar navbar halaman Desks `size-9`, seragam dengan lonceng (di luar K16); (b) ambang tab Settings mobile 768 px (D-15 ditutup); (c) submenu `+N` sebagai tambahan K8; (d) keputusan komponen dicatat di ADR-0015, bukan ADR-0011. | R10.9, R17.1, R4.12, R21.4 |
 
 **Temuan review yang sesuai spek** (dikerjakan): I-1 (R11.6), I-2 (R17.3 dan R17.4, tanpa perubahan teks), I-3 (R20.4, tanpa perubahan teks), I-4 (R4.5, tanpa perubahan teks), Minor 1 (R15.1), Minor 2 sampai 8 (tanpa perubahan requirement; dilacak di `tasks.md` grup 14).
