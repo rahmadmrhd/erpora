@@ -147,7 +147,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
   - [x] 11.1 PRD, ADR, dan catatan keputusan
     - ADR-0006 dan PRD-000 (daftar slug 25 menjadi 26, tambah `desks`); ADR-0011 (komponen persis shadcn, mekanisme kunci snapshot D-1, supersede sebagian); PRD-000 Q40: catatan hasil serta pencatatan D-1 sampai D-10 yang menyimpang dari tulisan sebelumnya (nama `platform.desks.update` bukan `desk.update`; R1.3 menjadi kunci snapshot; selisih ukuran 36 vs 34 px). `requirements.md` R1.3 dan R13.1 sudah diubah pada 31 Okt 2026 (bersamaan penulisan tasks); di sini cukup pastikan PRD-000 Q40 memuat keputusan yang sama.
     - _Requirements: 21.4, 21.5_
-  - [ ] 11.2 Panduan developer
+  - [x] 11.2 Panduan developer
     - `docs/module-sdk/{frontend,generators,creating-a-module}.md` (properti `desk`, rute `/<slug>`, tanpa `navigation`, `assertDeskRoutes`), `packages/ui/README.md` (alur `shadcn:sync`/`check`/`verify`, aturan "persis shadcn", lapisan `extended`).
     - _Requirements: 21.4_
   - [ ] 11.3 `CLAUDE.md` dan `AGENTS.md`
@@ -267,6 +267,12 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 - **PRD-000 Q40** ditambah butir 17 sampai 23: mekanisme kunci snapshot (R1.3), patch label dan token (R1.1), pemasangan komponen (`drawer` tidak dipasang, `command` disetujui, `sonner` dengan `next-themes`), permission `platform.desks.update` (bukan `desk.update`), model Desk di manifest tanpa `navigation` (D-2, D-3, D-5, D-9), penyimpanan `sessionStorage` dan `localStorage` tanpa cookie (D-10), dan keputusan desain yang tidak menyimpang (D-6, D-7, D-8, ambang dan Dock bawaan). Selisih 36 px dan 34 px sudah ada di butir (16).
 - **Verifikasi slug 26 (tanpa perubahan):** ADR-0006 butir 7 dan PRD-000 Q37 menyebut 26 slug dengan `desks`; `internal/platform/modules/registry/reserved.go` memuat `ui`, `sdk`, dan `desks`.
 - Berkas diubah: `docs/adr/0015-*.md` (baru), `docs/adr/0011-*.md` (status), `docs/prd/PRD-000-inisialisasi-project.md` (Q40).
+
+### 11.2 Hasil (31 Okt 2026)
+
+- `docs/module-sdk/frontend.md`: `defineModule` tanpa `navigation` (field dan error yang berlaku), properti `desk` di manifest dengan aturan `to`/`permission`, rute `/<slug>/<halaman>` dengan `attachModuleRoutes` (indeks milik shell, ditolak bila dari modul), `listModuleRoutePaths`, `assertDeskRoutes`, `/platform/modules`, barrel dan entry sekunder (`@erpora/ui/toaster`, `@erpora/ui/command`), padanan komponen lama, dan batas "belum tersedia" M3b.
+- `docs/module-sdk/generators.md` bagian 9 dan `creating-a-module.md`: isi `make:module --frontend` yang sekarang (`desk` di templat `module.json`, `items-page`, rute `/items` tanpa indeks, kunci i18n contoh), aturan `desk` untuk modul ber-`web/`, dan contoh manifest sesuai `modules/example/module.json`.
+- `packages/ui/README.md`: bagian "Memasang komponen baru" diganti alur `shadcn:sync`/`shadcn:check`/`shadcn:verify`, patch deklaratif, kunci snapshot, dan lapisan `extended`.
 
 ## Task Dependency Graph
 

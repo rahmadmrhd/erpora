@@ -49,9 +49,28 @@ Manifest divalidasi terhadap `contracts/module.schema.json` saat startup. Objek 
   ],
   "capabilities": ["example.ping.read", "example.notes.read"],
   "migrations": { "strategy": "versioned" },
-  "offline": { "mode": "online-only" }
+  "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
+  "offline": { "mode": "online-only" },
+  "desk": {
+    "label": "desk.title",
+    "icon": "file-text",
+    "menus": [
+      { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+    ]
+  }
 }
 ```
+
+Properti `desk` adalah menu Desk modul. Server membacanya untuk menyusun daftar Desk per pengguna (`GET /api/platform/desks`), sehingga frontend tidak lagi mendeklarasikan navigasi. Modul yang punya folder `web/` wajib mendeklarasikannya; modul tanpa frontend boleh tanpa `desk` (Q40 butir 16). Aturannya:
+
+- `label`, `menus[].label`, dan `dashboard.label` adalah kunci i18n di namespace `<slug>`, dan harus ada di katalog `i18n/id.json` dan `i18n/en.json`.
+- `icon` memakai nama dari `iconRegistry` di `@erpora/ui`.
+- `menus` berisi item atau grup satu tingkat. Setiap `id` unik dalam satu Desk, termasuk id anak grup.
+- `to` relatif terhadap base route modul (`/notes`), tanpa skema, host, `//`, query, atau fragmen. Tidak boleh `/`: indeks `/<slug>` adalah Dashboard bawaan shell dan tidak dideklarasikan sebagai menu.
+- `permission` harus salah satu `capabilities` modul. Item disembunyikan bila pengguna tidak memilikinya.
+- Dashboard tidak dihitung sebagai menu yang diizinkan. Desk tanpa menu yang diizinkan tidak tampil.
+
+Skema lengkap ada di `contracts/module.schema.json` (`desk`, `deskItem`, `deskGroup`). Rujukan rute dan pengujiannya dijelaskan di [`frontend.md`](frontend.md).
 
 Aturan yang diperiksa registry:
 
@@ -67,6 +86,7 @@ Aturan yang diperiksa registry:
 | `capabilities` | Harus berawalan `<slug>.` dan unik antarmodul. Setiap permission di `Handle` harus ada di sini. |
 | `migrations.strategy` | `versioned` atau `none`. |
 | `offline.mode` | `online-only`, `offline-read`, `offline-draft`, atau `offline-write`. |
+| `desk` | Wajib untuk modul berdirektori `web/` (`module:check`, aturan `DESK`). Id menu unik dalam Desk, `to` bersih dan tidak berupa indeks, `permission` termasuk `capabilities`, dan label ada di katalog. Lihat bagian 2 di atas. |
 
 Field yang sudah dicadangkan untuk marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`, `license`) dan PRD-001 (`resources`, `scope_dimensions`, `default_roles`, `settings`) boleh dibiarkan kosong.
 
@@ -239,7 +259,7 @@ Hanya untuk memahami apa yang dilakukan generator. Contoh berikut membuat modul 
 
 3. **Ubah import** dengan mengganti `erpora/modules/example` menjadi `erpora/modules/inventory` pada seluruh file `.go`. Cari dengan `git grep -n "erpora/modules/example"`.
 
-4. **Ubah `module.json`**: `key`, `slug`, `name`, `publisher`, `version` (mulai `1.0.0`), `capabilities` (berawalan `inventory.`), `dependencies` (hanya modul yang benar-benar diimpor), dan `migrations`. Ganti semua `Handle` agar memakai permission yang ada di `capabilities`.
+4. **Ubah `module.json`**: `key`, `slug`, `name`, `publisher`, `version` (mulai `1.0.0`), `capabilities` (berawalan `inventory.`), `dependencies` (hanya modul yang benar-benar diimpor), `migrations`, dan `desk` (`label`, `menus[].to`, dan `permission` mengikuti slug serta capabilities baru). Bila `web/` ikut disalin, ubah `package.json` (`@erpora/module-inventory`), dan pastikan `module.ts` tidak memuat `navigation` dan `routes.tsx` tidak mendaftarkan rute indeks. Ganti semua `Handle` agar memakai permission yang ada di `capabilities`.
 
 5. **Daftarkan modul** di tiga tempat:
    - `go.work`: tambahkan `./modules/inventory` pada blok `use`.
