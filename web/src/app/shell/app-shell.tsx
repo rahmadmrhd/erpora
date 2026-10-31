@@ -4,6 +4,7 @@ import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
 import { type CSSProperties, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { RouteErrorPage } from "../pages/pages";
 import { CollapseEdge } from "./collapse-edge";
+import { useCommandPaletteHotkey } from "./command-palette-hotkey";
 import { DeskPanel, PanelSheet } from "./desk-panel";
 import { Dock } from "./dock";
 import { useGlobalShortcuts } from "./global-shortcuts";
@@ -17,6 +18,11 @@ import { useIsCompact } from "./use-compact";
 // Dock Floating (pil, hot-edge, pintasan) dimuat malas: bagian berat di luar bundel awal (NFR-04).
 const LazyDockFloating = lazy(() =>
   import("./dock-floating").then((m) => ({ default: m.DockFloating })),
+);
+
+// Palet perintah (cmdk) hanya ada di chunk malas ini; pintasan Ctrl+K hidup di bundel awal dan memuatnya saat pertama dipakai.
+const LazyCommandPalette = lazy(() =>
+  import("./command-palette").then((m) => ({ default: m.CommandPalette })),
 );
 
 // Panel Notifikasi dan dialog Settings dimuat malas saat pertama dibuka (bagian berat di luar bundel awal).
@@ -51,6 +57,9 @@ function ContentSkeleton() {
 function RouteAnnouncer({ main }: { main: React.RefObject<HTMLElement | null> }) {
   const title = useRouteTitle();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Lokasi router berubah lebih dulu daripada route yang cocok (`useMatches`) selesai dimuat: mengumumkan saat itu
+  // akan membacakan judul halaman sebelumnya. Pengumuman menunggu router `idle` (judul sudah milik halaman baru).
+  const idle = useRouterState({ select: (s) => s.status === "idle" });
   const [announcement, setAnnouncement] = useState("");
   const previous = useRef<string | null>(null);
 
@@ -59,12 +68,13 @@ function RouteAnnouncer({ main }: { main: React.RefObject<HTMLElement | null> })
   }, [title]);
 
   useEffect(() => {
+    if (!idle) return;
     if (previous.current !== null && previous.current !== pathname) {
       setAnnouncement(title);
       main.current?.focus();
     }
     previous.current = pathname;
-  }, [pathname, title, main]);
+  }, [idle, pathname, title, main]);
 
   return (
     <div aria-live="polite" role="status" data-testid="route-announcer" className="sr-only">
@@ -94,6 +104,7 @@ export function AppShell() {
   }, [compact]);
 
   // Overlay dipasang saat pertama dibuka lalu dipertahankan (animasi tutup tetap berjalan, fokus kembali ke pemicu).
+  const [palette, setPalette] = useState({ mounted: false, open: false });
   const [notifications, setNotifications] = useState({ mounted: false, open: false });
   const [settings, setSettings] = useState<{
     mounted: boolean;
@@ -103,7 +114,7 @@ export function AppShell() {
 
   const actions = useMemo<ShellActions>(
     () => ({
-      openPalette: () => {},
+      openPalette: () => setPalette({ mounted: true, open: true }),
       openNotifications: () => setNotifications({ mounted: true, open: true }),
       openSettings: (section) => setSettings({ mounted: true, open: true, section }),
       reload: () => window.location.reload(),
@@ -111,6 +122,7 @@ export function AppShell() {
     [],
   );
 
+  useCommandPaletteHotkey(actions.openPalette);
   const { resolved, setPreference } = useTheme();
   useGlobalShortcuts({
     toggleTheme: () => setPreference(resolved === "dark" ? "light" : "dark"),
@@ -190,6 +202,14 @@ export function AppShell() {
             </CatchBoundary>
           </main>
         </div>
+        {palette.mounted ? (
+          <Suspense fallback={null}>
+            <LazyCommandPalette
+              open={palette.open}
+              onOpenChange={(open) => setPalette({ mounted: true, open })}
+            />
+          </Suspense>
+        ) : null}
         {notifications.mounted ? (
           <Suspense fallback={null}>
             <LazyNotificationPanel
