@@ -89,6 +89,7 @@ paths:
                         - { type: item, id: notes, label: { ns: example, key: nav.notes }, to: /example/notes, ownerDesk: example }
                   revision: 3f9a1c20b7d84e55a1b2c3d4e5f60718
         '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+        '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '503': { $ref: 'erp:common#/components/responses/NotReady' }
   /api/platform/i18n/{locale}/{namespace}:

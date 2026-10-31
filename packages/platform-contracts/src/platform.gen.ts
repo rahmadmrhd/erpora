@@ -717,6 +717,7 @@ export interface operations {
         };
         content?: never;
       };
+      400: components["responses"]["common.BadRequest"];
       403: components["responses"]["common.PermissionDenied"];
       503: components["responses"]["common.NotReady"];
     };
