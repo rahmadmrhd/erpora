@@ -1,17 +1,46 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { PREF_KEYS, readPref, writePref } from "./index";
+import { PREF_KEYS, readDockMode, readPref, writeDockMode, writePref } from "./index";
 
 afterEach(() => {
   localStorage.clear();
 });
 
 describe("prefs", () => {
-  test("kunci preferensi UI tetap tiga: tema, sidebar, bahasa", () => {
+  test("kunci preferensi UI: tema, sidebar, bahasa, mode Dock, dan Desk terakhir", () => {
     expect(PREF_KEYS).toEqual({
       theme: "erpora.theme",
       sidebar: "erpora.sidebar",
       locale: "erpora.locale",
+      dock: "erpora.dock",
+      desk: "erpora.desk",
     });
+  });
+
+  test("mode Dock: bawaan floating; hanya pinned/floating diterima", () => {
+    expect(readDockMode()).toBe("floating");
+    writeDockMode("pinned");
+    expect(localStorage.getItem("erpora.dock")).toBe("pinned");
+    expect(readDockMode()).toBe("pinned");
+    localStorage.setItem("erpora.dock", "<x>");
+    expect(readDockMode()).toBe("floating");
+    writeDockMode("floating");
+    expect(readDockMode()).toBe("floating");
+  });
+
+  test("mode Dock: penyimpanan melempar menghasilkan bawaan tanpa galat", () => {
+    const get = spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    const set = spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("quota", "QuotaExceededError");
+    });
+    try {
+      expect(readDockMode()).toBe("floating");
+      expect(() => writeDockMode("pinned")).not.toThrow();
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
   });
 
   test("tulis lalu baca; kunci yang tidak ada menghasilkan null", () => {
