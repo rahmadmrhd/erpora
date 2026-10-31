@@ -251,7 +251,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**. Pada mode mobile, navigasi kiri SHALL menjadi tab horizontal di atas konten (K19, 1 Nov 2026).
+1. THE Settings SHALL berupa dialog dua kolom (navigasi kiri, konten kanan) dengan bagian **Appearance** dan **Preferences**. Pada mode mobile, navigasi kiri SHALL menjadi tab horizontal di atas konten (K19, 1 Nov 2026). "Mode mobile" untuk orientasi ini adalah lebar jendela di bawah 768 px (`useIsNarrow`, `(max-width: 767px)`), berbeda dari ambang 1024 px panel shell (D-15). Ambang 768 px adalah rekomendasi reviewer dan belum ditolak pemilik produk; pemilik produk dapat meminta 1024 px.
 2. THE **Appearance** SHALL memuat **Tema** (Otomatis/Terang/Gelap, berupa kartu pratinjau) dan **Dock** (Pinned/Floating, berupa kartu pratinjau); **Layout** (Compact/Full Width) ditunda ke M3d bersama form (keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 3. THE **Preferences** SHALL memuat **Bahasa** memakai runtime `i18n-platform` dan **Zona waktu** (isi minimal ini keputusan sementara 31 Okt 2026, dapat ditinjau ulang).
 4. THE perubahan SHALL tersimpan otomatis per pengguna dan berlaku seketika; penyimpanan SHALL memakai `localStorage` untuk preferensi UI (tema, mode Dock, keadaan panel, bahasa) dan SHALL tidak menyimpan data sensitif.
