@@ -306,7 +306,7 @@ export function Dock() {
     <nav
       aria-label={t("dock.label")}
       data-slot="dock"
-      className="flex h-full w-(--dock-width) shrink-0 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-2 text-sidebar-foreground"
+      className="relative z-20 flex h-full w-(--dock-width) shrink-0 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-2 text-sidebar-foreground"
     >
       <LogoPopover variant="dock" />
       <DockFixedItems />

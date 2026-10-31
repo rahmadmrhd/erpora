@@ -102,7 +102,7 @@ export function DeskPanel({ variant }: { variant: PanelVariant }) {
           <LogoPopover variant="panel" />
         </SidebarHeader>
       ) : null}
-      <SidebarContent>
+      <SidebarContent className="overflow-x-hidden">
         <nav
           aria-label={ui("sidebar.label")}
           id={DESK_PANEL_ID}

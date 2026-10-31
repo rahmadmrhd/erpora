@@ -39,6 +39,30 @@ describe("AppShell: Dock dan panel", () => {
     );
   });
 
+  test("Pinned (K3): panel meluncur di bawah Dock (bukan melintasinya), tersembunyi saat ciut, dan tanpa transisi saat reduced-motion", async () => {
+    localStorage.setItem("erpora.dock", "pinned");
+    localStorage.setItem("erpora.sidebar", "collapsed");
+    renderApp({ path: "/alpha/home" });
+    await screen.findByRole("navigation", { name: "Dock Desk" });
+    const container = document.querySelector('[data-slot="sidebar-container"]') as HTMLElement;
+    const classes = container.className.split(/\s+/);
+    // Ciut: tepi kiri panel berhenti di balik Dock (dock - lebar panel), bukan di -lebar panel yang melintasi Dock.
+    expect(classes).toContain(
+      "group-data-[collapsible=offcanvas]:left-[calc(var(--dock-width)-var(--sidebar-width))]",
+    );
+    expect(classes).not.toContain(
+      "group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]",
+    );
+    // Panel tak dapat difokus saat tersembunyi; visibilitas ikut bertransisi agar tetap terlihat selama meluncur.
+    expect(classes).toContain("group-data-[collapsible=offcanvas]:invisible");
+    expect(classes).toContain("transition-[left,right,width,visibility]");
+    expect(classes).toContain("motion-reduce:transition-none");
+    // Dock di atas panel (z-index) agar panel yang meluncur tertutup Dock.
+    const dock = screen.getByRole("navigation", { name: "Dock Desk" });
+    expect(dock.className).toContain("z-20");
+    expect(dock.className).toContain("relative");
+  });
+
   test("klik pembatas menciutkan panel dan status tersimpan di erpora.sidebar", async () => {
     const user = userEvent.setup();
     renderApp({ path: "/alpha/home" });

@@ -114,6 +114,17 @@ describe("DeskPanel: isi dan urutan", () => {
     expect(separator.className).not.toContain("data-[orientation=horizontal]:w-full");
   });
 
+  test("isi panel tidak pernah menggulir horizontal (K4): konten sidebar overflow-x tersembunyi dan nav min-w-0", async () => {
+    for (const variant of ["pinned", "floating", "sheet"] as const) {
+      const { unmount } = renderShell(<DeskPanel variant={variant} />, { desks });
+      const nav = await ready();
+      expect(nav.className).toContain("min-w-0");
+      const content = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement;
+      expect(content.className).toContain("overflow-x-hidden");
+      unmount();
+    }
+  });
+
   test("Floating dan sheet: logo di kepala dan pengguna di dasar", async () => {
     for (const variant of ["floating", "sheet"] as const) {
       const { unmount } = renderShell(<DeskPanel variant={variant} />, { desks });

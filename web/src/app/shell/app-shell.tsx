@@ -40,6 +40,20 @@ const SHELL_STYLE = {
   "--dock-width": "3.5rem",
 } as CSSProperties;
 
+/**
+ * Panel Pinned (K3): berdiri di samping Dock. Ciut, tepi kirinya berhenti di balik Dock (`dock - lebar panel`, bukan
+ * `-lebar panel` bawaan shadcn yang membuat panel meluncur melintasi Dock); Dock berada di atas panel (z-20 vs z-10).
+ * Saat ciut panel `invisible` (tidak dapat difokus); visibilitas ikut bertransisi sehingga tetap terlihat selama
+ * meluncur. `motion-reduce` mematikan transisi; lebar `gap` mengikuti transisi shadcn yang sama.
+ */
+const PINNED_PANEL_CLASS = [
+  "left-(--dock-width)",
+  "group-data-[collapsible=offcanvas]:left-[calc(var(--dock-width)-var(--sidebar-width))]",
+  "group-data-[collapsible=offcanvas]:invisible",
+  "transition-[left,right,width,visibility]",
+  "motion-reduce:transition-none",
+].join(" ");
+
 function ContentSkeleton() {
   return (
     <div className="flex flex-col gap-3 p-4" aria-hidden="true">
@@ -163,7 +177,7 @@ export function AppShell() {
             {dockMode === "pinned" ? <Dock /> : null}
             <Sidebar
               collapsible={dockMode === "pinned" ? "offcanvas" : "icon"}
-              className={dockMode === "pinned" ? "left-(--dock-width)" : undefined}
+              className={dockMode === "pinned" ? PINNED_PANEL_CLASS : undefined}
             >
               <DeskPanel variant={dockMode} />
             </Sidebar>
