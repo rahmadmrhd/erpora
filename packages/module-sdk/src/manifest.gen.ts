@@ -1,5 +1,22 @@
 // Dibangkitkan oleh `erpora contracts:generate` dari contracts/module.schema.json. JANGAN DIEDIT.
 
+/**
+ * Kunci i18n bertitik pada katalog namespace modul (mis. nav.notes).
+ */
+export type MessageKey = string;
+/**
+ * Nama ikon dari peta ikon platform.
+ */
+export type IconName = string;
+/**
+ * Item menu atau grup satu tingkat (grup tidak boleh bersarang).
+ */
+export type DeskMenu = DeskItem | DeskGroup;
+/**
+ * Id menu, unik dalam satu Desk (item, grup, dan anak grup).
+ */
+export type DeskMenuId = string;
+
 export interface ModuleManifest {
   schema_version: "1";
   key: string;
@@ -39,6 +56,28 @@ export interface ModuleManifest {
      */
     locales: [string, ...string[]];
     defaultLocale: string;
+  };
+  /**
+   * Revisi M3a (Q40 butir 10-13): Desk modul. label/icon/menu dibaca server untuk menyusun daftar Desk per pengguna (GET /api/platform/desks); Dashboard dibangkitkan platform dan tidak boleh dideklarasikan. Opsional di schema; module:check mewajibkannya untuk modul berdirektori web/.
+   */
+  desk?: {
+    label: MessageKey;
+    icon: IconName;
+    /**
+     * Label dan ikon item Dashboard bawaan Desk; bila tidak diisi platform memakai label dan ikon bawaan.
+     */
+    dashboard?: {
+      label?: MessageKey;
+      icon?: IconName;
+    };
+    /**
+     * @maxItems 100
+     */
+    menus: DeskMenu[];
+    /**
+     * Pengaturan Desk; isi diperketat kemudian.
+     */
+    settings?: {};
   };
   /**
    * Marketplace: lokasi artefak modul.
@@ -87,4 +126,27 @@ export interface ModuleManifest {
    * PRD-001 FR-120: definisi setting modul. Isi diperketat kemudian.
    */
   settings?: {};
+}
+export interface DeskItem {
+  id: DeskMenuId;
+  label: MessageKey;
+  icon?: IconName;
+  /**
+   * Path internal relatif base route modul (/notes); tanpa skema, host, //, query, atau fragmen.
+   */
+  to: string;
+  /**
+   * Salah satu capabilities modul; item disembunyikan bila pengguna tidak memilikinya.
+   */
+  permission: string;
+}
+export interface DeskGroup {
+  id: DeskMenuId;
+  label: MessageKey;
+  icon?: IconName;
+  /**
+   * @minItems 1
+   * @maxItems 100
+   */
+  children: [DeskItem, ...DeskItem[]];
 }

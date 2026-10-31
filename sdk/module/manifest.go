@@ -23,6 +23,10 @@ type Manifest struct {
 	Offline       Offline       `json:"offline"`
 	// I18n menyatakan bahasa katalog terjemahan modul; nil = modul tanpa namespace i18n.
 	I18n *I18n `json:"i18n,omitempty"`
+	// Desk menyatakan Desk modul (Q40 butir 10-13): label, ikon, dan menu yang dibaca server untuk daftar Desk
+	// per pengguna. nil = modul tanpa Desk (modul tanpa antarmuka web); module:check mewajibkannya bagi modul
+	// berdirektori web/.
+	Desk *Desk `json:"desk,omitempty"`
 	// Raw adalah byte module.json asli; divalidasi platform terhadap schema.
 	Raw []byte `json:"-"`
 }
@@ -61,6 +65,34 @@ type Offline struct {
 type I18n struct {
 	Locales       []string `json:"locales"`
 	DefaultLocale string   `json:"defaultLocale"`
+}
+
+// Desk adalah Desk satu modul. Label, Icon, dan Label menu berupa kunci i18n / nama ikon; teks diterjemahkan di
+// klien dari katalog namespace modul. Dashboard (indeks /<slug>) dibangkitkan platform dan tidak dideklarasikan
+// sebagai menu.
+type Desk struct {
+	Label     string         `json:"label"`
+	Icon      string         `json:"icon"`
+	Dashboard *DeskDashboard `json:"dashboard,omitempty"`
+	Menus     []DeskMenu     `json:"menus"`
+	Settings  map[string]any `json:"settings,omitempty"`
+}
+
+// DeskDashboard menimpa label dan ikon item Dashboard bawaan; kosong = bawaan platform.
+type DeskDashboard struct {
+	Label string `json:"label,omitempty"`
+	Icon  string `json:"icon,omitempty"`
+}
+
+// DeskMenu adalah satu item menu (To dan Permission terisi) atau satu grup satu tingkat (Children terisi).
+// To relatif base route modul (mis. "/notes"); Permission wajib salah satu capabilities modul.
+type DeskMenu struct {
+	ID         string     `json:"id"`
+	Label      string     `json:"label"`
+	Icon       string     `json:"icon,omitempty"`
+	To         string     `json:"to,omitempty"`
+	Permission string     `json:"permission,omitempty"`
+	Children   []DeskMenu `json:"children,omitempty"`
 }
 
 // ParseManifest mengurai module.json dan menyalin byte aslinya ke Raw.
