@@ -70,6 +70,35 @@ describe("LogoPopover", () => {
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("example");
   });
 
+  describe("Pindah Desk mempertahankan rute bila ada di Desk tujuan (K10)", () => {
+    // `addon` memuat rute `/example/notes` milik `example` (menu bersama), jadi pindah ke sana tidak meninggalkan halaman.
+    const shared: Desk[] = [
+      ...desks,
+      makeDesk("addon", [
+        makeDashboardItem("addon", "addon"),
+        makeDeskItem("addon", "notes", "/example/notes", { ownerDesk: "example" }),
+      ]),
+    ];
+
+    test("rute ada di Desk tujuan: tetap di rute, hanya Desk saat ini berganti", async () => {
+      const { user, router } = await open("panel", { desks: shared, path: "/example/notes" });
+      await user.click(await screen.findByRole("menuitem", { name: "Pindah Desk" }));
+      await screen.findByRole("menuitemradio", { name: "Addon" });
+      await user.keyboard("{ArrowRight}{ArrowDown}{ArrowDown}{Enter}");
+      await waitFor(() => expect(sessionStorage.getItem("erpora.desk.tab")).toBe("addon"));
+      expect(router.state.location.pathname).toBe("/example/notes");
+    });
+
+    test("rute tidak ada di Desk tujuan: menuju Dashboard Desk tujuan", async () => {
+      const { user, router } = await open("panel", { desks: shared, path: "/platform" });
+      await user.click(await screen.findByRole("menuitem", { name: "Pindah Desk" }));
+      await screen.findByRole("menuitemradio", { name: "Addon" });
+      await user.keyboard("{ArrowRight}{ArrowDown}{ArrowDown}{Enter}");
+      await waitFor(() => expect(router.state.location.pathname).toBe("/addon"));
+      expect(sessionStorage.getItem("erpora.desk.tab")).toBe("addon");
+    });
+  });
+
   test("Semua Desk menuju / dengan penanda state showDesks", async () => {
     const { user, router } = await open();
     await user.click(await screen.findByRole("menuitem", { name: "Semua Desk" }));

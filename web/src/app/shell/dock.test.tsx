@@ -111,9 +111,9 @@ describe("Dock (Pinned)", () => {
     await waitFor(() => expect(example).toHaveAttribute("aria-current", "true"));
     const classes = example.className.split(/\s+/);
     expect(classes).toContain("data-[active=true]:bg-sidebar-accent");
-    expect(classes.filter((c) => /(^|:)(ring|outline)(-|$)/.test(c) && c.startsWith("data-"))).toEqual(
-      [],
-    );
+    expect(
+      classes.filter((c) => /(^|:)(ring|outline)(-|$)/.test(c) && c.startsWith("data-")),
+    ).toEqual([]);
   });
 
   test("hanya satu ikon yang dapat difokus (roving); panah bawah/atas, Home, dan End memindahkan fokus", async () => {
@@ -227,6 +227,24 @@ describe("DockFloating", () => {
     press();
     await user.click(await screen.findByRole("button", { name: "Example" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/example"));
+    await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
+  });
+
+  test("memilih Desk yang memuat rute saat ini bertahan di rute itu (K10)", async () => {
+    const user = userEvent.setup();
+    const shared: Desk[] = [
+      ...desks,
+      makeDesk("addon", [
+        makeDashboardItem("addon", "addon"),
+        makeDeskItem("addon", "notes", "/example/notes", { ownerDesk: "example" }),
+      ]),
+    ];
+    const { router } = renderShell(<DockFloating />, { desks: shared, path: "/example/notes" });
+    await waitFor(() => expect(pill()).toBeInTheDocument());
+    press();
+    await user.click(await screen.findByRole("button", { name: "Addon" }));
+    await waitFor(() => expect(sessionStorage.getItem("erpora.desk.tab")).toBe("addon"));
+    expect(router.state.location.pathname).toBe("/example/notes");
     await waitFor(() => expect(wrapper()).toHaveAttribute("aria-hidden", "true"));
   });
 

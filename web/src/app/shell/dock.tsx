@@ -139,7 +139,7 @@ export function DockDeskList({
   const { t } = useTranslation("platform");
   const { desks } = useDesks();
   const { deskId } = useCurrentDesk();
-  const { openDesk } = useDeskNavigation();
+  const { switchDesk } = useDeskNavigation();
   const listRef = useRef<HTMLUListElement>(null);
   const height = useElementHeight(listRef);
   const visible = fitDockCount({
@@ -156,10 +156,10 @@ export function DockDeskList({
 
   const select = useCallback(
     (desk: Desk) => {
-      openDesk(desk);
+      switchDesk(desk);
       onSelected?.();
     },
-    [openDesk, onSelected],
+    [switchDesk, onSelected],
   );
 
   const items = () =>

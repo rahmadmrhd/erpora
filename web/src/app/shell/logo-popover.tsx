@@ -62,7 +62,7 @@ export function LogoPopover({ variant }: { variant: "dock" | "panel" }) {
   const { appVersion } = useBootstrap();
   const { desks } = useDesks();
   const { deskId } = useCurrentDesk();
-  const { openDesk, goToDesks } = useDeskNavigation();
+  const { switchDesk, goToDesks } = useDeskNavigation();
   const actions = useShellActions();
   const hintId = useId();
   const hint = t("logoMenu.editSidebarHint");
@@ -83,7 +83,7 @@ export function LogoPopover({ variant }: { variant: "dock" | "panel" }) {
             value={deskId ?? ""}
             onValueChange={(id) => {
               const desk = desks.find((d) => d.id === id);
-              if (desk) openDesk(desk);
+              if (desk) switchDesk(desk);
             }}
           >
             {desks.map((d) => (
