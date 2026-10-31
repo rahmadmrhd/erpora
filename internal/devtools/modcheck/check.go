@@ -4,6 +4,7 @@ package modcheck
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"erpora/internal/archcheck"
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/modules/manifest"
+	"erpora/internal/platform/modules/registry"
 	"erpora/sdk/module"
 )
 
@@ -23,6 +25,7 @@ const (
 	RuleCapabilityPrefix = "CAPABILITY_PREFIX"
 	RuleGoVersion        = "GOVERSION"
 	RuleI18n             = "I18N"
+	RuleDesk             = "DESK"
 )
 
 // Finding adalah satu temuan pada satu modul.
@@ -79,6 +82,7 @@ func Check(root, only string) ([]Finding, error) {
 	for _, e := range entries {
 		out = append(out, manifestFindings(e)...)
 		out = append(out, i18nFindings(root, e, reg)...)
+		out = append(out, deskFindings(root, e)...)
 	}
 
 	repo, err := archcheck.Load(root)
@@ -186,4 +190,37 @@ func i18nFindings(root string, e entry, reg *i18n.Registry) []Finding {
 		}
 	}
 	return out
+}
+
+// deskFindings menegakkan aturan DESK (revisi M3a, Q40 butir 12-13): modul berdirektori web/ wajib mendeklarasikan
+// "desk" di module.json, dan bagian "desk" yang ada diperiksa dengan aturan registry yang sama (registry.CheckDesk:
+// id unik, permission termasuk capabilities, "to" bersih, Dashboard tidak dideklarasikan, label ada di katalog).
+// Temuan menyebut berkas dan kunci (JSON pointer). Modul tanpa web/ boleh tanpa desk.
+func deskFindings(root string, e entry) []Finding {
+	if e.parseErr != nil {
+		return nil
+	}
+	f := func(format string, a ...any) Finding {
+		return Finding{Module: label(e), Rule: RuleDesk, Detail: fmt.Sprintf(format, a...)}
+	}
+	if e.manifest.Desk == nil {
+		if st, err := os.Stat(filepath.Join(root, "modules", e.dir, "web")); err == nil && st.IsDir() {
+			return []Finding{f("modules/%s/web ada tetapi modules/%s/module.json tidak punya kunci \"desk\" (modul berantarmuka web wajib mendeklarasikan Desk; Dashboard dibangkitkan platform)", e.dir, e.dir)}
+		}
+		return nil
+	}
+	var catalogs fs.FS
+	if dir := filepath.Join(root, "modules", e.dir, "i18n"); dirExists(dir) {
+		catalogs = os.DirFS(dir)
+	}
+	var out []Finding
+	for _, p := range registry.CheckDesk(e.manifest, catalogs) {
+		out = append(out, f("modules/%s/module.json %s: %s (%s)", e.dir, p.Field, p.Message, p.Code))
+	}
+	return out
+}
+
+func dirExists(dir string) bool {
+	st, err := os.Stat(dir)
+	return err == nil && st.IsDir()
 }
