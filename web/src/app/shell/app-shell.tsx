@@ -11,6 +11,7 @@ import { useGlobalShortcuts } from "./global-shortcuts";
 import { LocalBoundary } from "./local-boundary";
 import { Navbar, NavbarFallback } from "./navbar";
 import { useRouteTitle } from "./route-crumbs";
+import { type ShellChrome, ShellChromeProvider } from "./shell-chrome";
 import { type SettingsSection, type ShellActions, ShellActionsProvider } from "./shell-context";
 import { readSidebarOpen, writeSidebarOpen } from "./sidebar-state";
 import { useIsCompact } from "./use-compact";
@@ -23,6 +24,11 @@ const LazyDockFloating = lazy(() =>
 // Palet perintah (cmdk) hanya ada di chunk malas ini; pintasan Ctrl+K hidup di bundel awal dan memuatnya saat pertama dipakai.
 const LazyCommandPalette = lazy(() =>
   import("./command-palette").then((m) => ({ default: m.CommandPalette })),
+);
+
+// Navbar halaman Desks (K1) hanya ada di chunk malas ini; fallback setinggi navbar agar tidak ada lompatan tata letak.
+const LazyDesksNavbar = lazy(() =>
+  import("./desks-navbar").then((m) => ({ default: m.DesksNavbar })),
 );
 
 // Panel Notifikasi dan dialog Settings dimuat malas saat pertama dibuka (bagian berat di luar bundel awal).
@@ -53,6 +59,11 @@ const PINNED_PANEL_CLASS = [
   "transition-[left,right,width,visibility]",
   "motion-reduce:transition-none",
 ].join(" ");
+
+/** Kerangka navbar halaman Desks saat chunk dimuat atau galat: setinggi navbar, tanpa konten. */
+function DesksNavbarFallback() {
+  return <header className="h-(--navbar-height) shrink-0 border-b bg-background" />;
+}
 
 function ContentSkeleton() {
   return (
@@ -110,6 +121,9 @@ export function AppShell() {
   const dockMode = useDockMode();
   const [panelOpen, setPanelOpen] = useState(readSidebarOpen);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Varian kerangka (K1): halaman Desks memintanya lewat `useShellChrome("desks")`.
+  const [chrome, setChrome] = useState<ShellChrome>("default");
+  const desksChrome = chrome === "desks";
   const resetKey = useRouterState({ select: (s) => s.location.href });
 
   // Kembali ke lebar besar: Sheet yang masih terbuka ditutup agar tidak muncul lagi saat menyempit.
@@ -147,6 +161,7 @@ export function AppShell() {
     <SidebarProvider
       className="h-svh overflow-hidden"
       style={SHELL_STYLE}
+      data-shell-chrome={chrome}
       open={compact ? sheetOpen : panelOpen}
       onOpenChange={(open) => {
         if (compact) {
@@ -158,94 +173,106 @@ export function AppShell() {
       }}
     >
       <ShellActionsProvider value={actions}>
-        {/* biome-ignore lint/a11y/useValidAnchor: skip link (K-33): tautan ke #content dengan fokus langsung ke <main> tanpa mengubah hash router */}
-        <a
-          href="#content"
-          className="sr-only z-50 rounded-md bg-background px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
-          onClick={(e) => {
-            // Tanpa mengubah hash URL (router klien): fokus langsung ke <main>.
-            e.preventDefault();
-            main.current?.focus();
-          }}
-        >
-          <Message message={{ ns: "platform", key: "shell.skipToContent" }} />
-        </a>
-        {compact ? (
-          <PanelSheet />
-        ) : (
-          <>
-            {dockMode === "pinned" ? <Dock /> : null}
-            <Sidebar
-              collapsible={dockMode === "pinned" ? "offcanvas" : "icon"}
-              className={dockMode === "pinned" ? PINNED_PANEL_CLASS : undefined}
+        <ShellChromeProvider setChrome={setChrome}>
+          {/* biome-ignore lint/a11y/useValidAnchor: skip link (K-33): tautan ke #content dengan fokus langsung ke <main> tanpa mengubah hash router */}
+          <a
+            href="#content"
+            className="sr-only z-50 rounded-md bg-background px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+            onClick={(e) => {
+              // Tanpa mengubah hash URL (router klien): fokus langsung ke <main>.
+              e.preventDefault();
+              main.current?.focus();
+            }}
+          >
+            <Message message={{ ns: "platform", key: "shell.skipToContent" }} />
+          </a>
+          {desksChrome ? null : compact ? (
+            <PanelSheet />
+          ) : (
+            <>
+              {dockMode === "pinned" ? <Dock /> : null}
+              <Sidebar
+                collapsible={dockMode === "pinned" ? "offcanvas" : "icon"}
+                className={dockMode === "pinned" ? PINNED_PANEL_CLASS : undefined}
+              >
+                <DeskPanel variant={dockMode} />
+              </Sidebar>
+              <CollapseEdge mode={dockMode} />
+              {dockMode === "floating" ? (
+                <Suspense fallback={null}>
+                  <LazyDockFloating />
+                </Suspense>
+              ) : null}
+            </>
+          )}
+          <div className="relative flex min-w-0 flex-1 flex-col bg-background">
+            {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
+            {desksChrome ? (
+              <LocalBoundary label="navbar" resetKey={resetKey} fallback={<DesksNavbarFallback />}>
+                <Suspense fallback={<DesksNavbarFallback />}>
+                  <LazyDesksNavbar />
+                </Suspense>
+              </LocalBoundary>
+            ) : (
+              <LocalBoundary label="navbar" resetKey={resetKey} fallback={<NavbarFallback />}>
+                <Suspense fallback={<NavbarFallback />}>
+                  <Navbar />
+                </Suspense>
+              </LocalBoundary>
+            )}
+            <main
+              id="content"
+              ref={main}
+              tabIndex={-1}
+              className={
+                scroll
+                  ? "min-h-0 flex-1 overflow-auto outline-none"
+                  : "min-h-0 flex-1 overflow-hidden outline-none"
+              }
             >
-              <DeskPanel variant={dockMode} />
-            </Sidebar>
-            <CollapseEdge mode={dockMode} />
-            {dockMode === "floating" ? (
-              <Suspense fallback={null}>
-                <LazyDockFloating />
-              </Suspense>
-            ) : null}
-          </>
-        )}
-        <div className="relative flex min-w-0 flex-1 flex-col bg-background">
-          {/* Navbar dan pengumuman rute punya batas lokal: galat atau pemuatan teks di sana tidak merobohkan shell. */}
-          <LocalBoundary label="navbar" resetKey={resetKey} fallback={<NavbarFallback />}>
-            <Suspense fallback={<NavbarFallback />}>
-              <Navbar />
+              <CatchBoundary
+                getResetKey={() => resetKey}
+                errorComponent={({ error, reset }) => (
+                  <RouteErrorPage error={error} reset={reset} />
+                )}
+              >
+                <Suspense fallback={<ContentSkeleton />}>
+                  <Outlet />
+                </Suspense>
+              </CatchBoundary>
+            </main>
+          </div>
+          {palette.mounted ? (
+            <Suspense fallback={null}>
+              <LazyCommandPalette
+                open={palette.open}
+                onOpenChange={(open) => setPalette({ mounted: true, open })}
+              />
+            </Suspense>
+          ) : null}
+          {notifications.mounted ? (
+            <Suspense fallback={null}>
+              <LazyNotificationPanel
+                open={notifications.open}
+                onOpenChange={(open) => setNotifications({ mounted: true, open })}
+              />
+            </Suspense>
+          ) : null}
+          {settings.mounted ? (
+            <Suspense fallback={null}>
+              <LazySettingsDialog
+                open={settings.open}
+                initialSection={settings.section}
+                onOpenChange={(open) => setSettings((s) => ({ ...s, open }))}
+              />
+            </Suspense>
+          ) : null}
+          <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
+            <Suspense fallback={null}>
+              <RouteAnnouncer main={main} />
             </Suspense>
           </LocalBoundary>
-          <main
-            id="content"
-            ref={main}
-            tabIndex={-1}
-            className={
-              scroll
-                ? "min-h-0 flex-1 overflow-auto outline-none"
-                : "min-h-0 flex-1 overflow-hidden outline-none"
-            }
-          >
-            <CatchBoundary
-              getResetKey={() => resetKey}
-              errorComponent={({ error, reset }) => <RouteErrorPage error={error} reset={reset} />}
-            >
-              <Suspense fallback={<ContentSkeleton />}>
-                <Outlet />
-              </Suspense>
-            </CatchBoundary>
-          </main>
-        </div>
-        {palette.mounted ? (
-          <Suspense fallback={null}>
-            <LazyCommandPalette
-              open={palette.open}
-              onOpenChange={(open) => setPalette({ mounted: true, open })}
-            />
-          </Suspense>
-        ) : null}
-        {notifications.mounted ? (
-          <Suspense fallback={null}>
-            <LazyNotificationPanel
-              open={notifications.open}
-              onOpenChange={(open) => setNotifications({ mounted: true, open })}
-            />
-          </Suspense>
-        ) : null}
-        {settings.mounted ? (
-          <Suspense fallback={null}>
-            <LazySettingsDialog
-              open={settings.open}
-              initialSection={settings.section}
-              onOpenChange={(open) => setSettings((s) => ({ ...s, open }))}
-            />
-          </Suspense>
-        ) : null}
-        <LocalBoundary label="pengumuman rute" resetKey={resetKey} fallback={null}>
-          <Suspense fallback={null}>
-            <RouteAnnouncer main={main} />
-          </Suspense>
-        </LocalBoundary>
+        </ShellChromeProvider>
       </ShellActionsProvider>
     </SidebarProvider>
   );

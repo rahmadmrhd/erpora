@@ -14,6 +14,9 @@
     "search": "Cari",
     "todo": "ToDo"
   },
+  "desksNavbar": {
+    "search": "Cari…"
+  },
   "dock": {
     "label": "Dock Desk",
     "more": "+{count} Desk lainnya"

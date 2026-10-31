@@ -13,6 +13,7 @@ import {
   type Desk,
   DeskProvider,
   emptyNotificationSource,
+  ModuleRegistryProvider,
   makeBootstrap,
   type NotificationSource,
   NotificationSourceProvider,
@@ -91,6 +92,10 @@ export interface ShellHarnessOptions {
   defaultSidebarOpen?: boolean;
   /** Menyetel `--dock-width` dan lebar sidebar seperti `AppShell`. */
   style?: CSSProperties;
+  /** Komponen rute indeks `/` (mis. halaman yang memanggil `useShellChrome`); bawaan tidak merender apa pun. */
+  indexComponent?: () => ReactNode;
+  /** `ui` merender `<Outlet />` sendiri (mis. `AppShell`): akar tidak menambah `<Outlet />` kedua. */
+  ownOutlet?: boolean;
 }
 
 const noopActions: ShellActions = {
@@ -115,11 +120,15 @@ export function renderShell(ui: ReactNode, opts: ShellHarnessOptions = {}) {
     component: () => (
       <>
         {ui}
-        <Outlet />
+        {opts.ownOutlet ? null : <Outlet />}
       </>
     ),
   });
-  const index = createRoute({ getParentRoute: () => rootRoute, path: "/", component: () => null });
+  const index = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: opts.indexComponent ?? (() => null),
+  });
   const splat = createRoute({ getParentRoute: () => rootRoute, path: "$", component: () => null });
   const router = createRouter({ routeTree: rootRoute.addChildren([index, splat]), history });
   const client = createClient<PlatformPaths>({
@@ -151,18 +160,20 @@ export function renderShell(ui: ReactNode, opts: ShellHarnessOptions = {}) {
                   source={opts.notificationSource ?? emptyNotificationSource}
                 >
                   <DeskProvider client={client}>
-                    <TooltipProvider>
-                      <SidebarProvider
-                        style={opts.style}
-                        defaultOpen={opts.defaultSidebarOpen ?? true}
-                        open={opts.sidebar?.open}
-                        onOpenChange={opts.sidebar?.onOpenChange}
-                      >
-                        <ShellActionsProvider value={actions}>
-                          <RouterProvider router={router} />
-                        </ShellActionsProvider>
-                      </SidebarProvider>
-                    </TooltipProvider>
+                    <ModuleRegistryProvider modules={[]}>
+                      <TooltipProvider>
+                        <SidebarProvider
+                          style={opts.style}
+                          defaultOpen={opts.defaultSidebarOpen ?? true}
+                          open={opts.sidebar?.open}
+                          onOpenChange={opts.sidebar?.onOpenChange}
+                        >
+                          <ShellActionsProvider value={actions}>
+                            <RouterProvider router={router} />
+                          </ShellActionsProvider>
+                        </SidebarProvider>
+                      </TooltipProvider>
+                    </ModuleRegistryProvider>
                   </DeskProvider>
                 </NotificationSourceProvider>
               </CurrentUserSourceProvider>

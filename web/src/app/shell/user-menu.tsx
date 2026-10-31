@@ -33,11 +33,12 @@ function Icon({ name }: { name: string }) {
 
 /**
  * Avatar (dan, pada varian `panel`, nama dan email) yang membuka menu akun: Pengaturan, Muat ulang, Keluar (R16).
- * `dock`: hanya avatar di dasar Dock Pinned; `panel`: identitas lengkap di dasar panel (Floating dan Sheet). Data
+ * `dock`: hanya avatar di dasar Dock Pinned; `panel`: identitas lengkap di dasar panel (Floating dan Sheet); `navbar`:
+ * hanya avatar di kanan navbar halaman Desks (K1, menu terbuka ke bawah). Data
  * pengguna dari `CurrentUserSource` (PII; hanya memori). Keluar dinonaktifkan dengan penjelasan sampai PRD-001;
  * tidak ada "My Space" (tidak ada konsepnya di ERPora).
  */
-export function UserMenu({ variant }: { variant: "dock" | "panel" }) {
+export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) {
   const { t } = useTranslation("platform");
   const { user } = useCurrentUser();
   const source = useCurrentUserSource();
@@ -52,7 +53,7 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" }) {
   const hint = t("user.unavailable");
 
   const avatar = (
-    <Avatar size="sm" aria-hidden={variant === "dock" ? "true" : undefined}>
+    <Avatar size="sm" aria-hidden={variant === "panel" ? undefined : "true"}>
       {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
       <AvatarFallback>{initialsOf(name)}</AvatarFallback>
     </Avatar>
@@ -68,7 +69,11 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" }) {
   );
 
   const content = (
-    <DropdownMenuContent side="right" align="end" className="w-64">
+    <DropdownMenuContent
+      side={variant === "navbar" ? "bottom" : "right"}
+      align="end"
+      className="w-64"
+    >
       <DropdownMenuLabel className="flex items-center gap-2 font-normal">
         {avatar}
         <span className="grid min-w-0 flex-1 leading-tight">
@@ -105,7 +110,7 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" }) {
     </DropdownMenuContent>
   );
 
-  if (variant === "dock") {
+  if (variant !== "panel") {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { makeDashboardItem, makeDesk } from "@erpora/platform-web/testing";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderApp } from "../test-utils";
-import { setViewportWidth } from "./shell-test-support";
+import { AppShell } from "./app-shell";
+import { useShellChrome } from "./shell-chrome";
+import { renderShell, setViewportWidth } from "./shell-test-support";
 
 beforeEach(() => {
   localStorage.clear();
@@ -126,5 +129,53 @@ describe("AppShell: overlay malas dan pintasan", () => {
       fireEvent.keyDown(window, { key: "L", code: "KeyL", ctrlKey: true, shiftKey: true });
     });
     await waitFor(() => expect(localStorage.getItem("erpora.theme")).not.toBeNull());
+  });
+});
+
+describe("AppShell: chrome halaman Desks (K1)", () => {
+  /** Meniru `DesksPage`: halaman yang meminta chrome Desks selama terpasang. */
+  function DesksProbe() {
+    useShellChrome("desks");
+    return <p>Isi halaman Desks</p>;
+  }
+  const desks = [
+    makeDesk("example", [makeDashboardItem("example", "example")], { icon: "file-text" }),
+  ];
+
+  for (const dock of ["pinned", "floating"] as const) {
+    test(`mode ${dock}: tanpa Dock, panel, pembatas, tombol sidebar, dan breadcrumb; navbar khusus Desks`, async () => {
+      localStorage.setItem("erpora.dock", dock);
+      renderShell(<AppShell />, { desks, ownOutlet: true, indexComponent: DesksProbe });
+      await screen.findByText("Isi halaman Desks");
+      const bar = await screen.findByRole("banner");
+      await within(bar).findByRole("button", { name: /Cari/ });
+      expect(document.querySelector('[data-shell-chrome="desks"]')).not.toBeNull();
+      expect(screen.queryByRole("navigation", { name: "Dock Desk", hidden: true })).toBeNull();
+      expect(document.querySelector('[data-slot="sidebar"]')).toBeNull();
+      expect(document.querySelector('[data-slot="dock-floating"]')).toBeNull();
+      expect(screen.queryByRole("separator", { name: "Ciutkan atau perluas sidebar" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Ciutkan atau perluas sidebar/ })).toBeNull();
+      expect(within(bar).queryByRole("navigation")).toBeNull();
+    });
+  }
+
+  test("Ctrl+K dari navbar Desks membuka palet", async () => {
+    const user = userEvent.setup();
+    renderShell(<AppShell />, { desks, ownOutlet: true, indexComponent: DesksProbe });
+    const bar = await screen.findByRole("banner");
+    await user.click(await within(bar).findByRole("button", { name: /Cari/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  test("tanpa halaman yang meminta chrome Desks, shell tetap penuh (Dock/panel dan navbar biasa)", async () => {
+    localStorage.setItem("erpora.dock", "pinned");
+    renderShell(<AppShell />, {
+      desks,
+      ownOutlet: true,
+      indexComponent: () => <p>Halaman biasa</p>,
+    });
+    await screen.findByText("Halaman biasa");
+    expect(await screen.findByRole("navigation", { name: "Dock Desk" })).toBeInTheDocument();
+    expect(document.querySelector('[data-shell-chrome="default"]')).not.toBeNull();
   });
 });

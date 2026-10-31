@@ -55,9 +55,10 @@ function Mark() {
 /**
  * Logo dan nama proyek yang membuka popover tingkat aplikasi (R6): Pindah Desk, Semua Desk, Edit sidebar
  * (nonaktif sampai M3b), Bantuan dan pintasan, Tentang (versi dari bootstrap). `dock`: hanya logo di atas Dock
- * Pinned; `panel`: logo dan nama sebagai kepala panel (Floating dan Sheet). Popover yang sama pada kedua mode.
+ * Pinned; `panel`: logo dan nama sebagai kepala panel (Floating dan Sheet); `navbar`: logo dan nama di kiri navbar
+ * halaman Desks (K1, tanpa Dock/panel). Popover yang sama pada semua varian.
  */
-export function LogoPopover({ variant }: { variant: "dock" | "panel" }) {
+export function LogoPopover({ variant }: { variant: "dock" | "panel" | "navbar" }) {
   const { t } = useTranslation("platform");
   const { appVersion } = useBootstrap();
   const { desks } = useDesks();
@@ -137,6 +138,23 @@ export function LogoPopover({ variant }: { variant: "dock" | "panel" }) {
           <Button variant="ghost" size="icon" className="size-10">
             <span className="sr-only">{t("logoMenu.label")}</span>
             <Mark />
+          </Button>
+        </DropdownMenuTrigger>
+        {content}
+      </DropdownMenu>
+    );
+  }
+
+  if (variant === "navbar") {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-10 gap-2 px-1.5">
+            <span className="sr-only">{t("logoMenu.label")}</span>
+            <Mark />
+            <span aria-hidden="true" className="hidden font-semibold sm:inline">
+              <Message message={{ ns: "platform", key: "app.name" }} />
+            </span>
           </Button>
         </DropdownMenuTrigger>
         {content}

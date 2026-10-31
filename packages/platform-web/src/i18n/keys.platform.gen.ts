@@ -21,6 +21,7 @@ declare module "./types" {
       "desks.loadError.description": {};
       "desks.loadError.title": {};
       "desks.title": {};
+      "desksNavbar.search": {};
       "dock.label": {};
       "dock.more": { count: string | number };
       "errors.bad_request": {};
