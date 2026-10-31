@@ -10,6 +10,7 @@ import {
   Alert,
   AlertDescription,
   Button,
+  cn,
   resolveIcon,
   Sheet,
   SheetClose,
@@ -23,42 +24,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@erpora/ui";
-import { type ReactNode, useLayoutEffect, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { EmptyNotice } from "../components/notices";
+import { type NotificationPlacement, useNotificationAnchor } from "./notification-anchor";
 import { useReturnFocus } from "./overlay-focus";
-
-/**
- * Penanda kontainer panel menu (sidebar shadcn). Tepi kanannya diukur langsung agar panel Notifikasi (yang dirender
- * di portal, di luar `SidebarProvider` sehingga tidak mewarisi `--sidebar-width`) selalu dimulai tepat di sebelahnya,
- * juga saat panel menu diciutkan atau Dock Pinned memperlebar kolom kiri.
- */
-const MENU_PANEL = '[data-slot="sidebar-container"]';
-
-/** Offset kiri (px) panel Notifikasi: tepi kanan panel menu; 0 bila tidak ada panel menu (mis. ponsel). */
-function useMenuPanelOffset(open: boolean): number {
-  const [offset, setOffset] = useState(0);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const el = document.querySelector(MENU_PANEL);
-    if (el === null) {
-      setOffset(0);
-      return;
-    }
-    const measure = () => setOffset(Math.max(0, Math.round(el.getBoundingClientRect().right)));
-    measure();
-    window.addEventListener("resize", measure);
-    let observer: ResizeObserver | undefined;
-    if (typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(measure);
-      observer.observe(el);
-    }
-    return () => {
-      window.removeEventListener("resize", measure);
-      observer?.disconnect();
-    };
-  }, [open]);
-  return offset;
-}
 
 function Rows({
   n,
@@ -104,25 +73,65 @@ function Rows({
   );
 }
 
+/** Geser pendek panel menu (bukan seluruh lebar) agar panel tidak meluncur melintasi Dock atau panel menu. */
+const SLIDE = "-0.75rem";
+
 /**
- * Panel Notifikasi: `Sheet` sisi kiri yang dimulai di tepi kanan panel menu, tanpa overlay penuh (mode non-modal
- * Radix: tanpa overlay dan tanpa kunci fokus; `Escape`, klik di luar, dan fokus keluar menutup). Fokus dikembalikan
- * ke elemen yang memicu pembukaan (Radix tidak melakukannya karena pemicunya berada di luar komponen ini). Sumber
- * data = `NotificationSource` M3a lewat `useNotifications` (kunci query sama dengan lencana jumlah belum dibaca).
- * Konten notifikasi dirender sebagai teks.
+ * Gaya per penempatan. Variabel `--tw-enter-*`/`--tw-exit-*` (tw-animate-css) di gaya inline menang atas utilitas
+ * `slide-*` bawaan `SheetContent` (geser selebar penuh dari tepi layar) tanpa menyentuh berkas shadcn.
+ */
+function placementStyle(anchor: { placement: NotificationPlacement; left: number; top: number }) {
+  if (anchor.placement === "desks") {
+    return {
+      top: anchor.top,
+      right: "1rem",
+      bottom: "auto",
+      left: "auto",
+      height: "auto",
+      maxHeight: `calc(100svh - ${anchor.top + 16}px)`,
+      "--tw-enter-translate-x": "0",
+      "--tw-exit-translate-x": "0",
+      "--tw-enter-translate-y": "-0.5rem",
+      "--tw-exit-translate-y": "-0.5rem",
+      "--tw-enter-scale": "0.98",
+      "--tw-exit-scale": "0.98",
+    } as CSSProperties;
+  }
+  return {
+    left: anchor.left,
+    "--tw-enter-translate-x": SLIDE,
+    "--tw-exit-translate-x": SLIDE,
+  } as CSSProperties;
+}
+
+/**
+ * Panel Notifikasi: `Sheet` non-modal tanpa overlay penuh. Penempatan `sidebar` (bawaan): lembar setinggi layar yang
+ * dimulai tepat di tepi kanan Dock/panel menu (Pinned terbuka atau diciutkan, Floating, strip ikon; lihat
+ * `useNotificationAnchor`) dan muncul dengan geser pendek + pudar. Penempatan `desks` (halaman Desks, tanpa Dock dan
+ * panel menu): kartu mengambang di kanan atas di bawah navbar. `placement` bawaan `auto` mendeteksi penanda
+ * `data-shell-chrome="desks"` pada kerangka.
+ *
+ * Fokus: mode non-modal Radix memutar Tab di dalam panel (`FocusScope` loop) sehingga fokus tidak keluar lewat
+ * keyboard; `Escape`, klik di luar, dan fokus yang berpindah keluar menutup panel (tanpa overlay, sehingga konten di
+ * luar tetap dapat dibaca). Fokus dikembalikan ke elemen yang memicu pembukaan (Radix tidak melakukannya karena
+ * pemicunya berada di luar komponen ini). Sumber data = `NotificationSource` M3a lewat `useNotifications` (kunci
+ * query sama dengan lencana jumlah belum dibaca). Konten notifikasi dirender sebagai teks.
  */
 export function NotificationPanel({
   open,
   onOpenChange,
+  placement = "auto",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  placement?: NotificationPlacement | "auto";
 }) {
   const { t } = useTranslation("platform");
   const { t: tUi } = useTranslation("ui");
   const n = useNotifications({ enabled: open });
   const navigate = useNavigate();
-  const offset = useMenuPanelOffset(open);
+  const anchor = useNotificationAnchor(open, placement);
+  const card = anchor.placement === "desks";
   const [actionFailed, setActionFailed] = useState(false);
 
   const focus = useReturnFocus(open);
@@ -170,10 +179,14 @@ export function NotificationPanel({
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
-        side="left"
+        side={card ? "right" : "left"}
         showCloseButton={false}
-        style={{ left: offset }}
-        className="w-96 gap-0 sm:max-w-96"
+        data-placement={anchor.placement}
+        style={placementStyle(anchor)}
+        className={cn(
+          "w-96 max-w-full gap-0 ease-out data-[state=closed]:duration-150 data-[state=closed]:fade-out-0 data-[state=open]:duration-200 data-[state=open]:fade-in-0 sm:max-w-96",
+          card && "overflow-hidden rounded-lg border",
+        )}
         onInteractOutside={focus.onInteractOutside}
         onCloseAutoFocus={focus.onCloseAutoFocus}
       >

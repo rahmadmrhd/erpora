@@ -11,8 +11,19 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const el of document.querySelectorAll("[data-fake-sidebar]")) el.remove();
+  for (const el of document.querySelectorAll("[data-fake-chrome]")) el.remove();
 });
+
+/** Elemen tiruan bagian kerangka (container sidebar, Dock, navbar): hanya tepi yang diukur panel yang dipalsukan. */
+function fakeChrome(attr: string, rect: { right?: number; bottom?: number }): HTMLElement {
+  const el = document.createElement("div");
+  const [name, value] = attr.split("=");
+  el.setAttribute(name ?? "", value ?? "");
+  el.setAttribute("data-fake-chrome", "");
+  el.getBoundingClientRect = () => ({ right: 0, bottom: 0, ...rect }) as DOMRect;
+  document.body.append(el);
+  return el;
+}
 
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 const mk = (id: string, over: Partial<AppNotification> = {}): AppNotification => ({
@@ -51,6 +62,19 @@ function Host({ initialOpen = false }: { initialOpen?: boolean }) {
         Pemicu
       </button>
       <NotificationPanel open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+/** Pemicu seperti lonceng navbar di halaman Desks: panel diminta tampil sebagai kartu mengambang. */
+function DesksHost() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen((o) => !o)}>
+        Pemicu
+      </button>
+      <NotificationPanel open={open} onOpenChange={setOpen} placement="desks" />
     </>
   );
 }
@@ -214,19 +238,142 @@ describe("NotificationPanel: fokus, penutupan, dan posisi", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  test("dimulai di tepi kanan panel menu (diukur dari kontainer sidebar)", async () => {
-    const fake = document.createElement("div");
-    fake.setAttribute("data-slot", "sidebar-container");
-    fake.setAttribute("data-fake-sidebar", "");
-    fake.getBoundingClientRect = () => ({ right: 312 }) as DOMRect;
-    document.body.append(fake);
-    await openPanel();
-    const dialog = screen.getByRole("dialog", { name: "Notifikasi" });
-    expect(dialog.style.left).toBe("312px");
-  });
-
-  test("tanpa panel menu (mis. layar ponsel) dimulai dari tepi kiri", async () => {
+  test("tanpa panel menu dan Dock (mis. layar ponsel) dimulai dari tepi kiri", async () => {
     await openPanel();
     expect(screen.getByRole("dialog", { name: "Notifikasi" }).style.left).toBe("0px");
+  });
+
+  test("Pinned terbuka: dimulai di tepi kanan container panel menu", async () => {
+    fakeChrome("data-slot=dock", { right: 56 });
+    fakeChrome("data-slot=sidebar-container", { right: 312 });
+    await openPanel();
+    expect(screen.getByRole("dialog", { name: "Notifikasi" }).style.left).toBe("312px");
+  });
+
+  test("Pinned diciutkan (container di luar layar): dimulai di tepi kanan Dock, bukan menutupinya (Minor 1)", async () => {
+    fakeChrome("data-slot=dock", { right: 56 });
+    fakeChrome("data-slot=sidebar-container", { right: 0 });
+    await openPanel();
+    expect(screen.getByRole("dialog", { name: "Notifikasi" }).style.left).toBe("56px");
+  });
+
+  test("Floating (strip ikon): dimulai di tepi kanan strip tanpa Dock", async () => {
+    fakeChrome("data-slot=sidebar-container", { right: 52 });
+    await openPanel();
+    expect(screen.getByRole("dialog", { name: "Notifikasi" }).style.left).toBe("52px");
+  });
+
+  test("offset mengikuti panel menu yang berubah (atribut data-state) saat panel Notifikasi terbuka", async () => {
+    fakeChrome("data-slot=dock", { right: 56 });
+    let right = 284;
+    const container = fakeChrome("data-slot=sidebar-container", {});
+    container.getBoundingClientRect = () => ({ right, bottom: 0 }) as DOMRect;
+    await openPanel();
+    const dialog = screen.getByRole("dialog", { name: "Notifikasi" });
+    expect(dialog.style.left).toBe("284px");
+    right = 0;
+    container.setAttribute("data-state", "collapsed");
+    await waitFor(() => expect(dialog.style.left).toBe("56px"));
+  });
+
+  test("animasi: geser pendek (bukan seluruh lebar) dengan pudar, sehingga tidak melintasi Dock atau panel menu", async () => {
+    await openPanel();
+    const dialog = screen.getByRole("dialog", { name: "Notifikasi" });
+    expect(dialog.style.getPropertyValue("--tw-enter-translate-x")).toBe("-0.75rem");
+    expect(dialog.style.getPropertyValue("--tw-exit-translate-x")).toBe("-0.75rem");
+    expect(dialog.className).toContain("data-[state=open]:fade-in-0");
+    expect(dialog.className).toContain("data-[state=closed]:fade-out-0");
+    expect(dialog.dataset.placement).toBe("sidebar");
+  });
+});
+
+describe("NotificationPanel: penempatan di halaman Desks", () => {
+  test("placement desks: kartu mengambang di kanan atas di bawah navbar, tanpa offset sidebar", async () => {
+    fakeChrome("data-slot=navbar", { bottom: 48 });
+    const app = renderOverlay(<DesksHost />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Pemicu" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notifikasi" });
+    expect(dialog.dataset.placement).toBe("desks");
+    expect(dialog.style.left).toBe("auto");
+    expect(dialog.style.right).toBe("1rem");
+    expect(dialog.style.top).toBe("56px");
+    expect(dialog.style.getPropertyValue("--tw-enter-translate-x")).toBe("0");
+    expect(dialog.className).toContain("rounded-lg");
+    expect(app.history.location.pathname).toBe("/");
+  });
+
+  test("terdeteksi otomatis lewat penanda data-shell-chrome desks", async () => {
+    const marker = document.createElement("div");
+    marker.setAttribute("data-shell-chrome", "desks");
+    marker.setAttribute("data-fake-chrome", "");
+    document.body.append(marker);
+    await openPanel();
+    expect(screen.getByRole("dialog", { name: "Notifikasi" }).dataset.placement).toBe("desks");
+  });
+
+  test("kartu memuat tab Semua/Peristiwa, tombol tandai semua dan tutup, serta keadaan kosong", async () => {
+    const user = userEvent.setup();
+    renderOverlay(<DesksHost />);
+    await user.click(await screen.findByRole("button", { name: "Pemicu" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notifikasi" });
+    expect(
+      within(dialog)
+        .getAllByRole("tab")
+        .map((t) => t.textContent),
+    ).toEqual(["Semua", "Peristiwa"]);
+    expect(
+      within(dialog).getByRole("button", { name: "Tandai semua telah dibaca" }),
+    ).toBeInTheDocument();
+    expect(await within(dialog).findByText("Belum ada notifikasi")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Tutup" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("button", { name: "Pemicu" })).toHaveFocus();
+  });
+});
+
+describe("NotificationPanel: jebakan fokus (K11)", () => {
+  test("fokus awal berada di dalam panel", async () => {
+    await openPanel();
+    const dialog = screen.getByRole("dialog", { name: "Notifikasi" });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+  });
+
+  test("Tab dari elemen terakhir berputar ke elemen pertama dan Shift+Tab sebaliknya (fokus tidak keluar)", async () => {
+    const m = memory([mk("a"), mk("b")]);
+    const { user } = await openPanel({ notificationSource: m.source });
+    const dialog = screen.getByRole("dialog", { name: "Notifikasi" });
+    await screen.findByText("Judul a");
+    const markAll = screen.getByRole("button", { name: "Tandai semua telah dibaca" });
+    const lastRow = screen.getByText("Judul b").closest("button") as HTMLElement;
+    act(() => lastRow.focus());
+    await user.tab();
+    expect(markAll).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(lastRow).toHaveFocus();
+    for (let i = 0; i < 8; i++) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    expect(screen.getByRole("dialog", { name: "Notifikasi" })).toBeInTheDocument();
+  });
+
+  test("klik di luar dan Escape tetap menutup meski fokus terjebak", async () => {
+    const { user } = await openPanel();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("button", { name: "Pemicu" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Pemicu" }));
+    await screen.findByRole("dialog", { name: "Notifikasi" });
+    await user.click(document.body);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  test("a11y: dialog non-modal bernama dengan deskripsi; konten lain tidak disembunyikan dari teknologi bantu", async () => {
+    await openPanel();
+    const dialog = screen.getByRole("dialog", { name: "Notifikasi" });
+    expect(dialog).toHaveAccessibleDescription();
+    expect(screen.getByRole("button", { name: "Pemicu" })).toBeVisible();
+    expect(document.querySelector('[data-slot="sheet-overlay"]')).toBeNull();
   });
 });
