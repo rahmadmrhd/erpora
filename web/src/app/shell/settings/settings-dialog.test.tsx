@@ -3,6 +3,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { renderOverlay } from "../overlay-test-support";
+import { installMatchMedia, restoreMatchMedia } from "./match-media-test-support";
 import { SettingsDialog, type SettingsSection } from "./settings-dialog";
 
 beforeEach(() => {
@@ -15,12 +16,12 @@ const DESKTOP_WIDTH = 1280;
 const PHONE_WIDTH = 375;
 
 function setViewportWidth(width: number) {
-  Object.defineProperty(window, "innerWidth", { value: width, configurable: true, writable: true });
+  installMatchMedia(width);
 }
 
 afterEach(() => {
   localStorage.clear();
-  setViewportWidth(DESKTOP_WIDTH);
+  restoreMatchMedia();
 });
 
 function Host({ initialSection }: { initialSection?: SettingsSection }) {
@@ -96,6 +97,7 @@ describe("SettingsDialog: struktur", () => {
     const { user } = await openSettings();
     const dialog = screen.getByRole("dialog");
     const list = screen.getByRole("tablist");
+    // Tata letak horizontal sudah berlaku pada render pertama dialog (tanpa kedip vertikal).
     expect(list).toHaveAttribute("aria-orientation", "horizontal");
     const column = list.parentElement as HTMLElement;
     expect(column.dataset.slot).toBe("settings-nav");

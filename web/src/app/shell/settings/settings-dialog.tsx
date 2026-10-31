@@ -10,13 +10,13 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  useIsMobile,
 } from "@erpora/ui";
 import { useEffect, useState } from "react";
 import { useReturnFocus } from "../overlay-focus";
 import { AppearanceSection } from "./appearance-section";
 import { PreferencesSection } from "./preferences-section";
 import { ShortcutsSection } from "./shortcuts-section";
+import { useIsNarrow } from "./use-narrow";
 
 export type SettingsSection = "appearance" | "preferences" | "shortcuts";
 
@@ -52,7 +52,7 @@ export function SettingsDialog({
 
   // Di bawah 768 px (ponsel) navigasi menjadi tab horizontal di atas konten; di atasnya kolom vertikal di kiri.
   // Orientasi ikut `Tabs` (peran, `aria-orientation`, dan tombol panah) tanpa mengubah berkas shadcn.
-  const vertical = !useIsMobile();
+  const vertical = !useIsNarrow();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
