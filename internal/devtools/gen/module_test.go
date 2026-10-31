@@ -254,6 +254,14 @@ func TestMakeModule_DeskDeclaredAndNoNavigationOrIndexRoute(t *testing.T) {
 			if strings.Contains(routes, `path: "/",`) || !strings.Contains(routes, `path: "/items"`) || !strings.Contains(routes, "items-page") {
 				t.Errorf("routes.tsx harus mendaftarkan hanya /items: %s", routes)
 			}
+			// K9: halaman tanpa judul sendiri (breadcrumb terakhir = satu-satunya h1); deskripsi muted tetap.
+			page := opContent(t, plan.Ops, dir+"web/src/pages/items-page.tsx")
+			if strings.Contains(page, "<h1") || strings.Contains(page, "<header") || strings.Contains(page, "page.items.title") {
+				t.Errorf("items-page.tsx tidak boleh memuat judul halaman: %s", page)
+			}
+			if !strings.Contains(page, "page.items.description") {
+				t.Errorf("items-page.tsx harus tetap memuat deskripsi: %s", page)
+			}
 			testTS := opContent(t, plan.Ops, dir+"web/src/module.test.ts")
 			for _, w := range []string{"assertDeskRoutes", `from "@erpora/module-sdk/testing"`} {
 				if !strings.Contains(testTS, w) {
