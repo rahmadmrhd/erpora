@@ -27,7 +27,16 @@
         "packages/ui/src/hooks/*.ts",
         "!packages/ui/src/hooks/*.test.ts"
       ],
-      "linter": { "enabled": false },
+      "linter": {
+        "enabled": true,
+        "rules": {
+          "recommended": false,
+          "security": {
+            "noDangerouslySetInnerHtml": "error",
+            "noDangerouslySetInnerHtmlWithChildren": "error"
+          }
+        }
+      },
       "formatter": { "enabled": false },
       "assist": { "enabled": false }
     }
