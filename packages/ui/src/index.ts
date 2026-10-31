@@ -172,6 +172,12 @@ export {
   uiKeys,
   useUiLabel,
 } from "./labels";
-export { type CollapsedCrumbs, type CrumbSlot, collapseCrumbs } from "./lib/breadcrumb";
+export {
+  type FitInput,
+  type FitPlan,
+  type FitSlot,
+  type FitStage,
+  fitBreadcrumb,
+} from "./lib/breadcrumb-fit";
 export { initialsOf } from "./lib/initials";
 export { cn } from "./lib/utils";
