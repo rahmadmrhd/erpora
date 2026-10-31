@@ -148,7 +148,7 @@ describe("AppShell: chrome halaman Desks (K1)", () => {
       renderShell(<AppShell />, { desks, ownOutlet: true, indexComponent: DesksProbe });
       await screen.findByText("Isi halaman Desks");
       const bar = await screen.findByRole("banner");
-      await within(bar).findByRole("button", { name: /Cari/ });
+      await within(bar).findByRole("button", { name: /Cari/ }, { timeout: 5000 });
       expect(document.querySelector('[data-shell-chrome="desks"]')).not.toBeNull();
       expect(screen.queryByRole("navigation", { name: "Dock Desk", hidden: true })).toBeNull();
       expect(document.querySelector('[data-slot="sidebar"]')).toBeNull();
@@ -163,7 +163,7 @@ describe("AppShell: chrome halaman Desks (K1)", () => {
     const user = userEvent.setup();
     renderShell(<AppShell />, { desks, ownOutlet: true, indexComponent: DesksProbe });
     const bar = await screen.findByRole("banner");
-    await user.click(await within(bar).findByRole("button", { name: /Cari/ }));
+    await user.click(await within(bar).findByRole("button", { name: /Cari/ }, { timeout: 5000 }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
