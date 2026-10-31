@@ -97,7 +97,7 @@ describe("SettingsDialog: struktur", () => {
     const { user } = await openSettings();
     const dialog = screen.getByRole("dialog");
     const list = screen.getByRole("tablist");
-    // Tata letak horizontal sudah berlaku pada render pertama dialog (tanpa kedip vertikal).
+    // Asersi ini berjalan setelah efek; bahwa frame pertama sudah benar dibuktikan `use-narrow.test.tsx` (`seen[0]`).
     expect(list).toHaveAttribute("aria-orientation", "horizontal");
     const column = list.parentElement as HTMLElement;
     expect(column.dataset.slot).toBe("settings-nav");
