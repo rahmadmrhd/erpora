@@ -1,5 +1,7 @@
 # Requirements Document
 
+> **Catatan (31 Okt 2026): sebagian digantikan.** Bagian **shell** (sidebar tunggal dan navigasi dari `defineModule`), **komponen** (salin lalu adaptasi di tempat, komposit `BadgeStatus`, `EmptyState`, `ErrorPage`, `Kbd`, `LoadingIcon`, dan prop `loading`), serta **routing** (`/settings/modules`, rute indeks modul) digantikan oleh spec revisi [`docs/specs/m3a-revisi-shell-shadcn/`](../m3a-revisi-shell-shadcn/) (PRD-000 Q40). Keputusan komponen ada di [ADR-0015](../../adr/0015-komponen-persis-shadcn-dan-kunci-snapshot.md). Isi spec ini tidak dihapus dan tetap menjadi catatan M3a. Bagian lain (token DS, bootstrap, registry, i18n, anggaran bundle) masih berlaku.
+
 ## Introduction
 
 M3a adalah blok pertama M3 (frontend core, PRD-000 Q33). Ia membangun fondasi yang dipakai semua blok M3 berikutnya dan semua modul bisnis: toolchain React, paket `@erpora/ui` (shadcn terbaru yang disalin dan dimiliki repo), token dan tipografi ERP Design System, shell aplikasi, theme switcher, routing, registry modul frontend, notifikasi, menu avatar, dan halaman `/settings/modules`.

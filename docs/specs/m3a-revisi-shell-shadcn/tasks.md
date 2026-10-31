@@ -143,7 +143,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
 - [ ] 10. Checkpoint — fitur lengkap
   - `task web:check`, `task lint arch check:gowork-off test`, `task contracts:check`; jalankan `task dev:setup` dan `web/dev-api.ts`, buka aplikasi dan pastikan Dock memuat Desk `Platform`, `example`, `exampleaddon`; tanyakan ke user bila ada kejanggalan tampilan.
 
-- [ ] 11. Dokumentasi (Kelas beban: Haiku)
+- [x] 11. Dokumentasi (Kelas beban: Haiku)
   - [x] 11.1 PRD, ADR, dan catatan keputusan
     - ADR-0006 dan PRD-000 (daftar slug 25 menjadi 26, tambah `desks`); ADR-0011 (komponen persis shadcn, mekanisme kunci snapshot D-1, supersede sebagian); PRD-000 Q40: catatan hasil serta pencatatan D-1 sampai D-10 yang menyimpang dari tulisan sebelumnya (nama `platform.desks.update` bukan `desk.update`; R1.3 menjadi kunci snapshot; selisih ukuran 36 vs 34 px). `requirements.md` R1.3 dan R13.1 sudah diubah pada 31 Okt 2026 (bersamaan penulisan tasks); di sini cukup pastikan PRD-000 Q40 memuat keputusan yang sama.
     - _Requirements: 21.4, 21.5_
@@ -153,7 +153,7 @@ Keputusan desain D-1 sampai D-10 dan enam pertanyaan terbuka `design.md` **diset
   - [x] 11.3 `CLAUDE.md` dan `AGENTS.md`
     - Ubah **keduanya identik**: aturan komponen persis shadcn (satu-satunya selisih impor `cn`, DS lewat token, kebutuhan tambahan di `components/extended`), `task shadcn:sync|verify`, URL berawalan slug dan `/` sebagai pintu masuk; `TestAgentsMDMatchesClaudeMD` lolos.
     - _Requirements: 21.4_
-  - [ ] 11.4 Tandai spec M3a sebagian digantikan
+  - [x] 11.4 Tandai spec M3a sebagian digantikan
     - `docs/specs/m3a-frontend-foundation-shell/{requirements,design,tasks}.md`: catatan di bagian atas bahwa shell, komponen, dan routing digantikan spec ini, tanpa menghapus isi.
     - _Requirements: 21.4_
 
@@ -273,6 +273,11 @@ Frappe UI hanya rujukan UX (ADR-0011, pustaka Vue); padanan dibaca dari catatan 
 - `docs/module-sdk/frontend.md`: `defineModule` tanpa `navigation` (field dan error yang berlaku), properti `desk` di manifest dengan aturan `to`/`permission`, rute `/<slug>/<halaman>` dengan `attachModuleRoutes` (indeks milik shell, ditolak bila dari modul), `listModuleRoutePaths`, `assertDeskRoutes`, `/platform/modules`, barrel dan entry sekunder (`@erpora/ui/toaster`, `@erpora/ui/command`), padanan komponen lama, dan batas "belum tersedia" M3b.
 - `docs/module-sdk/generators.md` bagian 9 dan `creating-a-module.md`: isi `make:module --frontend` yang sekarang (`desk` di templat `module.json`, `items-page`, rute `/items` tanpa indeks, kunci i18n contoh), aturan `desk` untuk modul ber-`web/`, dan contoh manifest sesuai `modules/example/module.json`.
 - `packages/ui/README.md`: bagian "Memasang komponen baru" diganti alur `shadcn:sync`/`shadcn:check`/`shadcn:verify`, patch deklaratif, kunci snapshot, dan lapisan `extended`.
+
+### 11.3 dan 11.4 Hasil (31 Okt 2026)
+
+- `CLAUDE.md` dan `AGENTS.md` identik (salinan byte per byte); `go test ./tests/architecture -run TestAgentsMDMatchesClaudeMD` lolos.
+- Spec M3a lama (`requirements.md`, `design.md`, `tasks.md`) mendapat catatan "sebagian digantikan" di bagian atas, tanpa menghapus isi dan tanpa mengubah centang.
 
 ## Task Dependency Graph
 

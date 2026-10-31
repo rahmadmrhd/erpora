@@ -1,5 +1,7 @@
 # Design Document: M3a Fondasi Frontend dan Shell
 
+> **Catatan (31 Okt 2026): sebagian digantikan.** Desain **shell** (sidebar tunggal, navbar, dan navigasi dari `defineModule`), **komponen** (adaptasi shadcn di tempat dan komposit buatan sendiri), serta **routing** (`/settings/modules`, `/example` dengan rute indeks modul) digantikan oleh [`docs/specs/m3a-revisi-shell-shadcn/design.md`](../m3a-revisi-shell-shadcn/design.md) (Dock dan panel menu, Desk per modul, URL berawalan slug, komponen persis shadcn). Lihat [ADR-0015](../../adr/0015-komponen-persis-shadcn-dan-kunci-snapshot.md) untuk keputusan komponen. Isi dokumen ini tidak dihapus dan tetap menjadi catatan M3a. Bagian lain (token DS, bootstrap, registry, i18n, keamanan) masih berlaku kecuali disebut di revisi.
+
 ## Overview
 
 M3a membangun fondasi frontend yang dipakai semua blok M3 berikutnya dan semua modul bisnis: toolchain React + Tailwind di Bun, paket `@erpora/ui` (shadcn yang disalin dan dimiliki repo, token ERP Design System), `defineModule()` dan registry modul frontend, lapisan data (bootstrap ber-`ETag`, TanStack Query, TanStack DB), TanStack Router dengan route guard, shell (sidebar, navbar, aksi halaman, notifikasi, menu avatar, theme switcher), dan halaman `/settings/modules`. Teks UI memakai runtime spec `i18n-platform` (namespace `platform` dan `ui`); M3a tidak mendefinisikan format atau runtime i18n sendiri.
