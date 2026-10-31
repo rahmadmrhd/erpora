@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { screen, within } from "@testing-library/react";
 import { renderApp } from "../test-utils";
-import { dedupeCrumbs, type ResolvedCrumb } from "./breadcrumbs";
+import { dedupeCrumbs, type ResolvedCrumb } from "./crumbs";
 
 beforeEach(() => {
   localStorage.clear();

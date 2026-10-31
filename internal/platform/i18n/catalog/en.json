@@ -138,6 +138,26 @@
   "pageActions": {
     "more": "More actions"
   },
+  "breadcrumb": {
+    "home": "Home",
+    "pathTitle": "Page path",
+    "pathDescription": "The full path to this page."
+  },
+  "palette": {
+    "title": "Command palette",
+    "description": "Search for a page or Desk, then press Enter to open it.",
+    "placeholder": "Search or type a command",
+    "empty": "No results.",
+    "groups": {
+      "pages": "Pages",
+      "desks": "Desks"
+    },
+    "hints": {
+      "navigate": "Select",
+      "open": "Open",
+      "close": "Close"
+    }
+  },
   "errors": {
     "bad_request": "The request is not valid.",
     "invalid_filter": "The filter is not valid.",

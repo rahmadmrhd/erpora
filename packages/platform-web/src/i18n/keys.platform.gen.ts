@@ -5,6 +5,9 @@ declare module "./types" {
   interface I18nCatalogs {
     platform: {
       "app.name": {};
+      "breadcrumb.home": {};
+      "breadcrumb.pathDescription": {};
+      "breadcrumb.pathTitle": {};
       "dashboard.description": {};
       "dashboard.slots": {};
       "dashboard.title": {};
@@ -200,6 +203,15 @@ declare module "./types" {
       "notifications.title": {};
       "notifications.unreadLabel": { count: number };
       "pageActions.more": {};
+      "palette.description": {};
+      "palette.empty": {};
+      "palette.groups.desks": {};
+      "palette.groups.pages": {};
+      "palette.hints.close": {};
+      "palette.hints.navigate": {};
+      "palette.hints.open": {};
+      "palette.placeholder": {};
+      "palette.title": {};
       "panel.loadError": {};
       "panel.noDesk": {};
       "routeError.description": {};

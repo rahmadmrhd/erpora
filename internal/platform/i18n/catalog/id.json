@@ -138,6 +138,26 @@
   "pageActions": {
     "more": "Aksi lainnya"
   },
+  "breadcrumb": {
+    "home": "Beranda",
+    "pathTitle": "Jalur halaman",
+    "pathDescription": "Jalur lengkap menuju halaman ini."
+  },
+  "palette": {
+    "title": "Palet perintah",
+    "description": "Cari halaman atau Desk, lalu tekan Enter untuk membukanya.",
+    "placeholder": "Cari atau ketik perintah",
+    "empty": "Tidak ada hasil.",
+    "groups": {
+      "pages": "Halaman",
+      "desks": "Desk"
+    },
+    "hints": {
+      "navigate": "Pilih",
+      "open": "Buka",
+      "close": "Tutup"
+    }
+  },
   "errors": {
     "bad_request": "Permintaan tidak valid.",
     "invalid_filter": "Filter tidak valid.",

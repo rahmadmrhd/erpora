@@ -35,12 +35,16 @@ describe("fallback galat Navbar (F-6)", () => {
       // sidebar dan konten tetap; minimal breadcrumb berupa path
       expect(screen.getByRole("navigation", { name: "Navigasi utama" })).toBeInTheDocument();
       expect(within(header).getByText("/alpha/crumbfail")).toBeInTheDocument();
+      // Peringatan lingkungan uji React (pembaruan di luar act) bukan catatan aplikasi dan bergantung pada waktu.
+      const appCalls = () =>
+        err.mock.calls.filter((c) => !/^(An update to|A suspended resource)/.test(String(c[0])));
+      await waitFor(() => expect(appCalls().length).toBeGreaterThan(0));
       await new Promise((r) => setTimeout(r, 50));
-      // SEMUA panggilan konsol error/warn/debug: satu catatan navbar, tanpa objek galat atau stack.
-      expect(err).toHaveBeenCalledTimes(1);
+      // SEMUA panggilan konsol error/warn/debug aplikasi: satu catatan navbar, tanpa objek galat atau stack.
+      expect(appCalls()).toHaveLength(1);
       expect(debug).not.toHaveBeenCalled();
-      expect(String(err.mock.calls[0]?.[0])).toContain("[erpora] navbar");
-      for (const call of [...err.mock.calls, ...warn.mock.calls, ...debug.mock.calls]) {
+      expect(String(appCalls()[0]?.[0])).toContain("[erpora] navbar");
+      for (const call of [...appCalls(), ...warn.mock.calls, ...debug.mock.calls]) {
         for (const arg of call) {
           expect(arg instanceof Error).toBe(false);
           expect(String(arg)).not.toMatch(/\n\s+at /);

@@ -2,7 +2,7 @@ import type { Crumb, MessageRef } from "@erpora/module-sdk";
 import { Message, useMessage, useModuleRegistry } from "@erpora/platform-web";
 import { useMatches } from "@tanstack/react-router";
 import { useMemo } from "react";
-import type { ResolvedCrumb } from "./breadcrumbs";
+import type { ResolvedCrumb } from "./crumbs";
 
 const APP_NAME = { ns: "platform", key: "app.name" } as const;
 
