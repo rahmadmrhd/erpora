@@ -10,6 +10,28 @@
       "label": "Language"
     }
   },
+  "fixedItems": {
+    "search": "Search",
+    "todo": "ToDo"
+  },
+  "dock": {
+    "label": "Desk dock",
+    "more": "+{count} more Desks"
+  },
+  "panel": {
+    "noDesk": "Choose a Desk in the Dock to see its menu.",
+    "loadError": "The Desk menu could not be loaded."
+  },
+  "logoMenu": {
+    "label": "App menu",
+    "switchDesk": "Switch Desk",
+    "allDesks": "All Desks",
+    "editSidebar": "Edit sidebar",
+    "editSidebarHint": "Available in an upcoming update (M3b)",
+    "help": "Help and shortcuts",
+    "about": "About",
+    "version": "Version {version}"
+  },
   "desk": {
     "title": "Platform",
     "modules": "Modules",
@@ -28,14 +50,57 @@
     "loadError": "Notifications could not be loaded.",
     "actionError": "The notification action failed. Try again.",
     "markAllRead": "Mark all as read",
-    "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}"
+    "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}",
+    "description": "Your notifications and events",
+    "tabsLabel": "Notification types",
+    "tabs": {
+      "all": "All",
+      "events": "Events"
+    },
+    "eventsEmpty": "No events yet"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Adjust your appearance, preferences, and shortcuts. Changes are saved automatically.",
+    "navLabel": "Settings sections",
+    "sections": {
+      "appearance": "Appearance",
+      "preferences": "Preferences",
+      "shortcuts": "Shortcuts"
+    },
+    "theme": {
+      "title": "Theme",
+      "description": "Light, dark, or follow your system setting.",
+      "automatic": "Automatic"
+    },
+    "dock": {
+      "title": "Dock",
+      "description": "The Dock stays attached to the screen edge or floats when needed.",
+      "pinned": "Pinned",
+      "floating": "Floating"
+    },
+    "timezone": {
+      "title": "Time zone",
+      "description": "Used to display dates and times.",
+      "automatic": "Automatic (follow browser)"
+    },
+    "shortcuts": {
+      "description": "Keyboard shortcuts that work across the whole app.",
+      "openPalette": "Open command palette",
+      "showShortcuts": "Show shortcuts",
+      "toggleSidebar": "Collapse or expand the panel",
+      "openDock": "Open the Dock",
+      "toggleTheme": "Switch theme"
+    }
   },
   "user": {
     "anonymous": "User",
     "menu": "Account menu",
     "manageAccount": "Manage Account",
     "signOut": "Sign Out",
-    "unavailable": "Not available in this version"
+    "unavailable": "Not available in this version",
+    "settings": "Settings",
+    "reload": "Reload"
   },
   "theme": {
     "label": "Theme",

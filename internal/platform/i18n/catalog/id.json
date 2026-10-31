@@ -10,6 +10,28 @@
       "label": "Bahasa"
     }
   },
+  "fixedItems": {
+    "search": "Cari",
+    "todo": "ToDo"
+  },
+  "dock": {
+    "label": "Dock Desk",
+    "more": "+{count} Desk lainnya"
+  },
+  "panel": {
+    "noDesk": "Pilih Desk di Dock untuk melihat menunya.",
+    "loadError": "Menu Desk gagal dimuat."
+  },
+  "logoMenu": {
+    "label": "Menu aplikasi",
+    "switchDesk": "Pindah Desk",
+    "allDesks": "Semua Desk",
+    "editSidebar": "Edit sidebar",
+    "editSidebarHint": "Tersedia pada pembaruan berikutnya (M3b)",
+    "help": "Bantuan dan pintasan",
+    "about": "Tentang",
+    "version": "Versi {version}"
+  },
   "desk": {
     "title": "Platform",
     "modules": "Modul",
@@ -28,14 +50,57 @@
     "loadError": "Notifikasi gagal dimuat.",
     "actionError": "Aksi pada notifikasi gagal. Coba lagi.",
     "markAllRead": "Tandai semua telah dibaca",
-    "unreadLabel": "{count, plural, =0 {Notifikasi, tidak ada yang belum dibaca} other {Notifikasi, # belum dibaca}}"
+    "unreadLabel": "{count, plural, =0 {Notifikasi, tidak ada yang belum dibaca} other {Notifikasi, # belum dibaca}}",
+    "description": "Notifikasi dan peristiwa Anda",
+    "tabsLabel": "Jenis notifikasi",
+    "tabs": {
+      "all": "Semua",
+      "events": "Peristiwa"
+    },
+    "eventsEmpty": "Belum ada peristiwa"
+  },
+  "settings": {
+    "title": "Pengaturan",
+    "description": "Atur tampilan, preferensi, dan pintasan Anda. Perubahan tersimpan otomatis.",
+    "navLabel": "Bagian pengaturan",
+    "sections": {
+      "appearance": "Tampilan",
+      "preferences": "Preferensi",
+      "shortcuts": "Pintasan"
+    },
+    "theme": {
+      "title": "Tema",
+      "description": "Terang, gelap, atau ikuti pengaturan sistem Anda.",
+      "automatic": "Otomatis"
+    },
+    "dock": {
+      "title": "Dock",
+      "description": "Dock menempel di sisi layar atau melayang saat dibutuhkan.",
+      "pinned": "Tersemat",
+      "floating": "Melayang"
+    },
+    "timezone": {
+      "title": "Zona waktu",
+      "description": "Dipakai untuk menampilkan tanggal dan waktu.",
+      "automatic": "Otomatis (ikuti peramban)"
+    },
+    "shortcuts": {
+      "description": "Pintasan keyboard yang berlaku di seluruh aplikasi.",
+      "openPalette": "Buka palet perintah",
+      "showShortcuts": "Tampilkan pintasan",
+      "toggleSidebar": "Ciutkan atau perluas panel",
+      "openDock": "Buka Dock",
+      "toggleTheme": "Ganti tema"
+    }
   },
   "user": {
     "anonymous": "Pengguna",
     "menu": "Menu akun",
     "manageAccount": "Kelola Akun",
     "signOut": "Keluar",
-    "unavailable": "Belum tersedia di versi ini"
+    "unavailable": "Belum tersedia di versi ini",
+    "settings": "Pengaturan",
+    "reload": "Muat ulang"
   },
   "theme": {
     "label": "Tema",
