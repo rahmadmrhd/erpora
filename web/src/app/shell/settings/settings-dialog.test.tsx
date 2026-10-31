@@ -56,6 +56,18 @@ describe("SettingsDialog: struktur", () => {
     expect(screen.getByText("Buka palet perintah")).toBeInTheDocument();
   });
 
+  test("garis pembatas navigasi/konten ada di kolom navigasi (setinggi penuh), bukan di daftar tab yang setinggi isinya (K7)", async () => {
+    await openSettings();
+    const list = screen.getByRole("tablist");
+    const column = list.parentElement as HTMLElement;
+    expect(column.dataset.slot).toBe("settings-nav");
+    expect(column.className).toContain("md:border-r");
+    expect(list.className).not.toContain("border-r");
+    expect(column.parentElement).toBe(
+      screen.getByRole("dialog").querySelector('[data-slot="tabs"]'),
+    );
+  });
+
   test("keyboard: panah berpindah antar bagian", async () => {
     const { user } = await openSettings();
     act(() => screen.getByRole("tab", { name: "Tampilan" }).focus());

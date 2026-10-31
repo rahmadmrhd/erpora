@@ -64,23 +64,30 @@ export function SettingsDialog({
           onValueChange={(v) => {
             if (isSection(v)) setSection(v);
           }}
-          className="grid min-h-0 gap-0 md:h-[26rem] md:grid-cols-[12rem_1fr]"
+          className="grid min-h-0 gap-0 md:h-[min(26rem,calc(100svh-9rem))] md:grid-cols-[12rem_1fr]"
         >
-          <TabsList
-            variant="line"
-            aria-label={t("settings.navLabel")}
-            className="h-fit w-full gap-1 p-3 md:h-full md:items-start md:justify-start md:border-r"
+          {/* Garis pembatas ada di kolom navigasi (sel grid yang meregang setinggi area dialog), bukan di daftar tab:
+              `TabsList` shadcn vertikal bertinggi `fit` sehingga garisnya terpotong setinggi isinya. */}
+          <div
+            data-slot="settings-nav"
+            className="min-h-0 overflow-y-auto border-b md:border-r md:border-b-0"
           >
-            <TabsTrigger value="appearance" className="justify-start">
-              {t("settings.sections.appearance")}
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="justify-start">
-              {t("settings.sections.preferences")}
-            </TabsTrigger>
-            <TabsTrigger value="shortcuts" className="justify-start">
-              {t("settings.sections.shortcuts")}
-            </TabsTrigger>
-          </TabsList>
+            <TabsList
+              variant="line"
+              aria-label={t("settings.navLabel")}
+              className="h-fit w-full gap-1 p-3 md:items-start md:justify-start"
+            >
+              <TabsTrigger value="appearance" className="justify-start">
+                {t("settings.sections.appearance")}
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="justify-start">
+                {t("settings.sections.preferences")}
+              </TabsTrigger>
+              <TabsTrigger value="shortcuts" className="justify-start">
+                {t("settings.sections.shortcuts")}
+              </TabsTrigger>
+            </TabsList>
+          </div>
           <div className="min-h-0 overflow-y-auto p-6">
             <TabsContent value="appearance">
               <AppearanceSection />
