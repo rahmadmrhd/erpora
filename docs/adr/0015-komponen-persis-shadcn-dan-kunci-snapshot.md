@@ -3,7 +3,7 @@
 - **Status:** Accepted. Menggantikan sebagian keputusan 1 dan konsekuensi "adaptasi manual" pada [ADR-0011](0011-kontrak-ui-extension-dan-design-system.md).
 - **Tanggal:** 2026-10-31
 - **Sumber:** PRD-000 Q40 butir 1 (diubah oleh butir 17 sampai 19); spec `docs/specs/m3a-revisi-shell-shadcn/` (requirements R1.1, R1.3, R1.6, R2.2; design D-1, D-1a, D-1b; tasks 1.3, 1.4, grup 2). Keputusan disetujui pemilik produk pada 31 Okt 2026.
-- **Diperbarui 2026-10-31 (putaran perbaikan 2):** penyimpangan terdaftar bertambah satu menjadi empat (patch perilaku, K12), CLI shadcn menjadi devDependency terpin (K13, bukan `bunx`). Sumber: PRD-000 Q40 butir 24; spec `m3a-revisi-shell-shadcn` requirements R1.1, R1.9, bagian "Keputusan putaran perbaikan" (K12, K13); design D-1a, D-11.
+- **Diperbarui 2026-10-31 (putaran perbaikan 2):** penyimpangan terdaftar bertambah satu menjadi empat (patch perilaku, K12), CLI shadcn tetap lewat `bunx` terpin (K13, keputusan 31 Okt 2026, tanpa perubahan). Sumber: PRD-000 Q40 butir 24; spec `m3a-revisi-shell-shadcn` requirements R1.1, bagian "Keputusan putaran perbaikan" (K12, K13); design D-1a, D-11.
 
 ## Konteks
 
@@ -35,7 +35,7 @@
 6. **Lembar bawah tanpa `drawer`.** Komponen `drawer` (vaul) tidak dipasang. Lembar bawah memakai `Sheet side="bottom"`.
 7. **Komponen baru dikonfirmasi dahulu.** Setiap komponen baru dari registry hanya dipasang setelah pemilik produk menyetujui, dengan perbandingan terhadap padanan Frappe UI dan DS (R1.6).
 8. **Ukuran kontrol.** Tinggi kontrol shadcn 36 px diterima walau DS menetapkan 34 px. Kepadatan hanya dapat diatur lewat token.
-9. **CLI sebagai devDependency terpin (K13, 31 Okt 2026).** CLI `shadcn` (`4.21.5`) menjadi devDependency `packages/ui` tanpa rentang versi dan dipanggil dari biner lokal oleh `shadcn:sync`, `shadcn:check`, dan `shadcn:verify`, bukan lewat `bunx`. Versi di `shadcn.lock.json` (`cli`) harus sama dengan versi devDependency. Keputusan ini mengganti keputusan `bunx` pada commit `a8fba4d` (31 Okt 2026). Alasan pemilik produk: `bunx` mengambil paket saat skrip berjalan (rapuh di Windows, tidak terkunci lockfile). Konsekuensi `bun audit` dipantau sebagai risiko (P-2 di spec revisi).
+9. **CLI shadcn tetap lewat `bunx` (K13, 31 Okt 2026).** Pemilik produk memutuskan CLI `shadcn@4.21.5` tetap dijalankan lewat `bunx shadcn@4.21.5` dari skrip `shadcn:sync`, `shadcn:check`, dan `shadcn:verify`, sesuai PRD-000 Q39 butir 5. Devdependency ditolak karena menambah ±270 entri `bun.lock` dan memperburuk `bun audit` (1 moderate menjadi 1 high, 1 moderate, dan 1 low). Temuan MINOR-1 (CLI via `bunx` tanpa lockfile, dependensi transitif di-resolve segar) ditutup sebagai risiko yang diterima: CI hijau, skrip hanya jalan di mesin pengembang, dan nama komponen divalidasi `parseComponentNames`.
 
 ## Konsekuensi
 
@@ -45,7 +45,7 @@
   - Kunci tidak melihat perubahan upstream sampai `shadcn:verify` dijalankan secara manual.
   - Dependensi baru masuk: `cmdk` 1.1.1 (palet, hanya chunk malas) dan `next-themes` 0.4.6 (ditarik `sonner` 2.0.8; `theme` ditimpa di pembungkus `Toaster`).
   - Perilaku bawaan shadcn yang bertentangan dengan keputusan produk (`Sidebar` menulis cookie `sidebar_state`) dihapus lewat patch perilaku (K12, 31 Okt 2026), bukan diterima. Perilaku bawaan lain yang berbeda dari M3a tetap dicatat di `docs/specs/m3a-revisi-shell-shadcn/tasks.md` (catatan 2.1 sampai 2.6).
-  - `shadcn-sync` menjalankan CLI devDependency terpin (K13, bukan `bunx`) dengan argumen nama polos saja, sehingga URL, namespace registry, dan flag ditolak. Ini membatasi risiko rantai pasok dan SSRF. Rantai dependensi CLI kembali masuk `bun.lock`; advisori `bun audit` yang muncul dipantau (P-2 di spec revisi).
+  - `shadcn-sync` menjalankan CLI lewat `bunx` terpin dengan argumen nama polos saja, sehingga URL, namespace registry, dan flag ditolak. Ini membatasi risiko rantai pasok dan SSRF. Risiko CLI tanpa lockfile diterima (K13, 31 Okt 2026).
 - **Pekerjaan lanjutan wajib:**
   - Setiap komponen baru tetap melewati konfirmasi pemilik produk sebelum `shadcn:sync`.
   - Setiap sinkronisasi memperbarui `shadcn.lock.json` dalam commit yang sama dengan komponennya.

@@ -42,7 +42,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 6. THE komponen baru dari registry SHALL tetap diminta konfirmasi pemilik produk sebelum dipasang (aturan konfirmasi komponen), memuat perbandingan dengan padanan Frappe UI dan DS.
 7. THE `@erpora/ui` SHALL tetap daun (F4): tidak mengimpor paket `@erpora/*`; teks bawaan komponen tetap lewat konteks label (`useUiLabel`).
 8. **Ukuran kontrol (diputuskan 31 Okt 2026):** shadcn memakai tinggi `h-9` (36 px), sedangkan DS menetapkan 34 px (Button md) dan 32 px (Input sm). Karena komponen tidak boleh diubah, ukuran shadcn bawaan diterima dan selisih dari DS dicatat di `design.md`; kepadatan hanya dapat dipengaruhi lewat token (mis. `--spacing`) bila kelak diputuskan lain.
-9. THE paket SHALL tidak menambah dependensi `cn` dan SHALL menyematkan versi pasti semua dependensi hasil `shadcn add` (aturan pin `package.json` yang ada). CLI `shadcn` SHALL menjadi devDependency terpin di `packages/ui` (versi sama dengan kunci `cli` di `shadcn.lock.json`) dan dipanggil dari biner lokal, bukan `bunx` (K13, 31 Okt 2026; ADR-0015).
+9. THE paket SHALL tidak menambah dependensi `cn` dan SHALL menyematkan versi pasti semua dependensi hasil `shadcn add` (aturan pin `package.json` yang ada).
 
 ### Requirement 2: Token ERP Design System lewat CSS
 
@@ -328,7 +328,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 ## Keputusan putaran perbaikan 31 Okt 2026 (K1–K14)
 
-Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan review). Keputusan ini **menang atas teks requirement lama** di atas bila berbeda. Setiap butir sudah diterapkan ke requirement yang disebut pada tabel, dan dicatat di PRD-000 Q40 butir 24 serta ADR-0015. Pemilik produk menyetujui seluruh butir.
+Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan review). Keputusan ini **menang atas teks requirement lama** di atas bila berbeda. Setiap butir sudah diterapkan ke requirement yang disebut pada tabel, dan dicatat di PRD-000 Q40 butir 24 serta ADR-0015. Pemilik produk menyetujui seluruh butir (K13 pada 31 Okt 2026 memutuskan CLI tetap `bunx`, tanpa perubahan requirement).
 
 | # | Keputusan | Requirement yang diubah |
 | - | --------- | ----------------------- |
@@ -344,7 +344,7 @@ Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan r
 | K10 | Pindah Desk (ikon Dock Floating, Pindah Desk di popover logo, entri lintas Desk di palet): tetap di rute bila rute itu juga ada di Desk tujuan (`matchMenu`), selain itu ke Dashboard Desk tujuan. Fungsi murni `resolveDeskSwitchTarget` di `@erpora/platform-web`. Klik nama Desk di breadcrumb dan kartu di halaman Desks tetap ke Dashboard. | R4.2, R6.5 (baru), R18.4 |
 | K11 | Panel Notifikasi memakai jebakan fokus; klik di luar dan `Escape` tetap menutup; fokus kembali ke pemicu. | R15.4, R19.3 |
 | K12 | Cookie `sidebar_state` yang ditulis sidebar shadcn dihapus lewat patch perilaku terdaftar; keadaan sidebar hanya di `localStorage["erpora.sidebar"]`. | R1.1 (d), R9.1, R20.2 |
-| K13 | CLI shadcn menjadi devDependency terpin di `packages/ui` dan dipanggil dari biner lokal, bukan `bunx`. | R1.9 |
+| K13 | CLI shadcn tetap lewat `bunx shadcn@4.21.5` (versi terpin), sesuai PRD-000 Q39 butir 5; devDependency tidak dipakai. Temuan MINOR-1 (CLI via `bunx` tanpa lockfile) ditutup sebagai risiko yang diterima. | R1.9 (tidak berubah) |
 | K14 | Desk yang tidak punya menu berizin disembunyikan dari pengguna itu (menyembunyikan, bukan menonaktifkan). Catatan M3b: pemilihan menu saat membuat Desk kustom difilter menurut izin pembuat atau role/user target; menu tak berizin tetap tampil di daftar tersedia tetapi tidak dapat ditambahkan. | R12.2 |
 
 **Temuan review yang sesuai spek** (dikerjakan): I-1 (R11.6), I-2 (R17.3 dan R17.4, tanpa perubahan teks), I-3 (R20.4, tanpa perubahan teks), I-4 (R4.5, tanpa perubahan teks), Minor 1 (R15.1), Minor 2 sampai 8 (tanpa perubahan requirement; dilacak di `tasks.md` grup 14).
@@ -354,5 +354,5 @@ Keputusan pemilik produk pada 31 Okt 2026 (hasil uji coba browser dan tinjauan r
 | # | Pertanyaan | Rekomendasi | Status |
 | - | ---------- | ----------- | ------ |
 | P-1 | Halaman Desks tidak punya breadcrumb (K1), sehingga tidak ada langkah terakhir yang menjadi h1 (K9, R22.3). Apa judul `<h1>` halaman Desks? | `<h1>` tersembunyi visual (`sr-only`) bertuliskan label halaman Desks, tanpa judul visual, agar satu h1 per halaman tetap terpenuhi. | Terbuka |
-| P-2 | K13 mengembalikan CLI shadcn sebagai devDependency. Rantai dependensinya sebelumnya menjadi alasan pindah ke `bunx` karena advisori `bun audit` (commit `a8fba4d`). Apakah advisori yang muncul kembali diterima? | Pantau `bun audit` di CI. Bila ada advisori tanpa versi perbaikan, putuskan ulang (pin atau override) sebelum merge. Risiko dicatat di `design.md`. | Terbuka: butuh konfirmasi |
+| P-2 | Cara memasang CLI shadcn (`bunx` atau devDependency terpin). | Tetap `bunx` sesuai Q39 butir 5 | Ditutup 31 Okt 2026 (K13): tetap `bunx`, keputusan pemilik produk |
 | P-3 | Halaman galat (`ErrorNotice`) memakai judul `<h1>` (catatan 2.6). Dengan K9 satu h1 per halaman, apakah judul galat turun menjadi `<h2>`? | Ya, turun menjadi `<h2>` agar satu h1 per halaman terpenuhi. | Terbuka: butuh konfirmasi |
