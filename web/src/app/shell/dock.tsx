@@ -26,6 +26,7 @@ import {
   useState,
 } from "react";
 import { useDeskNavigation } from "./desk-navigation";
+import { DockFixedItems } from "./dock-fixed-items";
 import { LogoPopover } from "./logo-popover";
 import { NavIcon } from "./nav-icon";
 import { UserMenu } from "./user-menu";
@@ -238,8 +239,8 @@ export function DockDeskList({
 }
 
 /**
- * Dock Pinned (R4.4): rel ikon berdiri di kiri bersama panel menu. Dari atas: logo (popover), pemisah, ikon Desk,
- * lalu avatar pengguna di dasar (R16.1). Di bawah 1024 px Dock tidak dirender (panel menjadi Sheet, R4.6).
+ * Dock Pinned (R4.4, K6): rel ikon berdiri di kiri bersama panel menu. Dari atas: logo (popover), item tetap (Cari,
+ * Notifikasi, ToDo), pemisah, ikon Desk, lalu avatar pengguna di dasar (R16.1). Di bawah 1024 px Dock tidak dirender (panel menjadi Sheet, R4.6).
  */
 export function Dock() {
   const { t } = useTranslation("platform");
@@ -250,6 +251,7 @@ export function Dock() {
       className="flex h-full w-(--dock-width) shrink-0 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-2 text-sidebar-foreground"
     >
       <LogoPopover variant="dock" />
+      <DockFixedItems />
       <Separator className="w-8" />
       <DockDeskList />
       <UserMenu variant="dock" />

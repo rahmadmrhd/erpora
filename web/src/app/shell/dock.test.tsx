@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { Desk } from "@erpora/platform-web";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Desk, NotificationSource } from "@erpora/platform-web";
 import { makeDashboardItem, makeDesk, makeDeskItem } from "@erpora/platform-web/testing";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -105,6 +105,73 @@ describe("Dock (Pinned)", () => {
     expect(sessionStorage.getItem("erpora.desk.tab")).toBe("billing");
   });
 
+  describe("item tetap di Dock (K6)", () => {
+    const source = (count: number): NotificationSource => ({
+      unreadCount: async () => count,
+      list: async () => [],
+      markRead: async () => {},
+      markAllRead: async () => {},
+    });
+    const before = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    test("urutan dari atas: logo, Cari, Notifikasi, ToDo, pemisah, ikon Desk, avatar", async () => {
+      renderShell(<Dock />, { desks });
+      const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+      const logo = within(nav).getByRole("button", { name: /Menu aplikasi/ });
+      const search = within(nav).getByRole("button", { name: /Cari/ });
+      const bell = within(nav).getByRole("button", { name: /Notifikasi/ });
+      const todo = within(nav).getByRole("link", { name: /ToDo/ });
+      const separator = nav.querySelector('[data-slot="separator"]') as HTMLElement;
+      const first = await within(nav).findByRole("button", { name: "Platform" });
+      const avatar = within(nav).getByRole("button", { name: /^Menu akun/ });
+      const order = [logo, search, bell, todo, separator, first, avatar];
+      for (let i = 0; i < order.length - 1; i++) {
+        expect(before(order[i] as Element, order[i + 1] as Element)).toBe(true);
+      }
+    });
+
+    test("Cari membuka palet, Notifikasi membuka panel, ToDo menavigasi ke /platform/todo", async () => {
+      const openPalette = mock(() => {});
+      const openNotifications = mock(() => {});
+      const user = userEvent.setup();
+      const { router } = renderShell(<Dock />, {
+        desks,
+        actions: { openPalette, openNotifications },
+      });
+      const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+      await user.click(within(nav).getByRole("button", { name: /Cari/ }));
+      expect(openPalette).toHaveBeenCalledTimes(1);
+      await user.click(within(nav).getByRole("button", { name: /Notifikasi/ }));
+      expect(openNotifications).toHaveBeenCalledTimes(1);
+      await user.click(within(nav).getByRole("link", { name: /ToDo/ }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/platform/todo"));
+    });
+
+    test.each([
+      [5, "5"],
+      [100, "99+"],
+    ])(
+      "lencana Notifikasi untuk %p belum dibaca menampilkan %p dan menjadi deskripsi tombol",
+      async (count, text) => {
+        renderShell(<Dock />, { desks, notificationSource: source(count) });
+        const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+        const bell = within(nav).getByRole("button", { name: /Notifikasi/ });
+        await waitFor(() => expect(bell).toHaveAccessibleDescription(text));
+      },
+    );
+
+    test("tanpa belum dibaca tidak ada lencana", async () => {
+      renderShell(<Dock />, { desks, notificationSource: source(0) });
+      const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 30));
+      });
+      const bell = within(nav).getByRole("button", { name: /Notifikasi/ });
+      expect(bell).not.toHaveAccessibleDescription();
+    });
+  });
+
   test("sorotan Desk aktif memakai latar (sidebar-accent), tanpa outline atau cincin (K2)", async () => {
     sessionStorage.setItem("erpora.desk.tab", "example");
     renderShell(<Dock />, { desks });
@@ -184,6 +251,14 @@ describe("DockFloating", () => {
     act(() => {
       fireEvent.keyDown(window, { key: "?", code: "Slash", ctrlKey: true, shiftKey: true });
     });
+
+  test("pil hanya berisi ikon Desk (item tetap ada di panel, bukan di pil)", async () => {
+    await renderFloating();
+    press();
+    const nav = await screen.findByRole("navigation", { name: "Dock Desk" });
+    expect(within(nav).queryByRole("button", { name: /Cari|Notifikasi/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /ToDo/ })).toBeNull();
+  });
 
   test("tertutup secara bawaan: tersembunyi dari pohon aksesibilitas dan tidak dapat difokus", async () => {
     await renderFloating();

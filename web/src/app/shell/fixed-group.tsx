@@ -15,7 +15,7 @@ import { NavIcon } from "./nav-icon";
 import { type ShellActions, useShellActions } from "./shell-context";
 
 /** Perintah yang dikenal shell untuk item tetap berjenis `command`; perintah lain diabaikan (tanpa galat). */
-function runCommand(actions: ShellActions, command: string): void {
+export function runCommand(actions: ShellActions, command: string): void {
   if (command === "search") actions.openPalette();
   else if (command === "notifications") actions.openNotifications();
 }

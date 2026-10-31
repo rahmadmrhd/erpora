@@ -62,8 +62,8 @@ describe("findActiveItem", () => {
 });
 
 describe("DeskPanel: isi dan urutan", () => {
-  test("tanpa header Desk; urutan grup tetap, pemisah, label Desk, lalu menu dengan Dashboard pertama", async () => {
-    renderShell(<DeskPanel variant="pinned" />, { desks });
+  test("Floating: tanpa header Desk; urutan grup tetap, pemisah, label Desk, lalu menu dengan Dashboard pertama", async () => {
+    renderShell(<DeskPanel variant="floating" />, { desks });
     const nav = await ready();
     const first = within(nav).getByRole("button", { name: /Cari/ });
     const todo = within(nav).getByRole("link", { name: /ToDo/ });
@@ -87,13 +87,26 @@ describe("DeskPanel: isi dan urutan", () => {
       .map((l) => l.getAttribute("href"));
     // ToDo, Dashboard (pertama di menu Desk), Notes
     expect(links.slice(0, 3)).toEqual(["/platform/todo", "/example", "/example/notes"]);
-    // Pinned: logo dan pengguna ada di Dock, bukan di panel.
+  });
+
+  test("Pinned (K6): panel hanya berisi label Desk dan menu Desk; Cari, Notifikasi, ToDo, logo, dan pengguna ada di Dock", async () => {
+    renderShell(<DeskPanel variant="pinned" />, { desks });
+    const nav = await ready();
+    await waitFor(() => expect(within(nav).getByText("Example")).toBeInTheDocument());
+    expect(within(nav).queryByRole("button", { name: /Cari/ })).toBeNull();
+    expect(within(nav).queryByRole("button", { name: /Notifikasi/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /ToDo/ })).toBeNull();
+    expect(nav.querySelector('[data-slot="sidebar-separator"]')).toBeNull();
     expect(screen.queryByRole("button", { name: /Menu aplikasi/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Menu akun/ })).toBeNull();
+    const links = within(nav)
+      .getAllByRole("link")
+      .map((l) => l.getAttribute("href"));
+    expect(links.slice(0, 2)).toEqual(["/example", "/example/notes"]);
   });
 
   test("pemisah tidak meluap secara horizontal: lebar penuh + mx-2 ditimpa w-auto (regresi bilah gulir horizontal)", async () => {
-    renderShell(<DeskPanel variant="pinned" />, { desks });
+    renderShell(<DeskPanel variant="floating" />, { desks });
     const nav = await ready();
     const separator = nav.querySelector('[data-slot="sidebar-separator"]') as HTMLElement;
     expect(separator.className).toContain("mx-2");
@@ -111,14 +124,13 @@ describe("DeskPanel: isi dan urutan", () => {
     }
   });
 
-  test("tanpa Desk saat ini (belum ada pilihan): petunjuk memilih Desk di Dock; grup tetap tetap ada", async () => {
+  test("tanpa Desk saat ini (belum ada pilihan): petunjuk memilih Desk di Dock", async () => {
     sessionStorage.clear();
     renderShell(<DeskPanel variant="pinned" />, { desks });
     const nav = await ready();
     expect(
       await within(nav).findByText("Pilih Desk di Dock untuk melihat menunya."),
     ).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: /Cari/ })).toBeInTheDocument();
   });
 });
 
@@ -127,7 +139,7 @@ describe("DeskPanel: item tetap", () => {
     const openPalette = mock(() => {});
     const openNotifications = mock(() => {});
     const user = userEvent.setup();
-    const { router } = renderShell(<DeskPanel variant="pinned" />, {
+    const { router } = renderShell(<DeskPanel variant="floating" />, {
       desks,
       actions: { openPalette, openNotifications },
     });
@@ -141,7 +153,7 @@ describe("DeskPanel: item tetap", () => {
   });
 
   test("Cari menampilkan petunjuk Ctrl K", async () => {
-    renderShell(<DeskPanel variant="pinned" />, { desks });
+    renderShell(<DeskPanel variant="floating" />, { desks });
     const nav = await ready();
     const search = within(nav).getByRole("button", { name: /Cari/ });
     expect(within(search).getByText("Ctrl")).toBeInTheDocument();
@@ -157,7 +169,7 @@ describe("DeskPanel: item tetap", () => {
       action: { kind: "link", to: "/platform/inbox" },
     });
     try {
-      renderShell(<DeskPanel variant="pinned" />, { desks });
+      renderShell(<DeskPanel variant="floating" />, { desks });
       const nav = await ready();
       const links = within(nav)
         .getAllByRole("link")
@@ -180,7 +192,7 @@ describe("DeskPanel: item tetap", () => {
     [99, "99"],
     [100, "99+"],
   ])("lencana Notifikasi untuk %p belum dibaca menampilkan %p", async (count, text) => {
-    renderShell(<DeskPanel variant="pinned" />, { desks, notificationSource: source(count) });
+    renderShell(<DeskPanel variant="floating" />, { desks, notificationSource: source(count) });
     const nav = await ready();
     const bell = within(nav).getByRole("button", { name: /Notifikasi/ });
     const item = bell.closest("li") as HTMLElement;
@@ -189,7 +201,7 @@ describe("DeskPanel: item tetap", () => {
   });
 
   test("tanpa belum dibaca tidak ada lencana", async () => {
-    renderShell(<DeskPanel variant="pinned" />, { desks, notificationSource: source(0) });
+    renderShell(<DeskPanel variant="floating" />, { desks, notificationSource: source(0) });
     const nav = await ready();
     await act(async () => {
       await new Promise((r) => setTimeout(r, 30));
