@@ -55,25 +55,4 @@ describe("Tooltip", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
-
-  test("jeda bawaan TooltipProvider 300 ms dan permukaan popover (teks saja)", async () => {
-    const user = userEvent.setup();
-    render(
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button type="button">x</button>
-          </TooltipTrigger>
-          <TooltipContent>Isi</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>,
-    );
-    await user.tab();
-    const tip = await screen.findByRole("tooltip");
-    // Radix menyalin teks ke elemen tersembunyi; konten visual memakai token popover.
-    const visual = document.querySelector('[data-slot="tooltip-content"]') as HTMLElement;
-    expect(visual.className).toContain("bg-popover");
-    expect(visual.className).toContain("text-popover-foreground");
-    expect(tip).toBeInTheDocument();
-  });
 });

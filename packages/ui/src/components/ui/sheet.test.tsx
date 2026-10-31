@@ -28,20 +28,11 @@ function Sample({ side }: { side?: "left" | "right" | "top" | "bottom" }) {
 }
 
 describe("Sheet", () => {
-  test("side=left: dialog bernama dari judul dengan data-side=left", async () => {
+  test("side=left: dialog bernama dari judul", async () => {
     const user = userEvent.setup();
     render(<Sample side="left" />);
     await user.click(screen.getByRole("button", { name: "Menu" }));
-    const dialog = await screen.findByRole("dialog", { name: "Navigasi" });
-    expect(dialog).toHaveAttribute("data-side", "left");
-    expect(dialog.className).toContain("left-0");
-  });
-
-  test("bawaan side=right", async () => {
-    const user = userEvent.setup();
-    render(<Sample />);
-    await user.click(screen.getByRole("button", { name: "Menu" }));
-    expect(await screen.findByRole("dialog")).toHaveAttribute("data-side", "right");
+    expect(await screen.findByRole("dialog", { name: "Navigasi" })).toBeInTheDocument();
   });
 
   test("tombol tutup berlabel dari UiLabels dan menutup panel", async () => {

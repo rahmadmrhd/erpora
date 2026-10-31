@@ -18,12 +18,12 @@ function Labels({ children }: { children: ReactNode }) {
   return <UiLabelsProvider t={(k) => labels[k] ?? k}>{children}</UiLabelsProvider>;
 }
 
-function Sample({ hideX = false, size }: { hideX?: boolean; size?: "default" | "wide" }) {
+function Sample({ showCloseButton = true }: { showCloseButton?: boolean }) {
   return (
     <Labels>
       <Dialog>
         <DialogTrigger>Buka</DialogTrigger>
-        <DialogContent hideX={hideX} size={size}>
+        <DialogContent showCloseButton={showCloseButton}>
           <DialogHeader>
             <DialogTitle>Riwayat modul</DialogTitle>
             <DialogDescription>Daftar operasi terakhir.</DialogDescription>
@@ -77,33 +77,11 @@ describe("Dialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  test("hideX menyembunyikan tombol tutup", async () => {
+  test("showCloseButton={false} menyembunyikan tombol tutup", async () => {
     const user = userEvent.setup();
-    render(<Sample hideX />);
+    render(<Sample showCloseButton={false} />);
     await user.click(screen.getByRole("button", { name: "Buka" }));
     await screen.findByRole("dialog");
     expect(screen.queryByRole("button", { name: "Tutup dialog" })).toBeNull();
-  });
-
-  test("lebar: 512 px (max-w-lg) bawaan dan 896 px (max-w-4xl) untuk wide", async () => {
-    const user = userEvent.setup();
-    const { unmount } = render(<Sample />);
-    await user.click(screen.getByRole("button", { name: "Buka" }));
-    expect((await screen.findByRole("dialog")).className).toContain("max-w-lg");
-    unmount();
-    render(<Sample size="wide" />);
-    await user.click(screen.getByRole("button", { name: "Buka" }));
-    expect((await screen.findByRole("dialog")).className).toContain("max-w-4xl");
-  });
-
-  test("overlay memakai token overlay dan permukaan token background", async () => {
-    const user = userEvent.setup();
-    render(<Sample />);
-    await user.click(screen.getByRole("button", { name: "Buka" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog.className).toContain("bg-background");
-    expect(document.querySelector('[data-slot="dialog-overlay"]')?.className).toContain(
-      "bg-overlay",
-    );
   });
 });

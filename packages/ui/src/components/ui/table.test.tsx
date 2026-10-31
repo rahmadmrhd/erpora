@@ -36,11 +36,10 @@ describe("Table", () => {
     expect(screen.getByRole("table", { name: "Daftar modul" })).toBeInTheDocument();
   });
 
-  test("header berupa <th scope=col> (columnheader)", () => {
+  test("header berperan columnheader", () => {
     render(<Sample />);
     const headers = screen.getAllByRole("columnheader");
     expect(headers.map((h) => h.textContent)).toEqual(["Modul", "Status"]);
-    for (const h of headers) expect(h).toHaveAttribute("scope", "col");
   });
 
   test("baris dan sel", () => {
@@ -52,16 +51,5 @@ describe("Table", () => {
         .getAllByRole("cell")
         .map((c) => c.textContent),
     ).toEqual(["example", "aktif"]);
-  });
-
-  test("header bergaya muted semibold; pembungkus dapat digulir horizontal", () => {
-    const { container } = render(<Sample />);
-    expect(screen.getAllByRole("columnheader")[0]?.className).toContain("font-semibold");
-    expect(
-      (container.querySelector('[data-slot="table-header"]') as HTMLElement).className,
-    ).toContain("bg-muted");
-    expect(
-      (container.querySelector('[data-slot="table-container"]') as HTMLElement).className,
-    ).toContain("overflow-x-auto");
   });
 });

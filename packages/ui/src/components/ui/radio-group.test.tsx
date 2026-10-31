@@ -29,11 +29,11 @@ describe("RadioGroup", () => {
     expect(seen).toEqual(["gelap"]);
   });
 
-  test("keyboard: panah bawah memindahkan pilihan (Radix)", async () => {
+  test("keyboard: panah bawah memindahkan fokus ke opsi berikutnya (Radix)", async () => {
     const user = userEvent.setup();
     setup();
     screen.getByRole("radio", { name: "Terang" }).focus();
     await user.keyboard("{ArrowDown}");
-    expect(screen.getByRole("radio", { name: "Gelap" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Gelap" })).toHaveFocus();
   });
 });

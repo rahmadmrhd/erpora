@@ -15,26 +15,21 @@ describe("Avatar", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 
-  test("lingkaran 40 px bawaan; fallback berlatar muted", () => {
-    const { container } = render(
+  test("fallback tampil dan ukuran ditandai data-size (default, sm, lg)", () => {
+    const { container, rerender } = render(
       <Avatar>
         <AvatarFallback>AB</AvatarFallback>
       </Avatar>,
     );
-    const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain("size-10");
-    expect(root.className).toContain("rounded-full");
-    expect(screen.getByText("AB").className).toContain("bg-muted");
-  });
-
-  test("ukuran dapat diganti lewat className (mis. 32 px di footer sidebar)", () => {
-    const { container } = render(
-      <Avatar className="size-8">
+    const root = () => container.firstElementChild as HTMLElement;
+    expect(screen.getByText("AB")).toBeInTheDocument();
+    expect(root()).toHaveAttribute("data-slot", "avatar");
+    expect(root()).toHaveAttribute("data-size", "default");
+    rerender(
+      <Avatar size="lg">
         <AvatarFallback>AB</AvatarFallback>
       </Avatar>,
     );
-    const cls = (container.firstElementChild as HTMLElement).className;
-    expect(cls).toContain("size-8");
-    expect(cls).not.toContain("size-10");
+    expect(root()).toHaveAttribute("data-size", "lg");
   });
 });
