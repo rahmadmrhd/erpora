@@ -347,3 +347,19 @@ describe("PanelSheet (< 1024 px)", () => {
     expect(screen.queryByRole("separator", { name: /sidebar/i })).toBeNull();
   });
 });
+
+describe("strip ikon Floating: tombol terpusat (K21)", () => {
+  test("semua SidebarMenu di panel memusatkan itemnya saat sidebar diciutkan, tanpa memengaruhi mode terbuka", async () => {
+    renderShell(<DeskPanel variant="floating" />, {
+      desks,
+      sidebar: { open: false, onOpenChange: () => {} },
+    });
+    await ready();
+    const menus = document.querySelectorAll('[data-slot="sidebar-menu"]');
+    // logo, grup tetap, menu Desk, pengguna
+    expect(menus.length).toBeGreaterThanOrEqual(4);
+    for (const menu of menus) {
+      expect(menu.className).toContain("group-data-[collapsible=icon]:items-center");
+    }
+  });
+});

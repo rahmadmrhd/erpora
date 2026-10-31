@@ -21,10 +21,11 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@erpora/ui";
 import { useId } from "react";
 import { DisabledHint } from "./disabled-hint";
-import { DOCK_BUTTON_CLASS } from "./dock-sizing";
+import { DOCK_BUTTON_CLASS, STRIP_CENTER_CLASS } from "./dock-sizing";
 import { useShellActions } from "./shell-context";
 
 function Icon({ name }: { name: string }) {
@@ -53,8 +54,11 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
   const canSignOut = source.capabilities.signOut;
   const hint = t("user.unavailable");
 
-  // Di Dock (K16, R16.1) avatar 32 px mengisi tombol, dengan cincin tipis dan latar secondary agar kontras terhadap sidebar.
-  const dock = variant === "dock";
+  // Di Dock (K16, R16.1) dan strip ikon Floating (K21) avatar 32 px mengisi tombol, dengan cincin tipis dan latar
+  // secondary agar kontras terhadap sidebar.
+  const { state, isMobile } = useSidebar();
+  const strip = variant === "panel" && state === "collapsed" && !isMobile;
+  const dock = variant === "dock" || strip;
   const avatar = (
     <Avatar
       size={dock ? "default" : "sm"}
@@ -140,7 +144,7 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
   }
 
   return (
-    <SidebarMenu>
+    <SidebarMenu className={STRIP_CENTER_CLASS}>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -23,6 +23,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { DESK_PANEL_ID } from "./collapse-edge";
 import { DeskMenuTree, resetDeskMenuChunks } from "./desk-panel-menu";
+import { STRIP_CENTER_CLASS } from "./dock-sizing";
 import { FixedGroup } from "./fixed-group";
 import { LogoPopover } from "./logo-popover";
 import { ShellBoundary } from "./shell-boundary";
@@ -60,7 +61,7 @@ function DeskMenu({ variant }: { variant: PanelVariant }) {
   if (status === "loading") {
     return (
       <SidebarGroup aria-busy="true">
-        <SidebarMenu>
+        <SidebarMenu className={STRIP_CENTER_CLASS}>
           {[0, 1, 2].map((i) => (
             <SidebarMenuItem key={i}>
               <SidebarMenuSkeleton showIcon />

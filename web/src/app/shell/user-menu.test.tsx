@@ -106,3 +106,25 @@ describe("UserMenu varian dock (K16)", () => {
     expect(trigger.tabIndex).toBe(0);
   });
 });
+
+describe("UserMenu varian panel di strip ikon Floating (K21)", () => {
+  test("diciutkan: avatar 32 px berkontras seperti Dock; terbuka: avatar kecil tanpa cincin", async () => {
+    const collapsed = renderShell(<UserMenu variant="panel" />, {
+      user: source(),
+      sidebar: { open: false, onOpenChange: () => {} },
+    });
+    const trigger = await screen.findByRole("button", { name: /Menu akun/ });
+    const avatar = trigger.querySelector('[data-slot="avatar"]') as HTMLElement;
+    expect(avatar).toHaveAttribute("data-size", "default");
+    expect(avatar.className).toContain("ring-1");
+    const fallback = trigger.querySelector('[data-slot="avatar-fallback"]') as HTMLElement;
+    expect(fallback.className).toContain("bg-secondary");
+    collapsed.unmount();
+
+    renderShell(<UserMenu variant="panel" />, { user: source() });
+    const open = await screen.findByRole("button", { name: /Menu akun/ });
+    const small = open.querySelector('[data-slot="avatar"]') as HTMLElement;
+    expect(small).toHaveAttribute("data-size", "sm");
+    expect(small.className).not.toContain("ring-1");
+  });
+});

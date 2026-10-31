@@ -20,6 +20,7 @@ import {
   SidebarMenuSubItem,
 } from "@erpora/ui";
 import { Suspense, useEffect, useState } from "react";
+import { STRIP_CENTER_CLASS } from "./dock-sizing";
 import { NavIcon } from "./nav-icon";
 import { retryableLazy } from "./retryable-lazy";
 
@@ -208,7 +209,7 @@ export function DeskMenuTree({
 }) {
   const activeId = findActiveItem(desk, pathname)?.id ?? null;
   return (
-    <SidebarMenu>
+    <SidebarMenu className={STRIP_CENTER_CLASS}>
       {desk.menus.map((m) =>
         m.type === "item" ? (
           <ItemLink

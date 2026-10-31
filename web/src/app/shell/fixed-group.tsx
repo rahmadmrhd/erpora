@@ -11,6 +11,7 @@ import {
 } from "@erpora/ui";
 import { useRouterState } from "@tanstack/react-router";
 import { useId } from "react";
+import { STRIP_CENTER_CLASS } from "./dock-sizing";
 import { NavIcon } from "./nav-icon";
 import { type ShellActions, useShellActions } from "./shell-context";
 
@@ -80,7 +81,7 @@ export function FixedGroup() {
   const items = useFixedItems();
   return (
     <SidebarGroup>
-      <SidebarMenu>
+      <SidebarMenu className={STRIP_CENTER_CLASS}>
         {items.map((item) => (
           <Row key={item.id} item={item} />
         ))}

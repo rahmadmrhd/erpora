@@ -21,3 +21,9 @@ export const DOCK_BUTTON_CLASS =
 
 /** Tombol galat Dock (katalog atau chunk gagal dimuat): warna destructive dipertahankan saat hover, juga di tema gelap. */
 export const DOCK_ERROR_BUTTON_CLASS = `${DOCK_BUTTON_CLASS} text-destructive hover:text-destructive dark:hover:text-destructive`;
+
+/**
+ * Strip ikon Floating (K21): `SidebarGroup` berpadding 8 px sehingga isinya (35 px) lebih lebar daripada tombol (32 px)
+ * dan tombol jatuh ke kiri. Menu memusatkan itemnya hanya saat sidebar diciutkan ke strip ikon.
+ */
+export const STRIP_CENTER_CLASS = "group-data-[collapsible=icon]:items-center";

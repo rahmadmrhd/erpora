@@ -28,7 +28,7 @@ import {
 import { useId } from "react";
 import { useDeskNavigation } from "./desk-navigation";
 import { DisabledHint } from "./disabled-hint";
-import { DOCK_BUTTON_CLASS } from "./dock-sizing";
+import { DOCK_BUTTON_CLASS, STRIP_CENTER_CLASS } from "./dock-sizing";
 import { useShellActions } from "./shell-context";
 
 function Icon({ name }: { name: string }) {
@@ -169,7 +169,7 @@ export function LogoPopover({ variant }: { variant: "dock" | "panel" | "navbar" 
   }
 
   return (
-    <SidebarMenu>
+    <SidebarMenu className={STRIP_CENTER_CLASS}>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
