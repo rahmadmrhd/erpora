@@ -189,6 +189,20 @@ describe("DesksPage (R10.6)", () => {
     expect(app.router.state.location.pathname).toBe("/example");
   });
 
+  test("kisi ubin (K1): judul hanya untuk pembaca layar, ubin ikon 64px dengan nama, sorotan lewat latar", async () => {
+    renderPage({ desks, routes });
+    const link = await screen.findByRole("link", { name: /Catatan Contoh/ });
+    expect(screen.getByRole("heading", { name: "Desk" })).toHaveClass("sr-only");
+    expect(screen.queryByText("Pilih Desk untuk melanjutkan.")).toBeNull();
+    const tile = link.querySelector("span");
+    expect(tile).toHaveClass("size-16", "rounded-2xl");
+    expect(tile?.querySelector("svg")).not.toBeNull();
+    expect(link.className).toContain("hover:bg-accent");
+    expect(link.className).not.toContain("ring");
+    expect(screen.getAllByRole("list")).toHaveLength(1);
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
   test("keadaan kosong bila tidak ada Desk yang diizinkan", async () => {
     renderPage({ desks: [], routes: [{ path: "/", component: DesksPage }] });
     expect(await screen.findByText("Belum ada Desk")).toBeInTheDocument();

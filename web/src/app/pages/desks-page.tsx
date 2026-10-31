@@ -7,33 +7,41 @@ import {
   useDesks,
   useTranslation,
 } from "@erpora/platform-web";
-import { Card, CardHeader, CardTitle, resolveIcon, Skeleton } from "@erpora/ui";
+import { resolveIcon, Skeleton } from "@erpora/ui";
 import { EmptyNotice } from "../components/notices";
 
+const GRID =
+  "grid w-full grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+
+/**
+ * Kartu Desk gaya ERP DS `DeskList`: ubin ikon 64px `rounded-2xl` (token semantik `muted`/`foreground` dengan
+ * border; Desk belum punya warna kustom) dan nama 14px medium. Sorotan hover/fokus memakai latar, bukan outline (K2).
+ */
 function DeskCard({ desk, onChoose }: { desk: Desk; onChoose: (id: string) => void }) {
-  const Icon = resolveIcon(desk.icon);
+  const Icon = resolveIcon(desk.icon) ?? resolveIcon("layout-dashboard");
   const to = deskDashboardPath(desk);
   if (to === null) return null;
   return (
-    <Card className="transition-colors hover:bg-accent">
-      <CardHeader>
-        <CardTitle className="text-base">
-          {/* Tautan sungguhan (klik-tengah dan Ctrl+klik tetap bekerja); memilih Desk mencatatnya sebagai Desk saat ini. */}
-          <Link to={to} className="flex items-center gap-2" onClick={() => onChoose(desk.id)}>
-            {Icon ? <Icon aria-hidden="true" className="size-5 shrink-0" /> : null}
-            <span>
-              <Message message={desk.label} />
-            </span>
-          </Link>
-        </CardTitle>
-      </CardHeader>
-    </Card>
+    // Tautan sungguhan (klik-tengah dan Ctrl+klik tetap bekerja); memilih Desk mencatatnya sebagai Desk saat ini.
+    <Link
+      to={to}
+      onClick={() => onChoose(desk.id)}
+      className="flex flex-col items-center gap-2 rounded-2xl p-3 text-center outline-none transition-colors hover:bg-accent focus-visible:bg-accent"
+    >
+      <span className="flex size-16 items-center justify-center rounded-2xl border bg-muted text-foreground">
+        {Icon ? <Icon aria-hidden="true" className="size-8" /> : null}
+      </span>
+      <span className="text-sm font-medium break-words">
+        <Message message={desk.label} />
+      </span>
+    </Link>
   );
 }
 
 /**
- * Halaman Desks (R10.6): kerangka daftar kartu Desk yang diizinkan, atau keadaan kosong. Tidak punya URL sendiri:
- * dirender oleh `DeskEntry` di `/`. Kustomisasi, folder/grup, dan pengelolaan adalah M3b.
+ * Halaman Desks (R10.6, K1): kisi kartu Desk yang diizinkan di tengah halaman, tanpa judul visual (judul hanya
+ * untuk pembaca layar), atau keadaan kosong. Tidak punya URL sendiri: dirender oleh `DeskEntry` di `/`.
+ * Kustomisasi, folder/grup, dan pengelolaan adalah M3b.
  */
 export function DesksPage() {
   const { t } = useTranslation("platform");
@@ -41,15 +49,13 @@ export function DesksPage() {
   const { setCurrentDesk } = useCurrentDesk();
   const usable = desks.filter((d) => deskDashboardPath(d) !== null);
   return (
-    <div className="flex min-h-full flex-col gap-4 p-4">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">{t("desks.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("desks.description")}</p>
-      </header>
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center gap-4 p-6">
+      <h1 className="sr-only">{t("desks.title")}</h1>
       {status === "loading" ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
-          <Skeleton className="h-16" />
-          <Skeleton className="h-16" />
+        <div className={GRID} aria-hidden="true">
+          {["a", "b", "c", "d"].map((k) => (
+            <Skeleton key={k} className="mx-auto size-16 rounded-2xl" />
+          ))}
         </div>
       ) : usable.length === 0 ? (
         <EmptyNotice
@@ -59,9 +65,9 @@ export function DesksPage() {
           description={t("desks.empty.description")}
         />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className={GRID}>
           {usable.map((d) => (
-            <li key={d.id}>
+            <li key={d.id} className="flex justify-center">
               <DeskCard desk={d} onChoose={setCurrentDesk} />
             </li>
           ))}
