@@ -8,7 +8,7 @@ Pola yang dipakai ulang: `contracts/embed.go` dan `module.schema.json` (skema di
 
 **Penafsiran yang dicatat (perancang tasks, untuk dikonfirmasi saat review rencana ini):** tabel Tahap menuntut paritas Go dan TS pada exit gate T1, sehingga **evaluator dan desimal TypeScript beserta pelari korpus vektor dibangun di T1** (grup 3), sedangkan T3 melengkapi sisanya (validator, registri tipe field, pemuat malas, anggaran bundle). Ini tidak menambah perilaku di luar spec.
 
-Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pemilik produk (1 Nov 2026). Dua pengaman K18 (penjaga data pada migrasi penghapusan dan `Down` tidak dapat dibalik) serta konsep `unmanagedColumns` adalah usulan perancang; bila pemilik produk belum mengonfirmasinya sebelum grup 12 dan grup 5, **berhenti dan tanyakan**. Penyimpangan lain dari spek **menunggu konfirmasi**; jangan memutuskan sendiri (lihat instruksi global "Menangani temuan review").
+Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pemilik produk (1 Nov 2026); K19 sampai K24 (jawaban konfirmasi 1 dan 2 Nov 2026: `example` aditif, `math/big`, linter desimal nullable, `sdk:audit` otomatis, lifecycle status baku, dan `statusAxes`) beserta D-36 sampai D-38 juga disetujui pemilik produk, kecuali penamaan `cancelled` dan `deleted` (K23) yang keputusan perancang dan menunggu konfirmasi. Dua pengaman K18 (penjaga data pada migrasi penghapusan dan `Down` tidak dapat dibalik) serta konsep `unmanagedColumns` adalah usulan perancang; bila pemilik produk belum mengonfirmasinya sebelum grup 12 dan grup 5, **berhenti dan tanyakan**. Penyimpangan lain dari spek **menunggu konfirmasi**; jangan memutuskan sendiri (lihat instruksi global "Menangani temuan review").
 
 ## Tasks
 
@@ -65,11 +65,14 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
     - `metadatatools/resolve`: hasil metadata datar dengan jejak asal (untuk pesan galat dan tinjauan); resolusi penuh saat `metadata:generate`/`check`; tidak ada jalur eksekusi runtime tambahan untuk tipe domain atau blok (D-4, D-5: tambal deklaratif tanpa parameter atau logika).
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.10, 3.11, 3.14, 13.1_
   - [ ] 4.3 Metadata bawaan SDK
-    - Berkas bawaan yang dibenamkan: abstrak `audit` dan `document` (field bawaan `id`, `version`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`, `status`, `amendedFromId`, semuanya `readOnly`; `lockWhen` bawaan `status` bukan `draft`) serta tipe domain `email`, `phone`, `percentage`, `money` (tipe dasar, batasan, klasifikasi, format, kunci widget, operator, kunci label).
-    - _Requirements: 2.6, 3.8, 3.9, 13.1_
+    - Berkas bawaan yang dibenamkan: abstrak `audit` dan `document` (field bawaan `id`, `version`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`, `status`, `amendedFromId`, semuanya `readOnly`; `createdBy` dan `updatedBy` nullable; `createdAt` dan `updatedAt` dengan `DEFAULT now()` implisit, K22; `status` dengan lifecycle baku `draft`, `deleted`, `need_approval`, `accepted`, `rejected`, `cancelled`, `done` beserta tabel transisinya, K23; `lockWhen` bawaan `status` bukan `draft`) serta tipe domain `email`, `phone`, `percentage`, `money` (tipe dasar, batasan, klasifikasi, format, kunci widget, operator, kunci label).
+    - _Requirements: 2.6, 3.8, 3.9, 13.1, 13.4_
   - [ ] 4.4 Pelaporan dampak tipe domain dan blok bersama
     - `metadata:check` menghitung indeks balik pemakai dan melaporkan dampak per resource (termasuk lintas modul untuk ekspor); perubahan bersama diperlakukan sebagai perubahan atas setiap pemakai; ekspor lintas modul tunduk SemVer modul pemilik (perubahan merusak butuh MAJOR). Test: ubah tipe `email` mengubah laporan semua pemakai.
     - _Requirements: 3.12_
+  - [ ] 4.5 Resolver: `sdk:audit` otomatis dan `statusAxes` (K22, K24)
+    - Test lalu implementasi di `metadatatools/resolve` dan skema `resource.schema.json`: setiap resource (tabel biasa maupun dokumen) otomatis menyertakan `sdk:audit` tanpa `include` eksplisit, dan `include: sdk:audit` eksplisit tetap sah tanpa nama ganda; `createdBy` dan `updatedBy` nullable, `createdAt` dan `updatedAt` membawa penanda `DEFAULT now()` implisit untuk model skema (tanpa nilai bawaan dinamis di berkas metadata); kunci `statusAxes` (nilai, `initial`, `transitions`) diterima hanya pada resource yang menyertakan `sdk:document`, diselesaikan menjadi field enum `readOnly` bukan-nullable berurutan stabil, dengan tabel transisi sumbu pada model datar (jejak asal), dan tidak diwarisi lewat `include` seperti atribut tingkat resource lain.
+    - _Requirements: 2.6, 13.14, 13.15, 13.17_
 
 - [ ] 5. Validasi semantik `metadata:check` (Kelas beban: Sonnet)
   - [ ] 5.1 Tulis test validasi field (merah dulu)
@@ -93,6 +96,9 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
   - [ ] 5.7 Validasi statis deprecated, salinan, penguncian, dan `generate`
     - Test lalu implementasi: pasangan `migrateFrom` memiliki `fieldGroup` dan `classification` identik; bentuk deklarasi `snapshot`/`snapshotSource` valid, field tujuan menyatakan `fieldGroup` dan `classification` eksplisit dan tidak lebih longgar dari sumber, salinan dari grup non-`default` ke `default` ditolak tanpa alasan tertulis; kolom salinan hanya `filterable`/`sortable` bila dinyatakan eksplisit; `lockWhen` untuk resource dokumen harus dapat diterjemahkan ke SQL (kolom milik sendiri, `eq`/`ne`/`in`/`isnull`) bila tidak, `metadata:check` gagal; `generate.crud` tidak boleh bersama `unmanagedColumns`.
     - **Validates: Requirements 12.6, 13.12, 14.1, 14.5, 14.6**
+  - [ ] 5.8 Validasi statis `statusAxes` (K24)
+    - Test lalu implementasi di `metadatatools/check`: nama sumbu camelCase sah, tidak bertabrakan dengan field lain atau sumbu lain setelah konversi nama dan bukan `status`; `values` snake_case (`^[a-z][a-z0-9_]{0,62}$`) dan unik; `initial` termasuk `values`; setiap `from` dan `to` termasuk `values`, tanpa pasangan ganda; sumbu tidak mendefinisikan ulang atau memperluas lifecycle `status` dan hanya pada resource ber-`sdk:document`; transisi mundur atau siklik sah; sumbu tidak dapat dilepas dari `readOnly`.
+    - **Validates: Requirements 13.14, 13.15, 13.18**
 
 - [ ] 6. Pembangkit T1: OpenAPI, Go, TypeScript (Kelas beban: Sonnet; templat TS 6.4 Sonnet)
   - [ ] 6.1 Tulis test golden dan drift (merah dulu)
@@ -100,7 +106,7 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
     - **Validates: Requirements 8.1, 8.2, 8.5, 8.6, 19.9, 19.10**
   - [ ] 6.2 Templat Go: domain, DTO, decoder, dan validator
     - `internal/devtools/templates/resource/`: `modules/<dir>/internal/domain/<nama>_meta.gen.go` (konstanta, aturan; tanpa I/O) dan `internal/presentation/http/<nama>_dto.gen.go`. Decoder `DisallowUnknownFields` menolak field tak dikenal dan `readOnly` (`422 validation_failed` rinci per field), validator menegakkan tipe, wajib, `nullable`, panjang, rentang, pola, enum, dan `rules` (`422 validation_failed` struktur; `422 business_rule_violated` aturan bisnis), batas `MaxBodyBytes` dan kedalaman JSON, galat tanpa nilai field `confidential` ke atas, AST kondisi tertanam sebagai data bertipe (D-2), batasan tidak pernah lebih ketat di klien daripada server atau kontrak.
-    - _Requirements: 4.7, 8.1, 8.4, 9.1, 9.2, 9.5, 9.6, 9.7_
+    - _Requirements: 4.7, 8.1, 8.4, 9.1, 9.2, 9.5, 9.6, 9.7, 13.17_
   - [ ] 6.3 Templat OpenAPI dan penyuntikan terstruktur
     - Tulis `components.schemas` ke `modules/<dir>/openapi.yaml` lewat suntingan node YAML, dengan `x-erp-generated: true`, `x-erp-field-group`, `x-erp-classification`, `x-erp-filterable`, `x-erp-sortable`, `x-erp-decimal`, `x-erp-extensible-enum`, `deprecated`; `decimal` sebagai `string` dengan pola; `contracts:lint` dan `contracts:generate --check` tetap lulus; skema bertanda tidak boleh diubah di luar generator.
     - _Requirements: 8.1, 8.3_
@@ -122,8 +128,8 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
 
 - [ ] 8. Modul fixture dan migrasi `example` ke metadata (Kelas beban: Sonnet)
   - [ ] 8.1 Modul fixture di `testdata`
-    - Satu atau dua modul fixture (lokasi dari 1.2; **tidak** didaftarkan ke aplikasi; lintas modul butuh dua modul dengan dependensi manifest) memuat: dokumen (`sdk:document`), relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok (beserta `prefix`). Dipakai exit gate T1 sampai T4. Metadata saja pada T1; migrasi dan kode data di tahap berikutnya.
-    - _Requirements: 20.5_
+    - Satu atau dua modul fixture (lokasi dari 1.2; **tidak** didaftarkan ke aplikasi; lintas modul butuh dua modul dengan dependensi manifest) memuat: dokumen (`sdk:document`), relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok (beserta `prefix`), serta (K24) satu resource dokumen bersumbu status (`statusAxes`: penagihan dan pengiriman dengan transisi mundur, mis. retur pengiriman). Dipakai exit gate T1 sampai T4. Metadata saja pada T1; migrasi dan kode data di tahap berikutnya.
+    - _Requirements: 20.5, 13.19_
   - [ ] 8.2 Migrasi `example` ke metadata
     - Pindahkan `example` ke metadata dengan `sdk:audit` utuh (K19, 1 Nov 2026: tanpa `omit`); tambahkan `createdBy` dan `updatedBy` secara **aditif** ke kontrak dan implementasi `example` (migrasi expand kolom nullable bila perlu, domain, repository, handler) tanpa perubahan breaking: `task contracts:check` (termasuk `contracts:breaking`) dan tes modul tetap lulus. Bila berkas bangkitan bertabrakan nama dengan kode tulis tangan `example` dan penyelesaiannya mengubah perilaku atau menyimpang dari spek, **tanyakan dulu**. `exampleaddon` tidak punya tabel dan tidak dimigrasikan.
     - _Requirements: 8.3, 20.5_
@@ -178,10 +184,11 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
 - [ ] 13. Pemicu immutabilitas dokumen (T2) (Kelas beban: Sonnet)
   - [ ] 13.1 Tulis test integrasi pemicu (merah dulu)
     - `UPDATE`/`DELETE` langsung pada dokumen terkunci ditolak database; pengecualian (a) hanya `status`/`version`/`updated_at`/`updated_by` berubah dengan pasangan status ada di tabel transisi, (b) hanya kolom tujuan `migrateFrom` diisi dari `NULL` menjadi salinan persis kolom asal; `DELETE` baris terkunci selalu ditolak; evaluasi pada `OLD`; pemicu anak menolak `INSERT`/`UPDATE`/`DELETE` untuk `embedded`, pivot, dan `hasOne` bila induk terkunci; tidak ada mekanisme pengecualian bagi jalur aplikasi (penanda sesi, `session_replication_role`, nonaktifkan pemicu); migrasi tulis tangan yang melampaui butir 8 menonaktifkan dan mengaktifkan kembali pemicu eksplisit, dan `metadata:diff` memastikan pemicu aktif di akhir; penghapusan pemicu tak sengaja terdeteksi mesin selisih.
-    - **Validates: Requirements 13.2, 13.5, 13.6, 13.8, 13.9, 13.10, 13.11**
+    - Tambahan K23 dan K24: tabel transisi lifecycle bawaan (tujuh pasangan sah lolos, pasangan lain termasuk `submitted` ditolak); pemicu mengizinkan perubahan kolom sumbu status dengan pasangan sah (termasuk mundur) pada dokumen terkunci dan menolak pasangan tak sah, perubahan sumbu bersama kolom data lain, dan `DELETE`; kolom sumbu NOT NULL dengan default `initial` dan CHECK nilai.
+    - **Validates: Requirements 13.2, 13.5, 13.6, 13.8, 13.9, 13.10, 13.11, 13.16, 13.19**
   - [ ] 13.2 Implementasi pembangkit pemicu
-    - Templat SQL tetap untuk pemicu dokumen dan pemicu anak, tabel transisi dibangkitkan dari metadata, `lockWhen` diterjemahkan lewat 10.3; mesin selisih mengenali pemicu dan statusnya (aktif). Pengecualian lain tidak disediakan.
-    - _Requirements: 13.2, 13.5, 13.6, 13.8, 13.9, 13.10, 13.11_
+    - Templat SQL tetap untuk pemicu dokumen dan pemicu anak, tabel transisi lifecycle (K23) dan transisi sumbu (K24) dibangkitkan dari metadata, `lockWhen` diterjemahkan lewat 10.3; mesin selisih mengenali pemicu dan statusnya (aktif) serta kolom sumbu (NOT NULL, default `initial`, CHECK). Pengecualian lain tidak disediakan.
+    - _Requirements: 13.2, 13.4, 13.5, 13.6, 13.8, 13.9, 13.10, 13.11, 13.14, 13.16_
 
 - [ ] 14. Migrasi nyata, CI, dan selisih kosong (T2) (Kelas beban: Sonnet; 14.2 Haiku)
   - [ ] 14.1 Migrasi modul referensi dan fixture
@@ -268,10 +275,11 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
 - [ ] 22. T4: salinan field dan penguncian di server (Kelas beban: Sonnet)
   - [ ] 22.1 Tulis test salinan dan penguncian (merah dulu)
     - Salinan diisi saat relasi diatur atau diubah selama belum terkunci dan diisi ulang dalam transaksi `submit`; beku setelah terkunci dalam kondisi apa pun (perubahan master, migrasi data); dengan principal pemanggil, gagal `422 business_rule_violated` (`code: snapshot_forbidden`) bila salah satu field sumber tak boleh dibaca (tanpa nilai basi atau sebagian); `authz.AsSystem` hanya eksplisit di metadata dengan alasan dan audit; `PATCH` dokumen terkunci `409 invalid_state`; transisi tidak sah `409 invalid_state`; koreksi hanya lewat `cancel`/`amend` yang menghasilkan dokumen baru; dua `submit` bersamaan dan `PATCH` bersamaan `submit` aman (`SELECT … FOR UPDATE`); ubah baris anak setelah `submit` ditolak.
-    - **Validates: Requirements 9.4, 13.3, 13.4, 13.13, 14.2, 14.3, 14.4, 14.5, 14.6**
+    - Tambahan K23 dan K24: `submit` menghasilkan `accepted` atau `need_approval` menurut kait (tidak ada status `submitted`); `amend` hanya dari `cancelled` atau `rejected` dan membuat dokumen baru `draft` dengan `amendedFromId`; sumbu status ditolak pada body `Create`/`Update` (hanya-baca), berubah hanya lewat aksi atau kait server dengan pasangan sah (`409 invalid_state` di luar pasangan), termasuk mundur.
+    - **Validates: Requirements 9.4, 13.3, 13.4, 13.13, 13.15, 13.17, 13.19, 14.2, 14.3, 14.4, 14.5, 14.6**
   - [ ] 22.2 Implementasi salinan dan penegakan penguncian
     - Pengisian dan pengisian ulang salinan, penegakan `lockWhen` dan transisi di server, pemuatan induk dengan `SELECT … FOR UPDATE` dalam transaksi untuk `PATCH`, `DELETE`, aksi, dan `submit`; field tujuan `readOnly` bagi klien.
-    - _Requirements: 9.4, 13.3, 13.4, 13.13, 14.1, 14.2, 14.3, 14.4, 14.5, 14.6_
+    - _Requirements: 9.4, 13.3, 13.4, 13.13, 13.15, 13.17, 14.1, 14.2, 14.3, 14.4, 14.5, 14.6_
 
 - [ ] 23. T4: CRUD bangkitan, kait, dan jalur lepas (Kelas beban: Sonnet)
   - [ ] 23.1 Tulis test handler (merah dulu)
@@ -347,6 +355,27 @@ Dicatat juga di `design.md` bagian "Diserahkan kepada pelaksana" dan Komponen 13
 8. **Lokasi modul fixture (D-18, Requirement 20.5): mini-repo `internal/devtools/metadatatools/testdata/repo/`**, mengikuti preseden `internal/devtools/gen/testdata/repo` (mini-repo dengan `go.mod`, `go.work`, `modules/*`, `migrations`; disalin ke direktori sementara per tes lewat `fixtureRepo`) dan `internal/archcheck/testdata/secmod`. Isi: dua modul Go sendiri, `modules/fixturecore` (master dengan `export: true`, mis. `customer`, tipe domain dan blok bersama) dan `modules/fixturesales` (dokumen `sdk:document` `invoice` dengan baris `embedded` `invoice_line`, relasi satu modul dan lintas modul ke `fixturecore` lewat dependensi manifest, `decimal`, `enum`, `morph`, tipe domain, blok berawalan), masing-masing dengan `module.json`, `go.mod`, `migrations/`, `i18n/`, dan `web/` seperlunya. Alasan: (a) Go dan alat web mengabaikan `testdata` (`./...`, golangci-lint, Biome `includes`, workspaces `modules/*/web`); (b) `archcheck`, `modcheck`, dan pemuat bertipe hanya meng-glob `modules/*/go.mod` dan `modules/*/module.json` dari root repo sehingga fixture tidak terpindai dan tidak terdaftar ke `internal/app` (D7); (c) tidak perlu `go:embed` (tidak bisa menembus direktori ber-`go.mod`) karena tes menyalin pohon ke direktori sementara. Dampak: **`go.work` root tidak berubah** (`GO_MODULES` dan seluruh gerbang `lint/build/test/vuln` tidak melihat fixture); modul fixture hanya `require erpora/sdk v0.0.0` dan `go.work` di salinan sementara dibuat oleh tes dengan `use` ke `sdk` asli (path absolut, tanpa spasi) bila perlu dikompilasi atau diuji (`go build`/`go test` sebagai subproses, pola tes `gen`); `metadata:check`, `module:check`, dan `archcheck` dijalankan terhadap **root salinan sementara** (semuanya sudah menerima parameter root), sehingga kepatuhan D1/D8/D9 fixture ikut dibuktikan tanpa pengecualian baru di `archcheck`. Tambahkan satu tes penjaga di `tests/architecture`: tidak ada `use` ke `testdata` di `go.work`, tidak ada impor path `testdata` dari kode non-tes, dan fixture tidak terdaftar di `internal/app`. Satu helper tes (mis. `metadatatools/internal/testrepo`) menemukan direktori lewat `runtime.Caller` dan menyalinnya, dipakai bersama paket `load`, `resolve`, `check`, generator, dan `dbmodel`. Fixture dipakai juga oleh integrasi T2 sampai T4 (`pgtest`) dengan salinan sementara yang sama.
 9. **Dependensi lain**: tidak ada tambahan selain butir 4 (shopspring pada `sdk`). `go mod verify` lulus dan seluruh dependensi di atas bertipe MIT/Apache-2.0 (tidak ada GPL/AGPL/MPL yang masuk).
 
+### Spike 10.1 dan keputusan T2 mesin selisih (pelaksana, 1 Nov 2026)
+
+**Keputusan: implementasi sendiri untuk subset yang dimodelkan; tidak ada alat pihak ketiga (Atlas atau sejenis) dan tidak ada dependensi baru.** Alasan teknis: (1) PostgreSQL sendiri yang menormalkan hasil perbandingan: DDL bangkitan dari model diterapkan ke skema sementara `erpora_expected` pada database sementara yang sama, lalu skema hasil migrasi (`public`) dan skema diharapkan dibaca dengan kueri katalog yang sama (`format_type`, `pg_get_expr`, `pg_get_constraintdef`), sehingga penulisan berbeda yang setara (mis. `BETWEEN` versus `>=`/`<=`) tidak menjadi selisih tanpa kita menulis pengurai ekspresi SQL; (2) pembangkit migrasi (task 11) dan pemicu (task 13) memakai penerjemah dan DDL yang sama dengan pembanding, jadi satu mesin; (3) permukaannya kecil (introspeksi ±200 baris, pembanding ±250 baris) dan seluruhnya Go; (4) migrasi dijalankan lewat `internal/platform/migrate.ApplyModule` (goose) oleh role non-superuser buatan sendiri, sesuai Requirement 10.8, tanpa mengikat ke format direktori alat lain. Lisensi dan dukungan format goose pada Atlas **tidak diverifikasi** (tanpa akses daring pada spike ini); keputusan tidak bergantung padanya. Bila pemilik produk kelak menginginkan alat siap pakai, antarmuka `diff.Catalog` dan `diff.Compare` adalah titik penggantian.
+
+Pemetaan yang ditetapkan (paket `dbmodel`, `sqlgen`, `diff`; keputusan kecil, dapat dibalik tanpa mengubah API):
+
+- `string` dan `text` menjadi `text` dengan satu CHECK `length` (minLength/maxLength) per kolom, sejalan dengan migrasi tulis tangan `example_notes.title`; `integer` menjadi `integer` bila `minimum` dan `maximum` keduanya ada dan muat 32-bit, selain itu `bigint`, dengan satu CHECK rentang; `decimal` wajib `precision` dan `scale`; `enum` menjadi `text` + CHECK `IN`; `pattern` dan `format` tidak masuk database (semantik RE2 dan PostgreSQL berbeda).
+- Perbandingan mengabaikan nama constraint dan indeks (migrasi tulis tangan sering bernama lain) tetapi membandingkan definisi; indeks atau unique yang tidak dideklarasikan, kolom berlebih, dan nilai bawaan berbeda adalah selisih; tabel berawalan slug yang tidak ada di model hanya catatan; pemicu di luar model hanya catatan; pemicu bangkitan yang hilang, nonaktif (`tgenabled` bukan `O`), atau berbadan lain adalah selisih (Requirement 13.10).
+- Kolom turunan `stored`: hanya konstruk tata bahasa tertutup dan fungsi immutable (`round`, `trunc`, `abs`, `mod`, `COALESCE`, `NULLIF`, `CASE`); `concat` atas `date`/`datetime` ditolak (cast ke teks bukan immutable); pembagian dengan `NULLIF(pembagi, 0)` (evaluator: tak tentu; database: NULL); ketujuh mode pembulatan diterjemahkan dan terbukti paritas dengan `metadata.EvaluateExpr` pada 150 baris acak berseed (tes integrasi).
+- Literal teks hanya lewat `sqlgen.Literal` (kutip digandakan, `E'...'` bila ada backslash, NUL dan UTF-8 tak sah ditolak); literal numerik hanya lewat `NumericLiteral` (string desimal kanonik); badan fungsi dibungkus `DollarQuote` dengan penanda yang dipilih agar tidak ada di badan; setiap pernyataan keluaran dibuktikan tetap satu pernyataan oleh pemecah pernyataan tingkat atas pada tes.
+- Role migrasi: `CREATE ROLE erpora_mig_<hex> ... NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` dengan hak `CREATE` pada database sementara dan skema `public` (bukan pemilik database; tidak membutuhkan superuser pada sisi admin); role dan objeknya dihapus (`DROP OWNED BY`, `DROP ROLE`) juga saat gagal. Terbukti: `COPY ... PROGRAM`, `pg_read_file`, `CREATE ROLE`, dan `SET session_replication_role` gagal dengan `permission denied`.
+
+Hal yang menunggu konfirmasi atau keputusan perancang spesifikasi (belum dikerjakan secara diam-diam):
+
+1. **Tabel transisi status** (Requirement 13.8 butir a): skema `resource.schema.json` belum punya kunci transisi, sehingga `Derive` belum membuat pemicu penguncian; templat pemicu sudah menerima `LockSpec.Transitions`. Perlu ditetapkan dari mana pasangan (lama, baru) berasal (task 13). **Ditutup 2 Nov 2026 (K23, K24):** pasangan lifecycle berasal dari metadata bawaan `sdk:document` (tujuh pasangan sah) dan transisi sumbu dari `statusAxes`; skema memuat kunci `statusAxes` (task 4.5).
+2. **Nilai kolom `<relasi>_type` pada `morphTo`**: dipakai kunci resource bentuk manifest (`sales.invoice_line`); spek hanya menyebut "kunci resource".
+3. **Penamaan tabel pivot `belongsToMany`**: `<slug>_<pemilik>_<relasi>` dengan kolom `<pemilik>_id` dan `<target>_id`; pivot antar resource yang sama dan `morphToMany` belum didukung (galat jelas).
+4. **`hasOne`**: nama kolom FK seberang tidak ditebak; wajib ada tepat satu `belongsTo` balik pada resource seberang (UNIQUE ditambahkan pada kolom itu).
+5. **Nilai bawaan `now()`** pada kolom `created_at`/`updated_at` migrasi `example` tidak dapat dinyatakan sebagai literal metadata, sehingga `metadata:diff` untuk `example` (task 14.1) melaporkan dua `column_default` (tes integrasi mendokumentasikannya). Perlu keputusan: nilai bawaan dinamis di metadata, atau pelonggaran perbandingan default. **Ditutup 2 Nov 2026 (K22):** `createdAt` dan `updatedAt` memakai `DEFAULT now()` implisit dari `sdk:audit` yang selalu disertakan; tidak ada nilai bawaan dinamis di berkas metadata.
+6. **Task 8.2 versus resolver**: resolver menolak `omit`/`set` atas field `sdk:audit` (Requirement 3.6, tanpa pengecualian), sedangkan D-18 dan task 8.2 menyebut `omit` atas field bawaan (`createdBy`, `updatedBy`) untuk memigrasikan `example`. Perlu diselaraskan sebelum task 8.2. **Ditutup 1 Nov 2026 (K19):** `example` dimigrasikan tanpa `omit`; `createdBy` dan `updatedBy` ditambahkan aditif ke kontrak dan implementasi, nullable (K22).
+
 ## Notes
 
 - Setiap task mereferensi requirement spesifik untuk traceability; checkpoint memastikan validasi inkremental.
@@ -368,8 +397,8 @@ Dicatat juga di `design.md` bagian "Diserahkan kepada pelaksana" dan Komponen 13
     { "id": 3, "tasks": ["2.2", "2.4", "3.2", "3.5"] },
     { "id": 4, "tasks": ["3.3", "3.4", "3.6", "4.1", "5.1", "5.3", "5.5"] },
     { "id": 5, "tasks": ["4.2"] },
-    { "id": 6, "tasks": ["4.3", "4.4", "5.2", "5.4", "5.6", "8.1"] },
-    { "id": 7, "tasks": ["5.7", "6.1"] },
+    { "id": 6, "tasks": ["4.3", "4.4", "4.5", "5.2", "5.4", "5.6", "8.1"] },
+    { "id": 7, "tasks": ["5.7", "5.8", "6.1"] },
     { "id": 8, "tasks": ["6.2", "6.3", "6.4", "6.5"] },
     { "id": 9, "tasks": ["7.1", "8.2"] },
     { "id": 10, "tasks": ["7.2"] },

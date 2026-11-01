@@ -57,7 +57,7 @@ Aturan:
 
 - **`PUT` tidak dipakai** untuk resource bisnis (ganti penuh berisiko menghapus field yang tidak dikirim/tidak terlihat oleh user). Pengecualian: dokumen konfigurasi utuh (mis. settings satu modul), dan harus dinyatakan di OpenAPI.
 - `PATCH` memakai semantik **JSON Merge Patch** (RFC 7396): hanya field yang dikirim yang diubah; `null` berarti mengosongkan field.
-- `DELETE` pada dokumen yang sudah `submitted` **ditolak** `409 invalid_state`; gunakan aksi `cancel`.
+- `DELETE` pada dokumen hanya sah pada `draft` (soft-delete: status menjadi `deleted`); pada status lain **ditolak** `409 invalid_state`; dokumen `accepted` dikoreksi lewat aksi `cancel` (§11).
 
 ## 4. Konvensi JSON
 
@@ -115,7 +115,7 @@ Zona waktu: server selalu mengirim UTC. Konversi ke zona waktu user (PRD-001 FR-
 | `version` | Integer, naik setiap perubahan (optimistic concurrency, §7) |
 | `createdAt`, `updatedAt` | UTC |
 | `createdBy`, `updatedBy` | ID user (dipakai juga oleh scope `owner`, PRD-001 FR-111) |
-| `status` | Wajib untuk resource berstatus dokumen (`draft`, `submitted`, `cancelled`, …) |
+| `status` | Wajib untuk resource berstatus dokumen: `draft`, `deleted`, `need_approval`, `accepted`, `rejected`, `cancelled`, `done` (§11) |
 
 ### 4.4. Field yang tidak boleh dilihat
 
@@ -184,7 +184,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 
 - Validasi struktur (tipe, wajib, format) → `422 validation_failed` dengan detail per field.
 - Pelanggaran aturan bisnis (stok tidak cukup, periode ditutup) → `422 business_rule_violated` dengan `code` spesifik di `details`.
-- Transisi status yang tidak sah (submit dokumen yang sudah submitted) → `409 invalid_state`.
+- Transisi status yang tidak sah (submit dokumen yang sudah `accepted`) → `409 invalid_state`.
 - Mengubah field tanpa akses `write` → `403 field_forbidden` (tidak diabaikan diam-diam).
 
 ## 8. Error
@@ -279,16 +279,23 @@ GET /api/platform/jobs/0193…
 
 ## 11. Dokumen ERP (resource berstatus)
 
-Resource dokumen (pesanan, penyesuaian stok, jurnal) mengikuti siklus standar yang selaras dengan aksi PRD-001:
+Resource dokumen (pesanan, penyesuaian stok, jurnal) mengikuti siklus standar yang selaras dengan aksi PRD-001. Nilai `status` (snake_case, persisten): `draft`, `deleted`, `need_approval`, `accepted`, `rejected`, `cancelled`, `done`.
 
 ```
-draft ──submit──▶ submitted ──cancel──▶ cancelled ──amend──▶ (draft baru, amendedFromId)
-  │                    │
-  └─ PATCH/DELETE      └─ approve (bila modul memakai approval)
+draft ──DELETE──▶ deleted
+  │
+  ├─ submit (tanpa skema persetujuan) ──▶ accepted
+  └─ submit (dengan skema persetujuan) ─▶ need_approval ──▶ accepted
+                                                       └──▶ rejected
+accepted ──cancel──▶ cancelled
+accepted ──────────▶ done
+cancelled | rejected ──amend──▶ (dokumen baru, status draft, amendedFromId)
 ```
 
-- `PATCH` hanya diizinkan pada `draft`; dokumen `submitted` bersifat tidak dapat diubah (`409 invalid_state`).
-- `amend` membuat dokumen **baru** dengan `amendedFromId`, tidak mengubah dokumen lama (jejak audit tetap utuh).
+- Aksi `submit` tidak menghasilkan status `submitted`: hasilnya langsung `accepted` atau `need_approval`, ditentukan resource atau kait (skema persetujuan di luar cakupan pedoman ini). Transisi di luar diagram menghasilkan `409 invalid_state`.
+- `PATCH` hanya diizinkan pada `draft`; dokumen berstatus lain bersifat tidak dapat diubah (`409 invalid_state`).
+- `amend` hanya sah dari `cancelled` atau `rejected` dan membuat dokumen **baru** berstatus `draft` dengan `amendedFromId`, tidak mengubah dokumen lama (jejak audit tetap utuh).
+- Dokumen dapat punya **sumbu status tambahan** di luar lifecycle (mis. `billingStatus`, `deliveryStatus` pada pesanan penjualan), masing-masing bernilai enum hanya-baca dengan pasangan transisi sendiri yang boleh mundur (mis. pengiriman sebagian lalu semua barang diretur kembali ke `to_deliver`). Sumbu hanya berubah lewat aksi atau kait server, tidak lewat `PATCH`, dan tetap dapat berubah pada dokumen terkunci hanya dengan pasangan yang sah; perubahan di luar pasangan menghasilkan `409 invalid_state`.
 - Aksi mengembalikan dokumen dalam status terbarunya.
 - Dokumen yang memiliki baris (`lines`) dikirim dan diubah **sebagai satu kesatuan** bersama induknya, bukan lewat endpoint baris terpisah, agar validasi dan total selalu konsisten.
 
@@ -390,11 +397,11 @@ If-Match: "1"
 POST /api/inventory/adjustments/0193…/submit
 If-Match: "2"
 Idempotency-Key: 9a2e…
-→ 200 { "data": { …, "status": "submitted", "version": 3 } }
+→ 200 { "data": { …, "status": "accepted", "version": 3 } }
 
 # 4. Submit ulang (tidak sah)
 POST /api/inventory/adjustments/0193…/submit
-→ 409 { "error": { "code": "invalid_state", "message": "Dokumen sudah disubmit." } }
+→ 409 { "error": { "code": "invalid_state", "message": "Dokumen tidak berstatus draft." } }
 ```
 
 Permission yang terlibat: `inventory.adjustment.create`, `inventory.adjustment.update`, `inventory.adjustment.submit`.
