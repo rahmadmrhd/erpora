@@ -54,6 +54,9 @@ tasks:
       - golangci-lint run --build-tags=generator,integration ./tests/generator/...
       # Katalog terjemahan: galat struktural menggagalkan; peringatan antar bahasa hanya dicetak (i18n Requirement 8.5).
       - task: i18n:check
+      # Metadata resource: galat semantik menggagalkan (modul tanpa metadata/ tidak terpengaruh). `metadata:generate --check`
+      # (drift hasil bangkitan) ditambahkan di sini dan di web:check bersama perintahnya.
+      - task: metadata:check
 
   test:
     desc: Jalankan unit test di setiap Go module
@@ -219,6 +222,11 @@ tasks:
     desc: Periksa katalog terjemahan (galat struktural gagal, peringatan dicetak; task i18n:check -- --strict menggagalkan peringatan)
     cmds:
       - go run -tags devtools ./cmd/erpora i18n:check {{.CLI_ARGS}}
+
+  metadata:check:
+    desc: Periksa berkas metadata resource (skema, semantik, relasi, manifest; hanya membaca, peringatan dicetak)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:check
 
   i18n:generate:
     desc: Bangkitkan tipe kunci terketik keys.gen.ts dari katalog (task i18n:generate -- --check hanya memeriksa drift)

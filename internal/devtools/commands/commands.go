@@ -25,5 +25,6 @@ func Register(root *cobra.Command, opts Options) {
 	registerDB(root, opts)
 	registerRelease(root)
 	registerI18n(root)
+	registerMetadata(root)
 	root.AddCommand(newDoctor(opts))
 }

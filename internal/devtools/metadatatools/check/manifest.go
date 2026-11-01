@@ -78,7 +78,7 @@ func (x *rctx) checkGroups() {
 		}
 		key := snake(raw)
 		_, known := g.known[key]
-		if !known && !(g.implicit && key == g.def) {
+		if !known && (!g.implicit || key != g.def) {
 			x.err(f, "fieldGroup", CodeManifestGroupUnknown,
 				"field %s menyebut grup %q yang tidak didefinisikan di field_groups manifest resource %s (grup default adalah %q)", f.Name, key, x.mres.Key, g.def)
 		}

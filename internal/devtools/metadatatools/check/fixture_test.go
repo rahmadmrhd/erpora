@@ -16,22 +16,7 @@ func TestFixtureWorkspacePasses(t *testing.T) {
 		t.Fatalf("modul = %d", len(in.Modules))
 	}
 	rep := Run(in)
-	// Fixture fixturesales.invoiceLine.description adalah tujuan salinan (snapshot dari product.name) tetapi tidak
-	// readOnly dan tidak menyatakan fieldGroup/classification eksplisit (Requirement 14.1, 14.5): cacat pada
-	// fixture (testdata bukan milik pemeriksa). Hapus toleransi ini setelah fixture diperbaiki.
-	var unexpected []Problem
-	for _, p := range rep.Problems {
-		if p.Severity == SeverityError && (p.Code == CodeSnapshotToNotReadOnly || p.Code == CodeSnapshotToExplicit) &&
-			strings.Contains(p.File, "invoiceLine.resource.yaml") && strings.Contains(p.Pointer, "/fields/description") {
-			continue
-		}
-		if p.Severity == SeverityError {
-			unexpected = append(unexpected, p)
-		}
-	}
-	if len(unexpected) != 0 {
-		t.Fatalf("galat tak terduga pada fixture: %s", dump(unexpected))
-	}
+	noErrors(t, rep)
 
 	inv := rep.Resource("fixturesales.invoice")
 	if inv == nil || !inv.Document {

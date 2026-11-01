@@ -22,6 +22,9 @@ fields:
   description:
     type: string
     maxLength: 200
+    readOnly: true
+    fieldGroup: general
+    classification: internal
     label: fixturesales.invoiceLine.description
   quantity:
     type: decimal
