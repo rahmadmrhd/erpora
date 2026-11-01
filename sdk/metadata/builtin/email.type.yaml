@@ -1,0 +1,10 @@
+schemaVersion: "1"
+kind: fieldType
+key: sdk.email
+export: true
+description: Alamat surel. Berklasifikasi confidential di semua resource pemakai.
+base: {type: string, maxLength: 254, format: email}
+classification: confidential
+widget: email
+display: email
+operators: [eq, ne, contains, isnull]

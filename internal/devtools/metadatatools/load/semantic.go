@@ -97,3 +97,7 @@ func semanticChecks(root map[string]any) []Problem {
 	walk(root, "", "")
 	return out
 }
+
+// ConditionStats menghitung jumlah node dan kedalaman pohon kondisi generik (daun = kedalaman 1); dipakai
+// resolver untuk memeriksa ulang batas Requirement 1.3 pada kondisi hasil penggabungan.
+func ConditionStats(v any) (nodes, depth int) { return conditionStats(v, 1) }

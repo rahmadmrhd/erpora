@@ -85,6 +85,9 @@ func DefaultLimits() Limits {
 	}
 }
 
+// Batas ukuran (Requirement 1.3). MaxFields berlaku per berkas (skema) dan pada hasil gabungan resolusi.
+const MaxFields = 200
+
 // Batas struktural kondisi (Requirement 1.3) yang tidak dapat dinyatakan JSON Schema.
 const (
 	MaxConditionNodes = 32

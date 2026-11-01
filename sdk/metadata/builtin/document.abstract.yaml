@@ -1,0 +1,11 @@
+schemaVersion: "1"
+kind: abstract
+key: sdk.document
+export: true
+description: Dasar dokumen transaksional. Menyertakan sdk.audit, menambah status dan amendedFromId, dan terkunci setelah keluar dari draft.
+include:
+  - source: sdk:audit
+fields:
+  status: {type: enum, values: [draft, submitted, cancelled], default: draft, readOnly: true, filterable: true, sortable: true}
+  amendedFromId: {type: uuid, nullable: true, readOnly: true, filterable: true}
+lockWhen: {field: status, op: ne, value: draft}
