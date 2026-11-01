@@ -1,0 +1,56 @@
+<% .Header %>
+
+package <% .Pkg %>
+
+import (
+<%- if .UsesJSON %>
+	"encoding/json"
+<%- end %>
+
+	"erpora/sdk/metadata"
+)
+
+// <% .Pascal %>Key adalah kunci resource ini pada metadata.
+const <% .Pascal %>Key = <% .KeyLiteral %>
+
+<%- if .LabelTemplate %>
+
+// <% .Pascal %>LabelTemplate adalah templat label resource (placeholder {field}).
+const <% .Pascal %>LabelTemplate = <% .LabelTemplate %>
+<%- end %>
+
+// Nama field <% .Pascal %> (camelCase, sama dengan kunci JSON).
+const (
+<%- range .FieldConsts %>
+	<% .Name %> = <% .Value %>
+<%- end %>
+)
+<%- if .EnumConsts %>
+
+// Nilai enum <% .Pascal %>.
+const (
+<%- range .EnumConsts %>
+	<% .Name %> = <% .Value %>
+<%- end %>
+)
+<%- end %>
+
+// <% .Pascal %>Spec adalah spesifikasi validasi resource: field, aturan lintas field, dan penguncian.
+var <% .Pascal %>Spec = &ResourceSpec{
+	Key: <% .Pascal %>Key,
+	Fields: []FieldSpec{
+<%- range .Fields %>
+		<% . %>,
+<%- end %>
+	},
+<%- if .Rules %>
+	Rules: []RuleSpec{
+<%- range .Rules %>
+		<% . %>,
+<%- end %>
+	},
+<%- end %>
+<%- if .LockWhen %>
+	LockWhen: <% .LockWhen %>,
+<%- end %>
+}

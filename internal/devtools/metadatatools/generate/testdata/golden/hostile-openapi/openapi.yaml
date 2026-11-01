@@ -1,0 +1,73 @@
+openapi: 3.1.0
+paths: {}
+components:
+  schemas:
+    Thing:
+      type: object
+      description: "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"
+      required: [title, status, note]
+      properties:
+        title:
+          type: string
+          maxLength: 10
+          pattern: ^[a-z"`$*/ ]+$
+          description: "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"
+          x-erp-classification: internal
+          x-erp-field-group: default
+        status:
+          type: string
+          enum: [draft, net_15, "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"]
+          x-erp-classification: internal
+          x-erp-field-group: default
+        note:
+          type: [string, "null"]
+          x-erp-classification: internal
+          x-erp-field-group: default
+      x-erp-generated: true
+    ThingCreate:
+      type: object
+      description: Body pembuatan evil.thing; hanya field yang boleh ditulis.
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 10
+          pattern: ^[a-z"`$*/ ]+$
+          default: "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"
+          description: "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"
+          x-erp-classification: internal
+          x-erp-field-group: default
+        status:
+          type: string
+          enum: [draft, net_15, "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"]
+          default: draft
+          x-erp-classification: internal
+          x-erp-field-group: default
+        note:
+          type: [string, "null"]
+          x-erp-classification: internal
+          x-erp-field-group: default
+      x-erp-generated: true
+    ThingUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) evil.thing; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          maxLength: 10
+          pattern: ^[a-z"`$*/ ]+$
+          description: "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"
+          x-erp-classification: internal
+          x-erp-field-group: default
+        status:
+          type: string
+          enum: [draft, net_15, "\"; panic(\"pwn\") /* */ `x` $$ ${y}\n\t\\ '; DROP TABLE t; -- \L</script>"]
+          x-erp-classification: internal
+          x-erp-field-group: default
+        note:
+          type: [string, "null"]
+          x-erp-classification: internal
+          x-erp-field-group: default
+      x-erp-generated: true
