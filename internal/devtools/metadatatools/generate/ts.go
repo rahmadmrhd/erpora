@@ -373,23 +373,81 @@ func (b *tsBuilder) fieldMeta(f *fld) (any, error) {
 		o = append(o, tsKV{"deprecated", d})
 	}
 	if f.Computed {
-		acc := tsObj{{"kind", jsonLit(f.AccessorKind)}}
-		switch f.AccessorKind {
-		case "expr", "stored":
-			if f.AccessorExpr != nil {
-				e, err := genericTS(f.AccessorExpr)
-				if err != nil {
-					return nil, fmt.Errorf("field %s: %w", f.Name, err)
-				}
-				acc = append(acc, tsKV{"expr", e})
-			}
-		case "func":
-		default:
-			return nil, inputErr("field %s: jenis accessor %q tidak dikenal", f.Name, f.AccessorKind)
+		acc, ok, err := b.accessor(f)
+		if err != nil {
+			return nil, err
 		}
-		o = append(o, tsKV{"accessor", acc})
+		if ok {
+			o = append(o, tsKV{"accessor", acc})
+		}
 	}
 	return o, nil
+}
+
+// exprRefs mengumpulkan semua rujukan field (kunci field dan ref) di dalam ekspresi atau kondisi mentah.
+func exprRefs(v any, into map[string]bool) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, x := range t {
+			if s, ok := x.(string); ok && (k == "field" || k == "ref") {
+				into[s] = true
+				continue
+			}
+			exprRefs(x, into)
+		}
+	case []any:
+		for _, x := range t {
+			exprRefs(x, into)
+		}
+	}
+}
+
+// namesSafe menilai apakah semua nama field aman untuk chunk publik (D-8, D-21).
+func (c *clientCtx) namesSafe(names map[string]bool) (bool, string) {
+	for _, n := range sortedKeys(names) {
+		f, ok := c.fields[n]
+		switch {
+		case !ok:
+			return false, fmt.Sprintf("merujuk field %q yang tidak ikut ke klien", n)
+		case f.Class != "public" && f.Class != "internal":
+			return false, fmt.Sprintf("merujuk field %q berklasifikasi %s", n, f.Class)
+		case f.Group != c.defaultGroup:
+			return false, fmt.Sprintf("merujuk field %q di luar grup default", n)
+		}
+	}
+	return true, ""
+}
+
+// accessor menyusun accessor klien. Nilai accessor stored datang dari server, sehingga ekspresinya tidak pernah
+// dipancarkan. Ekspresi expr dipancarkan hanya bila semua rujukan field (termasuk kondisi if) berklasifikasi paling
+// tinggi internal dan berada di grup default; selain itu seluruh accessor tidak dipancarkan (field tetap hanya-baca).
+func (b *tsBuilder) accessor(f *fld) (any, bool, error) {
+	acc := tsObj{{"kind", jsonLit(f.AccessorKind)}}
+	switch f.AccessorKind {
+	case "stored":
+		if f.AccessorExpr != nil {
+			b.omit("field %s: ekspresi accessor stored tidak dipancarkan (nilai datang dari server)", f.Name)
+		}
+	case "func":
+	case "expr":
+		if f.AccessorExpr == nil {
+			return nil, false, inputErr("field %s: accessor expr tanpa ekspresi", f.Name)
+		}
+		refs := map[string]bool{}
+		exprRefs(f.AccessorExpr, refs)
+		if ok, why := b.ctx.namesSafe(refs); !ok {
+			b.omit("field %s: accessor expr tidak dipancarkan ke klien (%s)", f.Name, why)
+			return nil, false, nil
+		}
+		e, err := genericTS(f.AccessorExpr)
+		if err != nil {
+			return nil, false, fmt.Errorf("field %s: %w", f.Name, err)
+		}
+		acc = append(acc, tsKV{"expr", e})
+	default:
+		return nil, false, inputErr("field %s: jenis accessor %q tidak dikenal", f.Name, f.AccessorKind)
+	}
+	return acc, true, nil
 }
 
 func (b *tsBuilder) relation(rel *resolve.Relation) (any, error) {
@@ -459,25 +517,53 @@ func (b *tsBuilder) relation(rel *resolve.Relation) (any, error) {
 			return b.docPos("/relations/"+escapePtr(rel.Name)+"/pivotFields/"+escapePtr(names[i])) <
 				b.docPos("/relations/"+escapePtr(rel.Name)+"/pivotFields/"+escapePtr(names[j]))
 		})
-		var arr tsArr
 		slug, rname, _ := naming.SplitResourceKey(b.m.Res.Key)
+		var kept []*fld
+		pctx := &clientCtx{fields: map[string]*fld{}, defaultGroup: b.m.DefaultGroup}
 		for _, n := range names {
 			attrs, _ := pf[n].(map[string]any)
 			cls := attrString(attrs, "classification")
 			if cls == "" {
 				cls = "internal"
 			}
-			f, err := newFld(n, attrs, slug+"."+rname+"."+rel.Name+"."+n, b.m.DefaultGroup, cls)
+			group := b.m.DefaultGroup
+			if g := attrString(attrs, "fieldGroup"); g != "" {
+				group = manifestGroup(g)
+			}
+			f, err := newFld(n, attrs, slug+"."+rname+"."+rel.Name+"."+n, group, cls)
 			if err != nil {
 				return nil, fmt.Errorf("relasi %s: %w", rel.Name, err)
 			}
+			switch {
+			case !f.ClientVisible:
+				b.omit("relasi %s: pivotFields.%s tidak dipancarkan (clientVisible: false)", rel.Name, n)
+				continue
+			case f.Class != "public" && f.Class != "internal":
+				b.omit("relasi %s: pivotFields.%s tidak dipancarkan (berklasifikasi %s)", rel.Name, n, f.Class)
+				continue
+			case f.Group != b.m.DefaultGroup:
+				b.omit("relasi %s: pivotFields.%s tidak dipancarkan (di luar grup default)", rel.Name, n)
+				continue
+			}
+			kept = append(kept, f)
+			pctx.fields[f.Name] = f
+		}
+		// Kondisi dan accessor field pivot hanya boleh merujuk sesama field pivot yang aman.
+		saved := b.ctx
+		b.ctx = pctx
+		var arr tsArr
+		for _, f := range kept {
 			fm, err := b.fieldMeta(f)
 			if err != nil {
+				b.ctx = saved
 				return nil, err
 			}
 			arr = append(arr, fm)
 		}
-		o = append(o, tsKV{"pivotFields", arr})
+		b.ctx = saved
+		if len(arr) > 0 {
+			o = append(o, tsKV{"pivotFields", arr})
+		}
 	}
 	return o, nil
 }

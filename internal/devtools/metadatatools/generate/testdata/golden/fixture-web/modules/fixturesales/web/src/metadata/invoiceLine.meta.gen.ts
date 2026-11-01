@@ -178,18 +178,6 @@ export const resourceMeta: ResourceMeta = {
       currency: "IDR",
       accessor: {
         kind: "stored",
-        expr: {
-          mul: [
-            {
-              field: "quantity",
-            },
-            {
-              field: "unitPrice",
-            },
-          ],
-          round: "half_up",
-          scale: 2,
-        },
       },
     },
   ],
