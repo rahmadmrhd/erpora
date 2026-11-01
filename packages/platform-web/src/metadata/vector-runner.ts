@@ -100,9 +100,11 @@ export function runDecimalCases(cases: Case[]) {
         case "mul":
           expect(formatDecimal(mulDecimal(dec(c.a), dec(c.b)))).toBe(c.out);
           break;
-        case "round":
-          expect(formatDecimal(roundDecimal(dec(c.a), c.scale, c.mode as RoundMode))).toBe(c.out);
+        case "round": {
+          const r = roundDecimal(dec(c.a), c.scale, c.mode as RoundMode);
+          expect(r === null ? null : formatDecimal(r)).toBe(c.out);
           break;
+        }
         case "div": {
           const q = divDecimal(dec(c.a), dec(c.b), c.scale, c.mode as RoundMode);
           expect(q === null ? null : formatDecimal(q)).toBe(c.out);

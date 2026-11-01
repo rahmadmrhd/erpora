@@ -236,8 +236,12 @@ func TestVectorsDecimals(t *testing.T) {
 					t.Errorf("%s = %q, want %q", op, got.String(), want)
 				}
 			case "round":
-				got := mustDecimal(t, str("a")).Round(num("scale"), metadata.RoundMode(str("mode")))
-				if want, _ := wantStr(); got.String() != want {
+				got, ok := mustDecimal(t, str("a")).Round(num("scale"), metadata.RoundMode(str("mode")))
+				want, wantOK := wantStr()
+				if ok != wantOK {
+					t.Fatalf("round ok = %v, want %v", ok, wantOK)
+				}
+				if ok && got.String() != want {
 					t.Errorf("round = %q, want %q", got.String(), want)
 				}
 			case "div":

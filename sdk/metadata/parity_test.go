@@ -304,7 +304,7 @@ func buildRandomVectors(t *testing.T) []randomFile {
 		case 3:
 			c = map[string]any{"op": "mul", "a": as, "b": bs, "out": a.Mul(b).String()}
 		case 4:
-			c = map[string]any{"op": "round", "a": as, "scale": scale, "mode": string(mode), "out": a.Round(scale, mode).String()}
+			c = map[string]any{"op": "round", "a": as, "scale": scale, "mode": string(mode), "out": mustRound(t, a, scale, mode).String()}
 		default:
 			var out any
 			if q, ok := a.Div(b, scale, mode); ok {

@@ -237,7 +237,8 @@ describe("property: desimal", () => {
           const sb = b.scale;
           // nilai a = a.coef / 10^sa
           const r = roundDecimal(a, scale, mode);
-          if (r.scale !== scale || r.coef !== refRound(a.coef, p10(sa), scale, mode)) return false;
+          if (r === null || r.scale !== scale || r.coef !== refRound(a.coef, p10(sa), scale, mode))
+            return false;
           const q = divDecimal(a, b, scale, mode);
           if (b.coef === 0n) return q === null;
           if (q === null) return false;

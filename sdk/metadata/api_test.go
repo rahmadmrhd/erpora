@@ -122,3 +122,63 @@ func TestCompilePatternMatches(t *testing.T) {
 		t.Fatal("pencocokan salah")
 	}
 }
+
+func TestUnknownRoundModeIsRejected(t *testing.T) {
+	d, _ := ParseDecimal("2.5")
+	for _, m := range []RoundMode{"", "bankers", "HALF_UP", "half-down", "toString"} {
+		if r, ok := d.Round(0, m); ok {
+			t.Errorf("Round dengan mode %q harus ditolak, dapat %s", m, r)
+		}
+		if _, ok := d.Div(DecimalFromInt(3), 2, m); ok {
+			t.Errorf("Div dengan mode %q harus ditolak", m)
+		}
+	}
+	if _, ok := d.Round(-1, RoundHalfUp); ok {
+		t.Error("skala negatif harus ditolak")
+	}
+	if _, ok := d.Div(DecimalFromInt(3), -1, RoundHalfUp); ok {
+		t.Error("Div dengan skala negatif harus ditolak")
+	}
+	// mode sah tetap bekerja, termasuk skala yang sama dengan nilai
+	if r, ok := d.Round(1, RoundHalfDown); !ok || r.String() != "2.5" {
+		t.Errorf("Round skala sama = %v %v", r, ok)
+	}
+	// AST bangunan sendiri dengan mode tak dikenal ditolak oleh Validate, bukan dibulatkan diam-diam
+	bad := &Expr{Kind: ExprAdd, Scale: 0, Round: "bankers", Args: []*Expr{{Kind: ExprDec, Dec: d}, {Kind: ExprDec, Dec: d}}}
+	if res := bad.Eval(nil, nil); res.Type != TypeNull || len(res.Reasons) != 1 || res.Reasons[0].Code != ReasonInvalidExpression {
+		t.Errorf("mode tak dikenal pada ekspresi: %+v", res)
+	}
+}
+
+func TestNonFiniteJSONNumbersAreInvalid(t *testing.T) {
+	types := Types{"i": TypeInteger, "d": TypeDecimal}
+	for _, n := range []json.Number{"NaN", "nan", "Infinity", "-Infinity", "inf", "+Inf", "1e999", "-1e999", "0x1p3", "1_0", "", "+1", ".5", "1.", "01", " 1", "--1"} {
+		res := Evaluate(map[string]any{"field": "i", "op": "eq", "value": n}, types, Record{"i": json.Number("1")})
+		if res.Value || len(res.Reasons) != 1 || res.Reasons[0].Code != ReasonInvalidCondition {
+			t.Errorf("literal %q: %+v, want invalid_condition", string(n), res)
+		}
+		res = Evaluate(map[string]any{"field": "i", "op": "in", "value": []any{n}}, types, Record{"i": json.Number("1")})
+		if len(res.Reasons) != 1 || res.Reasons[0].Code != ReasonInvalidCondition {
+			t.Errorf("elemen in %q: %+v", string(n), res)
+		}
+		res = Cmp("i", OpIsNull, false).Eval(types, Record{"i": n})
+		if res.Value || len(res.Reasons) != 1 || res.Reasons[0].Code != ReasonTypeMismatch {
+			t.Errorf("record %q: %+v, want type_mismatch", string(n), res)
+		}
+		if e := EvaluateExpr(map[string]any{"lit": n}, types, nil); len(e.Reasons) != 1 || e.Reasons[0].Code != ReasonInvalidExpression {
+			t.Errorf("lit %q: %+v", string(n), e)
+		}
+	}
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		res := Evaluate(map[string]any{"field": "i", "op": "eq", "value": f}, types, Record{"i": 1})
+		if len(res.Reasons) != 1 || res.Reasons[0].Code != ReasonInvalidCondition {
+			t.Errorf("float %v: %+v", f, res)
+		}
+	}
+	// angka JSON sah tetap diterima
+	for _, n := range []json.Number{"0", "-0", "5", "5.0", "1e2", "-1.5E+3", "9007199254740991"} {
+		if res := Evaluate(map[string]any{"field": "i", "op": "gte", "value": n}, Types{"i": TypeInteger}, Record{"i": 0}); len(res.Reasons) == 1 && res.Reasons[0].Code == ReasonInvalidCondition {
+			t.Errorf("angka sah %q ditolak", string(n))
+		}
+	}
+}

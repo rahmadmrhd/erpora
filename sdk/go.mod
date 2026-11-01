@@ -5,7 +5,6 @@ go 1.27
 toolchain go1.27.3
 
 require (
-	github.com/shopspring/decimal v1.5.0
 	go.opentelemetry.io/otel/trace v1.47.0
 	golang.org/x/text v0.43.0
 	gorm.io/gorm v1.31.2

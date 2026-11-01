@@ -250,12 +250,15 @@ function evalExprNode(ctx: Ctx, e: ExprNode, path: string): ER {
       break;
     default: {
       // div
+      if ((rest[0] as Decimal).coef === 0n) return unk(REASON.divisionByZero);
       const q = divDecimal(first, rest[0] as Decimal, ar.scale, ar.round);
-      if (q === null) return unk(REASON.divisionByZero);
+      if (q === null) return unk(REASON.invalidExpression);
       return [mkValue({ k: "num", ft: "decimal", num: q }), []];
     }
   }
-  return [mkValue({ k: "num", ft: "decimal", num: roundDecimal(res, ar.scale, ar.round) }), []];
+  const rounded = roundDecimal(res, ar.scale, ar.round);
+  if (rounded === null) return unk(REASON.invalidExpression);
+  return [mkValue({ k: "num", ft: "decimal", num: rounded }), []];
 }
 
 /** Mengevaluasi ekspresi hasil `parseExpr`. Fungsi total. */

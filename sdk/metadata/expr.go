@@ -437,11 +437,18 @@ func (ev *evaluator) expr(e *Expr, path string) (value, []Reason) {
 	case ExprSub:
 		res = vals[0].num.Sub(vals[1].num)
 	default: // ExprDiv
+		if vals[1].num.IsZero() {
+			return unk(ReasonDivisionByZero)
+		}
 		q, ok := vals[0].num.Div(vals[1].num, e.Scale, e.Round)
 		if !ok {
-			return unk(ReasonDivisionByZero)
+			return unk(ReasonInvalidExpression)
 		}
 		return value{k: kNum, ft: TypeDecimal, num: q}, nil
 	}
-	return value{k: kNum, ft: TypeDecimal, num: res.Round(e.Scale, e.Round)}, nil
+	rounded, ok := res.Round(e.Scale, e.Round)
+	if !ok {
+		return unk(ReasonInvalidExpression)
+	}
+	return value{k: kNum, ft: TypeDecimal, num: rounded}, nil
 }

@@ -385,7 +385,7 @@ func TestPropertyDecimalMatchesRat(t *testing.T) {
 		}
 		scale := r.Intn(6)
 		mode := modes[r.Intn(len(modes))]
-		if got, want := a.Round(scale, mode), refRound(ra, scale, mode); ratDecimal(t, got).Cmp(want) != 0 || got.Scale() != scale {
+		if got, want := mustRound(t, a, scale, mode), refRound(ra, scale, mode); ratDecimal(t, got).Cmp(want) != 0 || got.Scale() != scale {
 			t.Errorf("Round(%s,%d,%s)=%s want %s", as, scale, mode, got, want.FloatString(scale))
 			return false
 		}
@@ -435,4 +435,13 @@ func TestPropertyValidatePatternIsTotal(t *testing.T) {
 	if err := quick.Check(prop, &quick.Config{MaxCount: 20000}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func mustRound(t *testing.T, a Decimal, scale int, mode RoundMode) Decimal {
+	t.Helper()
+	r, ok := a.Round(scale, mode)
+	if !ok {
+		t.Fatalf("Round(%s, %d, %s) ditolak", a, scale, mode)
+	}
+	return r
 }

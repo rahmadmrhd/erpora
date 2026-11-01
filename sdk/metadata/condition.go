@@ -106,8 +106,8 @@ func isScalarLiteral(v any) bool {
 	case float32:
 		return !math.IsNaN(float64(x)) && !math.IsInf(float64(x), 0)
 	case json.Number:
-		_, err := strconv.ParseFloat(string(x), 64)
-		return err == nil
+		_, ok := parseJSONNumber(x)
+		return ok
 	}
 	return false
 }

@@ -48,7 +48,7 @@ Chunk metadata disajikan sebagai aset SPA statis tanpa autentikasi (Requirement 
 - field yang ditandai `clientVisible: false` (beserta `clientVisibleReason`); halaman yang memakainya ditulis tangan;
 - aturan berpenanda `scope: server`, yaitu aturan yang merujuk field berklasifikasi `confidential` ke atas atau field di luar grup `default` (Requirement 4.6), beserta nilai ambangnya.
 
-Tipe `ResourceMeta` sengaja tidak punya tempat bagi `clientVisible`, `clientVisibleReason`, atau `scope`. Pemuat (lihat di bawah) menolak chunk yang tetap memuatnya atau yang kondisinya merujuk field yang tidak ada di metadata klien, field `confidential` ke atas, atau field di luar grup default (`checkClientMeta`). Klien tidak pernah menyimpulkan akses grup field dari metadata: akses datang dari respons API.
+Tipe `ResourceMeta` sengaja tidak punya tempat bagi `clientVisible`, `clientVisibleReason`, atau `scope`. Pemuat (lihat di bawah) menolak chunk yang tetap memuatnya (`checkClientMeta`). `checkClientMeta` juga menelusuri **setiap** kondisi dan ekspresi di chunk: `visibleWhen`/`requiredWhen`/`readonlyWhen` field, `rules`, `relation.filter` (hanya `ref`), `lockWhen`, `accessor.expr` (termasuk kondisi dan cabang `if` di dalamnya, juga untuk `stored`), dan semua itu pada `relation.pivotFields[]`. Rujukan ke field yang tidak ada di metadata klien (mis. yang `clientVisible: false`), field `confidential` ke atas, atau field di luar grup default ditolak, karena yang demikian harus `scope: server` atau tidak dipancarkan (pembangkit tidak memancarkan `expr` untuk `stored`, dan memancarkan `expr` untuk accessor hanya bila semua masukannya berklasifikasi paling tinggi `internal` di grup default). Pemindaian yang melampaui batas (200.000 simpul) dianggap pelanggaran (gagal tertutup), dan chunk tak lengkap (koleksi `fields`, `relations`, `rules`, `sections` atau `defaultGroup` hilang) ditolak sebagai `invalid_module`, bukan `TypeError`. Klien tidak pernah menyimpulkan akses grup field dari metadata: akses datang dari respons API.
 
 ### Field tidak ada di respons = "tidak tersedia", bukan "kosong"
 
@@ -70,6 +70,10 @@ Evaluator Go (`sdk/metadata`) dan TypeScript berperilaku identik; paritas dibukt
 **Null.** `null` tidak pernah sama dengan nilai bukan-null; `eq` hanya benar bila kedua sisi `null`, `ne` adalah negasi `eq`, operator urutan, `contains`, dan `in` bernilai `false`. Gunakan `isnull` untuk menguji kosong.
 
 **Teks.** Dibandingkan menurut code point (identik dengan urutan byte UTF-8, bukan lokal). `contains` tidak peka huruf besar-kecil hanya untuk huruf ASCII.
+
+**Mode pembulatan.** Hanya tujuh mode di atas yang sah. Mode tak dikenal atau skala negatif **ditolak** (`roundDecimal` dan `divDecimal` di TS mengembalikan `null`; `Decimal.Round` di Go mengembalikan `ok=false`; ekspresi bangunan sendiri menjadi hasil tak tentu `invalid_expression`); tidak pernah berperilaku diam-diam sebagai mode lain.
+
+**Pattern.** Pola harus lolos validator subset (`ValidatePattern`, dijalankan `metadata:check`): subset RE2 yang sama di Go dan JS, tinggi bintang paling banyak 1 (kuantor variabel di dalam operand pengulang, termasuk `{n}` tepat dengan n > 1, ditolak: `(?:\d+){5}`), alternasi tak ambigu di bawah kuantor berulang, dan **tidak ada dua pengulangan lebar (tak terbatas atau batas atas > 32) yang himpunan karakternya beririsan dan hanya dipisahkan elemen opsional** (`\d*\d*x`, `.*.*=.*`, `\d+-?\d+` ditolak; `\d+-\d+`, `.+@.+`, `\d+(\.\d+)?` sah). Risiko sisa: pemisah wajib yang beririsan dengan pengulang di sekitarnya (`.*=.*=.*=.*`) tetap polinomial; di klien dibatasi panjang input 1024 dan hanya mempengaruhi tab pengguna sendiri.
 
 **Batas** (Requirement 1.3, 19.1): kondisi paling banyak 32 simpul dan kedalaman 4, `in` paling banyak 100 nilai, nilai teks paling banyak 65.536 satuan UTF-16, ekspresi paling banyak 32 simpul dan kedalaman 8. Struktur yang melampaui batas ditolak tanpa dieksekusi.
 
@@ -148,11 +152,24 @@ const meta = await resourceMetaLoader.load("sales.invoice"); // chunk terpisah, 
 ```
 
 - Satu importer (satu chunk) per resource; tidak ada metadata di bundel awal. Permintaan bersamaan dipadukan, hasil di-cache, kegagalan impor tidak di-cache (dapat diulang). `peek(key)` mengembalikan metadata yang sudah termuat.
-- Chunk divalidasi: ekspor `resourceMeta` harus ada, `key` harus cocok, dan `checkClientMeta` harus bersih (lihat "Yang tidak ada di metadata klien"). Pelanggaran memunculkan `MetadataLoadError` (`code`: `not_registered`, `import_failed`, `invalid_module`, `key_mismatch`, `unsafe_for_client`); chunk yang bocor tidak pernah dipakai.
+- Chunk divalidasi: ekspor `resourceMeta` harus lengkap bentuknya (`invalid_module`), `key` harus cocok, dan `checkClientMeta` harus bersih (lihat "Yang tidak ada di metadata klien"). Pelanggaran memunculkan `MetadataLoadError` (`code`: `not_registered`, `import_failed`, `invalid_module`, `key_mismatch`, `unsafe_for_client`); chunk yang bocor tidak pernah dipakai.
+
+## Catatan untuk penerjemah SQL (T2: `stored`, CHECK, pemicu `lockWhen`)
+
+Semantik evaluator di bawah ini adalah acuan yang harus dipertahankan saat kondisi dan ekspresi diterjemahkan ke SQL (kolom `stored`, CHECK, pemicu penguncian; Requirement 5.3, 11.5, 13.2):
+
+- `eq`/`ne` aman-null: `null` hanya sama dengan `null` (`a IS NOT DISTINCT FROM b`); `ne` adalah negasinya (`a IS DISTINCT FROM b`), jadi `ne` atas null bernilai **benar** (bukan NULL seperti `<>` SQL).
+- `gt`, `gte`, `lt`, `lte`, `contains`, dan `in` atas null bernilai **salah pasti**, bukan NULL: bungkus dengan `COALESCE(..., false)` atau `IS NOT NULL AND ...`.
+- `isnull` tanpa `value` berarti `value: true`.
+- `not` atas hasil pasti membalik biasa; kondisi yang diterjemahkan tidak boleh menghasilkan NULL pada akar (CHECK memperlakukan NULL sebagai lolos, yang berbeda dari "salah").
+- `contains` tidak peka huruf besar-kecil hanya untuk huruf ASCII (`lower()` SQL melipat huruf non-ASCII dan bergantung kolasi; terjemahkan ke pelipatan ASCII atau tandai tak dapat diterjemahkan).
+- Teks dibandingkan menurut code point (kolasi `"C"`), bukan kolasi bahasa.
+- Aritmetika `add`/`sub`/`mul`/`div` merambatkan null; `div` dengan pembagi nol adalah hasil tak tentu (di SQL: tolak atau jaga dengan `CASE`, jangan menjalankan `/` mentah); pembulatan hanya lewat `round` dengan skala dan mode eksplisit yang diterjemahkan secara eksak (tujuh mode di atas), tidak ke `ROUND()` bawaan yang hanya setara `half_up`.
+- Field tidak tersedia dan tipe tak cocok tidak ada di SQL (kolom selalu ada dan bertipe); kasus itu hanya hidup di evaluator.
 
 ## Format tampilan desimal
 
-`formatDecimalString(value, locale, { scale?, currency? })` memformat string desimal untuk tampilan tanpa konversi `Number`: digit berasal dari utilitas desimal, `Intl` hanya memberi pola bahasa (pemisah, simbol mata uang, posisi tanda). Skala tampilan di-pad ke skala field tanpa memotong digit nilai. Masukan yang bukan desimal kanonik menghasilkan `null`. Pengelompokan ribuan tiga digit. Jangan memformat nilai `decimal` dengan `Number(...)`, `parseFloat`, atau `toFixed`.
+`formatDecimalString(value, locale, { scale?, currency? })` memformat string desimal untuk tampilan tanpa konversi `Number`: digit berasal dari utilitas desimal, `Intl` hanya memberi pola bahasa (pemisah, simbol mata uang, posisi tanda). Skala tampilan di-pad ke skala field tanpa memotong digit nilai. Masukan yang bukan desimal kanonik menghasilkan `null`; selain itu fungsi ini total: bahasa, mata uang (`currency: "rupiah"`), atau skala yang rusak tidak pernah melempar (mata uang tak sah diabaikan, bahasa tak sah jatuh ke `en`, skala dibatasi 0 sampai 64). Pengelompokan ribuan tiga digit. Jangan memformat nilai `decimal` dengan `Number(...)`, `parseFloat`, atau `toFixed`.
 
 ## Titik perluasan dan checklist konsumen
 

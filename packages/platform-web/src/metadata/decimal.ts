@@ -90,7 +90,7 @@ export function isZeroDecimal(a: Decimal): boolean {
   return a.coef === 0n;
 }
 
-/** Membulatkan num/den (den != 0) ke bilangan bulat menurut mode. */
+/** Membulatkan num/den (den != 0) ke bilangan bulat menurut mode; mode harus sah (diperiksa pemanggil publik). */
 function roundQuotient(num: bigint, den: bigint, mode: RoundMode): bigint {
   const neg = num < 0n !== den < 0n;
   const n = num < 0n ? -num : num;
@@ -111,7 +111,9 @@ function roundQuotient(num: bigint, den: bigint, mode: RoundMode): bigint {
       case "ceiling":
         inc = !neg;
         break;
-      default: {
+      case "half_up":
+      case "half_down":
+      case "half_even": {
         const twice = 2n * r;
         if (twice > d) inc = true;
         else if (twice === d) inc = mode === "half_up" || (mode === "half_even" && (q & 1n) === 1n);
@@ -122,17 +124,26 @@ function roundQuotient(num: bigint, den: bigint, mode: RoundMode): bigint {
   return neg ? -q : q;
 }
 
-/** Membulatkan ke `scale` digit pecahan (scale >= 0); hasil berskala tepat `scale`. */
-export function roundDecimal(a: Decimal, scale: number, mode: RoundMode): Decimal {
-  const s = Math.max(0, scale);
+function validScale(scale: number): boolean {
+  return Number.isInteger(scale) && scale >= 0;
+}
+
+/**
+ * Membulatkan ke `scale` digit pecahan; hasil berskala tepat `scale`. Mengembalikan null (tanpa membulatkan)
+ * bila mode tidak dikenal atau skala bukan bilangan bulat tak negatif: mode tak dikenal tidak pernah berperilaku
+ * diam-diam sebagai mode lain.
+ */
+export function roundDecimal(a: Decimal, scale: number, mode: RoundMode): Decimal | null {
+  if (!validScale(scale) || !isRoundMode(mode)) return null;
+  const s = scale;
   if (a.scale <= s) return { coef: a.coef * pow10(s - a.scale), scale: s };
   return { coef: roundQuotient(a.coef, pow10(a.scale - s), mode), scale: s };
 }
 
-/** Membagi a dengan b dan membulatkan ke `scale` digit pecahan; null bila b nol. */
+/** Membagi a dengan b dan membulatkan ke `scale` digit pecahan; null bila b nol, mode tak dikenal, atau skala tak sah. */
 export function divDecimal(a: Decimal, b: Decimal, scale: number, mode: RoundMode): Decimal | null {
-  if (b.coef === 0n) return null;
-  const s = Math.max(0, scale);
+  if (b.coef === 0n || !validScale(scale) || !isRoundMode(mode)) return null;
+  const s = scale;
   const k = b.scale - a.scale + s;
   const num = k >= 0 ? a.coef * pow10(k) : a.coef;
   const den = k >= 0 ? b.coef : b.coef * pow10(-k);

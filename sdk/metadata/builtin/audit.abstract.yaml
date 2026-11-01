@@ -2,11 +2,11 @@ schemaVersion: "1"
 kind: abstract
 key: sdk.audit
 export: true
-description: Field bawaan semua resource (identitas, versi untuk konkurensi, dan jejak audit). Selalu hanya-baca.
+description: Field bawaan semua resource (identitas, versi untuk konkurensi, dan jejak audit). Selalu hanya-baca. createdBy dan updatedBy bernilai null untuk data lama, seed, dan tindakan sistem tanpa principal.
 fields:
   id: {type: uuid, readOnly: true, filterable: true}
   version: {type: integer, minimum: 1, readOnly: true}
   createdAt: {type: datetime, readOnly: true, filterable: true, sortable: true}
   updatedAt: {type: datetime, readOnly: true, filterable: true, sortable: true}
-  createdBy: {type: uuid, readOnly: true, filterable: true}
-  updatedBy: {type: uuid, readOnly: true, filterable: true}
+  createdBy: {type: uuid, nullable: true, readOnly: true, filterable: true}
+  updatedBy: {type: uuid, nullable: true, readOnly: true, filterable: true}

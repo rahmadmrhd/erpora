@@ -127,6 +127,11 @@ describe("validateRecord: tipe dan batasan", () => {
     expect(validateRecord(m, { s: `${"a".repeat(1024)}b` })).toEqual([]);
     expect(codes(validateRecord(m, { s: "ab" }))).toEqual(["s:pattern"]);
   });
+  test("pola tidak diuji pada nilai yang melebihi maxLength (hanya too_long)", () => {
+    expect(
+      codes(validateRecord(invoiceMeta, draft({ customerName: `${"x".repeat(60)}1` }))),
+    ).toEqual(["customerName:too_long"]);
+  });
   test("format email dan url", () => {
     expect(codes(validateRecord(invoiceMeta, draft({ email: "bukan-email" })))).toEqual([
       "email:format",

@@ -4,7 +4,8 @@
 // sehingga pemuat menolak chunk yang memuat apa yang seharusnya tetap di server.
 
 import { type ConditionNode, isPlainObject, parseCondition } from "./condition";
-import type { Condition, ResourceMeta, ResourceMetaModule } from "./meta";
+import { type ExprNode, parseExpr } from "./expr";
+import type { AccessorMeta, Condition, FieldMeta, ResourceMeta, ResourceMetaModule } from "./meta";
 
 export type MetadataLoadErrorCode =
   | "not_registered"
@@ -29,24 +30,57 @@ export class MetadataLoadError extends Error {
   }
 }
 
-function names(node: ConditionNode, out: { field: boolean; name: string }[]): void {
+interface Ref {
+  /** true: nama pada posisi `field` daun; false: nama pada `ref`. */
+  readonly field: boolean;
+  readonly name: string;
+}
+
+function condNames(node: ConditionNode, out: Ref[]): void {
   if (node.kind === "leaf") {
     out.push({ field: true, name: node.field });
     if (node.ref !== "") out.push({ field: false, name: node.ref });
     return;
   }
-  for (const c of node.children) names(c, out);
+  for (const c of node.children) condNames(c, out);
+}
+
+/** Mengumpulkan rujukan field dari pohon ekspresi, termasuk kondisi `if` (kondisi, lalu cabang). */
+function exprNames(node: ExprNode, out: Ref[]): void {
+  switch (node.kind) {
+    case "field":
+      out.push({ field: true, name: node.field });
+      return;
+    case "if":
+      condNames(node.cond, out);
+      exprNames(node.whenTrue, out);
+      exprNames(node.whenFalse, out);
+      return;
+    case "concat":
+    case "coalesce":
+    case "add":
+    case "sub":
+    case "mul":
+    case "div":
+      for (const a of node.args) exprNames(a, out);
+  }
 }
 
 const FORBIDDEN_KEYS = new Set(["clientVisible", "clientVisibleReason"]);
 const SCAN_LIMIT = 200_000;
+const SCAN_EXCEEDED =
+  "metadata terlalu besar untuk dipindai (melampaui batas): ditolak (gagal tertutup)";
 
 function forbiddenKeys(root: unknown): string[] {
   const found = new Set<string>();
   const stack: unknown[] = [root];
   const seen = new Set<unknown>();
   let steps = 0;
-  while (stack.length > 0 && steps++ < SCAN_LIMIT) {
+  while (stack.length > 0) {
+    if (steps++ >= SCAN_LIMIT) {
+      found.add(SCAN_EXCEEDED);
+      break;
+    }
     const v = stack.pop();
     if (typeof v !== "object" || v === null || seen.has(v)) continue;
     seen.add(v);
@@ -67,48 +101,128 @@ function forbiddenKeys(root: unknown): string[] {
   return [...found];
 }
 
+const objs = (v: unknown): v is readonly Record<string, unknown>[] =>
+  Array.isArray(v) && v.every(isPlainObject);
+
+/**
+ * Memeriksa kelengkapan bentuk metadata (semua koleksi ada dan berupa larik objek) sebelum dipindai; mengembalikan
+ * deskripsi masalah atau null. Dipakai pemuat (`invalid_module`) dan `checkClientMeta` agar chunk tak lengkap tidak
+ * pernah menimbulkan TypeError.
+ */
+export function metaShapeProblem(meta: unknown): string | null {
+  if (!isPlainObject(meta)) return "bukan objek";
+  if (typeof meta.key !== "string") return "key hilang";
+  if (typeof meta.defaultGroup !== "string" || meta.defaultGroup === "")
+    return "defaultGroup hilang";
+  for (const k of ["fields", "relations", "rules", "sections"] as const) {
+    if (!objs(meta[k])) return `${k} hilang atau bukan larik objek`;
+  }
+  for (const f of meta.fields as readonly Record<string, unknown>[]) {
+    if (typeof f.name !== "string") return "field tanpa name";
+    if (f.accessor !== undefined && !isPlainObject(f.accessor))
+      return `accessor ${f.name} bukan objek`;
+  }
+  for (const r of meta.relations as readonly Record<string, unknown>[]) {
+    if (r.pivotFields !== undefined) {
+      if (!objs(r.pivotFields)) return "pivotFields bukan larik objek";
+      for (const p of r.pivotFields) {
+        if (typeof p.name !== "string") return "pivotField tanpa name";
+        if (p.accessor !== undefined && !isPlainObject(p.accessor))
+          return `accessor ${p.name} bukan objek`;
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Memeriksa bahwa metadata aman untuk chunk publik: tidak ada `clientVisible`/`scope: server`, dan setiap kondisi
- * hanya merujuk field yang ada di metadata klien, bukan field berklasifikasi `confidential` ke atas atau di luar
- * grup default (aturan seperti itu harus `scope: server`, D-8). Mengembalikan daftar pelanggaran (kosong = aman).
+ * (field, aturan, filter relasi, `lockWhen`, serta field pivot) dan setiap `accessor.expr` (termasuk kondisi `if`
+ * di dalamnya) hanya merujuk field yang ada di metadata klien, bukan field berklasifikasi `confidential` ke atas
+ * atau di luar grup default (aturan seperti itu harus `scope: server`, D-8, Requirement 4.6 dan 5.8). Pemindaian
+ * yang melampaui batas dianggap pelanggaran (gagal tertutup). Fungsi total. Mengembalikan daftar pelanggaran
+ * (kosong = aman).
  */
 export function checkClientMeta(meta: ResourceMeta): readonly string[] {
+  const problem = metaShapeProblem(meta);
+  if (problem !== null) return [`struktur metadata tidak lengkap: ${problem}`];
   const out = forbiddenKeys(meta);
   const byName = new Map(meta.fields.map((f) => [f.name, f]));
-  const check = (where: string, cond: Condition | undefined, relationFilter = false) => {
+
+  /** Memeriksa satu rujukan terhadap cakupan nama (pivot: field pivot lebih dulu, lalu field resource). */
+  const checkRef = (where: string, name: string, scopes: readonly Map<string, FieldMeta>[]) => {
+    const f = scopes.map((s) => s.get(name)).find((x) => x !== undefined);
+    if (!f) {
+      out.push(`${where}: merujuk field "${name}" yang tidak ada di metadata klien`);
+    } else if (f.classification !== "public" && f.classification !== "internal") {
+      out.push(
+        `${where}: merujuk field "${name}" berklasifikasi ${f.classification} (harus scope server)`,
+      );
+    } else if (f.fieldGroup !== meta.defaultGroup) {
+      out.push(
+        `${where}: merujuk field "${name}" di grup ${f.fieldGroup} di luar grup default (harus scope server)`,
+      );
+    }
+  };
+  const check = (
+    where: string,
+    cond: Condition | undefined,
+    scopes: readonly Map<string, FieldMeta>[],
+    relationFilter = false,
+  ) => {
     if (cond === undefined) return;
     const p = parseCondition(cond);
     if (!p.ok) {
       out.push(`${where}: kondisi tidak sah (${p.reason.code})`);
       return;
     }
-    const refs: { field: boolean; name: string }[] = [];
-    names(p.value, refs);
+    const refs: Ref[] = [];
+    condNames(p.value, refs);
     for (const r of refs) {
       // pada filter relasi, `field` menunjuk field resource seberang; hanya `ref` menunjuk form ini
       if (relationFilter && r.field) continue;
-      const f = byName.get(r.name);
-      if (!f) {
-        out.push(`${where}: merujuk field "${r.name}" yang tidak ada di metadata klien`);
-      } else if (f.classification !== "public" && f.classification !== "internal") {
-        out.push(
-          `${where}: merujuk field "${r.name}" berklasifikasi ${f.classification} (harus scope server)`,
-        );
-      } else if (f.fieldGroup !== meta.defaultGroup) {
-        out.push(
-          `${where}: merujuk field "${r.name}" di grup ${f.fieldGroup} di luar grup default (harus scope server)`,
-        );
-      }
+      checkRef(where, r.name, scopes);
     }
   };
-  for (const f of meta.fields) {
-    check(`field ${f.name}.visibleWhen`, f.visibleWhen);
-    check(`field ${f.name}.requiredWhen`, f.requiredWhen);
-    check(`field ${f.name}.readonlyWhen`, f.readonlyWhen);
+  const checkAccessor = (
+    where: string,
+    accessor: AccessorMeta | undefined,
+    scopes: readonly Map<string, FieldMeta>[],
+  ) => {
+    if (accessor === undefined || accessor.kind === "func") return;
+    const expr = accessor.expr;
+    if (expr === undefined) {
+      if (accessor.kind === "expr") out.push(`${where}: accessor expr tanpa ekspresi`);
+      return;
+    }
+    const p = parseExpr(expr);
+    if (!p.ok) {
+      out.push(`${where}: ekspresi accessor tidak sah (${p.reason.code})`);
+      return;
+    }
+    const refs: Ref[] = [];
+    exprNames(p.value, refs);
+    for (const r of refs) checkRef(`${where}.accessor`, r.name, scopes);
+  };
+  const checkField = (f: FieldMeta, scopes: readonly Map<string, FieldMeta>[], prefix: string) => {
+    check(`${prefix}${f.name}.visibleWhen`, f.visibleWhen, scopes);
+    check(`${prefix}${f.name}.requiredWhen`, f.requiredWhen, scopes);
+    check(`${prefix}${f.name}.readonlyWhen`, f.readonlyWhen, scopes);
+    checkAccessor(`${prefix}${f.name}`, f.accessor, scopes);
+  };
+
+  const top = [byName];
+  for (const f of meta.fields) checkField(f, top, "field ");
+  for (const r of meta.rules) check(`rule ${r.id}`, r.assert, top);
+  for (const rel of meta.relations) {
+    check(`relation ${rel.name}.filter`, rel.filter, top, true);
+    if (rel.pivotFields) {
+      const pivotByName = new Map(rel.pivotFields.map((p) => [p.name, p]));
+      for (const p of rel.pivotFields)
+        checkField(p, [pivotByName, byName], `relation ${rel.name}.pivot `);
+    }
   }
-  for (const r of meta.rules) check(`rule ${r.id}`, r.assert);
-  for (const rel of meta.relations) check(`relation ${rel.name}.filter`, rel.filter, true);
-  check("lockWhen", meta.lockWhen);
+  check("lockWhen", meta.lockWhen, top);
   return out;
 }
 
@@ -140,13 +254,8 @@ export function createResourceMetaLoader(): ResourceMetaLoader {
       throw new MetadataLoadError("import_failed", key, undefined, { cause: err });
     }
     const meta = isPlainObject(mod) ? (mod as { resourceMeta?: unknown }).resourceMeta : undefined;
-    if (!isPlainObject(meta) || !Array.isArray((meta as { fields?: unknown }).fields)) {
-      throw new MetadataLoadError(
-        "invalid_module",
-        key,
-        "ekspor resourceMeta tidak ada atau bentuknya salah",
-      );
-    }
+    const problem = metaShapeProblem(meta);
+    if (problem !== null) throw new MetadataLoadError("invalid_module", key, problem);
     const m = meta as unknown as ResourceMeta;
     if (m.key !== key)
       throw new MetadataLoadError("key_mismatch", key, `chunk berisi ${String(m.key)}`);

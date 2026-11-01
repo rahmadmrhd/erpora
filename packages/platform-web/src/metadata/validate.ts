@@ -108,8 +108,11 @@ function checkValue(f: FieldMeta, v: unknown, out: ValidationIssue[]): void {
       const s = typed.s;
       const n = codePoints(s);
       if (f.minLength !== undefined && n < f.minLength) push("too_short", { min: f.minLength });
-      if (f.maxLength !== undefined && n > f.maxLength) push("too_long", { max: f.maxLength });
-      if (f.pattern !== undefined && testPattern(f.pattern, s).match === false) push("pattern");
+      const over = f.maxLength !== undefined && n > f.maxLength;
+      if (over) push("too_long", { max: f.maxLength as number });
+      // pola tidak diuji pada nilai yang sudah melebihi maxLength (batas input regex klien = min(1024, maxLength))
+      if (!over && f.pattern !== undefined && testPattern(f.pattern, s).match === false)
+        push("pattern");
       if (f.format === "email" && !EMAIL_RE.test(s)) push("format");
       if (f.format === "url" && !URL_RE.test(s)) push("format");
       return;

@@ -3,6 +3,7 @@ package metadata
 import (
 	"encoding/json"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -100,8 +101,8 @@ func toSafeInt(raw any) (int64, bool) {
 	}
 	switch v := raw.(type) {
 	case json.Number:
-		f, err := strconv.ParseFloat(string(v), 64)
-		if err != nil {
+		f, ok := parseJSONNumber(v)
+		if !ok {
 			return 0, false
 		}
 		return safe(f)
@@ -131,6 +132,23 @@ func toSafeInt(raw any) (int64, bool) {
 		return safeUint64(v)
 	}
 	return 0, false
+}
+
+// jsonNumberRE adalah tata bahasa angka JSON (RFC 8259); json.Number adalah tipe string sehingga isinya dapat
+// berupa apa saja ("NaN", "Infinity", "0x1p3", "1_0", "+1"), padahal JSON.parse di klien tidak pernah
+// menghasilkannya.
+var jsonNumberRE = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
+
+// parseJSONNumber mengurai json.Number yang sah dan berhingga menjadi float64 (sama dengan JSON.parse).
+func parseJSONNumber(n json.Number) (float64, bool) {
+	if !jsonNumberRE.MatchString(string(n)) {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(string(n), 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
 }
 
 func safeInt64(v int64) (int64, bool) {

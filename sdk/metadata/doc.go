@@ -18,4 +18,11 @@
 // bilangan bulat aman (|n| <= 2^53-1), date YYYY-MM-DD, datetime RFC 3339 UTC (akhiran Z, pecahan <= 9 digit),
 // uuid huruf kecil kanonik. Teks dibandingkan berurutan menurut code point (identik dengan urutan byte UTF-8);
 // "contains" tidak peka huruf besar-kecil hanya untuk huruf ASCII.
+//
+// # Semantik null (acuan bagi penerjemah SQL, task T2)
+//
+// null hanya sama dengan null (eq aman-null; ne adalah negasinya, jadi ne atas null bernilai benar); gt, gte, lt,
+// lte, contains, dan in atas null bernilai salah pasti (bukan tak tentu); isnull tanpa nilai berarti isnull true.
+// Penerjemah SQL (kolom stored, CHECK, pemicu lockWhen) harus mempertahankannya (IS [NOT] DISTINCT FROM dan
+// COALESCE(..., false)) karena logika tiga-nilai SQL berbeda.
 package metadata

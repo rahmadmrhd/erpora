@@ -13,6 +13,7 @@ const (
 	PatternUnsupported      = "unsupported"
 	PatternNestedQuantifier = "nested_quantifier"
 	PatternAmbiguous        = "ambiguous_alternation"
+	PatternOverlapping      = "overlapping_repeat"
 )
 
 // PatternError menjelaskan pelanggaran subset pattern.
@@ -164,9 +165,22 @@ type pelem struct {
 	quant    bool
 }
 
+// repeating: kuantor berulang variabel (tak terbatas, atau rentang {n,m} dengan m > 1); inilah "bintang" pada
+// tinggi bintang.
 func (e *pelem) repeating() bool {
 	return e.quant && (e.max < 0 || (e.max > 1 && e.min != e.max))
 }
+
+// multiplies: kuantor yang mengulang operandnya lebih dari sekali, termasuk {n} tepat (n > 1). Operand yang
+// memuat kuantor variabel di bawah pengulang seperti itu berlipat ganda ((?:\d+){1000}).
+func (e *pelem) multiplies() bool { return e.quant && (e.max < 0 || e.max > 1) }
+
+// wide: kuantor tak terbatas atau berbatas atas besar; dua yang berurutan dan beririsan membuat backtracking
+// polinomial berderajat tinggi.
+func (e *pelem) wide() bool { return e.quant && (e.max < 0 || e.max > wideRepeat) }
+
+// wideRepeat adalah batas atas kuantor terhitung yang dianggap "lebar" pada pemeriksaan kuantor bertetangga.
+const wideRepeat = 32
 
 type patParser struct {
 	src []rune
@@ -213,7 +227,7 @@ func (p *patParser) parseSeq() ([]*pelem, error) {
 			if n.kind == pnAnchor {
 				return nil, perr(PatternInvalidSyntax, "kuantor pada jangkar")
 			}
-			if el.repeating() {
+			if el.multiplies() {
 				if n.hasRepeat {
 					return nil, perr(PatternNestedQuantifier, "kuantor bersarang (tinggi bintang > 1)")
 				}
@@ -224,7 +238,30 @@ func (p *patParser) parseSeq() ([]*pelem, error) {
 		}
 		seq = append(seq, el)
 	}
+	if err := checkAdjacentRepeats(seq); err != nil {
+		return nil, err
+	}
 	return seq, nil
+}
+
+// checkAdjacentRepeats menolak dua elemen berulang lebar dalam satu urutan yang himpunan karakternya beririsan
+// dan hanya dipisahkan elemen opsional (mis. \d*\d*\d*, .*.*=.*, \d+-?\d+): pembagian masukan di antara keduanya
+// ambigu sehingga backtracking polinomial. Pemisah wajib di antaranya (\d+-\d+, .+@.+) membatasi ambiguitas.
+func checkAdjacentRepeats(seq []*pelem) error {
+	for i, a := range seq {
+		if !a.wide() {
+			continue
+		}
+		for _, b := range seq[i+1:] {
+			if b.wide() && a.n.set.intersects(b.n.set) {
+				return perr(PatternOverlapping, "dua pengulangan lebar beririsan bertetangga")
+			}
+			if !b.quant || b.min > 0 {
+				break // elemen wajib memisahkan
+			}
+		}
+	}
+	return nil
 }
 
 func (p *patParser) parseAtom() (*pnode, error) {
@@ -263,6 +300,13 @@ func (p *patParser) parseAtom() (*pnode, error) {
 		if len(alts) > 1 && !disjointAlts(alts) {
 			n.hasAmbig = true
 		}
+		var union rset
+		for _, seq := range alts {
+			for _, el := range seq {
+				union = append(union, el.n.set...)
+			}
+		}
+		n.set = union.normalize()
 		return n, nil
 	case '[':
 		return p.parseClass()
