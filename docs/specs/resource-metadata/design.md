@@ -311,7 +311,8 @@ Berkas metadata memakai camelCase ketat (`^[a-z][a-z0-9]*([A-Z][a-z0-9]*)*$`): t
 | Segmen URL | kebab-case jamak (api-guidelines §2) | `/api/sales/invoice-lines` |
 | Parameter query | camelCase (api-guidelines §5.1) | `customerId[in]=…` |
 | Kunci i18n (label dan pesan) | string berpemisah titik; segmen camelCase | `sales.invoiceLine.customerName` |
-| Kunci resource dan permission pada manifest | mengikuti aturan registry; bila registry hanya menerima huruf kecil dan garis bawah, dikonversi ke snake_case (`sales.invoice_line`) dan pemetaannya dicatat generator | diverifikasi pelaksana |
+| Kunci resource dan permission pada manifest | registry mensyaratkan `capabilities` berpola `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9_]*)+$` berawalan `<slug>.` (tanpa huruf besar), sehingga bagian resource pada kunci metadata dikonversi ke snake_case dengan fungsi yang sama dengan kolom SQL; slug tidak diubah; pemetaan dicatat generator dan tabrakan setelah konversi ditolak (diverifikasi pelaksana, 1 Nov 2026) | metadata `sales.invoiceLine` menjadi kunci manifest `sales.invoice_line`, permission `sales.invoice_line.read` |
+| Daftar `fields` pada field group di manifest (P-1) | kunci manifest tetap snake_case; `module:check` membandingkannya dengan `fieldGroup` metadata setelah konversi yang sama | `customer_name` pada manifest dan `customerName` pada metadata |
 | Nilai `enum` | tetap snake_case (api-guidelines §4.1); bukan kunci | `pending_approval` |
 | Kunci manifest (`module.json`) | tetap snake_case karena milik manifest | `field_groups`, `owner_field` |
 
@@ -437,6 +438,15 @@ Modul `example` dipindahkan ke metadata dengan hasil identik secara perilaku (`c
 
 Hal berikut sengaja tidak diputuskan di spec ini dan menjadi keputusan pelaksana (dicatat di catatan hasil `tasks.md`): bentuk tepat JSON Schema, nama paket dan antarmuka Go internal, kueri katalog PostgreSQL untuk introspeksi, kata kunci tepat templat SQL pemicu, bentuk keluaran peringatan, hasil spike alat selisih (Atlas atau implementasi sendiri; D-6), dan pustaka desimal Go dan TypeScript.
 
+Keputusan pelaksana yang sudah dicatat (task 1.2, 1 Nov 2026; rincian dan alasan di "Catatan hasil" `tasks.md`):
+
+- **YAML**: `go.yaml.in/yaml/v3 v3.0.5`; pemuat membatasi ukuran sebelum parse, parse ke `yaml.Node`, menolak seluruh anchor dan alias, tag kustom, kunci non-string, dokumen ganda, serta kedalaman dan jumlah node di atas batas.
+- **JSON Schema**: `santhosh-tekuri/jsonschema/v6 v6.0.3`; galat dipetakan ke baris lewat JSON pointer.
+- **Desimal Go**: `shopspring/decimal v1.5.0` dengan skala dan pembulatan eksplisit (dependensi langsung baru pada `sdk/go.mod`, ditandai untuk ditinjau pemilik produk; alternatif `math/big` tanpa dependensi baru). **Desimal TypeScript**: buatan sendiri di atas `BigInt`.
+- **Property test**: Go memakai PRNG berseed stdlib (tanpa dependensi baru; `rapid` ditolak karena MPL-2.0 dan belum ada di `go.mod`), TypeScript memakai `fast-check 4.10.2` (sudah ada). Paritas dua sisi lewat korpus acak berseed yang dikomit di `contracts/metadata-vectors/random/`.
+- **Lokasi modul fixture (D-18)**: mini-repo `internal/devtools/metadatatools/testdata/repo/` (dua modul `fixturecore` dan `fixturesales`), disalin ke direktori sementara per tes; tidak mengubah `go.work` root dan tidak terpindai `archcheck`/`modcheck` pada root repo.
+- **Format kunci resource bermulti-kata**: lihat Komponen 13 (dikonversi ke snake_case pada manifest dan permission).
+
 ## Pengembangan berikutnya (di luar cakupan, K17)
 
 Field `highly_confidential` ditiadakan dulu (K17, 1 Nov 2026). Rancangan awal hasil brainstorming dicatat di sini agar tidak hilang; ini bukan keputusan mengikat:
@@ -450,4 +460,4 @@ Temuan review keamanan tentang enkripsi dan larangan filter lewat URL tetap berl
 
 ## Pertanyaan terbuka
 
-Semua pertanyaan P-1 sampai P-8 sudah diputuskan pemilik produk pada 1 Nov 2026 (tabel keputusan di akhir `requirements.md`). Yang tersisa untuk pelaksana: format kunci resource bermulti-kata pada manifest dan permission (Komponen 13).
+Semua pertanyaan P-1 sampai P-8 sudah diputuskan pemilik produk pada 1 Nov 2026 (tabel keputusan di akhir `requirements.md`). Format kunci resource bermulti-kata pada manifest dan permission sudah diputuskan pelaksana pada 1 Nov 2026 (Komponen 13: dikonversi ke snake_case, `sales.invoice_line`). Tidak ada pertanyaan terbuka yang tersisa untuk pelaksana selain hasil spike alat selisih (task 10.1).
