@@ -75,6 +75,9 @@ Tujuan utamanya: **tidak ada kolom yang terlewat atau berbeda** antara database,
 | K16 | Pertanyaan terbuka P-1 sampai P-8 diputuskan sesuai rekomendasi ("sisanya saya terima"); P-7 digantikan K17 | Pemilik produk, 1 Nov 2026 |
 | K17 | Field berklasifikasi `highly_confidential` **ditiadakan dulu** dari sistem metadata (ditolak `metadata:check`, kolom dikelola tulis tangan lewat `unmanagedColumns`); dukungan penuh (enkripsi, pencarian eksak) menjadi pengembangan berikutnya | Pemilik produk, 1 Nov 2026 |
 | K18 | Penghapusan kolom hanya pada rilis MAJOR, didahului penandaan `deprecated`; upgrade yang melompati versi tetap menjalankan semua migrasi berurutan sehingga tidak ada titik henti wajib | Pemilik produk, 1 Nov 2026 |
+| K19 | Migrasi `example` ke metadata menambahkan `createdBy` dan `updatedBy` ke kontrak dan implementasi `example` (perubahan aditif, bukan breaking) alih-alih memberi pengecualian `omit`; larangan `omit`/`set` atas field bawaan (3.6, 13.1) tetap utuh tanpa pengecualian | Pemilik produk, 1 Nov 2026 (jawaban konfirmasi) |
+| K20 | Pustaka desimal Go `sdk/metadata` memakai `math/big` standar; dependensi `shopspring/decimal` tidak dipakai (SDK tanpa dependensi baru) | Pemilik produk, 1 Nov 2026 (jawaban konfirmasi) |
+| K21 | Linter kontrak `erp-decimal-not-number` diperluas secara aditif agar menerima `oneOf` yang memuat `$ref` Decimal (desimal nullable) | Pemilik produk, 1 Nov 2026 (jawaban konfirmasi) |
 
 ## Requirements
 
@@ -392,7 +395,7 @@ Tujuan utamanya: **tidak ada kolom yang terlewat atau berbeda** antara database,
 2. THE `metadata:check` dan `metadata:generate --check` SHALL masuk `task lint arch check:gowork-off test` dan `task web:check`; `metadata:diff` SHALL berjalan di job integrasi CI.
 3. THE perintah Taskfile SHALL tidak memakai utilitas khusus Unix (`rm`, `cp`, `sed`) dan SHALL berjalan di Windows.
 4. THE templat generator yang berubah SHALL diverifikasi `task test:generator`; `make:module` SHALL dapat menghasilkan modul dengan kerangka metadata bila diminta.
-5. THE modul `example` SHALL dimigrasikan ke metadata tanpa perubahan perilaku API yang teramati (`contracts:breaking` bersih; field bawaan yang belum ada di kontrak sekarang, seperti `createdBy` dan `updatedBy`, dilepas dengan `omit`); THE harus ada modul **fixture** di `testdata` (tidak didaftarkan ke aplikasi) yang memuat dokumen, relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok sebagai objek uji exit gate T1 sampai T4; `exampleaddon` tidak punya tabel dan tidak memerlukan metadata.
+5. THE modul `example` SHALL dimigrasikan ke metadata tanpa perubahan perilaku API yang teramati (`contracts:breaking` bersih; K19: field bawaan yang belum ada di kontrak sekarang, `createdBy` dan `updatedBy`, **ditambahkan secara aditif** ke kontrak dan implementasi `example` lewat `sdk:audit`, bukan dilepas dengan `omit`); THE harus ada modul **fixture** di `testdata` (tidak didaftarkan ke aplikasi) yang memuat dokumen, relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok sebagai objek uji exit gate T1 sampai T4; `exampleaddon` tidak punya tabel dan tidak memerlukan metadata.
 
 ### Requirement 21: Dokumentasi dan pencatatan keputusan
 

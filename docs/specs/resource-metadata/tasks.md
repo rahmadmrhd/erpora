@@ -125,7 +125,7 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
     - Satu atau dua modul fixture (lokasi dari 1.2; **tidak** didaftarkan ke aplikasi; lintas modul butuh dua modul dengan dependensi manifest) memuat: dokumen (`sdk:document`), relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok (beserta `prefix`). Dipakai exit gate T1 sampai T4. Metadata saja pada T1; migrasi dan kode data di tahap berikutnya.
     - _Requirements: 20.5_
   - [ ] 8.2 Migrasi `example` ke metadata
-    - Pindahkan `example` ke metadata dengan `omit` atas field bawaan yang belum ada di kontrak (`createdBy`, `updatedBy`, dan sejenisnya); tanpa perubahan perilaku API yang teramati: `task contracts:check` (termasuk `contracts:breaking`) dan tes modul tetap lulus. Bila berkas bangkitan bertabrakan nama dengan kode tulis tangan `example` dan penyelesaiannya mengubah perilaku atau menyimpang dari spek, **tanyakan dulu**. `exampleaddon` tidak punya tabel dan tidak dimigrasikan.
+    - Pindahkan `example` ke metadata dengan `sdk:audit` utuh (K19, 1 Nov 2026: tanpa `omit`); tambahkan `createdBy` dan `updatedBy` secara **aditif** ke kontrak dan implementasi `example` (migrasi expand kolom nullable bila perlu, domain, repository, handler) tanpa perubahan breaking: `task contracts:check` (termasuk `contracts:breaking`) dan tes modul tetap lulus. Bila berkas bangkitan bertabrakan nama dengan kode tulis tangan `example` dan penyelesaiannya mengubah perilaku atau menyimpang dari spek, **tanyakan dulu**. `exampleaddon` tidak punya tabel dan tidak dimigrasikan.
     - _Requirements: 8.3, 20.5_
 
 - [ ] 9. Checkpoint T1 — exit gate dan review (Kelas beban: 9.1 Sonnet; 9.2 agent independen model lebih tinggi)
