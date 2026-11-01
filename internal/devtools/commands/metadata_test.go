@@ -186,3 +186,162 @@ func TestMetadataCheck_RejectsArguments(t *testing.T) {
 		t.Error("argumen tambahan harus ditolak")
 	}
 }
+
+func TestMetadataGenerate_RegisteredInDevGroup(t *testing.T) {
+	root := newTestRoot(t)
+	cmd, _, err := root.Find([]string{"metadata:generate"})
+	if err != nil || cmd.Name() != "metadata:generate" {
+		t.Fatalf("metadata:generate tidak terdaftar: %v", err)
+	}
+	if cmd.GroupID != GroupDevtools || cmd.Short == "" || cmd.Long == "" {
+		t.Errorf("GroupID=%q Short/Long kosong?", cmd.GroupID)
+	}
+	if cmd.Flags().Lookup("check") == nil {
+		t.Error("flag --check tidak ada")
+	}
+}
+
+func TestMetadataGenerate_ModulesWithoutMetadataAreUnaffected(t *testing.T) {
+	dir := inRepo(t)
+	before := treeHash(t, dir)
+	for _, args := range [][]string{{"metadata:generate", "--check"}, {"metadata:generate"}} {
+		out, err := runMetadata(t, args...)
+		if err != nil {
+			t.Fatalf("%v: err = %v\n%s", args, err, out)
+		}
+		if !strings.Contains(out, "0 berkas keluaran") && !strings.Contains(out, "0 berkas keluaran sinkron") {
+			t.Errorf("%v: keluaran = %q", args, out)
+		}
+	}
+	if treeHash(t, dir) != before {
+		t.Error("repo tanpa metadata tidak boleh berubah")
+	}
+}
+
+func TestMetadataGenerate_WriteThenCheckIsGreen(t *testing.T) {
+	dir := fixtureRepo(t)
+	out, err := runMetadata(t, "metadata:generate")
+	if err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	for _, want := range []string{"ditulis: modules/fixturesales/internal/domain/invoice_meta.gen.go", "ditulis: modules/fixturesales/openapi.yaml", "metadata:generate:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("keluaran tidak memuat %q:\n%s", want, out)
+		}
+	}
+	before := treeHash(t, dir)
+	out, err = runMetadata(t, "metadata:generate", "--check")
+	if err != nil {
+		t.Fatalf("--check harus hijau: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "sinkron dengan metadata") {
+		t.Errorf("keluaran = %q", out)
+	}
+	if treeHash(t, dir) != before {
+		t.Error("--check tidak boleh menulis apa pun")
+	}
+	// Tulis ulang tanpa perubahan: tidak ada yang ditulis.
+	if out, err = runMetadata(t, "metadata:generate"); err != nil || !strings.Contains(out, "0 ditulis") {
+		t.Errorf("idempoten: err=%v\n%s", err, out)
+	}
+}
+
+func TestMetadataGenerate_CheckFailsOnPristineAndDriftWithoutWriting(t *testing.T) {
+	dir := fixtureRepo(t)
+	before := treeHash(t, dir)
+	out, err := runMetadata(t, "metadata:generate", "--check")
+	if exitCodeOf(err) != exitMetadataValidation || !strings.Contains(out, "basi: modules/fixturesales/openapi.yaml") {
+		t.Fatalf("exit=%d err=%v\n%s", exitCodeOf(err), err, out)
+	}
+	if treeHash(t, dir) != before {
+		t.Fatal("--check tidak boleh menulis apa pun, termasuk saat gagal")
+	}
+	if _, err := runMetadata(t, "metadata:generate"); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "modules", "fixturesales", "internal", "domain", "tag_meta.gen.go")
+	b, _ := os.ReadFile(p) //nolint:gosec // fixture salinan
+	if err := os.WriteFile(p, append(b, []byte("// diubah tangan\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before = treeHash(t, dir)
+	out, err = runMetadata(t, "metadata:generate", "--check")
+	if exitCodeOf(err) != exitMetadataValidation || !strings.Contains(out, "basi: modules/fixturesales/internal/domain/tag_meta.gen.go") {
+		t.Fatalf("exit=%d\n%s", exitCodeOf(err), out)
+	}
+	if treeHash(t, dir) != before {
+		t.Error("--check tidak boleh menulis apa pun")
+	}
+	// Mode tulis memulihkan.
+	if _, err := runMetadata(t, "metadata:generate"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runMetadata(t, "metadata:generate", "--check"); err != nil {
+		t.Fatalf("setelah dipulihkan harus hijau: %v", err)
+	}
+}
+
+func TestMetadataGenerate_MissingMarkerFailsWithoutWriting(t *testing.T) {
+	dir := fixtureRepo(t)
+	if _, err := runMetadata(t, "metadata:generate"); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "modules", "fixturesales", "internal", "presentation", "http", "invoice_dto.gen.go")
+	b, _ := os.ReadFile(p) //nolint:gosec // fixture salinan
+	if err := os.WriteFile(p, []byte(strings.Replace(string(b), "// Code generated", "// ditulis tangan", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := treeHash(t, dir)
+	for _, args := range [][]string{{"metadata:generate"}, {"metadata:generate", "--check"}} {
+		if _, err := runMetadata(t, args...); exitCodeOf(err) != exitMetadataValidation {
+			t.Errorf("%v: exit = %d err = %v", args, exitCodeOf(err), err)
+		}
+	}
+	if treeHash(t, dir) != before {
+		t.Error("tidak boleh menulis apa pun bila penanda hilang")
+	}
+}
+
+func TestMetadataGenerate_CheckErrorsStopBeforeWriting(t *testing.T) {
+	dir := fixtureRepo(t)
+	line := filepath.Join(dir, "modules", "fixturesales", "metadata", "invoiceLine.resource.yaml")
+	b, _ := os.ReadFile(line) //nolint:gosec // fixture salinan
+	broken := strings.Replace(string(b), "type: integer\n    minimum: 1", "type: integer\n    maxLength: 5\n    minimum: 1", 1)
+	if err := os.WriteFile(line, []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := treeHash(t, dir)
+	out, err := runMetadata(t, "metadata:generate")
+	if exitCodeOf(err) != exitMetadataValidation || !strings.Contains(out, "field_attr_not_for_type") {
+		t.Fatalf("exit=%d\n%s", exitCodeOf(err), out)
+	}
+	if treeHash(t, dir) != before {
+		t.Error("tidak boleh menulis apa pun bila metadata:check bergalat")
+	}
+}
+
+func TestMetadataGenerate_ModuleArgument(t *testing.T) {
+	dir := fixtureRepo(t)
+	out, err := runMetadata(t, "metadata:generate", "fixturecore")
+	if err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "ditulis: modules/fixturecore/openapi.yaml") || strings.Contains(out, "fixturesales") {
+		t.Errorf("hanya fixturecore yang boleh ditulis:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "modules", "fixturesales", "internal")); err == nil {
+		t.Error("fixturesales tidak boleh tersentuh")
+	}
+	for _, bad := range []string{"nope", "../fixturesales"} {
+		if _, err := runMetadata(t, "metadata:generate", bad); exitCodeOf(err) != exitMetadataValidation {
+			t.Errorf("%q: exit = %d err = %v", bad, exitCodeOf(err), err)
+		}
+	}
+}
+
+func TestMetadataGenerate_OutsideRepoExits3(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if _, err := runMetadata(t, "metadata:generate"); exitCodeOf(err) != exitMetadataConfig {
+		t.Fatalf("exit = %d err = %v", exitCodeOf(err), err)
+	}
+}
