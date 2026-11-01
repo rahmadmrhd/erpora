@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://erpora.dev/contracts/resource.schema.json",
+  "title": "ERPora resource metadata (modules/<dir>/metadata/*.{resource,abstract,type}.yaml)",
+  "description": "Skema berkas metadata resource (schemaVersion 1). Skema ini membatasi bentuk dan ukuran (spec resource-metadata Requirement 1). Dua batas yang tidak dapat dinyatakan JSON Schema ditegakkan pemuat (internal/devtools/metadatatools/load): jumlah node kondisi paling banyak 32 dan kedalaman kondisi paling banyak 4. Aturan semantik (rujukan, siklus, klasifikasi, kata tercadang, dst.) ditegakkan metadata:check.",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "key"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "kind": { "enum": ["resource", "abstract", "fieldType"] },
+    "key": { "$ref": "#/$defs/resourceKey" }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "resource" } }, "required": ["kind"] }, "then": { "$ref": "#/$defs/resourceBody" } },
+    { "if": { "properties": { "kind": { "const": "abstract" } }, "required": ["kind"] }, "then": { "$ref": "#/$defs/abstractBody" } },
+    { "if": { "properties": { "kind": { "const": "fieldType" } }, "required": ["kind"] }, "then": { "$ref": "#/$defs/fieldTypeBody" } }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "maxLength": 63,
+      "description": "camelCase ketat: huruf kecil di awal, huruf ASCII dan angka, tanpa huruf kapital berurutan (kata ke-2 dan seterusnya berekor huruf kecil atau angka; kata terakhir boleh satu huruf kapital).",
+      "pattern": "^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$"
+    },
+    "resourceKey": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Kunci <slug>.<nama>: slug modul (kebab-case) dan nama camelCase ketat.",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$"
+    },
+    "includeSource": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Kunci metadata (bukan jalur berkas): sdk:<nama> untuk bawaan SDK atau <slug>.<nama> untuk metadata modul.",
+      "pattern": "^(sdk:[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?|[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?)$"
+    },
+    "typeRef": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Tipe bawaan (string, text, integer, decimal, boolean, date, datetime, enum, uuid) atau tipe domain: sdk:<nama> atau <slug>.<nama>.",
+      "pattern": "^(string|text|integer|decimal|boolean|date|datetime|enum|uuid|sdk:[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?|[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?)$"
+    },
+    "builtinType": { "enum": ["string", "text", "integer", "decimal", "boolean", "date", "datetime", "enum", "uuid"] },
+    "messageKey": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Kunci i18n bertitik pada katalog namespace modul (pola sama dengan module.schema.json).",
+      "pattern": "^[a-z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_-]+)+$"
+    },
+    "freeText": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Teks bebas (deskripsi, alasan). Nilai hanya data: tanpa karakter kontrol, backtick, titik koma, dolar, kurung sudut, garis miring terbalik, dan kurung kurawal; pemuat juga menolak URL.",
+      "pattern": "^[^\\p{C}`;$<>\\\\{}]*$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "enumValue": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+    },
+    "operator": { "enum": ["eq", "ne", "gt", "gte", "lt", "lte", "in", "contains", "isnull"] },
+    "conditionValue": {
+      "type": ["string", "number", "boolean", "array"],
+      "maxLength": 200,
+      "maxItems": 100,
+      "items": { "type": ["string", "number", "boolean"], "maxLength": 200 }
+    },
+    "condition": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 3,
+      "properties": {
+        "all": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/condition" } },
+        "any": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/condition" } },
+        "not": { "$ref": "#/$defs/condition" },
+        "field": { "$ref": "#/$defs/identifier" },
+        "op": { "$ref": "#/$defs/operator" },
+        "value": { "$ref": "#/$defs/conditionValue" },
+        "ref": { "$ref": "#/$defs/identifier" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "required": ["all"] }, "then": { "maxProperties": 1 } },
+        { "if": { "required": ["any"] }, "then": { "maxProperties": 1 } },
+        { "if": { "required": ["not"] }, "then": { "maxProperties": 1 } },
+        {
+          "if": { "not": { "anyOf": [{ "required": ["all"] }, { "required": ["any"] }, { "required": ["not"] }] } },
+          "then": {
+            "required": ["field", "op"],
+            "anyOf": [{ "required": ["value"] }, { "required": ["ref"] }],
+            "not": { "required": ["value", "ref"] }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "in" } }, "required": ["op"] },
+          "then": { "properties": { "value": { "type": "array" } } }
+        }
+      ]
+    },
+    "exprValue": {
+      "description": "Pohon ekspresi accessor: bentuk umum dibatasi di sini; tata bahasa tertutup divalidasi metadata:check.",
+      "type": ["string", "number", "boolean", "object", "array"],
+      "maxLength": 200,
+      "maxItems": 32,
+      "maxProperties": 8,
+      "patternProperties": { "^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$": { "$ref": "#/$defs/exprValue" } },
+      "additionalProperties": false,
+      "items": { "$ref": "#/$defs/exprValue" }
+    },
+    "accessor": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["expr", "stored", "func"] },
+        "expr": { "$ref": "#/$defs/exprValue" },
+        "func": { "$ref": "#/$defs/identifier" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "kind": { "enum": ["expr", "stored"] } }, "required": ["kind"] }, "then": { "required": ["expr"] } },
+        { "if": { "properties": { "kind": { "const": "func" } }, "required": ["kind"] }, "then": { "required": ["func"] } }
+      ]
+    },
+    "deprecated": {
+      "type": "object",
+      "required": ["since"],
+      "properties": {
+        "since": { "$ref": "#/$defs/semver" },
+        "replacedBy": { "$ref": "#/$defs/identifier" }
+      },
+      "additionalProperties": false
+    },
+    "fieldProps": {
+      "allOf": [
+        {
+          "if": { "properties": { "clientVisible": { "const": false } }, "required": ["clientVisible"] },
+          "then": { "required": ["clientVisibleReason"] }
+        }
+      ],
+      "properties": {
+        "precision": { "type": "integer", "minimum": 1, "maximum": 38 },
+        "scale": { "type": "integer", "minimum": 0, "maximum": 38 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "minLength": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "pattern": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "format": { "enum": ["email", "url"] },
+        "minimum": { "type": ["integer", "string"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+        "maximum": { "type": ["integer", "string"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+        "values": { "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/enumValue" } },
+        "extensible": { "type": "boolean" },
+        "type": { "$ref": "#/$defs/typeRef" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "description": { "$ref": "#/$defs/freeText" },
+        "nullable": { "type": "boolean" },
+        "default": { "type": ["string", "number", "boolean", "null"], "maxLength": 200 },
+        "readOnly": { "type": "boolean" },
+        "fieldGroup": { "$ref": "#/$defs/identifier" },
+        "classification": {
+          "enum": ["public", "internal", "confidential", "highly_confidential"],
+          "description": "highly_confidential belum didukung (K17): diterima secara sintaks agar metadata:check dapat menolaknya dengan pesan yang jelas."
+        },
+        "filterable": { "type": "boolean" },
+        "sortable": { "type": "boolean" },
+        "groupable": { "type": "boolean" },
+        "aggregatable": { "type": "boolean" },
+        "unique": { "type": "boolean" },
+        "index": { "type": "boolean" },
+        "visibleWhen": { "$ref": "#/$defs/condition" },
+        "requiredWhen": { "$ref": "#/$defs/condition" },
+        "readonlyWhen": { "$ref": "#/$defs/condition" },
+        "deprecated": { "$ref": "#/$defs/deprecated" },
+        "removeAfter": { "$ref": "#/$defs/semver" },
+        "migrateFrom": { "$ref": "#/$defs/identifier" },
+        "snapshotSource": { "type": "boolean" },
+        "clientVisible": { "type": "boolean" },
+        "clientVisibleReason": { "allOf": [{ "$ref": "#/$defs/freeText" }, { "minLength": 1 }] },
+        "accessor": { "$ref": "#/$defs/accessor" }
+      },
+      "additionalProperties": false
+    },
+    "fieldDef": {
+      "type": "object",
+      "required": ["type"],
+      "$ref": "#/$defs/fieldProps"
+    },
+    "fieldPatch": {
+      "type": "object",
+      "$ref": "#/$defs/fieldProps"
+    },
+    "fieldMap": {
+      "type": "object",
+      "maxProperties": 200,
+      "patternProperties": { "^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$": { "$ref": "#/$defs/fieldDef" } },
+      "additionalProperties": false
+    },
+    "includeItem": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": { "$ref": "#/$defs/includeSource" },
+        "prefix": { "$ref": "#/$defs/identifier" },
+        "set": {
+          "type": "object",
+          "maxProperties": 200,
+          "patternProperties": { "^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$": { "$ref": "#/$defs/fieldPatch" } },
+          "additionalProperties": false
+        },
+        "omit": { "type": "array", "maxItems": 200, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
+        "add": { "$ref": "#/$defs/fieldMap" }
+      },
+      "additionalProperties": false
+    },
+    "include": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/includeItem" } },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "section": { "$ref": "#/$defs/identifier" },
+        "columns": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "order": { "type": "array", "maxItems": 200, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } }
+      },
+      "additionalProperties": false
+    },
+    "relation": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["belongsTo", "hasOne", "hasMany", "belongsToMany", "morphTo", "morphMany", "morphToMany"] },
+        "to": { "$ref": "#/$defs/resourceKey" },
+        "of": { "$ref": "#/$defs/resourceKey" },
+        "types": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/resourceKey" } },
+        "as": { "$ref": "#/$defs/identifier" },
+        "onDelete": { "enum": ["restrict", "cascade", "setNull"] },
+        "required": { "type": "boolean" },
+        "embedded": { "type": "boolean" },
+        "filter": { "$ref": "#/$defs/condition" },
+        "snapshot": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "required": ["from", "to"],
+            "properties": {
+              "from": { "$ref": "#/$defs/identifier" },
+              "to": { "$ref": "#/$defs/identifier" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "pivotFields": { "$ref": "#/$defs/fieldMap" },
+        "description": { "$ref": "#/$defs/freeText" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "type": { "enum": ["belongsTo", "hasOne", "belongsToMany", "morphToMany"] } }, "required": ["type"] }, "then": { "required": ["to"] } },
+        { "if": { "properties": { "type": { "enum": ["hasMany", "morphMany"] } }, "required": ["type"] }, "then": { "required": ["of"] } },
+        { "if": { "properties": { "type": { "const": "morphTo" } }, "required": ["type"] }, "then": { "required": ["types"] } },
+        { "if": { "required": ["embedded"] }, "then": { "properties": { "type": { "const": "hasMany" } } } }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "assert", "message"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "assert": { "$ref": "#/$defs/condition" },
+        "field": { "$ref": "#/$defs/identifier" },
+        "message": { "$ref": "#/$defs/messageKey" },
+        "scope": { "enum": ["both", "server"] }
+      },
+      "additionalProperties": false
+    },
+    "index": {
+      "type": "object",
+      "required": ["fields"],
+      "properties": {
+        "fields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
+        "unique": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "unmanagedColumn": {
+      "type": "object",
+      "required": ["name", "reason"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "reason": { "allOf": [{ "$ref": "#/$defs/freeText" }, { "minLength": 1 }] }
+      },
+      "additionalProperties": false
+    },
+    "resourceBody": {
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "kind": { "const": "resource" },
+        "key": { "$ref": "#/$defs/resourceKey" },
+        "description": { "$ref": "#/$defs/freeText" },
+        "export": { "type": "boolean" },
+        "include": { "$ref": "#/$defs/include" },
+        "labelTemplate": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Placeholder {field} milik resource; teks tetap hanya tanda baca dan spasi.",
+          "pattern": "^(\\{[a-z][a-zA-Z0-9]*\\}|[^\\p{L}\\p{N}\\p{M}\\p{C}\\p{Zl}\\p{Zp}{}])+$"
+        },
+        "layout": { "$ref": "#/$defs/layout" },
+        "fields": { "$ref": "#/$defs/fieldMap" },
+        "relations": {
+          "type": "object",
+          "maxProperties": 16,
+          "patternProperties": { "^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$": { "$ref": "#/$defs/relation" } },
+          "additionalProperties": false
+        },
+        "rules": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/rule" } },
+        "lockWhen": { "$ref": "#/$defs/condition" },
+        "indexes": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/index" } },
+        "generate": {
+          "type": "object",
+          "properties": { "crud": { "type": "boolean" } },
+          "additionalProperties": false
+        },
+        "large": { "type": "boolean" },
+        "ownerField": { "$ref": "#/$defs/identifier" },
+        "scopeFields": {
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": { "type": "string", "maxLength": 120, "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9_]*)+$" },
+          "additionalProperties": { "$ref": "#/$defs/identifier" }
+        },
+        "unmanagedColumns": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/unmanagedColumn" } }
+      },
+      "additionalProperties": false
+    },
+    "abstractBody": {
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "kind": { "const": "abstract" },
+        "key": { "$ref": "#/$defs/resourceKey" },
+        "description": { "$ref": "#/$defs/freeText" },
+        "export": { "type": "boolean" },
+        "include": { "$ref": "#/$defs/include" },
+        "layout": { "$ref": "#/$defs/layout" },
+        "fields": { "$ref": "#/$defs/fieldMap" },
+        "rules": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/rule" } },
+        "lockWhen": { "$ref": "#/$defs/condition" }
+      },
+      "additionalProperties": false
+    },
+    "fieldTypeBody": {
+      "required": ["base"],
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "kind": { "const": "fieldType" },
+        "key": { "$ref": "#/$defs/resourceKey" },
+        "description": { "$ref": "#/$defs/freeText" },
+        "export": { "type": "boolean" },
+        "base": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "$ref": "#/$defs/builtinType" },
+        "precision": { "type": "integer", "minimum": 1, "maximum": 38 },
+        "scale": { "type": "integer", "minimum": 0, "maximum": 38 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "minLength": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "pattern": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "format": { "enum": ["email", "url"] },
+        "minimum": { "type": ["integer", "string"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+        "maximum": { "type": ["integer", "string"], "pattern": "^-?[0-9]+(\\.[0-9]+)?$" },
+        "values": { "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/enumValue" } },
+        "extensible": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "classification": { "enum": ["public", "internal", "confidential", "highly_confidential"] },
+        "widget": { "$ref": "#/$defs/identifier" },
+        "display": { "$ref": "#/$defs/identifier" },
+        "operators": { "type": "array", "minItems": 1, "maxItems": 9, "uniqueItems": true, "items": { "$ref": "#/$defs/operator" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}
