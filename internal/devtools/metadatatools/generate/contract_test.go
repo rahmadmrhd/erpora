@@ -26,7 +26,18 @@ func TestInjectedSchemasPassContractTooling(t *testing.T) {
 		t.Skip("bun tidak ada")
 	}
 	real := testrepo.RepoRoot(t)
-	root, cat := fixtureRepo(t)
+	root := testrepo.Copy(t, false)
+	// Desimal nullable bernama uang (K21): harus lolos erp-decimal-not-number lewat oneOf [Decimal, null].
+	prod := "modules/fixturesales/metadata/product.resource.yaml"
+	writeFile(t, root, prod, readFile(t, root, prod)+`  discountAmount:
+    type: decimal
+    precision: 18
+    scale: 2
+    nullable: true
+    minimum: "0"
+    label: fixturesales.product.discountAmount
+`)
+	cat := fixtureCatalog(t, root)
 	for _, f := range []string{"common.yaml", "platform.yaml"} {
 		data, err := os.ReadFile(filepath.Join(real, "contracts", "openapi", f)) //nolint:gosec // repo sendiri
 		if err != nil {
@@ -72,6 +83,13 @@ func TestInjectedSchemasPassContractTooling(t *testing.T) {
 		if strings.HasSuffix(f.Path, "contract.gen.ts") {
 			ts = string(f.Content)
 		}
+	}
+	const nullableDecimal = `discountAmount:
+          oneOf:
+            - {$ref: 'erp:common#/components/schemas/Decimal'}
+            - {type: "null"}`
+	if spec := readFile(t, root, "modules/fixturesales/openapi.yaml"); !strings.Contains(spec, nullableDecimal) {
+		t.Errorf("desimal nullable harus berbentuk oneOf [Decimal, null]:\n%s", spec)
 	}
 	for _, want := range []string{"InvoiceCreate", "InvoiceUpdate", "Invoice:"} {
 		if !strings.Contains(ts, want) {

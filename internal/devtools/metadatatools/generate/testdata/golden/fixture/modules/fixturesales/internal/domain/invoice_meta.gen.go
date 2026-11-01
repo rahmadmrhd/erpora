@@ -89,6 +89,7 @@ var InvoiceSpec = &ResourceSpec{
 		{
 			Name:           "createdBy",
 			Type:           metadata.TypeUUID,
+			Nullable:       true,
 			ReadOnly:       true,
 			Classification: "internal",
 			Group:          "general",
@@ -96,6 +97,7 @@ var InvoiceSpec = &ResourceSpec{
 		{
 			Name:           "updatedBy",
 			Type:           metadata.TypeUUID,
+			Nullable:       true,
 			ReadOnly:       true,
 			Classification: "internal",
 			Group:          "general",

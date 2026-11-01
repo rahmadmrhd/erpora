@@ -44,14 +44,14 @@ components:
           x-erp-filterable: true
           x-erp-sortable: true
         createdBy:
-          type: string
+          type: [string, "null"]
           format: uuid
           readOnly: true
           x-erp-classification: internal
           x-erp-field-group: general
           x-erp-filterable: true
         updatedBy:
-          type: string
+          type: [string, "null"]
           format: uuid
           readOnly: true
           x-erp-classification: internal
@@ -142,14 +142,14 @@ components:
           x-erp-filterable: true
           x-erp-sortable: true
         createdBy:
-          type: string
+          type: [string, "null"]
           format: uuid
           readOnly: true
           x-erp-classification: internal
           x-erp-field-group: general
           x-erp-filterable: true
         updatedBy:
-          type: string
+          type: [string, "null"]
           format: uuid
           readOnly: true
           x-erp-classification: internal

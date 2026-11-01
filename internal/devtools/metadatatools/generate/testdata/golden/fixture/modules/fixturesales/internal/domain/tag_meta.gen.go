@@ -59,6 +59,7 @@ var TagSpec = &ResourceSpec{
 		{
 			Name:           "createdBy",
 			Type:           metadata.TypeUUID,
+			Nullable:       true,
 			ReadOnly:       true,
 			Classification: "internal",
 			Group:          "general",
@@ -66,6 +67,7 @@ var TagSpec = &ResourceSpec{
 		{
 			Name:           "updatedBy",
 			Type:           metadata.TypeUUID,
+			Nullable:       true,
 			ReadOnly:       true,
 			Classification: "internal",
 			Group:          "general",

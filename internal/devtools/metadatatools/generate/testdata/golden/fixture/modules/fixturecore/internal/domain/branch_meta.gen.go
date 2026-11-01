@@ -60,6 +60,7 @@ var BranchSpec = &ResourceSpec{
 		{
 			Name:           "createdBy",
 			Type:           metadata.TypeUUID,
+			Nullable:       true,
 			ReadOnly:       true,
 			Classification: "internal",
 			Group:          "general",
@@ -67,6 +68,7 @@ var BranchSpec = &ResourceSpec{
 		{
 			Name:           "updatedBy",
 			Type:           metadata.TypeUUID,
+			Nullable:       true,
 			ReadOnly:       true,
 			Classification: "internal",
 			Group:          "general",

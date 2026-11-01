@@ -507,3 +507,65 @@ func TestLint_HighlyConfidentialExceptionAllowedForHRNames(t *testing.T) {
 		})
 	}
 }
+
+// K21 (1 Nov 2026): properti desimal nullable berbentuk oneOf [$ref Decimal, null] lolos erp-decimal-not-number
+// (tambahan aditif atas $ref langsung); number dan oneOf tanpa Decimal tetap ditolak.
+func TestLint_DecimalNotNumber_NullableOneOf(t *testing.T) {
+	bun := requireBun(t)
+	const dec = "{ $ref: 'erp:common#/components/schemas/Decimal' }"
+	cases := []struct {
+		name, prop string
+		wantRule   bool
+		msg        string
+	}{
+		{"direct_ref_passes", "total: " + dec, false, ""},
+		{"nullable_oneof_passes", "total: { oneOf: [" + dec + ", { type: 'null' }] }", false, ""},
+		{"nullable_oneof_null_first_passes", "total: { oneOf: [{ type: 'null' }, " + dec + "] }", false, ""},
+		{"oneof_without_decimal_rejected", "total: { oneOf: [{ type: string }, { type: 'null' }] }", true, "tidak merujuk skema Decimal"},
+		{"oneof_with_extra_alternative_rejected", "total: { oneOf: [" + dec + ", { type: string }] }", true, "tidak merujuk skema Decimal"},
+		{"oneof_with_number_rejected", "total: { oneOf: [" + dec + ", { type: number }] }", true, "alternatif bertipe number"},
+		{"number_still_rejected", "total: { type: number }", true, "bertipe number"},
+		{"nullable_number_rejected", "total: { type: [number, 'null'] }", true, "bertipe number"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Modul minimal sendiri agar tes tidak bergantung pada isi modules/example.
+			root := t.TempDir()
+			copyRepoSubset(t, root)
+			writeFile(t, root, "modules/lintdec/module.json", []byte(`{"key":"acme.lintdec","slug":"lintdec","version":"1.0.0","capabilities":[],"dependencies":[]}`))
+			writeFile(t, root, "modules/lintdec/openapi.yaml", []byte("openapi: 3.1.0\ninfo:\n  title: t\n  version: 1.0.0\n  description: Modul uji linter desimal.\nservers:\n  - url: /\npaths: {}\ncomponents:\n  schemas:\n    Row:\n      type: object\n      properties:\n        "+c.prop+"\n"))
+			repo, err := LoadRepo(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo.ToolsRoot = realRoot
+			res, err := Lint(context.Background(), repo, "lintdec", bun)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var errs []LintResult
+			for _, r := range res {
+				if r.Severity != SeverityInfo {
+					errs = append(errs, r)
+				}
+			}
+			if !c.wantRule {
+				if len(errs) != 0 {
+					t.Fatalf("seharusnya lolos: %v", errs)
+				}
+				return
+			}
+			if len(errs) == 0 {
+				t.Fatal("seharusnya ditolak")
+			}
+			for _, r := range errs {
+				if r.Rule != "erp-decimal-not-number" {
+					t.Errorf("rule tak terduga: %s %s", r.Rule, r.Message)
+				}
+				if !strings.Contains(r.Message, c.msg) {
+					t.Errorf("pesan %q tidak memuat %q", r.Message, c.msg)
+				}
+			}
+		})
+	}
+}

@@ -48,7 +48,24 @@ function typeIncludes(schema: Obj, t: string): boolean {
   return schema.type === t || (Array.isArray(schema.type) && schema.type.includes(t));
 }
 
-/** erp-decimal-not-number: uang dan kuantitas adalah string desimal ($ref Decimal), bukan number (§4.1). */
+const DECIMAL_REF = /\/schemas\/Decimal$/;
+
+/**
+ * Desimal nullable: `oneOf` yang memuat `$ref` ke skema Decimal dan selain itu hanya `{type: 'null'}`
+ * (keputusan pemilik produk K21; tambahan aditif atas `$ref` langsung). `oneOf` tanpa Decimal tidak lolos.
+ */
+function isNullableDecimal(schema: Obj): boolean {
+  const alts = asArr(schema.oneOf);
+  if (alts.length === 0) return false;
+  const isDecimal = (x: unknown) => DECIMAL_REF.test(asStr(asObj(x)?.$ref) ?? "");
+  const isNull = (x: unknown) => asObj(x)?.type === "null";
+  return alts.some(isDecimal) && alts.every((a) => isDecimal(a) || isNull(a));
+}
+
+/**
+ * erp-decimal-not-number: uang dan kuantitas adalah string desimal ($ref Decimal, atau oneOf [Decimal, null]),
+ * bukan number (§4.1).
+ */
 export function decimalNotNumber(root: unknown): Result[] {
   const out: Result[] = [];
   for (const [name, raw, path] of schemaProperties(root)) {
@@ -60,9 +77,21 @@ export function decimalNotNumber(root: unknown): Result[] {
       });
       continue;
     }
+    if (asArr(s.oneOf).some((a) => typeIncludes(asObj(a) ?? {}, "number"))) {
+      out.push({
+        message: `Properti "${name}" memuat alternatif bertipe number; uang dan kuantitas wajib string desimal ($ref erp:common#/components/schemas/Decimal) (api-guidelines §4.1)`,
+        path,
+      });
+      continue;
+    }
     const ref = asStr(s.$ref) ?? "";
     // Penghitung bertipe integer (mis. Page.total) bukan uang dan dikecualikan dari pemeriksaan nama.
-    if (MONEY_NAME.test(name) && !typeIncludes(s, "integer") && !/\/schemas\/Decimal$/.test(ref)) {
+    if (
+      MONEY_NAME.test(name) &&
+      !typeIncludes(s, "integer") &&
+      !DECIMAL_REF.test(ref) &&
+      !isNullableDecimal(s)
+    ) {
       out.push({
         message: `Properti "${name}" tampak uang atau kuantitas tetapi tidak merujuk skema Decimal (api-guidelines §4.1)`,
         path,
