@@ -193,6 +193,15 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
   - Hindari dependensi baru di entry; bila perlu, taruh di chunk halaman.
 - Periksa dengan `bun run --filter @erpora/web build`.
 
+## Metadata resource (form, daftar, dan filter generik)
+
+Bentuk data satu resource (field, tipe, batasan, grup, kondisi tampil/wajib/hanya-baca, relasi, penguncian) dinyatakan sekali di `modules/<dir>/metadata/*.resource.yaml` dan dibangkitkan ke frontend sebagai berkas statis `modules/<dir>/web/src/metadata/<nama>.meta.gen.ts` (hanya untuk modul ber-`web/`). Berkas itu **tidak diedit tangan** (berkepala `Code generated ...`; lihat [`generators.md`](generators.md) §10) dan diperiksa drift-nya oleh `task metadata:generate:check`, yang ikut `task web:check`.
+
+- Setiap berkas mengekspor satu konstanta `resourceMeta` bertipe `ResourceMeta`, diimpor dari `@erpora/platform-web/metadata`. Paket itu **bukan** bagian barrel `@erpora/platform-web` agar tidak masuk bundel awal; muat malas, satu chunk per resource, lewat `resourceMetaLoader.register("<slug>.<nama>", () => import("./metadata/<nama>.meta.gen"))` saat registrasi modul.
+- Isi paket (tipe, evaluator kondisi dan ekspresi, templat label, desimal berbasis `BigInt`, validator record, registri tipe field dengan editor form dan filter, pemuat malas) dan seluruh aturan evaluasinya dijelaskan di [`metadata.md`](metadata.md). Komponen perender generik (form, tabel data, FilterBuilder) dibuat di M3c dan M3d di atas paket ini.
+- Chunk metadata bersifat publik (SPA statis tanpa autentikasi), sehingga pembangkit tidak memancarkan aturan `scope: server`, kondisi yang merujuk field `confidential` ke atas atau di luar grup default, field `clientVisible: false`, dan ekspresi accessor `stored`; pemuat menolak chunk yang tetap memuatnya (`checkClientMeta`). Server tetap otoritas atas semua validasi, otorisasi, dan penguncian; validasi klien hanya kenyamanan.
+- Label dan pesan aturan berupa kunci i18n pada katalog namespace modul pemilik resource (`labelRef(meta, key)`); tidak ada teks UI bebas di metadata.
+
 ## Perintah
 
 | Perintah | Keterangan |
@@ -202,7 +211,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 | `bun run --filter @erpora/web deps` | dependency-cruiser: aturan F1 sampai F4 |
 | `bun test --pass-with-no-tests` | Uji dari root |
 | `bun run --filter @erpora/web build` | Build, anggaran bundle, dan csp-check |
-| `task web:check` | Gabungan: install beku, typecheck, lint, `i18n:generate --check`, deps, test, build |
+| `task web:check` | Gabungan: install beku, `metadata:generate --check` (drift `*.meta.gen.ts`), typecheck, lint, `i18n:generate --check`, deps, test, build |
 | `task web:test` | Hanya uji frontend |
 | `task i18n:check` / `task i18n:generate` | Lihat [`i18n.md`](i18n.md) |
 

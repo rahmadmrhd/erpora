@@ -215,6 +215,12 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | Penanda lingkungan database + guard binary dev (`production` ditolak), `db:fresh` berlapis | **M2d ✅** (PRD-000 FR-22.5) |
 | `SafeHtml`, OWASP ZAP baseline | **M3** (PRD-000 FR-24.3) |
 | Pipeline upload file | **PRD Files** (sebelum fitur upload pertama) |
+| Mass assignment pada DTO bangkitan metadata: decoder (`httpx.DecodeJSON`) menolak field tak dikenal dan field `readOnly` dengan `422 validation_failed` rinci per field; galat validasi tanpa nilai field; kode bangkitan lolos arch test tanpa pengecualian | **Resource metadata T1 ✅** (spec `resource-metadata` Req. 9, 19; `task metadata:generate:check`) |
+| Validasi server otoritatif atas tipe, wajib, panjang, rentang, pola (RE2, waktu linear), enum, desimal string, dan `rules` lintas field; `422 business_rule_violated` untuk aturan bisnis | **Resource metadata T1 ✅** (`docs/module-sdk/generators.md` §10) |
+| Metadata klien publik tanpa aturan `scope: server`, ambang atau field `confidential` ke atas, field `clientVisible: false`, dan ekspresi accessor `stored`; pemuat menolak chunk yang bocor (`checkClientMeta`) | **Resource metadata T1 ✅** (design D-8, D-21) |
+| Pembangkit aman: hanya menulis di bawah `modules/<dir>/`, tanpa symlink, gagal tanpa menulis bila check gagal atau penanda `Code generated` hilang, literal lewat satu fungsi kutip per bahasa, tes golden masukan berbahaya; field `highly_confidential` ditolak (K17) | **Resource metadata T1 ✅** (design D-32; Req. 19) |
+| Pemicu database penguncian dokumen, mesin selisih, dan migrasi bangkitan dengan penjaga data | **Resource metadata T2** (menyusul) |
+| `authz.Check/Filter/CheckWrite/MaskFields` pada CRUD bangkitan, tes IDOR A vs B per titik masuk ID (matriks design), `SELECT ... FOR UPDATE` pada transisi, relasi dan salinan field lintas modul | **Resource metadata T4** (menyusul; bergantung PRD-001 FR-110 sampai FR-115, FR-119) |
 
 ## 8. Pertanyaan terbuka
 

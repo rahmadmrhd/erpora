@@ -45,6 +45,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - Backend adalah otoritas: permission frontend hanya untuk UX.
 - **Cegah IDOR di setiap titik masuk ID** (PRD-001 FR-119): handler memuat record hanya lewat `authz.Check`/`authz.Filter`; ID referensi di body juga dicek; record di luar scope → 404. **Implementasi `contract/` menegakkan otorisasi sendiri** terhadap principal di context (jangan percaya pemanggil); parameter kontrak tidak boleh membawa `tenantId`/`userId`; hak sistem hanya lewat `authz.AsSystem(ctx, reason)` yang teraudit. Setiap endpoint/kontrak yang menerima ID wajib punya test IDOR (user A vs B).
 - Tenancy: mode single-tenant; selalu ambil tenant dari context (`tenancy.FromContext`, `sdk/data.DB(ctx)`), jangan pernah memegang pool DB langsung di modul.
+- Metadata resource (spec `docs/specs/resource-metadata/`, ADR-0016): bentuk data resource dinyatakan di `modules/<dir>/metadata/*.resource.yaml`. Berkas `*.gen.go`, `*.gen.ts`, dan skema OpenAPI bertanda `x-erp-generated` hasil `task erpora -- metadata:generate` **tidak diedit tangan**; setelah mengubah metadata jalankan perintah itu. `task metadata:check` dan `task metadata:generate:check` sudah ikut `task lint` (dan `task web:check`).
 - Detail aturan & penegaknya: PRD-000 §4.2 dan `internal/archcheck`.
 
 ## API & kontrak

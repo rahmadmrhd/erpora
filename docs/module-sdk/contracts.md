@@ -27,6 +27,8 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 | `x-erp-filterable`, `x-erp-sortable` | properti | Field yang boleh difilter/diurutkan (api-guidelines §5) |
 | `x-erp-field-group` | properti | Field group untuk masking (security-guidelines §2) |
 | `x-erp-extensible-enum` | enum | Nilai baru boleh ditambah tanpa breaking (api-guidelines §14.1) |
+| `x-erp-generated` | skema (`components.schemas`) | Skema dibangkitkan `metadata:generate` dari berkas metadata; tidak boleh diedit tangan (§9) |
+| `x-erp-decimal` | properti desimal | `{precision, scale, minimum?, maximum?}` dari metadata; kontrak hanya informasi, server menegakkan presisi, skala, dan rentang |
 | `x-erp-allow-highly-confidential` | properti respons 2xx | Pengecualian eksplisit agar properti `highly_confidential` boleh tampil di respons; hanya untuk nama data HR (`nik`, `npwp`, `bankAccount*`, `salary`), ERROR pada nama kredensial/nama lain dan di luar properti respons 2xx (Q32 butir 14). Nilai: alasan string tidak kosong; wajib bersama `x-erp-classification: highly_confidential`. Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store` berlaku). Dicetak linter sebagai INFO `erp-highly-confidential-exception` untuk ditinjau reviewer (Q32) |
 
 ## 3. Linter: rule → pasal
@@ -45,7 +47,7 @@ Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`i
 | `erp-operation-permission` | `x-erp-permission` berformat benar atau `x-erp-public` | §1, §13 |
 | `erp-operation-id` | `operationId` ada, camelCase, unik | §13 |
 | `erp-property-camel-case`, `erp-enum-snake-case` | Nama properti dan nilai enum | §4.1 |
-| `erp-decimal-not-number` | Uang/kuantitas string desimal, bukan `number` | §4.1 |
+| `erp-decimal-not-number` | Uang/kuantitas string desimal, bukan `number`: `$ref` ke `Decimal`, atau `oneOf` berisi `$ref` Decimal dan `{type: 'null'}` untuk yang nullable (K21, 1 Nov 2026); `number` dan `oneOf` tanpa Decimal ditolak | §4.1 |
 | `erp-success-envelope` | Respons sukses JSON berbentuk `{data}` | §4.2 |
 | `erp-error-standard` | 4xx/5xx memakai komponen error `erp:common` | §8 |
 | `erp-collection-pagination` | `GET` koleksi memakai `page`+`pageSize` atau `cursor`+`limit` | §6 |
@@ -103,3 +105,25 @@ Operasi `deprecated: true` di kontrak: respons membawa header `Deprecation: true
 Parameter **query** `deprecated: true` yang benar-benar dikirim klien menambah counter yang sama dengan `kind=parameter` dan `erp.api.deprecated.name`. Dipasang setelah pemeriksaan permission,
 sehingga request yang ditolak tidak dihitung. Belum dicakup (PRD-000 Q31 ★5): properti body request deprecated (menuntut parse body dua kali; ditegakkan di `DecodeJSON` bila ada konsumen),
 atribut klien (identitas klien baru ada di PRD-001), dan properti respons (tidak terukur di server).
+
+## 9. Skema bangkitan dari metadata (`x-erp-generated`)
+
+Untuk modul bermetadata (lihat [`generators.md`](generators.md) §10), `metadata:generate` menyuntikkan tiga skema per resource ke `components.schemas` `modules/<dir>/openapi.yaml`: `<Nama>` (baca), `<Nama>Create` (hanya field yang boleh ditulis, `additionalProperties: false`, `required` = tidak nullable dan tanpa default), dan `<Nama>Update` (PATCH: semua opsional, `minProperties: 1`). Setiap skema bangkitan ditandai `x-erp-generated: true` dan **tidak boleh diedit tangan**: `metadata:generate --check` menganggap perbedaan apa pun sebagai drift, dan skema tulis tangan bernama sama menghentikan pembangkitan (tidak pernah ditimpa). Penyuntikan memakai splice berbasis node YAML sehingga komentar dan bagian lain berkas tetap utuh. `contracts:lint`, `contracts:generate`, dan `contracts:breaking` bekerja atas hasilnya seperti atas skema tulis tangan; setelah `metadata:generate`, jalankan `task erpora -- contracts:generate <modul>` untuk memperbarui tipe TS.
+
+| Metadata | OpenAPI |
+| --- | --- |
+| `string`, `text` | `type: string`; `minLength`, `maxLength`, `pattern`; `format: email` atau `uri` (dari `format: url`) |
+| `integer` | `type: integer`, `format: int64`, `minimum`, `maximum` |
+| `decimal` | `$ref: erp:common#/components/schemas/Decimal` (nullable: `oneOf: [{$ref Decimal}, {type: 'null'}]`, K21) beserta `x-erp-decimal` |
+| `boolean`, `date`, `datetime`, `uuid` | `boolean`; `format: date`; `format: date-time`; `format: uuid` |
+| `enum` | `enum` (nullable menambah `null`); `x-erp-extensible-enum: true` bila `extensible` |
+| kolom tipe `morphTo` | `type: string` dengan `pattern` daftar putih kunci resource (kunci bertitik tidak lolos `erp-enum-snake-case`) |
+| `nullable` | `type: [tipe, 'null']` (OpenAPI 3.1) |
+| `readOnly` | `readOnly: true` pada skema baca; field hanya-baca tidak ada di `Create` dan `Update` |
+| `deprecated` | `deprecated: true` |
+| `fieldGroup`, `classification` | `x-erp-field-group` (kunci manifest, snake_case), `x-erp-classification` pada setiap properti |
+| `filterable`, `sortable` | `x-erp-filterable`, `x-erp-sortable` (skema baca) |
+| `default` | `default` (hanya skema `Create`) |
+| relasi `belongsTo` | properti `<nama>Id` (uuid; nullable bila relasi tidak `required`) |
+
+Catatan: field di luar grup field default tidak masuk `required` pada skema baca, karena field group yang tidak boleh dilihat dihilangkan dari JSON (api-guidelines §4.4). Field `highly_confidential` belum didukung (K17) dan ditolak sebelum pembangkitan. Relasi koleksi (`hasMany` termasuk `embedded`, `hasOne`, `belongsToMany`, `morphMany`) dan skema baca bertipe untuk masking belum dibangkitkan; keduanya menyusul bersama T4.
