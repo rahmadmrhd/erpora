@@ -40,7 +40,7 @@ Sistem ini menambah satu lapisan di atas kontrak OpenAPI yang sudah ada: **berka
 | D-18 | **Objek uji exit gate**: modul **fixture** di `testdata` (tidak didaftarkan ke aplikasi) memuat dokumen, relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok; `example` dimigrasikan dengan `omit` atas field bawaan yang belum ada di kontrak (tanpa perubahan perilaku API); `exampleaddon` tidak punya tabel dan tidak dimigrasikan. *Keputusan perancang (1 Nov 2026) dari pemeriksaan pembaca independen; disetujui pemilik produk 1 Nov 2026 ("sisanya saya terima").* | `example` hanya punya satu tabel dan endpoint baca; tidak cukup untuk membuktikan T1 sampai T4 | Menambah resource ke `example`/`exampleaddon`: mengubah modul referensi dan UI; modul referensi baru: biaya dan permukaan baru |
 | D-19 | **Pengecualian pemicu baris terkunci**: dievaluasi pada `OLD`; `DELETE` selalu ditolak; `UPDATE` hanya bila (a) hanya `status`/`version`/`updated_at`/`updated_by` berubah dengan pasangan status yang ada di tabel transisi bangkitan, atau (b) hanya kolom tujuan `migrateFrom` diisi dari `NULL` menjadi salinan persis kolom asal; tanpa penanda sesi atau pengecualian role (deployment memakai satu role `erp`); migrasi tulis tangan yang perlu melampaui itu menonaktifkan dan mengaktifkan pemicu secara eksplisit, dan `metadata:diff` memastikan pemicu aktif di akhir. | Memungkinkan cancel, amend, dan rename tanpa membuka celah yang juga tersedia bagi jalur aplikasi | Penanda `SET LOCAL`: dapat dipakai kode aplikasi; role migrasi terpisah: tidak ada di deployment |
 | D-20 | **Operasi kontrak ketiga** `ReadSnapshotFields(ctx, id, fields)`: hanya field `snapshotSource` yang dideklarasikan modul pemilik dan boleh dibaca principal. | Salinan lintas modul (K7) butuh data lebih dari label; operasi khusus menjaga Requirement 17.5 | Memperluas `ResolveLabels` dengan field bebas: membuka field di luar kebutuhan |
-| D-21 | **Metadata klien memuat struktur semua field**, termasuk `highly_confidential` (nama, tipe, batasan, grup, kunci label); hanya aturan dan ambang `scope: server` yang tidak terkirim; `clientVisible: false` (dengan alasan) untuk keluar sepenuhnya. Chunk bersifat publik (SPA statis). *Disetujui pemilik produk (P-8), 1 Nov 2026.* | Form generik tetap dapat merender field itu bagi pengguna berhak; nilai tidak pernah terkirim tanpa hak | Membuang field dari bundel: form generik tidak bisa merendernya |
+| D-21 | **Metadata klien memuat struktur field** (nama, tipe, batasan, grup, kunci label); aturan dan ambang yang merujuk field `confidential` ke atas atau grup non-`default` bertanda `scope: server` dan tidak terkirim; `clientVisible: false` (dengan alasan) untuk keluar sepenuhnya. Chunk bersifat publik (SPA statis). *Disetujui pemilik produk (P-8), 1 Nov 2026; `highly_confidential` belum didukung (D-31).* | Form generik tetap dapat merender field bagi pengguna berhak; nilai tidak pernah terkirim tanpa hak | Membuang field dari bundel: form generik tidak bisa merendernya |
 | D-22 | **Tes IDOR T4 dibangkitkan sebagai integration test** (tag `integration`, fixture A dan B lewat `testsupport`) dengan penanda `// erp:idor-test <resource>.<operasi>`; `metadata:check` memastikan penanda ada untuk setiap baris matriks. Integration test **repository** tetap manual (Q31 ★2). | Tes IDOR bermakna butuh database dan scope nyata; penanda dapat diperiksa tanpa menjalankan tes | Tes dengan stub: tetap hijau walau scope hilang (sudah terjadi pada kerangka generator sekarang) |
 | D-23 | **Indeks dan unique dideklarasikan eksplisit** (`unique`, `index`, `indexes` komposit), tidak diturunkan otomatis; yang tidak dideklarasikan dianggap selisih; peringatan untuk FK tanpa indeks. | Migrasi bangkitan kecil dan dapat ditebak; `example` tetap cocok | Menurunkan indeks dari `sortable`/`filterable`/FK: migrasi besar dan menyimpang dari skema yang ada |
 | D-24 | **Sebelum PRD-001**, T1 tidak mensyaratkan `resources`/`field_groups` di manifest: grup field divalidasi terhadap definisi di metadata (grup `default` implisit); kesamaan dengan manifest diperiksa begitu manifest memuat `resources` (P-1). | T1 dapat dirilis tanpa menunggu PRD-001 | Mewajibkan manifest sekarang: memaksa pekerjaan PRD-001 lebih awal |
@@ -50,12 +50,11 @@ Sistem ini menambah satu lapisan di atas kontrak OpenAPI yang sudah ada: **berka
 | D-28 | **Label dan accessor hanya dari field grup `default` berklasifikasi ≤ `internal`**; accessor mewarisi klasifikasi tertinggi dan grup paling ketat; teks bebas `q` hanya mencocokkan field yang boleh dibaca principal. | Label dikembalikan kepada siapa pun yang boleh membaca record; accessor dan `q` dapat menjadi oracle | Pengecualian dengan alasan: celah kebocoran lewat label |
 | D-29 | **Relasi satu modul tetap lewat otorisasi resource seberang**; hanya `embedded` yang ditulis lewat induk, dengan otorisasi per baris; membaca anak morph lewat otorisasi target. | JOIN tidak boleh melewati scope dan grup field resource seberang | JOIN tanpa filter seberang: kebocoran label dan hitungan |
 | D-30 | **Urutan penegakan handler**: `Check(read)` (404), `Check(aksi)` (403), `If-Match` (412 dengan `details` lewat `MaskFields`), lalu validasi dan tulis. | `412` memuat record terbaru (api-guidelines §7.1): tanpa urutan ini membocorkan record milik pihak lain | `If-Match` sebelum `Check`: kebocoran isi record |
-| D-31 | **Field `highly_confidential`**: terenkripsi atau hash, `filterable` hanya untuk kecocokan utuh `eq` lewat indeks buta (D-35), tidak pernah `sortable`/`groupable`/`aggregatable`, tidak di kolom `stored`, CHECK, indeks biasa, atau templat label, tidak di skema baca; pemetaan database dan `generate.crud` menunggu spec `field-encryption` (D-36). | security-guidelines §2, §3.4; aturan linter `erp-no-sensitive-in-url` | Pengecualian filter "dengan alasan": data sangat rahasia lewat URL |
+| D-31 | **Field `highly_confidential` belum didukung pada rilis pertama** (K17, 1 Nov 2026): `metadata:check` menolaknya (termasuk dari tipe domain, blok, accessor, dan properti bernama sensitif); kolom seperti itu ditangani kode tulis tangan dan dideklarasikan di `unmanagedColumns` (dikecualikan dari DTO, kontrak, metadata klien, dan mesin selisih; resource itu tanpa `generate.crud`). Rancangan awal dukungan penuh dicatat pada bagian "Pengembangan berikutnya". | Belum ada sistem enkripsi; menahan cakupan; menolak dengan jelas lebih aman daripada menyimpan data sangat rahasia sebagai teks biasa | Menyimpan sebagai teks biasa: melanggar security-guidelines §2; membangun enkripsi sekarang: menunda blok metadata |
 | D-32 | **Pembangkitan aman literal**: nilai `enum` snake_case, kanonisasi nilai, satu fungsi escape literal SQL yang diuji, `strconv.Quote` untuk Go, `JSON.stringify` untuk TS, golden berbahaya. | DDL tidak dapat diparameterisasi; literal yang ditanam ke kode dapat menyuntikkan perintah | Hanya meng-quote identifier: nilai literal tetap terbuka |
 | D-33 | **Pasangan `migrateFrom`** memiliki `fieldGroup` dan `classification` identik; `CheckWrite` dan `MaskFields` atas field kanonik; kedua bentuk dengan nilai berbeda ditolak. | Mencegah melewati field group lewat bentuk lama | Memperlakukan kedua bentuk bebas: jalur memintas grup |
 | D-34 | **Penamaan camelCase di berkas metadata, dikonversi per bahasa saat pembangkitan** (K15): camelCase ketat tanpa huruf kapital berurutan agar konversi tidak ambigu dan dapat dibalik; SQL snake_case, Go PascalCase dengan inisialisme baku, URL kebab-case jamak, JSON/OpenAPI/TS camelCase; nilai enum tetap snake_case. Tabel konversi di Komponen 13. | Satu kosakata bagi developer; tiap bahasa tetap idiomatik; konversi deterministik dapat diuji | snake_case di berkas (draf awal): sama dengan manifest tetapi berbeda dari JSON dan TS |
-| D-35 | **Pencarian `highly_confidential` hanya `eq` lewat indeks buta** (K13): kolom `<kolom>_idx` berisi HMAC-SHA-256 atas nilai terkanonisasi dengan kunci turunan (HKDF) berlabel resource dan field; pencarian lewat `POST …/search` dengan body JSON, bukan URL; permission aksi `search` dan akses grup field `read`; audit tanpa nilai; rate limit lebih ketat. Risiko diterima dan dicatat: kebocoran kesamaan nilai bagi pembaca database, dan oracle keberadaan nilai bagi pemegang hak `search` (dimitigasi rate limit, audit, dan hak ketat). | Pencarian utuh atas NIK atau NPWP dibutuhkan; enkripsi acak AES-GCM tidak dapat dicari; URL dilarang menurut security-guidelines | `like` atau `matches`: membocorkan isi lewat percobaan prefiks; enkripsi deterministik: membocorkan kesamaan tanpa kunci terpisah |
-| D-36 | **Sistem enkripsi field dibangun lebih dahulu sebagai spec terpisah `field-encryption`** (K14), dipakai bersama PRD-001 (rahasia pengaturan, kunci tanda tangan, rahasia MFA); pemetaan database T2 dan CRUD T4 untuk field `highly_confidential` bergantung padanya; T1 dan T3 tidak. | Belum ada kode enkripsi di repo sementara PRD-001 dan pedoman keamanan membutuhkannya; satu sistem menghindari duplikasi dan celah | Membangun enkripsi di dalam spec ini: menggabungkan dua pekerjaan besar yang berbeda |
+| D-35 | **Penghapusan kolom hanya pada rilis MAJOR; upgrade lompat versi tetap menjalankan semua migrasi berurutan** (K18, 1 Nov 2026): migrasi yang sudah dirilis tidak boleh diedit atau digabung; tidak ada titik henti wajib antar-versi; migrasi penghapusan bangkitan memuat penjaga (gagal bila ada baris dengan kolom lama terisi dan kolom pengganti kosong), `Down` penghapusan ditandai tidak dapat dibalik, dan dokumen upgrade mewajibkan backup sebelumnya. *Penjaga dan penanda tidak dapat dibalik: usulan perancang.* | Migrasi goose berurutan menjamin salinan data berjalan sebelum penghapusan walau versi dilompati; MAJOR memberi klien masa transisi (api-guidelines §14.3) | Titik henti wajib antar-MAJOR: butuh kolom manifest dan pemeriksaan lifecycle baru, tidak dipilih pemilik produk; gabung migrasi lama (squash): memutus lompat versi |
 
 ## Arsitektur
 
@@ -178,7 +177,7 @@ visibleWhen:
         - not: {field: note, op: isnull, value: true}
 ```
 
-Daun memakai `value` (literal) atau `ref` (field lain, resource sama). Perbandingan desimal memakai aritmetika desimal (Go: tipe desimal di `sdk/metadata`; TS: `BigInt` berskala atau pustaka desimal, tidak `Number`). Evaluator total fungsi: tipe tak cocok mengembalikan `false` dengan alasan; tidak ada panik; biaya linear. Aturan yang merujuk field `highly_confidential` otomatis `scope: server` (D-8).
+Daun memakai `value` (literal) atau `ref` (field lain, resource sama). Perbandingan desimal memakai aritmetika desimal (Go: tipe desimal di `sdk/metadata`; TS: `BigInt` berskala atau pustaka desimal, tidak `Number`). Evaluator total fungsi: tipe tak cocok mengembalikan `false` dengan alasan; tidak ada panik; biaya linear. Aturan yang merujuk field `confidential` ke atas atau grup non-`default` otomatis `scope: server` (D-8).
 
 ### 4. Accessor dan templat label
 
@@ -235,7 +234,6 @@ Pemetaan tipe:
 | `uuid` | `uuid` |
 | `stored` accessor | kolom `GENERATED ALWAYS AS (...) STORED` |
 | `belongsTo` satu modul | kolom + FK sesuai `onDelete` |
-| `highly_confidential` | `bytea` (ciphertext AES-256-GCM yang memuat versi kunci); ditambah `<kolom>_idx bytea` (indeks buta) hanya bila `filterable` atau `unique` (D-35) |
 
 Klasifikasi selisih:
 
@@ -255,7 +253,7 @@ fields:
   phoneE164:   {type: string, maxLength: 20, migrateFrom: phone}
 ```
 
-`metadata:migrate` menghasilkan `ADD COLUMN phoneE164` dan salinan data dari `phone` (batch bila `large`). DTO menerima dan mengirim keduanya sampai tahap contract; kontrak menandai `phone` `deprecated: true`. Penghapusan hanya lewat kerangka dan hanya setelah `removeAfter` dinyatakan (syarat api-guidelines §14.3 langkah 3). `metadata:check` menolak field yang hilang tanpa tanda `deprecated` pada rilis sebelumnya (D-15).
+`metadata:migrate` menghasilkan `ADD COLUMN phoneE164` dan salinan data dari `phone` (batch bila `large`). DTO menerima dan mengirim keduanya sampai tahap contract; kontrak menandai `phone` `deprecated: true`. Penghapusan hanya lewat kerangka, hanya pada rilis MAJOR modul (K18), dan hanya setelah `removeAfter` dinyatakan (untuk kolom yang tampil di API juga syarat api-guidelines §14.3 langkah 3). Migrasi penghapusan memuat penjaga terhadap baris yang belum disalin, dan `Down`-nya ditandai tidak dapat dibalik (D-35). `metadata:check` menolak field yang hilang tanpa tanda `deprecated` pada rilis sebelumnya (D-15).
 
 ### 9. Dokumen transaksional dan salinan field
 
@@ -330,7 +328,7 @@ Kontrol yang dirujuk: `security-guidelines.md` §2, §3.1 (IDOR, BFLA, mass assi
 | **T**ampering | Berkas metadata (modul pihak ketiga) | Diperlakukan tak tepercaya (Requirement 19.4); tidak dibangkitkan otomatis di produksi; masuk tinjauan; tanpa fragmen SQL/kode di berkas |
 | **R**epudiation | Perubahan data | `audit.data_changes` dari penanda resource; nilai `confidential` ke atas disamarkan di audit |
 | **I**nformation disclosure | Filter, urut, grup, agregat | Daftar putih dari metadata; field `none` bagi principal ditolak `403 field_forbidden`; scope diterapkan sebelum filter klien (api-guidelines §5.1) |
-| **I**nformation disclosure | Metadata di bundel klien | Aturan dan ambang field `highly_confidential` tidak dikirim (`scope: server`); klien tidak menyimpulkan akses dari metadata |
+| **I**nformation disclosure | Metadata di bundel klien | Aturan dan ambang yang merujuk field `confidential` ke atas tidak dikirim (`scope: server`); klien tidak menyimpulkan akses dari metadata |
 | **I**nformation disclosure | Salinan field | Principal pemanggil; klasifikasi dan grup field diwarisi; field wajib tak terbaca menggagalkan simpan |
 | **I**nformation disclosure | Galat validasi | Tanpa nilai field `confidential` ke atas |
 | **D**oS | Kondisi, regex, YAML, halaman | Batas node, kedalaman, panjang, ukuran berkas, alias; RE2 di server; `pageSize ≤ 200`; kedalaman grup ≤ 4; `MaxBodyBytes` |
@@ -362,15 +360,14 @@ Kontrol yang dirujuk: `security-guidelines.md` §2, §3.1 (IDOR, BFLA, mass assi
 | 19 | `If-Match` salah pada record milik A | `If-Match: "0"` | `Check` sebelum `If-Match`; `details` lewat `MaskFields` | 404 (B) / 412 tanpa field terlarang (pengguna berhak) | B tidak menerima isi record A pada 412 |
 | 20 | Ubah baris anak dokumen terkunci; `PATCH` bersamaan `submit` | ID baris, ID dokumen | Pemicu anak; `SELECT … FOR UPDATE` atas induk | `409 invalid_state` | Ubah baris setelah `submit`; dua permintaan bersamaan |
 | 21 | Tulis lewat pasangan field deprecated | Dua bentuk field | Field kanonik; nilai berbeda ditolak | `422 validation_failed` | Tulis lewat bentuk lama pada field grup terbatas |
-| 22 | Pencarian eksak `POST …/search` atas field `highly_confidential` | Nilai di body (bukan URL) | Hanya `eq`; permission `search` dan grup field `read`; indeks buta; `authz.Filter`; audit tanpa nilai; rate limit | `403 field_forbidden` / `400 invalid_filter` / hasil dalam scope | B tanpa hak: 403; operator `like` ditolak; hasil tidak memuat record A di luar scope B; percobaan berulang kena rate limit |
 
-Setiap baris matriks 1 sampai 12 dan 14 sampai 22 yang dibangkitkan disertai tes IDOR (A vs B) dan **gagal** bila pembatasan scope dihapus; `metadata:check` menggagalkan T4 untuk resource tanpa tes itu (Requirement 15.9, 15.10).
+Setiap baris matriks 1 sampai 12 dan 14 sampai 21 yang dibangkitkan disertai tes IDOR (A vs B) dan **gagal** bila pembatasan scope dihapus; `metadata:check` menggagalkan T4 untuk resource tanpa tes itu (Requirement 15.9, 15.10).
 
 **Koneksi keluar (SSRF).** Tidak ada koneksi keluar baru; metadata tidak memuat URL yang diambil server. Tipe `string` ber-`format: url` hanya memvalidasi skema `http`/`https` dan tidak pernah di-fetch server.
 
 **File.** Tidak ada unggah. Pembangkit hanya menulis di direktori modul; keluaran melewati normalisasi jalur.
 
-**Data offline.** Metadata frontend statis tanpa data pengguna; tidak masuk penyimpanan offline. Field `highly_confidential` hanya terkirim sebagai struktur (nama, tipe, batasan, grup); aturan dan ambang `scope: server` tidak terkirim (D-21).
+**Data offline.** Metadata frontend statis tanpa data pengguna; tidak masuk penyimpanan offline. Aturan dan ambang `scope: server` tidak terkirim (D-21); field `highly_confidential` belum didukung (D-31).
 
 **Skrip dan XSS.** Label dan pesan dirender sebagai teks; `dangerouslySetInnerHTML` tetap dilarang.
 
@@ -386,7 +383,8 @@ Setiap baris matriks 1 sampai 12 dan 14 sampai 22 yang dibangkitkan disertai tes
 - **Dokumen:** immutabilitas (`UPDATE`/`DELETE` langsung ditolak database), pengecualian pemicu (transisi sah lolos, perubahan kolom lain ditolak, backfill `migrateFrom` hanya salinan persis, `DELETE` selalu ditolak), pemicu anak, dua `submit` bersamaan atau `PATCH` bersamaan `submit`, salinan beku setelah terkunci.
 - **Frontend (bun test):** evaluator, validator, registri tipe field, paritas; anggaran bundle (`web:check`).
 - **Penamaan:** konversi camelCase ke snake_case, PascalCase, dan kebab-case diuji dengan tes properti (bolak-balik identik, tanpa tabrakan, tanpa kata tercadang, batas 63 byte); tolak huruf kapital berurutan.
-- **Pencarian eksak:** hanya `eq` yang diterima; `like`, `matches`, `contains`, `in`, rentang, urut, grup, dan agregat ditolak; indeks buta konsisten untuk nilai yang sama setelah kanonisasi; rate limit dan audit tanpa nilai; field `highly_confidential` tidak pernah ada di URL.
+- **Field `highly_confidential`:** ditolak `metadata:check` dengan pesan yang jelas, termasuk dari tipe domain, blok, accessor, dan nama sensitif; `unmanagedColumns` hanya diterima untuk kolom itu dan tidak muncul di DTO, kontrak, metadata klien, atau selisih; resource ber-`unmanagedColumns` tidak dapat memakai `generate.crud`.
+- **Penghapusan kolom:** hanya pada MAJOR; penjaga menggagalkan migrasi bila ada baris belum disalin; lompatan beberapa versi menjalankan semua migrasi berurutan dengan hasil sama seperti upgrade bertahap (tes integrasi pada fixture); `Down` penghapusan ditandai tidak dapat dibalik.
 - **Generator:** golden dan `task test:generator`.
 
 ## Migrasi dari kondisi sekarang dan dokumentasi
@@ -410,8 +408,8 @@ Modul `example` dipindahkan ke metadata dengan hasil identik secara perilaku (`c
 | Keluhan ergonomi YAML (verbositas penyertaan) | Skema JSON untuk editor; contoh di panduan; evaluasi ulang D-1 setelah T1 |
 | Kondisi `lockWhen` tak dapat diterjemahkan ke SQL | Dibatasi pada kolom milik sendiri dengan operator sederhana (D-11); bila tidak dapat diterjemahkan, `metadata:check` gagal (D-26), tidak turun diam-diam ke lapis server |
 | Galat validasi, `q`, dan unique dapat menjadi oracle nilai atau keberadaan record | Aturan yang merujuk field di luar grup `default` diberi peringatan; `q` hanya field terbaca; pesan unique generik; rate limit pada tulis dan pencarian; sisa risiko diterima (Requirement 9.8, 16.9) |
-| Primitif enkripsi field belum ada di repo | Dibangun lebih dahulu lewat spec `field-encryption` (D-36); sebelum itu pemetaan database dan `generate.crud` ditolak untuk resource ber-field `highly_confidential`, sedangkan T1 dan T3 tetap berjalan |
-| Pencarian eksak `highly_confidential` menjadi oracle keberadaan nilai atau membocorkan kesamaan nilai | Hak ketat (`search` dan grup field `read`), audit tanpa nilai, rate limit lebih ketat, kunci indeks buta terpisah; sisa risiko diterima (D-35) |
+| Field `highly_confidential` belum didukung | Ditolak dengan pesan jelas; kolom ditangani tulis tangan lewat `unmanagedColumns`; dukungan penuh (enkripsi, pencarian eksak) menjadi pengembangan berikutnya (D-31) |
+| Pengguna melompati versi dan penghapusan kolom mengejutkan klien atau menghilangkan data | Penghapusan hanya MAJOR; semua migrasi tetap berurutan; penjaga data dan `Down` tidak dapat dibalik; backup wajib (D-35) |
 | Chunk metadata klien bersifat publik | Hanya struktur dan batasan; aturan dan ambang server tidak terkirim; `clientVisible: false` untuk kasus sensitif (D-21, P-8) |
 | Tipe domain atau blok bersama diubah: dampak berlipat | Pelaporan dampak per resource, `contracts:breaking`, mesin selisih, dan SemVer modul untuk ekspor (Requirement 3.12) |
 
@@ -439,6 +437,17 @@ Modul `example` dipindahkan ke metadata dengan hasil identik secara perilaku (`c
 
 Hal berikut sengaja tidak diputuskan di spec ini dan menjadi keputusan pelaksana (dicatat di catatan hasil `tasks.md`): bentuk tepat JSON Schema, nama paket dan antarmuka Go internal, kueri katalog PostgreSQL untuk introspeksi, kata kunci tepat templat SQL pemicu, bentuk keluaran peringatan, hasil spike alat selisih (Atlas atau implementasi sendiri; D-6), dan pustaka desimal Go dan TypeScript.
 
+## Pengembangan berikutnya (di luar cakupan, K17)
+
+Field `highly_confidential` ditiadakan dulu (K17, 1 Nov 2026). Rancangan awal hasil brainstorming dicatat di sini agar tidak hilang; ini bukan keputusan mengikat:
+
+- **Sistem enkripsi field end to end** sebagai spec terpisah: manajemen kunci `ERP_SECRET_KEY` (NFR-104 PRD-001), AES-256-GCM dengan nonce acak per nilai dan versi kunci di dalam ciphertext, rotasi kunci, dan API `sdk`. Belum ada kode enkripsi di repo; PRD-001 juga membutuhkannya (kunci tanda tangan JWT, rahasia MFA, pengaturan bertipe `secret`), sehingga satu implementasi bersama menghindari duplikasi.
+- **Pencarian eksak** atas field `highly_confidential` hanya `eq` lewat **indeks buta** (kolom `<kolom>_idx` berisi HMAC-SHA-256 atas nilai terkanonisasi dengan kunci turunan HKDF berlabel resource dan field), lewat `POST …/search` dengan body JSON (bukan URL; security-guidelines §2 dan §3.4), permission aksi `search` dan hak baca grup field, audit tanpa nilai, dan rate limit ketat. Risiko yang diterima pada rancangan itu: kebocoran kesamaan nilai bagi pembaca database dan oracle keberadaan nilai bagi pemegang hak `search`.
+- **Pemetaan database**: `bytea` untuk ciphertext dan `bytea` pendamping untuk indeks buta; skema baca bangkitan mengecualikan field itu; tanpa `stored`, CHECK nilai, indeks biasa, atau templat label; `unique` hanya lewat indeks buta.
+- **Pencabutan penolakan** di `metadata:check` dan penghapusan `unmanagedColumns` untuk kolom yang sudah didukung.
+
+Temuan review keamanan tentang enkripsi dan larangan filter lewat URL tetap berlaku sebagai syarat dukungan itu kelak.
+
 ## Pertanyaan terbuka
 
-Semua pertanyaan P-1 sampai P-8 sudah diputuskan pemilik produk pada 1 Nov 2026 (tabel keputusan di akhir `requirements.md`). Yang tersisa untuk pelaksana: format kunci resource bermulti-kata pada manifest dan permission (Komponen 13) dan isi spec `field-encryption` (spec terpisah, prasyarat T2 dan T4 untuk field `highly_confidential`).
+Semua pertanyaan P-1 sampai P-8 sudah diputuskan pemilik produk pada 1 Nov 2026 (tabel keputusan di akhir `requirements.md`). Yang tersisa untuk pelaksana: format kunci resource bermulti-kata pada manifest dan permission (Komponen 13).
