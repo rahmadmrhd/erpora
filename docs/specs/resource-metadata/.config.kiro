@@ -1,0 +1,6 @@
+{
+  "specId": "bdc5ea6d-c25e-4fc3-b6e3-8eaec8402df8",
+  "workflowType": "requirements-first",
+  "specType": "feature",
+  "description": "Metadata resource: satu sumber kebenaran per resource (field, tipe, batasan, aturan kondisi, relasi, accessor, label, penguncian dokumen) yang membangkitkan kontrak OpenAPI, validasi Go dan TypeScript, metadata frontend, selisih dan migrasi database, serta (tahap akhir) CRUD untuk resource sederhana, dengan penegakan otorisasi dan pencegahan IDOR di setiap integrasi"
+}

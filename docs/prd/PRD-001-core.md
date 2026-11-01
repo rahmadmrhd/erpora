@@ -236,6 +236,8 @@ Perluasan `contracts/module.schema.json` (aditif; `schema_version` tetap `1`):
 
 **AC:** manifest dengan aksi kustom bentrok, `scope_fields` merujuk dimensi tak terdaftar, atau resource tanpa grup default ditolak dengan pesan yang jelas.
 
+**Catatan (PRD-000 Q41, 1 Nov 2026, disetujui pemilik produk; perubahan aditif):** keanggotaan field pada grup juga dapat dinyatakan di metadata resource (spec `docs/specs/resource-metadata`, field `fieldGroup`). Bila sebuah resource memiliki metadata, daftar `fields` pada grup di manifest menjadi **opsional** dan, bila ada, `module:check` memeriksa kesamaannya dengan metadata; definisi grup (kunci, label, klasifikasi, grup `default`) tetap di manifest. Sistem enkripsi field (spec `field-encryption`) dibangun lebih dahulu dan dipakai bersama bagian PRD ini yang membutuhkan penyimpanan terenkripsi (kunci tanda tangan, rahasia MFA, pengaturan bertipe `secret`).
+
 ### FR-111 — Scope data (record-level)
 
 Setiap baris matriks memiliki scope. Admin memilih dari tipe berikut:
