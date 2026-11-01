@@ -1,0 +1,80 @@
+{
+  "schema_version": "1",
+  "key": "acme.fixturesales",
+  "slug": "fixturesales",
+  "name": "Fixture Sales",
+  "version": "1.0.0",
+  "publisher": { "id": "acme", "name": "ACME" },
+  "trust": "builtin",
+  "compatibility": { "platform": "^0.1", "sdk": "^0.1" },
+  "dependencies": [
+    { "module": "platform.core", "version": "^0.1", "optional": false },
+    { "module": "acme.fixturecore", "version": "^1.0", "optional": false }
+  ],
+  "capabilities": [
+    "fixturesales.invoice.read",
+    "fixturesales.invoice.create",
+    "fixturesales.invoice.update",
+    "fixturesales.invoice.delete",
+    "fixturesales.invoice.submit",
+    "fixturesales.invoice.cancel",
+    "fixturesales.invoice.amend",
+    "fixturesales.invoice_line.read",
+    "fixturesales.invoice_line.update",
+    "fixturesales.product.read",
+    "fixturesales.product.create",
+    "fixturesales.product.update",
+    "fixturesales.tag.read",
+    "fixturesales.tag.create",
+    "fixturesales.note.read",
+    "fixturesales.note.create"
+  ],
+  "migrations": { "strategy": "versioned" },
+  "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "fixturesales.invoice",
+      "label": "Faktur penjualan",
+      "actions": ["read", "create", "update", "delete", "submit", "cancel", "amend"],
+      "owner_field": "created_by",
+      "scope_fields": { "fixturecore.branch": "branch_id" },
+      "field_groups": [
+        { "key": "general", "label": "Umum", "default": true },
+        { "key": "pricing", "label": "Harga", "classification": "confidential" }
+      ]
+    },
+    {
+      "key": "fixturesales.invoice_line",
+      "label": "Baris faktur",
+      "actions": ["read", "update"],
+      "field_groups": [
+        { "key": "general", "label": "Umum", "default": true },
+        { "key": "pricing", "label": "Harga", "classification": "confidential" }
+      ]
+    },
+    {
+      "key": "fixturesales.product",
+      "label": "Produk",
+      "actions": ["read", "create", "update"],
+      "field_groups": [
+        { "key": "general", "label": "Umum", "default": true }
+      ]
+    },
+    {
+      "key": "fixturesales.tag",
+      "label": "Label",
+      "actions": ["read", "create"],
+      "field_groups": [
+        { "key": "general", "label": "Umum", "default": true }
+      ]
+    },
+    {
+      "key": "fixturesales.note",
+      "label": "Catatan",
+      "actions": ["read", "create"],
+      "field_groups": [
+        { "key": "general", "label": "Umum", "default": true }
+      ]
+    }
+  ]
+}

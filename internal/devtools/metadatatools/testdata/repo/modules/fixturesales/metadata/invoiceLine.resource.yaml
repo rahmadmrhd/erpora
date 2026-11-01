@@ -1,0 +1,79 @@
+schemaVersion: "1"
+kind: resource
+key: fixturesales.invoiceLine
+description: Baris faktur, anak embedded dari invoice.
+include:
+  - source: sdk:audit
+labelTemplate: "{productSku} - {description}"
+fields:
+  lineNo:
+    type: integer
+    minimum: 1
+    readOnly: true
+    sortable: true
+    label: fixturesales.invoiceLine.lineNo
+  productSku:
+    type: string
+    maxLength: 40
+    readOnly: true
+    fieldGroup: general
+    classification: internal
+    label: fixturesales.invoiceLine.productSku
+  description:
+    type: string
+    maxLength: 200
+    label: fixturesales.invoiceLine.description
+  quantity:
+    type: decimal
+    precision: 18
+    scale: 3
+    minimum: "0.001"
+    label: fixturesales.invoiceLine.quantity
+  unitPrice:
+    type: decimal
+    precision: 18
+    scale: 2
+    currency: IDR
+    minimum: "0"
+    fieldGroup: pricing
+    classification: confidential
+    label: fixturesales.invoiceLine.unitPrice
+  lineTotal:
+    type: decimal
+    precision: 18
+    scale: 2
+    currency: IDR
+    fieldGroup: pricing
+    classification: confidential
+    aggregatable: true
+    sortable: true
+    label: fixturesales.invoiceLine.lineTotal
+    accessor:
+      kind: stored
+      expr:
+        mul:
+          - { field: quantity }
+          - { field: unitPrice }
+        scale: 2
+        round: half_up
+relations:
+  invoice:
+    type: belongsTo
+    to: fixturesales.invoice
+    required: true
+    onDelete: cascade
+  product:
+    type: belongsTo
+    to: fixturesales.product
+    required: true
+    onDelete: restrict
+    snapshot:
+      - { from: sku, to: productSku }
+      - { from: name, to: description }
+rules:
+  - id: quantityPositive
+    assert: { field: quantity, op: gt, value: "0" }
+    field: quantity
+    message: fixturesales.invoiceLine.error.quantityNotPositive
+indexes:
+  - fields: [lineNo]

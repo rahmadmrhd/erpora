@@ -1,6 +1,7 @@
 # ADR-010: Migrasi database dan kompatibilitas upgrade
 
 - **Status:** Proposed
+- **Diperbarui 2026-11-01 oleh [ADR-0016](0016-metadata-sumber-kebenaran-pembangkit-kontrak-dan-migrasi.md):** keputusan sebagian di bawah (K18) dikaitkan dengan migrasi bangkitan dari metadata resource: migrasi dihasilkan sebagai berkas goose yang ditinjau, perubahan merusak hanya berupa kerangka `TODO`, dan larangan `AutoMigrate` tetap berlaku. Status ADR ini tetap Proposed.
 
 ## Konteks
 

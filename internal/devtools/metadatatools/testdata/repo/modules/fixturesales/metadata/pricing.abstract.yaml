@@ -1,0 +1,23 @@
+schemaVersion: "1"
+kind: abstract
+key: fixturesales.pricing
+description: Abstrak tarif harga milik modul sendiri (tidak diekspor), dipakai invoice dengan timpaan set dan omit.
+fields:
+  discountRate:
+    type: "sdk:percentage"
+    default: "0"
+    fieldGroup: pricing
+    classification: confidential
+    label: fixturesales.pricing.discountRate
+  taxRate:
+    type: "sdk:percentage"
+    default: "11"
+    fieldGroup: pricing
+    classification: confidential
+    label: fixturesales.pricing.taxRate
+  withholdingRate:
+    type: "sdk:percentage"
+    nullable: true
+    fieldGroup: pricing
+    classification: confidential
+    label: fixturesales.pricing.withholdingRate

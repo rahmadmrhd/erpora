@@ -1,0 +1,10 @@
+schemaVersion: "1"
+kind: fieldType
+key: fixturecore.email
+export: true
+description: Alamat surel dengan format dan batas panjang baku.
+base: { type: string, maxLength: 254, format: email }
+label: fixturecore.type.email
+classification: confidential
+widget: email
+operators: [eq, contains, isnull]

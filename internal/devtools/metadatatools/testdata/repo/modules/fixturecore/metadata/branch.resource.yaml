@@ -1,0 +1,11 @@
+schemaVersion: "1"
+kind: resource
+key: fixturecore.branch
+export: true
+description: Cabang usaha, sumber dimensi scope fixturecore.branch.
+include:
+  - source: sdk:audit
+labelTemplate: "{code} - {name}"
+fields:
+  code: { type: string, maxLength: 16, unique: true, sortable: true, filterable: true, label: fixturecore.branch.code }
+  name: { type: string, maxLength: 120, sortable: true, filterable: true, label: fixturecore.branch.name }

@@ -1,0 +1,10 @@
+schemaVersion: "1"
+kind: abstract
+key: fixturecore.address
+export: true
+description: Blok alamat yang dipakai ulang lewat awalan (prefix).
+layout: { section: address, columns: 2, order: [street, city, postalCode] }
+fields:
+  street:     { type: string, maxLength: 200, nullable: true, label: fixturecore.address.street }
+  city:       { type: string, maxLength: 100, nullable: true, label: fixturecore.address.city }
+  postalCode: { type: string, maxLength: 10, nullable: true, pattern: "^[0-9]{5}$", label: fixturecore.address.postalCode }

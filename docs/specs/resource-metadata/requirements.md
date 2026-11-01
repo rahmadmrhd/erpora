@@ -434,5 +434,5 @@ Pemilik produk menerima rekomendasi pada P-1 sampai P-6 dan P-8 ("sisanya saya t
 
 ## Diserahkan kepada pelaksana (tambahan)
 
-- Format kunci resource bermulti-kata pada manifest dan permission: registri dapat mensyaratkan huruf kecil; pelaksana memverifikasi aturan registry (`capability_prefix`) dan menentukan konversinya (mis. `sales.invoiceLine` menjadi `sales.invoice_line`), lalu mencatat pemetaan itu di `design.md` Komponen 13.
+- Format kunci resource bermulti-kata pada manifest dan permission: **selesai (1 Nov 2026, pelaksana)**. Registri mensyaratkan capability berpola `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9_]*)+$` tanpa huruf besar, sehingga `sales.invoiceLine` di metadata dikonversi ke `sales.invoice_line` (permission `sales.invoice_line.read`) dengan fungsi snake_case yang sama dengan kolom SQL; pemetaan tercatat di `design.md` Komponen 13.
 - Pengembangan berikutnya di luar spec ini (K17): dukungan field `highly_confidential` (sistem enkripsi field end to end, indeks buta untuk pencarian eksak `eq` lewat `POST …/search`, pemetaan database, dan pencabutan penolakan di `metadata:check`); rancangan awalnya dicatat di `design.md` bagian "Pengembangan berikutnya".

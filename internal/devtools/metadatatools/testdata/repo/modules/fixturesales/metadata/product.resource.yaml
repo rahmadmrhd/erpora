@@ -1,0 +1,37 @@
+schemaVersion: "1"
+kind: resource
+key: fixturesales.product
+description: Master produk, target relasi satu modul dari baris faktur dan sasaran morph.
+include:
+  - source: sdk:audit
+labelTemplate: "{sku} - {name}"
+fields:
+  sku:
+    type: string
+    maxLength: 40
+    unique: true
+    sortable: true
+    filterable: true
+    snapshotSource: true
+    label: fixturesales.product.sku
+  name:
+    type: string
+    maxLength: 200
+    sortable: true
+    filterable: true
+    snapshotSource: true
+    label: fixturesales.product.name
+  unitPrice:
+    type: decimal
+    precision: 18
+    scale: 2
+    currency: IDR
+    minimum: "0"
+    aggregatable: true
+    sortable: true
+    label: fixturesales.product.unitPrice
+  active:
+    type: boolean
+    default: true
+    filterable: true
+    label: fixturesales.product.active
