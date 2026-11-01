@@ -317,3 +317,51 @@ func TestCheck_Desk(t *testing.T) {
 		})
 	}
 }
+
+// metadataFixture menambah resources/field_groups pada manifest alpha dan metadata resource alpha.item.
+func metadataFixture(t *testing.T, pricingFields string, nameGroup string) string {
+	t.Helper()
+	root := fixture{betaDeclaresDep: true}.build(t)
+	p := filepath.Join(root, "modules", "alpha", "module.json")
+	b, err := os.ReadFile(p) //nolint:gosec // path uji
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := `"offline": { "mode": "online-only" },
+  "resources": [{"key":"alpha.item","actions":["read"],"field_groups":[
+    {"key":"general","default":true},
+    {"key":"pricing","classification":"confidential"` + pricingFields + `}]}]`
+	write(t, root, "modules/alpha/module.json", strings.Replace(string(b), `"offline": { "mode": "online-only" }`, res, 1))
+	write(t, root, "modules/alpha/metadata/item.resource.yaml", `schemaVersion: "1"
+kind: resource
+key: alpha.item
+fields:
+  name: {type: text`+nameGroup+`}
+  unitPrice: {type: decimal, precision: 10, scale: 2, fieldGroup: pricing}
+`)
+	return root
+}
+
+func TestCheck_MetadataFieldGroups(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	// kapabilitas alpha.items.read tetap ada; resource baru tidak dipersoalkan oleh module:check.
+	root := metadataFixture(t, `,"fields":["unit_price"]`, "")
+	if got, err := Check(root, ""); err != nil || len(got) != 0 {
+		t.Fatalf("fields sama dengan metadata harus bersih: %+v err=%v", got, err)
+	}
+	root = metadataFixture(t, `,"fields":["unit_price","name"]`, "")
+	got, err := Check(root, "alpha")
+	if err != nil || len(got) != 1 || got[0].Rule != RuleMetadata || !strings.Contains(got[0].Detail, "manifest_fields_mismatch") {
+		t.Fatalf("got = %+v err=%v", got, err)
+	}
+	root = metadataFixture(t, ``, ", fieldGroup: ghost")
+	got, err = Check(root, "")
+	if err != nil || len(got) != 1 || got[0].Rule != RuleMetadata || !strings.Contains(got[0].Detail, "manifest_group_unknown") ||
+		!strings.Contains(got[0].Detail, "modules/alpha/metadata/item.resource.yaml") {
+		t.Fatalf("got = %+v err=%v", got, err)
+	}
+	// modul tanpa metadata/ tidak terpengaruh.
+	if got, err := Check(fixture{betaDeclaresDep: true}.build(t), ""); err != nil || len(got) != 0 {
+		t.Fatalf("got = %+v err=%v", got, err)
+	}
+}

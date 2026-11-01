@@ -84,6 +84,7 @@ func Check(root, only string) ([]Finding, error) {
 		out = append(out, i18nFindings(root, e, reg)...)
 		out = append(out, deskFindings(root, e)...)
 	}
+	out = append(out, metadataFindings(root, entries)...)
 
 	repo, err := archcheck.Load(root)
 	if err != nil {
