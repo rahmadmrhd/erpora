@@ -14,6 +14,8 @@ import type {
   Bootstrap,
   BootstrapModule,
   CurrentUserSource,
+  Desk,
+  DeskMenuItem,
   NotificationSource,
 } from "@erpora/platform-web";
 import {
@@ -23,6 +25,12 @@ import {
   makeBootstrapModule,
   usePageActions,
 } from "@erpora/platform-web";
+import {
+  makeDashboardItem,
+  makeDesk,
+  makeDeskGroup,
+  makeDeskItem,
+} from "@erpora/platform-web/testing";
 import { focusManager, QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, render } from "@testing-library/react";
@@ -53,6 +61,7 @@ type Catalog = { revision: string; messages: Record<string, string> };
 const FIXTURE_CATALOGS: Record<string, Record<string, Record<string, string>>> = {
   alpha: {
     id: {
+      "desk.title": "Alpha Desk",
       "nav.home": "Alpha Beranda",
       "nav.reports": "Laporan",
       "nav.sales": "Penjualan",
@@ -61,6 +70,7 @@ const FIXTURE_CATALOGS: Record<string, Record<string, Record<string, string>>> =
       "page.title": "Judul Alpha",
     },
     en: {
+      "desk.title": "Alpha Desk",
       "nav.home": "Alpha Home",
       "nav.reports": "Reports",
       "nav.sales": "Sales",
@@ -70,8 +80,8 @@ const FIXTURE_CATALOGS: Record<string, Record<string, Record<string, string>>> =
     },
   },
   beta: {
-    id: { "nav.home": "Beta Beranda" },
-    en: { "nav.home": "Beta Home" },
+    id: { "desk.title": "Beta Desk", "nav.home": "Beta Beranda" },
+    en: { "desk.title": "Beta Desk", "nav.home": "Beta Home" },
   },
 };
 
@@ -95,6 +105,35 @@ function withActiveRevisions(b: Bootstrap): Bootstrap {
   const revisions: Record<string, string> = { platform: "p1", ui: "u1" };
   for (const m of b.modules) if (m.status === "enabled") revisions[m.slug] = `${m.slug[0]}1`;
   return { ...b, i18n: { ...b.i18n, revisions } };
+}
+
+/**
+ * Meniru `GET /api/platform/desks`: Desk Platform ditambah satu Desk per modul `enabled` (alpha: Home dan grup
+ * Laporan; beta: Home), masing-masing dengan Dashboard terkunci; id Desk = slug modul (D-3).
+ */
+export function fakeDesks(b: Bootstrap): { desks: Desk[]; revision: string } {
+  const item = (deskId: string, id: string, to: string, extra: Partial<DeskMenuItem> = {}) =>
+    makeDeskItem(deskId, id, to, extra);
+  const desks: Desk[] = [
+    makeDesk(
+      "platform",
+      [makeDashboardItem("platform", "platform"), item("platform", "modules", "/platform/modules")],
+      { source: "platform", label: { ns: "platform", key: "desk.title" }, icon: "settings" },
+    ),
+  ];
+  for (const m of b.modules) {
+    if (m.status !== "enabled") continue;
+    const menus: Desk["menus"] =
+      m.slug === "alpha"
+        ? [
+            makeDashboardItem("alpha", "alpha"),
+            item("alpha", "home", "/alpha/home"),
+            makeDeskGroup("alpha", "reports", [item("alpha", "sales", "/alpha/reports/sales")]),
+          ]
+        : [makeDashboardItem(m.slug, m.slug), item(m.slug, "home", `/${m.slug}/home`)];
+    desks.push(makeDesk(m.slug, menus, { moduleKey: m.key, icon: "package" }));
+  }
+  return { desks, revision: `d${b.revision}-${desks.map((d) => d.id).join("+")}` };
 }
 
 export function createFakeServer(
@@ -148,6 +187,15 @@ export function createFakeServer(
         const etag = `"${server.bootstrap.revision}"`;
         if (headers.get("If-None-Match") === etag) return new Response(null, { status: 304 });
         return new Response(JSON.stringify({ data: server.bootstrap }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ETag: etag },
+        });
+      }
+      if (path === "/api/platform/desks") {
+        const data = fakeDesks(server.bootstrap);
+        const etag = `"${data.revision}"`;
+        if (headers.get("If-None-Match") === etag) return new Response(null, { status: 304 });
+        return new Response(JSON.stringify({ data }), {
           status: 200,
           headers: { "Content-Type": "application/json", ETag: etag },
         });
@@ -222,33 +270,10 @@ export function makeFixtureModules(loads: FixtureLoads): FrontendModule[] {
     key: "acme.alpha",
     slug: "alpha",
     version: "1.0.0",
-    navigation: [
-      {
-        type: "item",
-        id: "home",
-        label: { ns: "alpha", key: "nav.home" },
-        to: "/",
-        icon: "package",
-      },
-      {
-        type: "group",
-        id: "reports",
-        label: { ns: "alpha", key: "nav.reports" },
-        icon: "folder",
-        children: [
-          {
-            type: "item",
-            id: "sales",
-            label: { ns: "alpha", key: "nav.sales" },
-            to: "/reports/sales",
-          },
-        ],
-      },
-    ],
     registerRoutes: (base) => [
       createRoute({
         getParentRoute: () => base,
-        path: "/",
+        path: "/home",
         staticData: { crumb: { ref: { ns: "alpha", key: "nav.home" } } },
         component: lazyRouteComponent(() => {
           loads.alphaHome += 1;
@@ -312,11 +337,10 @@ export function makeFixtureModules(loads: FixtureLoads): FrontendModule[] {
     key: "acme.beta",
     slug: "beta",
     version: "1.0.0",
-    navigation: [{ type: "item", id: "home", label: { ns: "beta", key: "nav.home" }, to: "/" }],
     registerRoutes: (base) => [
       createRoute({
         getParentRoute: () => base,
-        path: "/",
+        path: "/home",
         staticData: { crumb: { ref: { ns: "beta", key: "nav.home" } } },
         component: lazyRouteComponent(() => {
           loads.beta += 1;
@@ -330,7 +354,6 @@ export function makeFixtureModules(loads: FixtureLoads): FrontendModule[] {
     key: "acme.ghost",
     slug: "ghost",
     version: "1.0.0",
-    navigation: [{ type: "item", id: "home", label: { ns: "ghost", key: "nav.home" }, to: "/" }],
     registerRoutes: () => [],
     offline: defaultOfflinePolicy,
   });

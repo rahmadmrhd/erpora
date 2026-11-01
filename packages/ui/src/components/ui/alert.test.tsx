@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import { Alert, AlertDescription, AlertTitle } from "./alert";
 
+// Alert shadcn terbaru: varian default dan destructive; selalu role="alert". Varian DS lama (warning, info,
+// success) dan role status dihapus bersama adaptasi; nada status memakai StatusBadge atau pemanggil.
 describe("Alert", () => {
-  test("destructive berperan alert (mengumumkan segera)", () => {
+  test("destructive berperan alert dan memuat judul serta deskripsi", () => {
     render(
       <Alert variant="destructive">
         <AlertTitle>Gagal</AlertTitle>
@@ -13,51 +15,28 @@ describe("Alert", () => {
     const a = screen.getByRole("alert");
     expect(a).toHaveTextContent("Gagal");
     expect(a).toHaveTextContent("Periksa koneksi.");
+    expect(screen.getByText("Gagal")).toHaveAttribute("data-slot", "alert-title");
   });
 
-  test.each(["default", "warning", "info", "success"] as const)(
-    "varian %s berperan status (tidak menyela)",
-    (variant) => {
-      render(
-        <Alert variant={variant}>
-          <AlertTitle>Judul</AlertTitle>
-        </Alert>,
-      );
-      expect(screen.getByRole("status")).toBeInTheDocument();
-      expect(screen.queryByRole("alert")).toBeNull();
-    },
-  );
+  test("varian default berperan alert", () => {
+    render(
+      <Alert>
+        <AlertTitle>Judul</AlertTitle>
+      </Alert>,
+    );
+    expect(screen.getByRole("alert")).toHaveAttribute("data-slot", "alert");
+  });
 
   test("role dapat ditimpa pemanggil", () => {
     render(
-      <Alert role="note">
+      <Alert role="status">
         <AlertTitle>t</AlertTitle>
       </Alert>,
     );
-    expect(screen.getByRole("note")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
-  test("hanya tampilan outline: teks memakai foreground, hue hanya di border (K-14)", () => {
-    for (const [variant, border] of [
-      ["success", "border-success"],
-      ["info", "border-info"],
-      ["warning", "border-warning"],
-      ["destructive", "border-destructive"],
-    ] as const) {
-      const { unmount } = render(
-        <Alert variant={variant}>
-          <AlertTitle>x</AlertTitle>
-        </Alert>,
-      );
-      const cls = screen.getByRole(variant === "destructive" ? "alert" : "status").className;
-      expect(cls).toContain(border);
-      expect(cls).toContain("text-foreground");
-      expect(cls).not.toMatch(/bg-(success|info|warning|destructive)(?![-\w])(?!\/)/);
-      unmount();
-    }
-  });
-
-  test("ikon dekoratif (svg) disembunyikan dari pembaca layar", () => {
+  test("ikon (svg) anak dirender di dalam alert", () => {
     const { container } = render(
       <Alert>
         <svg />
@@ -65,6 +44,5 @@ describe("Alert", () => {
       </Alert>,
     );
     expect(container.querySelector("svg")).not.toBeNull();
-    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 });

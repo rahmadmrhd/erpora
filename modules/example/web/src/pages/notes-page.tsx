@@ -1,10 +1,10 @@
 import {
   describeApiError,
-  formatDateTime,
   getActiveLocale,
   Message,
   type MessageArgs,
   msg,
+  useDateTimeFormatter,
   useDb,
   useMessage,
   usePageActions,
@@ -13,8 +13,12 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Button,
-  EmptyState,
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  LoadingButton,
+  resolveIcon,
   Skeleton,
   Table,
   TableBody,
@@ -31,6 +35,23 @@ import { toApiError } from "../notes-api";
 // Teks dari namespace bersama (`ui`, `platform`) dirujuk lewat MessageRef biasa: kunci `platform` untuk galat dipilih saat
 // runtime (`describeApiError`), dan katalog `ui` belum punya keys.gen.ts.
 const retryLabel = { ns: "ui", key: "actions.retry" } as const;
+
+/** Keadaan kosong: komposisi `Empty` shadcn (menggantikan `EmptyState` lama). */
+function NotesEmpty({ title }: { title: string }) {
+  const Icon = resolveIcon("file-text");
+  return (
+    <Empty>
+      <EmptyHeader>
+        {Icon ? (
+          <EmptyMedia variant="icon">
+            <Icon aria-hidden="true" />
+          </EmptyMedia>
+        ) : null}
+        <EmptyTitle>{title}</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  );
+}
 
 export function NotesPage() {
   // Menangguhkan (Suspense) sampai chunk TanStack DB termuat; DB tidak ada di JS awal (K-21).
@@ -73,13 +94,11 @@ export function NotesPage() {
   ]);
 
   const locale = getActiveLocale() ?? "id";
+  const formatDateTime = useDateTimeFormatter(); // mengikuti zona waktu Settings seketika
 
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">
-          <Message message={msg("example", "page.notes.title")} />
-        </h1>
         <p className="text-sm text-muted-foreground">
           <Message message={msg("example", "page.notes.description")} />
         </p>
@@ -104,7 +123,7 @@ export function NotesPage() {
                 }}
               />
             </p>
-            <Button
+            <LoadingButton
               variant="outline"
               size="sm"
               loading={refreshing}
@@ -113,11 +132,11 @@ export function NotesPage() {
               }}
             >
               <Message message={retryLabel} />
-            </Button>
+            </LoadingButton>
           </AlertDescription>
         </Alert>
       ) : notes.length === 0 ? (
-        <EmptyState icon="file-text" title={emptyTitle} />
+        <NotesEmpty title={emptyTitle} />
       ) : (
         <>
           <p className="text-sm">{count}</p>

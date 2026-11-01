@@ -7,6 +7,7 @@ import {
   createModuleBaseRoute,
   defaultOfflinePolicy,
 } from "@erpora/module-sdk";
+import { assertDeskRoutes } from "@erpora/module-sdk/testing";
 import * as entry from "./index";
 import { flattenCatalog } from "./testing";
 
@@ -18,6 +19,7 @@ const manifest = JSON.parse(readFileSync(join(moduleDir, "module.json"), "utf8")
   version: string;
   offline: { mode: string };
   dependencies: Array<{ module: string }>;
+  desk?: Parameters<typeof assertDeskRoutes>[1];
 };
 
 describe("frontendModule exampleaddon", () => {
@@ -40,14 +42,10 @@ describe("frontendModule exampleaddon", () => {
     expect(manifest.dependencies.map((d) => d.module)).toContain("acme.example");
   });
 
-  test("satu item navigasi ke halaman dasar dengan label dari namespace modul", () => {
-    expect(mod.navigation).toHaveLength(1);
-    expect(mod.navigation[0]).toMatchObject({
-      type: "item",
-      id: "summary",
-      to: "/",
-      label: { ns: "example-addon", key: "nav.summary" },
-    });
+  test("tanpa navigation: menu dari manifest desk, tiap `to` punya rute terdaftar (assertDeskRoutes)", () => {
+    expect("navigation" in mod).toBe(false);
+    expect(manifest.desk?.menus.map((m) => m.id)).toEqual(["summary"]);
+    expect(() => assertDeskRoutes(mod, manifest.desk)).not.toThrow();
   });
 
   test("registerRoutes mengembalikan route anak dari base modul", () => {
@@ -56,7 +54,7 @@ describe("frontendModule exampleaddon", () => {
     const routes = mod.registerRoutes(base);
     expect(routes).toHaveLength(1);
     expect(routes[0]?.options.getParentRoute()).toBe(base);
-    expect((routes[0]?.options as { path?: string } | undefined)?.path).toBe("/");
+    expect((routes[0]?.options as { path?: string } | undefined)?.path).toBe("/summary");
     expect(routes[0]?.options.staticData?.crumb).toEqual({
       ref: { ns: "example-addon", key: "page.summary.title" },
     });

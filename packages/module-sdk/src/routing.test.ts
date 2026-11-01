@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
+import { ModuleDefinitionError } from "./define-module";
 import {
   attachModuleRoutes,
   createAppRootRoute,
@@ -59,5 +60,62 @@ describe("createAppRootRoute dengan opsi", () => {
     expect(root.options.component).toBe(component);
     expect(root.options.notFoundComponent).toBe(notFoundComponent);
     expect(root.options.errorComponent).toBe(errorComponent);
+  });
+});
+
+describe("attachModuleRoutes menolak rute indeks (R10.8)", () => {
+  const make = (path: string) => {
+    const root = createAppRootRoute();
+    const base = createModuleBaseRoute(root, "example");
+    const child = createRoute({ getParentRoute: () => base, path });
+    return { base, child };
+  };
+
+  test('path "/" ditolak dengan ModuleDefinitionError yang menyebut modul dan rute indeks', () => {
+    const { base, child } = make("/");
+    let err: unknown;
+    try {
+      attachModuleRoutes(base, [child]);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ModuleDefinitionError);
+    expect((err as Error).message).toContain("/example");
+    expect((err as Error).message).toContain("indeks");
+  });
+
+  test("anak lain tetap diterima, termasuk bersarang dan tanpa indeks di dalamnya", () => {
+    const { base, child } = make("/notes");
+    expect(() => attachModuleRoutes(base, [child])).not.toThrow();
+  });
+
+  test("indeks di antara anak lain tetap ditolak", () => {
+    const { base, child } = make("/notes");
+    const index = createRoute({ getParentRoute: () => base, path: "/" });
+    expect(() => attachModuleRoutes(base, [child, index])).toThrow(ModuleDefinitionError);
+  });
+});
+
+describe("attachModuleRoutes dengan indeks milik shell", () => {
+  test("opsi index memasang Dashboard di /<slug> tanpa ditolak, di samping anak modul", async () => {
+    const root = createAppRootRoute();
+    const base = createModuleBaseRoute(root, "example");
+    const notes = createRoute({ getParentRoute: () => base, path: "/notes" });
+    const index = createRoute({ getParentRoute: () => base, path: "/" });
+    const tree = root.addChildren([attachModuleRoutes(base, [notes], { index })]);
+    const router = createRouter({
+      routeTree: tree,
+      history: createMemoryHistory({ initialEntries: ["/example"] }),
+      context: { queryClient: new QueryClient() },
+    });
+    await router.load();
+    expect(router.state.matches.at(-1)?.routeId).toBe(index.id);
+  });
+
+  test("opsi index harus berupa rute indeks", () => {
+    const root = createAppRootRoute();
+    const base = createModuleBaseRoute(root, "example");
+    const notRoot = createRoute({ getParentRoute: () => base, path: "/notes" });
+    expect(() => attachModuleRoutes(base, [], { index: notRoot })).toThrow(ModuleDefinitionError);
   });
 });

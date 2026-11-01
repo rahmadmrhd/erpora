@@ -11,6 +11,7 @@ export const emptyNotificationSource: NotificationSource = Object.freeze({
 /** Pengguna anonim: Kelola Akun dan Keluar tidak tersedia (identitas datang di PRD-001). */
 export const anonymousUserSource: CurrentUserSource = Object.freeze({
   capabilities: Object.freeze({ manageAccount: false, signOut: false }),
+  defaultDesk: null,
   get: () => Promise.resolve(null),
 });
 

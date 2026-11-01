@@ -33,6 +33,10 @@ type Options struct {
 	PlatformCapabilities []string
 	// PlatformContract adalah kontrak OpenAPI platform.core (contracts.PlatformOpenAPI); nil = tanpa kontrak.
 	PlatformContract []byte
+	// PlatformDesk adalah Desk bawaan platform (id "platform"); nil = tanpa Desk platform. Strukturnya diperiksa
+	// seperti Desk modul, kecuali label (katalog platform diperiksa test, bukan registry) dan permission harus
+	// termasuk PlatformCapabilities.
+	PlatformDesk *module.Desk
 }
 
 // RouteInfo adalah satu route terdaftar. Pattern adalah path penuh "/api/{slug}{path}".
@@ -85,8 +89,9 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 
 	platform := module.Manifest{
 		Key: PlatformKey, Slug: PlatformSlug, Version: opts.PlatformVersion, Trust: "builtin",
-		Capabilities: slices.Clone(opts.PlatformCapabilities),
+		Capabilities: slices.Clone(opts.PlatformCapabilities), Desk: opts.PlatformDesk,
 	}
+	problems = append(problems, checkDesk(platform, nil)...)
 	byKey := map[string]Entry{PlatformKey: {Manifest: platform, Contract: opts.PlatformContract}}
 	if opts.PlatformContract != nil {
 		if _, err := apicontract.Parse(PlatformSlug, opts.PlatformContract); err != nil {
@@ -115,6 +120,7 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		problems = append(problems, cproblems...)
 		catalogs, iproblems := catalogsOf(mf, m)
 		problems = append(problems, iproblems...)
+		problems = append(problems, CheckDesk(mf, catalogs)...)
 		e := Entry{Manifest: mf, Module: m, Contract: contract, Catalogs: catalogs}
 		byKey[mf.Key] = e
 		unique = append(unique, e)

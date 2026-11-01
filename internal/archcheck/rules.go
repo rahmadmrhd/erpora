@@ -88,6 +88,7 @@ func Check(r Repo) []Violation {
 			underPath(rp, "internal/platform/database") ||
 			underPath(rp, "internal/platform/modules/store") ||
 			underPath(rp, "internal/platform/i18n/store") ||
+			underPath(rp, "internal/platform/desks/store") ||
 			underPath(rp, "sdk/data")
 		dbOK := isArch || underPath(rp, "internal/platform/database")
 		sqlOK := dbOK || underPath(rp, "internal/platform/migrate")

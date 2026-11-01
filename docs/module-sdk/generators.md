@@ -119,14 +119,18 @@ dan `stock-opname`, lalu menjalankan seluruh gate dan memasang modul ke PostgreS
 Isi yang dibuat `make:module` (sumber: `internal/devtools/templates/module`):
 
 - **Selalu** (dengan atau tanpa `--frontend`):
-  - `i18n/id.json` dan `i18n/en.json` berisi kunci contoh bersarang: `nav.home`, `page.home.title`, `page.home.description`, dan `errors.bad_request`.
+  - `i18n/id.json` dan `i18n/en.json` berisi kunci `errors.bad_request`.
   - `module.go` dengan `//go:embed i18n/*.json` dan `Catalogs()`.
   - Bagian `"i18n": { "locales": ["id", "en"], "defaultLocale": "id" }` pada `module.json`.
-- **Hanya dengan `--frontend`**, di `modules/<dir>/web/`:
-  - `bunfig.toml` (preload `web/test/dom.ts` dan `setup.ts`), `package.json` (`@erpora/module-<dir>`), dan `tsconfig.json`.
-  - `src/index.ts` (mengekspor `api`, `moduleInfo`, `frontendModule`), `src/info.ts`, dan `src/module.ts` (`defineModule`, navigasi satu item `nav.home`).
-  - `src/routes.tsx` (route lazy `/<slug>/`) dan `src/pages/home-page.tsx`.
-  - `src/i18n/keys.gen.ts` (augmentasi kunci awal) dan `src/module.test.ts` (memastikan key, slug, dan versi sama dengan `module.json`; offline `online-only`; navigasi satu item; route anak dengan crumb; dan entry paket).
+- **Hanya dengan `--frontend`** (modul tanpa frontend tidak punya Desk: PRD-000 Q40, hanya modul ber-`web/` yang wajib `desk`):
+  - Kunci contoh tambahan di `i18n/id.json` dan `i18n/en.json`: `desk.title`, `nav.items`, `page.items.title`, dan `page.items.description`.
+  - Bagian `"desk"` pada `module.json`: `label` `desk.title`, `icon` `boxes`, dan satu menu `items` dengan `to` `/items` serta permission `<slug>.items.read` (aturan `DESK` di `module:check`).
+  - Di `modules/<dir>/web/`:
+    - `bunfig.toml` (preload `web/test/dom.ts` dan `setup.ts`), `package.json` (`@erpora/module-<dir>`), dan `tsconfig.json`.
+    - `src/index.ts` (mengekspor `api`, `moduleInfo`, `frontendModule`), `src/info.ts`, dan `src/module.ts` (`defineModule` tanpa `navigation`; menu berasal dari `module.json`).
+    - `src/routes.tsx` (route lazy `/<slug>/items`, tanpa rute indeks: indeks adalah Dashboard shell) dan `src/pages/items-page.tsx`.
+    - `src/i18n/keys.gen.ts` (augmentasi kunci awal) dan `src/module.test.ts` (memastikan key, slug, dan versi sama dengan `module.json`; offline `online-only`; tanpa `navigation`; `assertDeskRoutes` atas menu `desk`; route anak dengan crumb; dan entry paket).
+    - Generator menyisipkan `frontendModule` ke `web/src/app/modules.ts` lewat penanda (bagian 4).
 - **Langkah lanjutan `--frontend`:** `contracts:generate <dir>` (membangkitkan `api/contract.gen.ts` dari `openapi.yaml`), `bun install`, dan `biome check --write`.
 
 Konvensi isi halaman dan teks ada di [`frontend.md`](frontend.md) dan [`i18n.md`](i18n.md).

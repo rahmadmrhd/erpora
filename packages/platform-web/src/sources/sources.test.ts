@@ -18,6 +18,10 @@ describe("anonymousUserSource", () => {
     expect(anonymousUserSource.capabilities).toEqual({ manageAccount: false, signOut: false });
     expect(anonymousUserSource.manageAccountPath?.() ?? null).toBeNull();
   });
+
+  test("default_desk belum tersedia sampai PRD-001: null (M3a R9.7)", () => {
+    expect(anonymousUserSource.defaultDesk).toBeNull();
+  });
 });
 
 describe("safeInternalHref", () => {

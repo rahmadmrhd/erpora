@@ -34,3 +34,12 @@ export function UiLabelsProvider(props: { t: UiLabelFn; children: ReactNode }) {
 export function useUiLabel(): UiLabelFn {
   return useContext(UiLabelsContext);
 }
+
+/**
+ * Menampilkan satu label `ui` sebagai teks. Dipakai berkas shadcn hasil registry lewat patch deklaratif
+ * (`shadcn.patches.json`) untuk mengganti teks Inggris tertanam tanpa mengubah struktur komponen.
+ */
+export function UiLabel(props: { k: UiKey; args?: Record<string, string | number> }) {
+  const t = useUiLabel();
+  return <>{t(props.k, props.args)}</>;
+}

@@ -1,49 +1,52 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Button } from "./button";
+import { Button, buttonVariants } from "./button";
 
+// API shadcn terbaru (R1.2): varian default|destructive|outline|secondary|ghost|link, ukuran
+// default|xs|sm|lg|icon|icon-xs|icon-sm|icon-lg. Tes memeriksa perilaku (peran ARIA, keyboard, atribut data-*),
+// bukan kelas Tailwind internal.
 describe("Button", () => {
-  test("merender <button type=button> dengan label dan varian bawaan primary ukuran md", () => {
+  test("merender <button> dengan varian dan ukuran bawaan default", () => {
     render(<Button>Simpan</Button>);
     const b = screen.getByRole("button", { name: "Simpan" });
-    expect(b).toHaveAttribute("type", "button");
-    expect(b).toHaveAttribute("data-variant", "primary");
-    expect(b).toHaveAttribute("data-size", "md");
-    expect(b.className).toContain("bg-primary");
-    expect(b.className).toContain("h-control-md");
+    expect(b).toHaveAttribute("data-slot", "button");
+    expect(b).toHaveAttribute("data-variant", "default");
+    expect(b).toHaveAttribute("data-size", "default");
   });
 
-  test.each([
-    ["primary", "bg-primary"],
-    ["secondary", "bg-secondary"],
-    ["outline", "border-input"],
-    ["ghost", "hover:bg-accent"],
-    ["destructive", "bg-destructive"],
-  ] as const)("varian %s memakai token %s", (variant, token) => {
-    render(<Button variant={variant}>x</Button>);
-    const b = screen.getByRole("button");
-    expect(b).toHaveAttribute("data-variant", variant);
-    expect(b.className).toContain(token);
+  test.each(["default", "destructive", "outline", "secondary", "ghost", "link"] as const)(
+    "varian %s ditandai data-variant",
+    (variant) => {
+      render(<Button variant={variant}>x</Button>);
+      expect(screen.getByRole("button")).toHaveAttribute("data-variant", variant);
+    },
+  );
+
+  test.each(["default", "xs", "sm", "lg", "icon", "icon-xs", "icon-sm", "icon-lg"] as const)(
+    "ukuran %s ditandai data-size",
+    (size) => {
+      render(
+        <Button size={size} aria-label="x">
+          i
+        </Button>,
+      );
+      expect(screen.getByRole("button")).toHaveAttribute("data-size", size);
+    },
+  );
+
+  test("buttonVariants menghasilkan kelas berbeda untuk varian dan ukuran berbeda", () => {
+    expect(buttonVariants({ variant: "default" })).not.toBe(buttonVariants({ variant: "ghost" }));
+    expect(buttonVariants({ size: "sm" })).not.toBe(buttonVariants({ size: "lg" }));
   });
 
-  test.each([
-    ["sm", "h-control-sm"],
-    ["md", "h-control-md"],
-    ["lg", "h-control-lg"],
-  ] as const)("ukuran %s memakai tinggi token %s", (size, cls) => {
-    render(<Button size={size}>x</Button>);
-    expect(screen.getByRole("button").className).toContain(cls);
-  });
-
-  test("ukuran icon berbentuk persegi 34 px dan memakai aria-label", () => {
-    render(
-      <Button size="icon" aria-label="Tutup">
-        i
-      </Button>,
-    );
-    const b = screen.getByRole("button", { name: "Tutup" });
-    expect(b.className).toContain("size-control-md");
+  test("varian dan ukuran buatan lama (primary, md) bukan bagian API: ditolak tipe", () => {
+    // @ts-expect-error `primary` bukan varian shadcn
+    const bad = <Button variant="primary">p</Button>;
+    // @ts-expect-error `md` bukan ukuran shadcn
+    const bad2 = <Button size="md">m</Button>;
+    expect(bad).toBeDefined();
+    expect(bad2).toBeDefined();
   });
 
   test("klik dan keyboard (Enter, Spasi) memicu onClick", async () => {
@@ -70,61 +73,19 @@ describe("Button", () => {
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
-  test("loading: aria-busy, LoadingIcon tampil, dan tombol tidak dapat diklik", async () => {
-    const user = userEvent.setup();
-    let n = 0;
-    render(
-      <Button loading onClick={() => n++}>
-        Menyimpan
-      </Button>,
-    );
-    const b = screen.getByRole("button", { name: /Menyimpan/ });
-    expect(b).toHaveAttribute("aria-busy", "true");
-    expect(b.querySelector("svg circle")).not.toBeNull();
-    await user.click(b);
-    expect(n).toBe(0);
-  });
-
-  test("asChild merender elemen anak (tautan) dengan gaya tombol", () => {
+  test("asChild merender elemen anak (tautan) dengan atribut data tombol", () => {
     render(
       <Button asChild variant="outline">
         <a href="/x">Tautan</a>
       </Button>,
     );
     const a = screen.getByRole("link", { name: "Tautan" });
-    expect(a.className).toContain("border-input");
+    expect(a).toHaveAttribute("data-slot", "button");
+    expect(a).toHaveAttribute("data-variant", "outline");
   });
 
-  test("tanpa kelas palet langsung: gaya fokus memakai garis global 2 px (bukan ring 3 px shadcn)", () => {
-    render(<Button>x</Button>);
-    expect(screen.getByRole("button").className).not.toContain("ring-[3px]");
-  });
-});
-
-describe("Button size=icon tanpa aria-label", () => {
-  let warn: ReturnType<typeof spyOn>;
-  beforeEach(() => {
-    warn = spyOn(console, "warn").mockImplementation(() => {});
-  });
-  afterEach(() => warn.mockRestore());
-
-  test("memicu peringatan dev", () => {
-    render(<Button size="icon">i</Button>);
-    expect(warn).toHaveBeenCalled();
-    expect(String(warn.mock.calls[0]?.[0])).toContain("aria-label");
-  });
-
-  test("dengan aria-label atau aria-labelledby tidak memperingatkan", () => {
-    render(
-      <>
-        <Button size="icon" aria-label="A">
-          i
-        </Button>
-        <Button size="icon" aria-labelledby="x">
-          i
-        </Button>
-      </>,
-    );
-    expect(warn).not.toHaveBeenCalled();
+  test("tanpa prop loading: aria-busy tidak diset (perilaku loading pindah ke LoadingButton)", () => {
+    render(<Button>Biasa</Button>);
+    expect(screen.getByRole("button")).not.toHaveAttribute("aria-busy");
   });
 });

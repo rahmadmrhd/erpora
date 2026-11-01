@@ -1,4 +1,7 @@
 {
+  "desk": {
+    "title": "Example Add-on"
+  },
   "nav": {
     "summary": "Summary"
   },

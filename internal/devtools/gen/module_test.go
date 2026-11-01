@@ -2,11 +2,17 @@ package gen
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
+
+	"erpora/internal/platform/modules/manifest"
+	"erpora/internal/platform/modules/registry"
+	"erpora/sdk/module"
 )
 
 func applyPlan(t *testing.T, root string, p Plan) {
@@ -169,9 +175,9 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 		"migrations/0001_create_example_notes.sql":      "migrations/0001_create_inventory_items.sql",
 		"migrations/0002_add_example_notes_version.sql": "", // version/updated_at sudah ada di migrasi awal
 		// Frontend: halaman dan pendukung khusus example (notes, koleksi DB, test halaman) tidak ada di template; halaman awal
-		// generik home-page menggantikan notes-page. api/contract.gen.ts dibangkitkan oleh langkah Post contracts:generate.
+		// generik items-page (anak /<slug>/items; indeks /<slug> adalah Dashboard bawaan shell) menggantikan notes-page. api/contract.gen.ts dibangkitkan oleh langkah Post contracts:generate.
 		"catalogs_test.go":                     "", // template menyertakan TestCatalogs di module_test.go
-		"web/src/pages/notes-page.tsx":         "web/src/pages/home-page.tsx",
+		"web/src/pages/notes-page.tsx":         "web/src/pages/items-page.tsx",
 		"web/src/pages/notes-page.test.tsx":    "",
 		"web/src/db/notes-collection.ts":       "",
 		"web/src/db/notes-collection.test.tsx": "",
@@ -201,9 +207,125 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, extra := range []string{"deps.go", "README.md", "web/package.json", "web/tsconfig.json", "web/bunfig.toml", "web/src/index.ts", "web/src/info.ts", "web/src/module.ts", "web/src/routes.tsx", "web/src/pages/home-page.tsx", "web/src/i18n/keys.gen.ts", "web/src/module.test.ts", "i18n/id.json", "i18n/en.json", "internal/domain/errors.go"} {
+	for _, extra := range []string{"deps.go", "README.md", "web/package.json", "web/tsconfig.json", "web/bunfig.toml", "web/src/index.ts", "web/src/info.ts", "web/src/module.ts", "web/src/routes.tsx", "web/src/pages/items-page.tsx", "web/src/i18n/keys.gen.ts", "web/src/module.test.ts", "i18n/id.json", "i18n/en.json", "internal/domain/errors.go"} {
 		if !have[extra] {
 			t.Errorf("file %s harus dihasilkan", extra)
+		}
+	}
+}
+
+// Revisi M3a (R11.6): templat --frontend mendeklarasikan "desk" di module.json (menu contoh ke halaman anak
+// /items, label dari katalog templat), tanpa navigation dan tanpa rute indeks di web (indeks /<slug> adalah
+// Dashboard bawaan shell), serta tes modul memakai assertDeskRoutes.
+func TestMakeModule_DeskDeclaredAndNoNavigationOrIndexRoute(t *testing.T) {
+	root := fixtureRepo(t)
+	for _, name := range []string{"inventory", "stock-opname"} {
+		t.Run(name, func(t *testing.T) {
+			plan, err := MakeModule(root, ModuleOptions{Name: name, Publisher: "acme", Frontend: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := "modules/" + strings.ReplaceAll(name, "-", "") + "/"
+			mf, err := module.ParseManifest([]byte(opContent(t, plan.Ops, dir+"module.json")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if problems := manifest.Validate(mf); len(problems) != 0 {
+				t.Fatalf("manifest templat tidak valid: %+v", problems)
+			}
+			d := mf.Desk
+			if d == nil || d.Label != "desk.title" || d.Icon == "" || len(d.Menus) != 1 {
+				t.Fatalf("Desk = %+v", d)
+			}
+			if m := d.Menus[0]; m.ID != "items" || m.To != "/items" || m.Permission != name+".items.read" || m.Label != "nav.items" {
+				t.Errorf("menu = %+v", m)
+			}
+			// Aturan registry/module:check (DESK) terhadap katalog templat: semua kunci label ada.
+			cat := fstest.MapFS{"id.json": {Data: []byte(opContent(t, plan.Ops, dir+"i18n/id.json"))}}
+			if ps := registry.CheckDesk(mf, cat); len(ps) != 0 {
+				t.Errorf("CheckDesk: %+v", ps)
+			}
+
+			moduleTS := opContent(t, plan.Ops, dir+"web/src/module.ts")
+			if strings.Contains(moduleTS, "navigation") {
+				t.Errorf("module.ts tidak boleh memuat navigation: %s", moduleTS)
+			}
+			routes := opContent(t, plan.Ops, dir+"web/src/routes.tsx")
+			if strings.Contains(routes, `path: "/",`) || !strings.Contains(routes, `path: "/items"`) || !strings.Contains(routes, "items-page") {
+				t.Errorf("routes.tsx harus mendaftarkan hanya /items: %s", routes)
+			}
+			// K9: halaman tanpa judul sendiri (breadcrumb terakhir = satu-satunya h1); deskripsi muted tetap.
+			page := opContent(t, plan.Ops, dir+"web/src/pages/items-page.tsx")
+			if strings.Contains(page, "<h1") || strings.Contains(page, "<header") || strings.Contains(page, "page.items.title") {
+				t.Errorf("items-page.tsx tidak boleh memuat judul halaman: %s", page)
+			}
+			if !strings.Contains(page, "page.items.description") {
+				t.Errorf("items-page.tsx harus tetap memuat deskripsi: %s", page)
+			}
+			testTS := opContent(t, plan.Ops, dir+"web/src/module.test.ts")
+			for _, w := range []string{"assertDeskRoutes", `from "@erpora/module-sdk/testing"`} {
+				if !strings.Contains(testTS, w) {
+					t.Errorf("module.test.ts tidak memuat %q", w)
+				}
+			}
+			if strings.Contains(testTS, "mod.navigation") {
+				t.Error("module.test.ts tidak boleh menguji navigation")
+			}
+			for _, path := range opPaths(plan.Ops) {
+				if strings.HasSuffix(path, "web/src/pages/home-page.tsx") {
+					t.Errorf("home-page.tsx tidak boleh dihasilkan lagi: %s", path)
+				}
+			}
+			for _, loc := range []string{"id", "en"} {
+				cat := opContent(t, plan.Ops, dir+"i18n/"+loc+".json")
+				for _, k := range []string{`"desk"`, `"title"`, `"items"`} {
+					if !strings.Contains(cat, k) {
+						t.Errorf("katalog %s tidak memuat %s", loc, k)
+					}
+				}
+			}
+		})
+	}
+}
+
+// Modul tanpa --frontend tidak punya Desk (R11.1: hanya modul ber-web/ yang wajib) dan katalognya tidak membawa
+// kunci yatim yang hanya dipakai Desk atau halaman web (desk.*, nav.*, page.*).
+func TestMakeModule_WithoutFrontendHasNoDeskAndNoOrphanI18nKeys(t *testing.T) {
+	root := fixtureRepo(t)
+	plan, err := MakeModule(root, ModuleOptions{Name: "stock-opname", Publisher: "acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mf, err := module.ParseManifest([]byte(opContent(t, plan.Ops, "modules/stockopname/module.json")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if problems := manifest.Validate(mf); len(problems) != 0 {
+		t.Fatalf("manifest tidak valid: %+v", problems)
+	}
+	if mf.Desk != nil {
+		t.Errorf("Desk = %+v, want nil untuk modul tanpa --frontend", mf.Desk)
+	}
+	if raw := opContent(t, plan.Ops, "modules/stockopname/module.json"); strings.Contains(raw, `"desk"`) {
+		t.Errorf("module.json tidak boleh memuat desk: %s", raw)
+	}
+	cats := fstest.MapFS{"id.json": {Data: []byte(opContent(t, plan.Ops, "modules/stockopname/i18n/id.json"))}}
+	if ps := registry.CheckDesk(mf, cats); len(ps) != 0 {
+		t.Errorf("CheckDesk (modul tanpa frontend tidak wajib desk): %+v", ps)
+	}
+	for _, loc := range []string{"id", "en"} {
+		raw := opContent(t, plan.Ops, "modules/stockopname/i18n/"+loc+".json")
+		var cat map[string]any
+		if err := json.Unmarshal([]byte(raw), &cat); err != nil {
+			t.Fatalf("katalog %s bukan JSON valid: %v\n%s", loc, err, raw)
+		}
+		if len(cat) != 1 || cat["errors"] == nil {
+			t.Errorf("katalog %s harus hanya memuat errors (kunci desk/nav/page yatim): %v", loc, cat)
+		}
+	}
+	for _, path := range opPaths(plan.Ops) {
+		if strings.Contains(path, "/web/") {
+			t.Errorf("tanpa --frontend tidak boleh ada berkas web: %s", path)
 		}
 	}
 }

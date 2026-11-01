@@ -12,6 +12,5 @@ export {
   type ResolveOptions,
   resetRegistryWarnings,
   resolveModules,
-  selectNavigation,
   validateModules,
 } from "./registry";

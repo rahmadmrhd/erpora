@@ -43,14 +43,13 @@ describe("AlertDialog", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Batal" })).toHaveFocus());
   });
 
-  test("Esc TIDAK menutup (hanya Batal atau aksi)", async () => {
+  test("Esc menutup (perilaku bawaan Radix pada shadcn persis; DS lama menahan Esc)", async () => {
     const user = userEvent.setup();
     render(<Sample />);
     await user.click(screen.getByRole("button", { name: "Nonaktifkan" }));
     await screen.findByRole("alertdialog");
     await user.keyboard("{Escape}");
-    await new Promise((r) => setTimeout(r, 50));
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   });
 
   test("klik di luar tidak menutup", async () => {

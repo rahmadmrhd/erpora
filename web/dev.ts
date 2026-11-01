@@ -18,6 +18,6 @@ Bun.serve({
       });
     },
   },
-  development: true,
+  development: { hmr: false },
 });
 console.log("web dev server: http://127.0.0.1:5173");

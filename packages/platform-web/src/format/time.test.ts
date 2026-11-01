@@ -1,5 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { writeTimezone } from "../prefs";
 import { formatDateTime, formatRelativeTime } from "./time";
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 const NOW = Date.parse("2026-10-29T12:00:00Z");
 const at = (ms: number) => new Date(NOW + ms).toISOString();
@@ -57,5 +62,35 @@ describe("formatDateTime", () => {
 
   test("masukan tidak valid dikembalikan apa adanya", () => {
     expect(formatDateTime("xx", "en")).toBe("xx");
+  });
+
+  test("zona waktu eksplisit menggeser tanggal dan jam (UTC 23:30 menjadi hari berikutnya di Jakarta)", () => {
+    const late = "2026-10-15T23:30:00Z";
+    const jakarta = formatDateTime(late, "en", "Asia/Jakarta");
+    const newYork = formatDateTime(late, "en", "America/New_York");
+    expect(jakarta).toContain("Oct 16");
+    expect(jakarta).toContain("6:30");
+    expect(newYork).toContain("Oct 15");
+    expect(newYork).toContain("7:30");
+  });
+
+  test("tanpa argumen zona memakai preferensi tersimpan; berubah seketika saat preferensi berubah", () => {
+    const late = "2026-10-15T23:30:00Z";
+    writeTimezone("Asia/Jakarta");
+    expect(formatDateTime(late, "en")).toBe(formatDateTime(late, "en", "Asia/Jakarta"));
+    writeTimezone("America/New_York");
+    expect(formatDateTime(late, "en")).toBe(formatDateTime(late, "en", "America/New_York"));
+    expect(formatDateTime(late, "en")).toContain("Oct 15");
+  });
+
+  test("zona tidak valid memakai zona bawaan (tidak melempar)", () => {
+    const late = "2026-10-15T23:30:00Z";
+    writeTimezone("Asia/Tokyo");
+    expect(() => formatDateTime(late, "en", "Bukan/Zona")).not.toThrow();
+    expect(formatDateTime(late, "en", "Bukan/Zona")).toBe(formatDateTime(late, "en", "Asia/Tokyo"));
+  });
+
+  test("locale tidak valid dengan zona tetap tidak melempar", () => {
+    expect(() => formatDateTime("2026-10-15T12:00:00Z", "!!", "Asia/Jakarta")).not.toThrow();
   });
 });

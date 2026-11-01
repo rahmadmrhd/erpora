@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./toaster": "./src/entries/toaster.ts",
+    "./command": "./src/entries/command.ts",
     "./theme.css": "./src/styles/theme.css",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
@@ -20,7 +21,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
-    "shadcn": "bunx shadcn@4.21.5"
+    "shadcn": "bunx shadcn@4.21.5",
+    "shadcn:check": "bun scripts/shadcn-check.ts",
+    "shadcn:sync": "bun scripts/shadcn-sync.ts",
+    "shadcn:verify": "bun scripts/shadcn-verify.ts"
   },
   "peerDependencies": {
     "react": ">=19.3.1 <20",
@@ -30,7 +34,9 @@
     "@fontsource-variable/figtree": "5.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "cmdk": "1.1.1",
     "lucide-react": "1.62.0",
+    "next-themes": "0.4.6",
     "radix-ui": "1.8.1",
     "sonner": "2.0.8",
     "tailwind-merge": "3.7.0",

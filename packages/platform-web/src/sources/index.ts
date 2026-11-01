@@ -1,4 +1,9 @@
-export { CurrentUserSourceProvider, useCurrentUser, useCurrentUserSource } from "./current-user";
+export {
+  CurrentUserSourceProvider,
+  useCurrentUser,
+  useCurrentUserSource,
+  useDefaultDesk,
+} from "./current-user";
 export {
   anonymousUserSource,
   emptyNotificationSource,

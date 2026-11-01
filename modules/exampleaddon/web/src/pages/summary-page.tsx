@@ -10,7 +10,7 @@ import {
   usePageActions,
   useTenantId,
 } from "@erpora/platform-web";
-import { Alert, AlertDescription, AlertTitle, Button, Skeleton } from "@erpora/ui";
+import { Alert, AlertDescription, AlertTitle, Button, LoadingButton, Skeleton } from "@erpora/ui";
 import { useQuery } from "@tanstack/react-query";
 import "../i18n/keys.gen";
 import { fetchSummary, toApiError } from "../summary-api";
@@ -45,9 +45,6 @@ export function SummaryPage() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">
-          <Message message={msg("example-addon", "page.summary.title")} />
-        </h1>
         <p className="text-sm text-muted-foreground">
           <Message message={msg("example-addon", "page.summary.description")} />
         </p>
@@ -66,7 +63,7 @@ export function SummaryPage() {
                 message={{ ns: "platform", key: describeApiError(toApiError(query.error)).key }}
               />
             </p>
-            <Button
+            <LoadingButton
               variant="outline"
               size="sm"
               loading={query.isFetching}
@@ -75,7 +72,7 @@ export function SummaryPage() {
               }}
             >
               <Message message={retryLabel} />
-            </Button>
+            </LoadingButton>
           </AlertDescription>
         </Alert>
       ) : (
@@ -83,7 +80,7 @@ export function SummaryPage() {
           <p className="text-2xl font-semibold">{noteCount}</p>
           <Button asChild variant="outline" size="sm">
             {/* Tautan antar-modul: slug dari entry paket @erpora/module-example (bukan deep import; aturan F2). */}
-            <Link to={`/${exampleModule.slug}`}>
+            <Link to={`/${exampleModule.slug}/notes`}>
               <Message message={msg("example-addon", "page.summary.view_notes")} />
             </Link>
           </Button>

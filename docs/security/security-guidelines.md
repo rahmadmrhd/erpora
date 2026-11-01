@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | **Draft v1 — menunggu review** (21 Oktober 2026) |
 | Berlaku untuk | Seluruh kode platform, SDK, modul (backend & frontend), tooling, dan konfigurasi deployment |
-| Dirujuk oleh | `CLAUDE.md`, PRD-000, PRD-001, setiap Kiro spec (`.kiro/specs/*/design.md`) |
+| Dirujuk oleh | `CLAUDE.md`, PRD-000, PRD-001, setiap Kiro spec (`docs/specs/*/design.md`) |
 | Terkait | `docs/architecture/api-guidelines.md`, `docs/architecture/transaction-data-standards.md`, `docs/operations/deployment.md` |
 
 Kata **WAJIB**, **DILARANG**, dan **SEBAIKNYA** bersifat normatif.

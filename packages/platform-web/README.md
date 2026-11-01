@@ -1,8 +1,8 @@
 # platform-web
 
 Layanan frontend platform (`@erpora/platform-web`) yang dipakai bersama app shell dan modul. Tidak mengimpor `@erpora/ui`
-(komponen dijembatani di shell, mis. `UiLabelsBridge`) dan tidak mengimpor paket modul. Spesifikasi: `.kiro/specs/m3a-frontend-foundation-shell/`
-(design §5) dan `.kiro/specs/i18n-platform/`.
+(komponen dijembatani di shell, mis. `UiLabelsBridge`) dan tidak mengimpor paket modul. Spesifikasi: `docs/specs/m3a-frontend-foundation-shell/`
+(design §5) dan `docs/specs/i18n-platform/`.
 
 ## Isi
 
@@ -37,7 +37,7 @@ Layanan frontend platform (`@erpora/platform-web`) yang dipakai bersama app shel
   navbar; `onSelect` terbaru tanpa render ulang konsumen; dibersihkan saat unmount.
 - **`sources`**: antarmuka `NotificationSource` dan `CurrentUserSource` (+ `emptyNotificationSource`, `anonymousUserSource`),
   `useNotifications`, `useCurrentUser`, `safeInternalHref`. Data notifikasi dan pengguna (PII) hanya di cache memori.
-- **`format`**: `formatRelativeTime`, `formatDateTime`.
+- **`format`**: `formatRelativeTime`, `formatDateTime` (zona waktu Settings; argumen zona opsional), `useDateTimeFormatter` (hook: berubah seketika saat zona diganti).
 - **`permissions`**: `usePermission` (petunjuk UX; `permissions` kosong berarti optimistis `true`; backend tetap otoritas).
 - **`db`**: `loadDb`/`useDb` memuat TanStack DB lewat `import()` dinamis (chunk terpisah; DB tidak boleh ada di bundle awal).
 

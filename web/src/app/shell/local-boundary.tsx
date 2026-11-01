@@ -13,7 +13,10 @@ export function isHandledByShellBoundary(error: unknown): boolean {
 interface Props {
   /** Dipakai di catatan konsol (mis. "navbar"). */
   label: string;
-  fallback: ReactNode;
+  /** Tampilan saat galat; fungsi menerima `retry` (menghapus keadaan galat dan memanggil `onRetry`). */
+  fallback: ReactNode | ((retry: () => void) => ReactNode);
+  /** Dipanggil sebelum anak dirender ulang oleh `retry` (mis. mereset query yang galat). */
+  onRetry?: () => void;
   /** Berubahnya nilai ini (mis. URL) mengembalikan anak setelah galat. */
   resetKey: string;
   children: ReactNode;
@@ -41,11 +44,21 @@ export class LocalBoundary extends Component<Props, { failed: boolean }> {
   }
 
   override componentDidUpdate(prev: Props): void {
-    if (this.state.failed && prev.resetKey !== this.props.resetKey)
+    if (this.state.failed && prev.resetKey !== this.props.resetKey) {
+      // Berpindah halaman = percobaan ulang otomatis (mis. query galat dan chunk malas dimuat ulang).
+      this.props.onRetry?.();
       this.setState({ failed: false });
+    }
   }
 
+  retry = (): void => {
+    this.props.onRetry?.();
+    this.setState({ failed: false });
+  };
+
   override render(): ReactNode {
-    return this.state.failed ? this.props.fallback : this.props.children;
+    if (!this.state.failed) return this.props.children;
+    const { fallback } = this.props;
+    return typeof fallback === "function" ? fallback(this.retry) : fallback;
   }
 }

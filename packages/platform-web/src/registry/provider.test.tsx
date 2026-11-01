@@ -10,7 +10,6 @@ const mod = (key: string, slug: string) =>
     key,
     slug,
     version: "1.0.0",
-    navigation: [{ type: "item", id: "home", label: { ns: slug, key: "nav.home" }, to: "/" }],
     registerRoutes: () => [],
     offline: defaultOfflinePolicy,
   });
@@ -19,7 +18,7 @@ function Probe() {
   const r = useModuleRegistry();
   return (
     <div>
-      <span data-testid="nav">{r.navigation.map((n) => n.id).join(",")}</span>
+      <span data-testid="has-nav">{String("navigation" in r)}</span>
       <span data-testid="status">{r.statusOf("acme.one") ?? "-"}</span>
       <span data-testid="enabled">{String(r.isEnabled("acme.one"))}</span>
       <span data-testid="resolved">{r.resolved.map((x) => x.module.key).join(",")}</span>
@@ -44,9 +43,9 @@ function renderWith(status: "enabled" | "disabled", withTwo = true) {
 }
 
 describe("useModuleRegistry", () => {
-  test("navigasi hanya modul enabled; statusOf dan isEnabled", () => {
+  test("tanpa navigasi (menu dari server); statusOf dan isEnabled", () => {
     renderWith("enabled");
-    expect(screen.getByTestId("nav").textContent).toBe("home,home");
+    expect(screen.getByTestId("has-nav").textContent).toBe("false");
     expect(screen.getByTestId("status").textContent).toBe("enabled");
     expect(screen.getByTestId("enabled").textContent).toBe("true");
   });
@@ -67,7 +66,6 @@ describe("useModuleRegistry", () => {
     );
     expect(screen.getByTestId("status").textContent).toBe("disabled");
     expect(screen.getByTestId("enabled").textContent).toBe("false");
-    expect(screen.getByTestId("nav").textContent).toBe("home");
     expect(screen.getByTestId("resolved").textContent).toBe(before);
     rerender(
       ui(
@@ -80,13 +78,12 @@ describe("useModuleRegistry", () => {
         }),
       ),
     );
-    expect(screen.getByTestId("nav").textContent).toBe("home,home");
+    expect(screen.getByTestId("status").textContent).toBe("enabled");
   });
 
   test("modul tidak ada di bootstrap: tidak resolved, statusOf undefined", () => {
     renderWith("enabled", false);
     expect(screen.getByTestId("resolved").textContent).toBe("acme.one");
-    expect(screen.getByTestId("nav").textContent).toBe("home");
   });
 
   test("key ganda menggagalkan render dengan DuplicateModuleKeyError", () => {

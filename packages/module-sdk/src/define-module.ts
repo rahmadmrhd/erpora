@@ -4,7 +4,7 @@ import {
   OFFLINE_MODES,
   type OfflinePolicy,
 } from "./offline";
-import type { FrontendModule, MessageRef, NavigationEntry, NavigationItem } from "./types";
+import type { FrontendModule, MessageRef } from "./types";
 
 /** Dilempar `defineModule` bila definisi modul tidak valid; `field` menyebut bidang yang salah. */
 export class ModuleDefinitionError extends Error {
@@ -22,8 +22,6 @@ const SLUG_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const SLUG_MAX = 50;
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
-// Path internal: diawali satu "/", tanpa spasi, karakter kontrol, atau "\", dan bukan protocol-relative ("//").
-const NAV_TO_PATTERN = /^\/(?!\/)[^\s\\\p{Cc}]*$/u;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -98,97 +96,6 @@ function checkOffline(key: string, offline: unknown): asserts offline is Offline
   }
 }
 
-function checkNavId(
-  key: string,
-  path: string,
-  entry: Record<string, unknown>,
-  seen: Set<string>,
-): string {
-  if (typeof entry.id !== "string" || entry.id === "") {
-    throw new ModuleDefinitionError(key, `${path}.id`, "harus string tidak kosong");
-  }
-  if (seen.has(entry.id)) {
-    throw new ModuleDefinitionError(
-      key,
-      `${path}.id`,
-      `id "${entry.id}" ganda dalam navigasi modul`,
-    );
-  }
-  seen.add(entry.id);
-  return entry.id;
-}
-
-function checkIcon(key: string, path: string, icon: unknown): void {
-  if (icon !== undefined && (typeof icon !== "string" || icon === "")) {
-    throw new ModuleDefinitionError(key, `${path}.icon`, "harus string tidak kosong bila diisi");
-  }
-}
-
-function checkItem(key: string, path: string, item: unknown, seen: Set<string>): NavigationItem {
-  if (!isRecord(item) || item.type !== "item") {
-    throw new ModuleDefinitionError(key, path, 'harus entri { type: "item" }');
-  }
-  const id = checkNavId(key, path, item, seen);
-  if (typeof item.to !== "string" || !NAV_TO_PATTERN.test(item.to)) {
-    throw new ModuleDefinitionError(
-      key,
-      `${path}.to`,
-      "harus path internal berawalan '/' (bukan URL atau '//')",
-    );
-  }
-  checkMessageRef(key, `${path}.label`, item.label);
-  checkIcon(key, path, item.icon);
-  return Object.freeze({
-    type: "item",
-    id,
-    label: Object.freeze({ ns: item.label.ns, key: item.label.key }),
-    to: item.to,
-    ...(item.icon === undefined ? {} : { icon: item.icon as string }),
-  });
-}
-
-function checkNavigation(key: string, navigation: unknown): readonly NavigationEntry[] {
-  if (!Array.isArray(navigation)) {
-    throw new ModuleDefinitionError(key, "navigation", "harus array");
-  }
-  const seen = new Set<string>();
-  const out: NavigationEntry[] = [];
-  navigation.forEach((entry: unknown, i) => {
-    const path = `navigation[${i}]`;
-    if (!isRecord(entry)) throw new ModuleDefinitionError(key, path, "harus objek");
-    if (entry.type === "item") {
-      out.push(checkItem(key, path, entry, seen));
-      return;
-    }
-    if (entry.type !== "group") {
-      throw new ModuleDefinitionError(key, `${path}.type`, 'harus "item" atau "group"');
-    }
-    const id = checkNavId(key, path, entry, seen);
-    checkMessageRef(key, `${path}.label`, entry.label);
-    checkIcon(key, path, entry.icon);
-    if (!Array.isArray(entry.children) || entry.children.length === 0) {
-      throw new ModuleDefinitionError(
-        key,
-        `${path}.children`,
-        "grup harus punya minimal satu anak",
-      );
-    }
-    const children = entry.children.map((child: unknown, j) =>
-      checkItem(key, `${path}.children[${j}]`, child, seen),
-    );
-    out.push(
-      Object.freeze({
-        type: "group",
-        id,
-        label: Object.freeze({ ns: entry.label.ns, key: entry.label.key }),
-        ...(entry.icon === undefined ? {} : { icon: entry.icon as string }),
-        children: Object.freeze(children),
-      }),
-    );
-  });
-  return Object.freeze(out);
-}
-
 function freezeOffline(o: OfflinePolicy): OfflinePolicy {
   return Object.freeze({
     mode: o.mode,
@@ -203,8 +110,7 @@ function freezeOffline(o: OfflinePolicy): OfflinePolicy {
 }
 
 /**
- * Mendeklarasikan modul frontend. Memvalidasi bentuk (key/slug/version berpola sama dengan manifest, navigasi,
- * offline) dan mengembalikan salinan beku; objek masukan tidak diubah. Melempar `ModuleDefinitionError` yang
+ * Mendeklarasikan modul frontend. Memvalidasi bentuk (key/slug/version berpola sama dengan manifest, offline) dan mengembalikan salinan beku; objek masukan tidak diubah. Melempar `ModuleDefinitionError` yang
  * menyebut bidang yang salah.
  */
 export function defineModule<const S extends string>(m: FrontendModule<S>): FrontendModule<S> {
@@ -232,7 +138,6 @@ export function defineModule<const S extends string>(m: FrontendModule<S>): Fron
     throw new ModuleDefinitionError(key, "version", "harus semver (mis. 1.0.0)");
   }
   if (input.title !== undefined) checkMessageRef(key, "title", input.title);
-  const navigation = checkNavigation(key, input.navigation);
   if (typeof input.registerRoutes !== "function") {
     throw new ModuleDefinitionError(key, "registerRoutes", "harus fungsi (base) => route[]");
   }
@@ -245,7 +150,6 @@ export function defineModule<const S extends string>(m: FrontendModule<S>): Fron
     ...(m.title === undefined
       ? {}
       : { title: Object.freeze({ ns: m.title.ns, key: m.title.key }) as MessageRef }),
-    navigation,
     registerRoutes: m.registerRoutes,
     offline: freezeOffline(m.offline),
   });

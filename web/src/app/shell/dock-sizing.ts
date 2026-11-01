@@ -1,0 +1,29 @@
+/**
+ * Satu sumber ukuran Dock (K15, R4.10): tombol, ikon, dan jarak yang sama dengan item `SidebarMenuButton` di strip ikon
+ * Floating (tombol 32 px = `size-8`, ikon 16 px, jarak `gap-1` = 4 px), dan lebar rel mengikuti lebar strip ikon.
+ */
+
+/** Ukuran tombol Dock (`size-8`) dan jarak antartombol (`gap-1`), dalam px; dipakai `fitDockCount`. */
+export const DOCK_ITEM_SIZE = 32;
+export const DOCK_GAP = 4;
+
+/** Nilai `--dock-width` yang dipasang `AppShell`: sama dengan lebar strip ikon sidebar. */
+export const SHELL_DOCK_WIDTH = "var(--sidebar-width-icon)";
+
+/**
+ * Kelas tombol Dock: ukuran seragam, ikon 16 px, sorotan hover seperti item sidebar (K17, R4.11, juga di tema gelap), dan sorotan aktif berupa latar
+ * (`data-active`, tanpa cincin; K2). Indikator fokus keyboard tetap dari `Button`.
+ */
+// `dark:hover:*` menimpa `dark:hover:bg-accent/50` varian ghost `Button` (tailwind-merge menganggap modifier berbeda tidak
+// bertabrakan; di tema gelap aturan itu berspesifisitas lebih tinggi dan mengalahkan sorotan hover dan aktif).
+export const DOCK_BUTTON_CLASS =
+  "size-8 rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&_svg]:size-4";
+
+/** Tombol galat Dock (katalog atau chunk gagal dimuat): warna destructive dipertahankan saat hover, juga di tema gelap. */
+export const DOCK_ERROR_BUTTON_CLASS = `${DOCK_BUTTON_CLASS} text-destructive hover:text-destructive dark:hover:text-destructive`;
+
+/**
+ * Strip ikon Floating (K21): `SidebarGroup` berpadding 8 px sehingga isinya (35 px) lebih lebar daripada tombol (32 px)
+ * dan tombol jatuh ke kiri. Menu memusatkan itemnya hanya saat sidebar diciutkan ke strip ikon.
+ */
+export const STRIP_CENTER_CLASS = "group-data-[collapsible=icon]:items-center";

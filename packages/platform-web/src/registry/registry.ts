@@ -1,4 +1,4 @@
-import type { FrontendModule, MessageRef, NavigationItem } from "@erpora/module-sdk";
+import type { FrontendModule, MessageRef } from "@erpora/module-sdk";
 import type { Bootstrap, BootstrapModule, ModuleStatus } from "../bootstrap/types";
 
 /** Dilempar saat dua modul frontend memakai `key` atau `slug` yang sama (aplikasi gagal start). */
@@ -120,8 +120,13 @@ export function resolveModules(
   return { resolved, warnings };
 }
 
-export type NavNodeItem = Omit<NavigationItem, "label"> & {
+/** Simpul navigasi shell lama (bukan dari modul lagi; menu kini dari server). Dipertahankan sementara untuk shell lama. */
+export type NavNodeItem = {
+  type: "item";
+  id: string;
   label: MessageRef;
+  to: string;
+  icon?: string;
   moduleKey: string;
 };
 export type NavNode =
@@ -138,45 +143,4 @@ export type NavNode =
 /** Status modul pada bootstrap; `undefined` bila modul tidak ada. */
 export function moduleStatus(bootstrap: Bootstrap, key: string): ModuleStatus | undefined {
   return bootstrap.modules.find((m) => m.key === key)?.status;
-}
-
-function absolute(slug: string, to: string): string {
-  return to === "/" ? `/${slug}` : `/${slug}${to}`;
-}
-
-/**
- * Navigasi untuk sidebar: hanya modul berstatus `enabled` pada bootstrap terbaru (R6.5; backend tetap otoritas),
- * dalam urutan modul; `to` sudah absolut (`/<slug>` + `to`).
- */
-export function selectNavigation(
-  resolved: readonly ResolvedModule[],
-  bootstrap: Bootstrap,
-): readonly NavNode[] {
-  const out: NavNode[] = [];
-  for (const { module } of resolved) {
-    if (moduleStatus(bootstrap, module.key) !== "enabled") continue;
-    const item = (e: NavigationItem): NavNodeItem => ({
-      type: "item",
-      id: e.id,
-      label: e.label,
-      to: absolute(module.slug, e.to),
-      ...(e.icon === undefined ? {} : { icon: e.icon }),
-      moduleKey: module.key,
-    });
-    for (const entry of module.navigation) {
-      if (entry.type === "item") {
-        out.push(item(entry));
-      } else {
-        out.push({
-          type: "group",
-          id: entry.id,
-          label: entry.label,
-          ...(entry.icon === undefined ? {} : { icon: entry.icon }),
-          moduleKey: module.key,
-          children: entry.children.map(item),
-        });
-      }
-    }
-  }
-  return out;
 }

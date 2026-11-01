@@ -10,7 +10,6 @@ function valid(overrides: Partial<FrontendModule> = {}): FrontendModule {
     key: "acme.example",
     slug: "example",
     version: "1.0.0",
-    navigation: [{ type: "item", id: "notes", label: label("nav.notes"), to: "/notes" }],
     registerRoutes: () => [],
     offline: defaultOfflinePolicy,
     ...overrides,
@@ -28,35 +27,19 @@ function messageOf(fn: () => unknown): string {
 }
 
 describe("defineModule: modul valid", () => {
-  test("lolos dan hasilnya beku (modul, navigation, entri, offline)", () => {
-    const m = defineModule(
-      valid({
-        navigation: [
-          { type: "item", id: "home", label: label("nav.home"), to: "/", icon: "home" },
-          {
-            type: "group",
-            id: "reports",
-            label: label("nav.reports"),
-            children: [
-              { type: "item", id: "sales", label: label("nav.sales"), to: "/reports/sales" },
-            ],
-          },
-        ],
-      }),
-    );
+  test("lolos dan hasilnya beku (modul dan offline); tanpa navigation (menu dari server, R10.8)", () => {
+    const m = defineModule(valid());
     expect(Object.isFrozen(m)).toBe(true);
-    expect(Object.isFrozen(m.navigation)).toBe(true);
-    for (const entry of m.navigation) {
-      expect(Object.isFrozen(entry)).toBe(true);
-      if (entry.type === "group") {
-        expect(Object.isFrozen(entry.children)).toBe(true);
-        for (const child of entry.children) expect(Object.isFrozen(child)).toBe(true);
-      }
-    }
     expect(Object.isFrozen(m.offline)).toBe(true);
+    expect("navigation" in m).toBe(false);
     expect(() => {
       (m as { slug: string }).slug = "lain";
     }).toThrow();
+  });
+
+  test("properti navigation lama diabaikan (tidak disalin ke hasil)", () => {
+    const m = defineModule({ ...valid(), navigation: [] } as never);
+    expect("navigation" in m).toBe(false);
   });
 
   test("mempertahankan field, termasuk title opsional", () => {
@@ -72,7 +55,6 @@ describe("defineModule: modul valid", () => {
     const input = valid();
     defineModule(input);
     expect(Object.isFrozen(input)).toBe(false);
-    expect(Object.isFrozen(input.navigation)).toBe(false);
   });
 
   test("slug menyimpulkan tipe literal", () => {
@@ -105,73 +87,6 @@ describe("defineModule: ModuleDefinitionError menyebut bidang", () => {
 
   test.each(["1.0", "v1.0.0", "01.0.0", "1.0.0.0", ""])("version tidak valid %p", (version) => {
     expect(messageOf(() => defineModule(valid({ version })))).toContain("version");
-  });
-
-  test("id navigasi ganda (juga lintas grup dan anak)", () => {
-    const dup = valid({
-      navigation: [
-        { type: "item", id: "notes", label: label("a"), to: "/a" },
-        { type: "item", id: "notes", label: label("b"), to: "/b" },
-      ],
-    });
-    expect(messageOf(() => defineModule(dup))).toContain("navigation[1].id");
-
-    const nested = valid({
-      navigation: [
-        { type: "item", id: "x", label: label("a"), to: "/a" },
-        {
-          type: "group",
-          id: "g",
-          label: label("g"),
-          children: [{ type: "item", id: "x", label: label("b"), to: "/b" }],
-        },
-      ],
-    });
-    expect(messageOf(() => defineModule(nested))).toContain("navigation[1].children[0].id");
-  });
-
-  test("to tanpa awalan /", () => {
-    const bad = valid({
-      navigation: [{ type: "item", id: "notes", label: label("a"), to: "notes" }],
-    });
-    expect(messageOf(() => defineModule(bad))).toContain("navigation[0].to");
-  });
-
-  test("to tidak boleh berskema atau protocol-relative", () => {
-    for (const to of ["//evil.example/x", "/a b", "https://evil.example"]) {
-      const bad = valid({
-        navigation: [{ type: "item", id: "notes", label: label("a"), to }],
-      });
-      expect(() => defineModule(bad)).toThrow(ModuleDefinitionError);
-    }
-  });
-
-  test("grup tanpa anak", () => {
-    const bad = valid({
-      navigation: [{ type: "group", id: "g", label: label("g"), children: [] }],
-    });
-    expect(messageOf(() => defineModule(bad))).toContain("navigation[0].children");
-  });
-
-  test("anak grup tidak boleh grup lagi", () => {
-    const bad = valid({
-      navigation: [
-        {
-          type: "group",
-          id: "g",
-          label: label("g"),
-          children: [{ type: "group", id: "h", label: label("h"), children: [] }],
-        } as never,
-      ],
-    });
-    expect(() => defineModule(bad)).toThrow(ModuleDefinitionError);
-  });
-
-  test("label tanpa ns/key", () => {
-    const bad = valid({
-      navigation: [{ type: "item", id: "a", label: { ns: "", key: "x" }, to: "/a" }],
-    });
-    expect(messageOf(() => defineModule(bad))).toContain("navigation[0].label");
   });
 
   test("registerRoutes bukan fungsi", () => {

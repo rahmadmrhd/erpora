@@ -219,3 +219,101 @@ func TestCheck_I18nSkipsRegistryCheckWithoutRegistryFile(t *testing.T) {
 		t.Fatalf("tanpa registri, pemeriksaan registri dilewati: %+v", got)
 	}
 }
+
+// deskFixture membangun fixture bersih lalu menambahkan, pada alpha, direktori web/ (bila withWeb), bagian
+// "desk" manifest (bila deskJSON != "") beserta katalog id.json (bagian i18n ikut dideklarasikan bila catalog != "").
+func deskFixture(t *testing.T, withWeb bool, deskJSON, catalog string) string {
+	t.Helper()
+	root := fixture{betaDeclaresDep: true}.build(t)
+	write(t, root, "internal/platform/i18n/locales.json", testLocalesJSON)
+	extra := ""
+	if catalog != "" {
+		extra += `,
+  "i18n": {"locales":["id"],"defaultLocale":"id"}`
+		write(t, root, "modules/alpha/i18n/id.json", catalog)
+	}
+	if deskJSON != "" {
+		extra += `,
+  "desk": ` + deskJSON
+	}
+	if extra != "" {
+		p := filepath.Join(root, "modules", "alpha", "module.json")
+		b, err := os.ReadFile(p) //nolint:gosec // path uji
+		if err != nil {
+			t.Fatal(err)
+		}
+		write(t, root, "modules/alpha/module.json", strings.Replace(string(b), `"offline": { "mode": "online-only" }`, `"offline": { "mode": "online-only" }`+extra, 1))
+	}
+	if withWeb {
+		write(t, root, "modules/alpha/web/package.json", `{"name":"@erpora/module-alpha"}`)
+	}
+	return root
+}
+
+const (
+	deskCatalog   = `{"desk":{"title":"Alpha"},"nav":{"items":"Item"}}`
+	deskValidJSON = `{"label":"desk.title","icon":"file-text","menus":[{"id":"items","label":"nav.items","to":"/items","permission":"alpha.items.read"}]}`
+)
+
+func TestCheck_Desk(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	tests := []struct {
+		name    string
+		withWeb bool
+		desk    string
+		catalog string
+		want    []string // potongan Detail yang harus ada pada temuan DESK; kosong = bersih
+	}{
+		{"modul tanpa web dan tanpa desk lolos", false, "", "", nil},
+		{"modul tanpa web boleh punya desk", false, deskValidJSON, deskCatalog, nil},
+		{"modul web dengan desk valid lolos", true, deskValidJSON, deskCatalog, nil},
+		{"modul web tanpa desk ditolak", true, "", "", []string{"module.json", `"desk"`, "modules/alpha/web"}},
+		{"permission di luar capabilities", true,
+			`{"label":"desk.title","icon":"file-text","menus":[{"id":"items","label":"nav.items","to":"/items","permission":"alpha.items.write"}]}`,
+			deskCatalog, []string{"/desk/menus/0/permission", "desk_unknown_permission"}},
+		{"label tidak ada di katalog", true,
+			`{"label":"desk.title","icon":"file-text","menus":[{"id":"items","label":"nav.tidakAda","to":"/items","permission":"alpha.items.read"}]}`,
+			deskCatalog, []string{"/desk/menus/0/label", "desk_label_unknown"}},
+		{"to tidak valid", true,
+			`{"label":"desk.title","icon":"file-text","menus":[{"id":"items","label":"nav.items","to":"/a/../b","permission":"alpha.items.read"}]}`,
+			deskCatalog, []string{"/desk/menus/0/to", "desk_invalid_to"}},
+		{"dashboard dideklarasikan sebagai menu", true,
+			`{"label":"desk.title","icon":"file-text","menus":[{"id":"dashboard","label":"nav.items","to":"/items","permission":"alpha.items.read"}]}`,
+			deskCatalog, []string{"/desk/menus/0/id", "desk_dashboard_locked"}},
+		{"id ganda", true,
+			`{"label":"desk.title","icon":"file-text","menus":[{"id":"items","label":"nav.items","to":"/a","permission":"alpha.items.read"},{"id":"items","label":"nav.items","to":"/b","permission":"alpha.items.read"}]}`,
+			deskCatalog, []string{"/desk/menus/1/id", "desk_duplicate_id"}},
+		{"desk tanpa katalog", true, deskValidJSON, "", []string{"desk_label_unknown"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Check(deskFixture(t, tc.withWeb, tc.desk, tc.catalog), "alpha")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var desk []Finding
+			for _, f := range got {
+				if f.Rule == RuleDesk {
+					desk = append(desk, f)
+				}
+			}
+			if len(tc.want) == 0 {
+				if len(got) != 0 {
+					t.Fatalf("harus bersih: %+v", got)
+				}
+				return
+			}
+			for _, w := range tc.want {
+				found := false
+				for _, f := range desk {
+					if strings.Contains(f.Detail, w) {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("temuan DESK %q tidak ada: %+v", w, desk)
+				}
+			}
+		})
+	}
+}

@@ -13,5 +13,12 @@
   "capabilities": ["example.ping.read", "example.notes.read"],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
-  "offline": { "mode": "online-only" }
+  "offline": { "mode": "online-only" },
+  "desk": {
+    "label": "desk.title",
+    "icon": "file-text",
+    "menus": [
+      { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+    ]
+  }
 }

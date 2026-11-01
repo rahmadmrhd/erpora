@@ -1,11 +1,14 @@
 {
+  "desk": {
+    "title": "Stock Opname"
+  },
   "nav": {
-    "home": "Stock Opname"
+    "items": "Daftar"
   },
   "page": {
-    "home": {
-      "title": "Stock Opname",
-      "description": "Halaman awal modul Stock Opname. Ganti dengan halaman Anda."
+    "items": {
+      "title": "Daftar",
+      "description": "Halaman contoh modul Stock Opname. Ganti dengan halaman Anda."
     }
   },
   "errors": {

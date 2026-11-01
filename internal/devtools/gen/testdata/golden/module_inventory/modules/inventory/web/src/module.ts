@@ -4,21 +4,15 @@ import "./i18n/keys.gen";
 import { moduleInfo, moduleVersion } from "./info";
 import { registerRoutes } from "./routes";
 
-/** Definisi modul frontend `inventory`: navigasi satu item, route lazy `/inventory`, online-only. */
+/**
+ * Definisi modul frontend `inventory`: route lazy `/inventory/items` (menu dari manifest `desk` di module.json;
+ * indeks `/inventory` adalah Dashboard bawaan shell, jangan didaftarkan di sini), online-only.
+ */
 export const frontendModule = defineModule({
   key: moduleInfo.key,
   slug: moduleInfo.slug,
   version: moduleVersion,
-  title: msg("inventory", "nav.home"),
-  navigation: [
-    {
-      type: "item",
-      id: "home",
-      label: msg("inventory", "nav.home"),
-      to: "/",
-      icon: "layout-dashboard",
-    },
-  ],
+  title: msg("inventory", "desk.title"),
   registerRoutes,
   offline: defaultOfflinePolicy,
 });

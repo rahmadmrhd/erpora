@@ -5,6 +5,7 @@ declare module "@erpora/platform-web" {
   interface I18nCatalogs {
     "example-addon": {
       "actions.refresh": {};
+      "desk.title": {};
       "nav.summary": {};
       "page.summary.description": {};
       "page.summary.error": {};

@@ -14,6 +14,8 @@ import (
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
 	"erpora/internal/platform/database"
+	"erpora/internal/platform/desks"
+	desksstore "erpora/internal/platform/desks/store"
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/i18n"
 	i18nadmin "erpora/internal/platform/i18n/admin"
@@ -130,6 +132,12 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	})
 	apis.Modules.Bind(svc)
 	apis.I18n.Bind(i18nSvc)
+	// Daftar Desk memakai Authorizer yang sama dengan permission route (stub sampai PRD-001): penyaringan menu
+	// hanya lewat Authorizer.Allow, backend adalah otoritas.
+	authz := authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log)
+	apis.Desks.Bind(desks.NewService(desks.Deps{
+		Registry: reg, Status: snap, Authz: authz, Overrides: desksstore.New(database.ControlDB{DB: db}), Log: log,
+	}))
 	// Gate mutasi (keputusan 8): di luar development tanpa ERP_MODULES_ADMIN_API=true, route aksi mutasi tidak
 	// dilayani (404 sebelum permission), sementara route baca tetap tunduk pada permission.
 	var mountOpts []runtime.MountOption
@@ -142,7 +150,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	if prov.Meter != nil {
 		mountOpts = append(mountOpts, runtime.WithMeter(prov.Meter.Meter("erpora/modules")))
 	}
-	runtime.Mount(router, reg, snap, authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log), log, mountOpts...)
+	runtime.Mount(router, reg, snap, authz, log, mountOpts...)
 	registerTestRoutes(router)
 	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid, I18n: i18nSvc}, nil
 }

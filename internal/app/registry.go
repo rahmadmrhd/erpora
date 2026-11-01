@@ -5,6 +5,7 @@ import (
 
 	"erpora/contracts"
 	"erpora/internal/platform/buildinfo"
+	"erpora/internal/platform/desks"
 	i18nadmin "erpora/internal/platform/i18n/admin"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/registry"
@@ -26,12 +27,13 @@ func BuildRegistry() (*registry.Registry, error) {
 type platformAPIs struct {
 	Modules *admin.API
 	I18n    *i18nadmin.API
+	Desks   *desks.API
 }
 
 // buildRegistry seperti BuildRegistry, ditambah API route platform.core: manajemen modul (di-bind ke
-// lifecycle.Service) dan katalog i18n (di-bind ke i18n.Service) oleh assemble.
+// lifecycle.Service), katalog i18n (di-bind ke i18n.Service), dan daftar Desk (di-bind ke desks.Service) oleh assemble.
 func buildRegistry() (*registry.Registry, *platformAPIs, error) {
-	apis := &platformAPIs{Modules: admin.New(), I18n: i18nadmin.New()}
+	apis := &platformAPIs{Modules: admin.New(), I18n: i18nadmin.New(), Desks: desks.New()}
 	reg, err := registry.Build(registry.Options{
 		PlatformVersion: buildinfo.PlatformVersion,
 		SDKVersion:      module.SDKVersion,
@@ -39,10 +41,14 @@ func buildRegistry() (*registry.Registry, *platformAPIs, error) {
 			if err := apis.Modules.Register(r); err != nil {
 				return err
 			}
-			return apis.I18n.Register(r)
+			if err := apis.I18n.Register(r); err != nil {
+				return err
+			}
+			return apis.Desks.Register(r)
 		},
-		PlatformCapabilities: append(slices.Clone(admin.Capabilities), i18nadmin.Capabilities...),
+		PlatformCapabilities: slices.Concat(admin.Capabilities, i18nadmin.Capabilities, desks.Capabilities),
 		PlatformContract:     contracts.PlatformOpenAPI,
+		PlatformDesk:         desks.PlatformDesk(),
 	}, compiledModulesFn()...)
 	return reg, apis, err
 }

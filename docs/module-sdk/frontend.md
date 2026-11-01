@@ -2,11 +2,13 @@
 
 Panduan ini menjelaskan cara menulis frontend untuk modul ERPora: struktur folder, deklarasi modul dengan `defineModule`, route lazy, aksi halaman, teks lewat i18n, pemakaian `@erpora/ui`, uji komponen, dan anggaran bundle. Contoh acuannya adalah `modules/example/web` dan `modules/exampleaddon/web`.
 
-Keputusan yang melandasinya: [ADR-011](../adr/0011-kontrak-ui-extension-dan-design-system.md) (design system, batas paket, registry), PRD-000 FR-08 dan FR-09, serta spec `.kiro/specs/m3a-frontend-foundation-shell/`. Panduan teks dan kunci terjemahan ada di [`i18n.md`](i18n.md).
+Keputusan yang melandasinya: [ADR-011](../adr/0011-kontrak-ui-extension-dan-design-system.md) (design system, batas paket; keputusan komponen dan `navigation` sudah digantikan), [ADR-0015](../adr/0015-komponen-persis-shadcn-dan-kunci-snapshot.md) (komponen persis shadcn), PRD-000 Q40 (shell Desk, Desk per modul, URL bersih), serta spec revisi `docs/specs/m3a-revisi-shell-shadcn/` dan dasarnya `docs/specs/m3a-frontend-foundation-shell/`. Panduan teks dan kunci terjemahan ada di [`i18n.md`](i18n.md).
 
 ## Ringkasan
 
 - Frontend modul ada di `modules/<dir>/web`, package `@erpora/module-<dir>`, dan dirakit oleh app shell `web/` (aturan F3).
+- Menu dan Dashboard Desk dideklarasikan di **manifest** (`module.json`, properti `desk`), bukan di frontend. Frontend hanya mendaftarkan rute. Modul berfrontend wajib punya `desk` (aturan `DESK` di `module:check`). Lihat [`creating-a-module.md`](creating-a-module.md).
+- Semua rute modul diawali slugnya: `/<slug>` adalah Dashboard Desk (milik shell, bukan modul), `/<slug>/<halaman>` adalah halaman modul. Modul tidak boleh mendaftarkan rute indeks `/`.
 - Aturan F2 hanya membatasi impor paket `@erpora/*`: frontend modul boleh mengimpor `@erpora/ui`, `@erpora/platform-web`, `@erpora/module-sdk`, `@erpora/platform-contracts`, dan `@erpora/module-<x>` yang ada di `manifest.dependencies`. Pustaka pihak ketiga (`react`, `@tanstack/react-query`, dan lainnya) diizinkan; versinya dipin sebagai `peerDependencies` modul (Q39 butir 1). Impor lewat `index.ts`; deep import dilarang.
 - Backend tetap otoritas. Permission dan status modul di frontend hanya untuk UX (route yang nonaktif menampilkan "Modul tidak aktif").
 - Dilarang: `dangerouslySetInnerHTML` (Biome, `noDangerouslySetInnerHtml` = error), palet warna langsung di komponen, dan string UI yang ditanam di kode.
@@ -23,7 +25,7 @@ modules/example/web/
 └── src/
     ├── index.ts        # satu-satunya entry publik: api, moduleInfo, frontendModule
     ├── info.ts         # key, slug, versi; harus sama dengan module.json (diuji module.test.ts)
-    ├── module.ts       # defineModule(...): navigasi, registerRoutes, offline
+    ├── module.ts       # defineModule(...): key, slug, version, title?, registerRoutes, offline
     ├── routes.tsx      # route anak base route; halaman dimuat lazy
     ├── notes-api.ts    # pemanggil API modul (lewat klien platform-contracts)
     ├── db/             # koleksi TanStack DB (dimuat malas lewat useDb)
@@ -51,9 +53,6 @@ export const frontendModule = defineModule({
   slug: moduleInfo.slug,
   version: moduleVersion,
   title: msg("example", "nav.notes"), // opsional: crumb dasar modul
-  navigation: [
-    { type: "item", id: "notes", label: msg("example", "nav.notes"), to: "/", icon: "file-text" },
-  ],
   registerRoutes,
   offline: defaultOfflinePolicy,
 });
@@ -63,15 +62,34 @@ Bentuk `FrontendModule` (`packages/module-sdk/src/types.ts`):
 
 | Field | Keterangan |
 | --- | --- |
-| `key` | Sama dengan `manifest.key`, pola `^[a-z0-9]+(\.[a-z0-9-]+)+$` |
-| `slug` | Sama dengan `manifest.slug`; basePath `/<slug>` dan namespace i18n |
+| `key` | Sama dengan `manifest.key`, pola `<publisher>.<nama>` (huruf kecil, angka, `-`) |
+| `slug` | Sama dengan `manifest.slug` (maks 50 karakter); basePath `/<slug>` dan namespace i18n |
 | `version` | Semver; registry memberi peringatan bila berbeda dari versi backend di bootstrap |
 | `title?` | `MessageRef` opsional, crumb dasar modul (Q36, PK-6) |
-| `navigation` | Daftar `NavigationItem` (`type: "item"`) atau `NavigationGroup` (`type: "group"`, anak berupa item). Hanya satu tingkat grup |
-| `registerRoutes` | `(base: ModuleBaseRoute) => AnyModuleChildRoute[]` |
+| `registerRoutes` | `(base: ModuleBaseRoute) => AnyModuleChildRoute[]`; hanya mendaftarkan halaman anak (lihat "Route modul") |
 | `offline` | `OfflinePolicy`, mengikuti `docs/architecture/offline-strategy.md` §3; untuk modul online saja pakai `defaultOfflinePolicy` |
 
-`defineModule` melempar `ModuleDefinitionError` (dengan `key` modul dan `path` bidang yang salah) bila: `key`/`slug`/`version` tidak valid, `id` navigasi ganda dalam modul, `to` tidak diawali `/`, grup tanpa anak, `icon` kosong bila diisi, atau `offline` tidak valid. Objek yang dikembalikan dibekukan (`Object.freeze`).
+Field `navigation` (beserta tipe `NavigationItem` dan `NavigationGroup`) **sudah dihapus** (PRD-000 Q40 butir 21). Menu Desk berasal dari properti `desk` di `module.json`, yang disaring server per pengguna lewat `GET /api/platform/desks`. Jangan menambahkan `navigation` lagi: `defineModule` tidak lagi menerimanya.
+
+`defineModule` melempar `ModuleDefinitionError` (dengan `key` modul dan `field` bidang yang salah) bila: `key`, `slug`, atau `version` tidak valid; `title` bukan `MessageRef`; `registerRoutes` bukan fungsi; atau `offline` tidak valid. Objek yang dikembalikan dibekukan (`Object.freeze`).
+
+Contoh properti `desk` di `modules/example/module.json` (sumber menu, dibaca server; bukan bagian `defineModule`):
+
+```json
+"desk": {
+  "label": "desk.title",
+  "icon": "file-text",
+  "menus": [
+    { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+  ]
+}
+```
+
+- `label` dan `menus[].label` adalah kunci i18n di namespace modul; `icon` memakai nama dari `iconRegistry`.
+- `menus` berisi item atau grup satu tingkat (grup tidak boleh bersarang, anak grup minimal satu).
+- `to` relatif terhadap base route modul (`/notes` menjadi `/example/notes`). Tanpa skema, host, `//`, query, atau fragmen. **Tidak boleh `/`**: indeks adalah Dashboard shell.
+- `permission` harus salah satu `capabilities` modul; item disembunyikan bila pengguna tidak memilikinya.
+- `dashboard` (opsional) hanya mengisi `label` dan `icon` item Dashboard bawaan. Dashboard sendiri dibangkitkan platform di `/<slug>`, tidak dideklarasikan sebagai menu.
 
 Registry di shell (`@erpora/platform-web`, `registry/`) mencocokkan modul dengan bootstrap berdasarkan `key`:
 
@@ -79,7 +97,7 @@ Registry di shell (`@erpora/platform-web`, `registry/`) mencocokkan modul dengan
 - Versi berbeda dari backend: peringatan `version_mismatch`.
 - `slug` berbeda dari bootstrap: peringatan `slug_mismatch`; `offline` tidak cocok: `offline_mismatch`.
 - Key atau slug ganda: `DuplicateModuleKeyError` / `DuplicateModuleSlugError`.
-- Hanya status `enabled` yang memunculkan navigasi (`selectNavigation`); `to` menjadi absolut (`/<slug>` + `to`).
+- Menu Desk tidak dibaca dari modul frontend. Server membangun daftar Desk per pengguna dari manifest `desk` (`GET /api/platform/desks`, permission `platform.desks.read`; hanya modul `enabled` dan menu yang diizinkan). Klien menentukan Desk saat ini dan mencocokkan halaman dengan menu lewat fungsi murni `resolveDesk` dan `matchMenu` (`@erpora/platform-web`, folder `desk/`). `to` di manifest menjadi absolut lewat base route modul.
 
 ## Route modul (lazy)
 
@@ -91,21 +109,23 @@ import { crumb } from "@erpora/platform-web";
 import "./i18n/keys.gen";
 
 export function registerRoutes(base: ModuleBaseRoute): readonly AnyModuleChildRoute[] {
-  const index = createRoute({
+  const notes = createRoute({
     getParentRoute: () => base,
-    path: "/",
+    path: "/notes",
     staticData: { crumb: crumb("example", "page.notes.title") },
     component: lazyRouteComponent(() => import("./pages/notes-page"), "NotesPage"),
   });
-  return [index];
+  return [notes];
 }
 ```
 
-- Halaman dimuat dengan `import()` agar menjadi chunk terpisah (R5.4). Modul yang tidak dibuka tidak ikut dimuat.
+- Path halaman (`/notes`) harus sama dengan `to` menu di `desk.menus` pada `module.json`. Halaman dimuat dengan `import()` agar menjadi chunk terpisah (R5.4). Modul yang tidak dibuka tidak ikut dimuat.
+- **Rute indeks dilarang.** `/<slug>` adalah Dashboard bawaan shell (slot widget). Shell memasangnya lewat `attachModuleRoutes(base, children, { index })`, dan `attachModuleRoutes` menolak path `/` atau kosong dari modul dengan `ModuleDefinitionError`. Halaman yang dulu berada di indeks pindah menjadi anak (`/example/notes`).
+- `listModuleRoutePaths(module)` (`@erpora/module-sdk`) mengembalikan path halaman relatif base, termasuk rute bersarang dan tanpa indeks. Dipakai pengujian dan analisis dampak.
 - `staticData.crumb` adalah sumber tunggal breadcrumb dan judul dokumen. Untuk teks data (mis. nama record) pakai `{ text: "..." }`, bukan `crumb(...)`.
 - Gunakan `createRoute` dan `lazyRouteComponent` dari `@erpora/module-sdk`, bukan langsung dari `@tanstack/react-router`.
 
-**Guard.** Shell memasang `beforeLoad` pada base route: bila status modul di bootstrap bukan `enabled`, route melempar `ModuleInactiveError` dan halaman "Modul tidak aktif" tampil **sebelum** chunk halaman dimuat. Saat modul di-disable lewat `/settings/modules`, bootstrap di-refetch (revision berubah), router di-`invalidate`, dan menu hilang tanpa reload.
+**Guard.** Shell memasang `beforeLoad` pada base route: bila status modul di bootstrap bukan `enabled`, route melempar `ModuleInactiveError` dan halaman "Modul tidak aktif" tampil **sebelum** chunk halaman dimuat. Saat modul di-disable lewat `/platform/modules`, bootstrap di-refetch (revision berubah), router di-`invalidate`, dan menu hilang tanpa reload.
 
 ## Aksi halaman
 
@@ -117,7 +137,7 @@ usePageActions([
 ]);
 ```
 
-- `PageAction`: `id`, `label` (sudah diterjemahkan oleh pemanggil), `icon?` (nama di registry `@erpora/ui`), `variant?` (`primary`, `outline`, `ghost`, `destructive`), `onSelect`, `disabled?`, `loading?`, `pinned?`.
+- `PageAction`: `id`, `label` (sudah diterjemahkan oleh pemanggil), `icon?` (nama di registry `@erpora/ui`), `variant?` (`primary`, `outline`, `ghost`, `destructive`; `primary` ditampilkan sebagai `default` shadcn di shell), `onSelect`, `disabled?`, `loading?` (ditampilkan lewat `LoadingButton`), `pinned?`.
 - `pinned: true` tetap tampil sebagai tombol ikon di layar kecil; aksi lain dilipat ke menu ⋯.
 - `PageActionNode` (`{ id, node }`) untuk simpul kustom hanya tampil di layar `md` ke atas.
 - `onSelect` selalu memakai closure terbaru tanpa render ulang konsumen; pendaftaran dibersihkan saat unmount (diuji P13).
@@ -137,17 +157,20 @@ usePageActions([
 ## Halaman modul dan mode hanya-baca
 
 - Route modul yang statusnya bukan `enabled` menampilkan "Modul tidak aktif" tanpa memuat chunk halaman (guard di `beforeLoad`).
-- `/settings/modules` berada dalam mode hanya-baca bila `features.modulesAdminApi` di bootstrap tidak aktif, atau bila mutasi membalas `404`. Dalam mode ini kolom Aksi disembunyikan, sedangkan Riwayat operasi tetap tersedia lewat tombol di sel nama (Q39 butir 2). Pemakaian `features` lewat `useFeature("modulesAdminApi")`.
+- `/platform/modules` (sebelumnya `/settings/modules`, dipindah tanpa pengalihan, PRD-000 Q40 butir 13) berada dalam mode hanya-baca bila `features.modulesAdminApi` di bootstrap tidak aktif, atau bila mutasi membalas `404`. Dalam mode ini kolom Aksi disembunyikan, sedangkan Riwayat operasi tetap tersedia lewat tombol di sel nama (Q39 butir 2). Pemakaian `features` lewat `useFeature("modulesAdminApi")`.
 
 Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
 ## Pemakaian `@erpora/ui`
 
 - Impor hanya dari barrel `@erpora/ui` (`src/index.ts`). Entry sekunder yang dikecualikan (mis. `@erpora/ui/toaster`) dimuat lazy dan hanya bila perlu.
-- Komponen yang tersedia mencakup Button, Badge, BadgeStatus, Avatar, Alert, Checkbox, Label, Separator, Skeleton, Kbd, LoadingIcon, EmptyState, ErrorPage, Dialog, AlertDialog, Sheet, Popover, Tooltip, DropdownMenu, Collapsible, Breadcrumb, Table, dan komponen Sidebar. Daftar lengkap ada di `packages/ui/src/index.ts`.
+- Komponen `components/ui` adalah salinan **persis** registry shadcn (ADR-0015): nama varian dan ukuran bawaan shadcn (`default` bukan `primary`; `default`, `xs`, `sm`, `lg`, `icon*` bukan `md`). Jangan mengubah berkasnya; kebutuhan DS dipenuhi lewat pembungkus atau token.
+- Barrel `@erpora/ui` mengekspor komponen shadcn (Alert, Avatar, Badge, Breadcrumb, Button, Card, Checkbox, Collapsible, Dialog, AlertDialog, DropdownMenu, Empty, Input, Kbd, Label, Popover, RadioGroup, Select, Separator, Sheet, Sidebar, Skeleton, Spinner, Table, Tabs, Tooltip), komponen pembungkus `LoadingButton` dan `StatusBadge` (`components/extended`), serta `cn`, `useIsMobile`, `iconRegistry`, dan `UiLabelsProvider`.
+- Entry sekunder yang dimuat malas, tidak diekspor dari barrel: `@erpora/ui/toaster` (`Toaster`, `toast`, bergaya token) dan `@erpora/ui/command` (`Command`, pustaka cmdk; palet perintah). Impor keduanya langsung dari `exports` paket hanya bila perlu.
+- Padanan komponen lama: `BadgeStatus` menjadi `StatusBadge`; `EmptyState` dan `ErrorPage` menjadi `Empty` (komposisi `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`); `LoadingIcon` menjadi `Spinner`; `Button` dengan `loading` menjadi `LoadingButton`; `Button variant="primary"` dan `size="md"` menjadi `default`. Lembar bawah (mis. breadcrumb di ponsel) memakai `Sheet side="bottom"`; `Drawer` tidak dipasang.
 - Komponen tidak menanam teks. Teks bawaan (mis. tombol tutup dialog) diisi shell lewat `UiLabelsProvider`. Modul tidak perlu mengatur ini.
 - Warna dan radius lewat token semantik (`bg-background`, `text-muted-foreground`, `bg-status-success-bg`, `border-border`, dan seterusnya). Nilai palet langsung (`zinc-100`, `red-500`, `#fff`, `rgb(...)`) dilarang di luar `theme.css` dan diuji.
-- Ikon: `icon` pada navigasi dan aksi memakai nama kebab dari `iconRegistry` (mis. `file-text`, `bell-ring`). Nama tak dikenal tampil sebagai lingkaran berinisial dan dicatat sekali di development.
+- Ikon: `icon` pada menu Desk (manifest) dan aksi halaman memakai nama kebab dari `iconRegistry` (mis. `file-text`, `bell-ring`). Nama tak dikenal tampil sebagai lingkaran berinisial dan dicatat sekali di development.
 - `cn` dari `@erpora/ui` untuk menggabungkan kelas.
 
 ## Uji
@@ -156,6 +179,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 - Stack: `bun test`, `@testing-library/react`, `user-event`, `jest-dom`, dan happy-dom. Radix (DropdownMenu, Dialog) dan perilaku ARIA diuji dengan peran dan keyboard.
 - Untuk halaman yang membutuhkan bootstrap, pakai `StaticBootstrapProvider` dan `makeBootstrap` (`@erpora/platform-web`). Untuk teks, pakai `createTestI18n({ ns: { "kunci.lengkap": "pesan" } })`, atau `testing.tsx` modul yang memuat katalog JSON nyata.
 - Panggilan API di test memakai `fetch` palsu yang merekam permintaan. Test harus membuktikan bahwa body tidak memuat `tenantId` atau `userId`.
+- Uji Desk: `assertDeskRoutes(frontendModule, manifest.desk)` dari `@erpora/module-sdk/testing` memastikan setiap `to` menu di `desk` punya rute terdaftar di `registerRoutes` (termasuk rute bersarang), dan tidak ada `to` indeks. Melempar `Error` yang menyebut `to` bermasalah. `module.test.ts` hasil `make:module --frontend` memanggilnya dan juga memastikan tidak ada properti `navigation`.
 - Uji tipe: kunci atau argumen yang salah harus gagal `tsc`. Gunakan berkas `*.check.ts` (dijalankan lewat `typecheck`) dengan `@ts-expect-error`, seperti `packages/platform-web/src/msg/msg.check.ts`.
 - End-to-end browser (Playwright) belum tersedia; direncanakan di M3g.
 
@@ -193,5 +217,6 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
 - **`make:page`**: ditunda ke M3d (Q36 PK-5). Halaman baru ditulis manual mengikuti `modules/example/web`.
 - **Kontrak UI extension**: belum diputuskan (ADR-011, fase lanjutan).
+- **Desk kustom, halaman Desks lengkap, Start Guide, dan penulisan timpaan Desk** (permission `platform.desks.update`): M3b. Revisi M3a hanya membaca `GET /api/platform/desks`; `desk_overrides` belum diisi lewat API.
 - **Layar notifikasi dan pengguna nyata**: masih sumber sementara (`emptyNotificationSource`, `anonymousUserSource`) sampai PRD Notifications dan PRD-001.
 - **Layar bootstrap gagal** memakai kamus bawaan id/en (PK-4), bukan kunci i18n. Ini satu-satunya pengecualian aturan teks.

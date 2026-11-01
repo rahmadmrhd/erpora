@@ -1,6 +1,6 @@
 # Log keputusan pelaksanaan M3a dan i18n-platform (didelegasikan pemilik produk)
 
-Dibuat 31 Okt 2026. Pemilik produk berpesan (29 Okt 2026): "jika ada hal yang butuh keputusanku, lakukan dulu sesuai rekomendasi, namun tetap beritahu setiap keputusan dengan alasan". Keputusan ini dapat ditinjau dan dibatalkan. Yang menyimpang dari PRD/ADR/api-guidelines juga tercatat di PRD-000 (Q34-Q39), ADR-0006, dan ADR-0011. Keputusan teknis lebih rinci M3a (K-1..K-34, PK-1..PK-6) ada di `.kiro/specs/m3a-frontend-foundation-shell/design.md`; keputusan desain i18n (D-1..D-9) di `.kiro/specs/i18n-platform/design.md`.
+Dibuat 31 Okt 2026. Pemilik produk berpesan (29 Okt 2026): "jika ada hal yang butuh keputusanku, lakukan dulu sesuai rekomendasi, namun tetap beritahu setiap keputusan dengan alasan". Keputusan ini dapat ditinjau dan dibatalkan. Yang menyimpang dari PRD/ADR/api-guidelines juga tercatat di PRD-000 (Q34-Q39), ADR-0006, dan ADR-0011. Keputusan teknis lebih rinci M3a (K-1..K-34, PK-1..PK-6) ada di `docs/specs/m3a-frontend-foundation-shell/design.md`; keputusan desain i18n (D-1..D-9) di `docs/specs/i18n-platform/design.md`.
 
 # Log keputusan yang diambil atas delegasi pemilik produk (/goal 29 Okt 2026)
 

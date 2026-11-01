@@ -2,6 +2,7 @@ MODULE              METHOD  PATTERN                                             
 acme.example-addon  GET     /api/example-addon/summary                               example-addon.summary.read  false
 acme.example        GET     /api/example/notes                                       example.notes.read          false
 acme.example        GET     /api/example/ping                                        example.ping.read           false
+platform.core       GET     /api/platform/desks                                      platform.desks.read         false
 platform.core       GET     /api/platform/i18n/overrides                             platform.i18n.read          false
 platform.core       DELETE  /api/platform/i18n/overrides/{namespace}/{locale}/{key}  platform.i18n.manage        false
 platform.core       PUT     /api/platform/i18n/overrides/{namespace}/{locale}/{key}  platform.i18n.manage        false

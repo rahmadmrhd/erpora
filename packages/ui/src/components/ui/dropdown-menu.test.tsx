@@ -71,13 +71,12 @@ describe("DropdownMenu", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
-  test("item destructive memakai penanda dan token destructive (Keluar)", async () => {
+  test("item destructive ditandai data-variant (Keluar)", async () => {
     const user = userEvent.setup();
     render(<Basic />);
     await user.click(screen.getByRole("button", { name: "Menu" }));
     const keluar = await screen.findByRole("menuitem", { name: "Keluar" });
     expect(keluar).toHaveAttribute("data-variant", "destructive");
-    expect(keluar.className).toContain("text-logout-fg");
     expect(screen.getByRole("menuitem", { name: "Bantuan" })).toHaveAttribute(
       "data-variant",
       "default",

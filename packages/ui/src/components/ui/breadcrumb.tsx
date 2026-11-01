@@ -1,15 +1,11 @@
-import { cn } from "@erpora/ui/lib/utils";
-import { ChevronRight, Ellipsis } from "lucide-react";
-import { Slot } from "radix-ui";
-import type * as React from "react";
-import { useUiLabel } from "../../labels";
+import * as React from "react"
+import { cn } from "@erpora/ui/lib/utils"
+import { UiLabel, useUiLabel } from "../../labels"
+import { ChevronRight, MoreHorizontal } from "lucide-react"
+import { Slot } from "radix-ui"
 
-// Hasil `shadcn add breadcrumb`, diadaptasi ke kartu DS Breadcrumb dan mockup (K-24, K-25): `<nav>` bernama dari UiLabels
-// (`breadcrumb.label`), tautan bergaya teks `muted-foreground` (bukan kotak bertepi DS), halaman aktif `aria-current="page"`, elipsis
-// bernama `breadcrumb.more` (dipakai sebagai pemicu menu jalur yang dilipat; lihat collapseCrumbs).
 function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
-  const t = useUiLabel();
-  return <nav aria-label={t("breadcrumb.label")} data-slot="breadcrumb" {...props} />;
+  return <nav aria-label={useUiLabel()("breadcrumb.label")} data-slot="breadcrumb" {...props} />
 }
 
 function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
@@ -18,11 +14,11 @@ function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
       data-slot="breadcrumb-list"
       className={cn(
         "flex flex-wrap items-center gap-1.5 text-sm break-words text-muted-foreground sm:gap-2.5",
-        className,
+        className
       )}
       {...props}
     />
-  );
+  )
 }
 
 function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
@@ -32,36 +28,45 @@ function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
       className={cn("inline-flex items-center gap-1.5", className)}
       {...props}
     />
-  );
+  )
 }
 
 function BreadcrumbLink({
   asChild,
   className,
   ...props
-}: React.ComponentProps<"a"> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "a";
+}: React.ComponentProps<"a"> & {
+  asChild?: boolean
+}) {
+  const Comp = asChild ? Slot.Root : "a"
+
   return (
     <Comp
       data-slot="breadcrumb-link"
-      className={cn("text-muted-foreground transition-colors hover:text-foreground", className)}
+      className={cn("transition-colors hover:text-foreground", className)}
       {...props}
     />
-  );
+  )
 }
 
 function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="breadcrumb-page"
+      role="link"
+      aria-disabled="true"
       aria-current="page"
-      className={cn("font-medium text-foreground", className)}
+      className={cn("font-normal text-foreground", className)}
       {...props}
     />
-  );
+  )
 }
 
-function BreadcrumbSeparator({ children, className, ...props }: React.ComponentProps<"li">) {
+function BreadcrumbSeparator({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"li">) {
   return (
     <li
       data-slot="breadcrumb-separator"
@@ -72,29 +77,33 @@ function BreadcrumbSeparator({ children, className, ...props }: React.ComponentP
     >
       {children ?? <ChevronRight />}
     </li>
-  );
+  )
 }
 
-function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span">) {
-  const t = useUiLabel();
+function BreadcrumbEllipsis({
+  className,
+  ...props
+}: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="breadcrumb-ellipsis"
+      role="presentation"
+      aria-hidden="true"
       className={cn("flex size-9 items-center justify-center", className)}
       {...props}
     >
-      <Ellipsis className="size-4" aria-hidden="true" />
-      <span className="sr-only">{t("breadcrumb.more")}</span>
+      <MoreHorizontal className="size-4" />
+      <span className="sr-only"><UiLabel k="breadcrumb.more" /></span>
     </span>
-  );
+  )
 }
 
 export {
   Breadcrumb,
-  BreadcrumbEllipsis,
+  BreadcrumbList,
   BreadcrumbItem,
   BreadcrumbLink,
-  BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-};
+  BreadcrumbEllipsis,
+}

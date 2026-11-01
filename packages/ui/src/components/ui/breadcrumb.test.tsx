@@ -36,7 +36,7 @@ function Sample() {
           <BreadcrumbItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button">
+                <button type="button" aria-label={t("breadcrumb.more")}>
                   <BreadcrumbEllipsis />
                 </button>
               </DropdownMenuTrigger>
@@ -82,12 +82,5 @@ describe("Breadcrumb", () => {
     render(<Sample />);
     await user.click(screen.getByRole("button", { name: "Tampilkan jalur lengkap" }));
     expect(await screen.findByRole("menuitem", { name: "Modul" })).toBeInTheDocument();
-  });
-
-  test("tautan bergaya teks muted dengan hover foreground", () => {
-    render(<Sample />);
-    const link = screen.getByRole("link", { name: "Pengaturan" });
-    expect(link.className).toContain("text-muted-foreground");
-    expect(link.className).toContain("hover:text-foreground");
   });
 });

@@ -25,6 +25,11 @@ export function useCurrentUserSource(): CurrentUserSource {
   return useContext(CurrentUserSourceContext);
 }
 
+/** `default_desk` pengguna dari sumber terpasang; `null` sampai PRD-001 menyediakannya (M3a R9.7). */
+export function useDefaultDesk(): string | null {
+  return useCurrentUserSource().defaultDesk ?? null;
+}
+
 /**
  * Pengguna saat ini dari sumber terpasang. Nama dan email adalah PII (Rahasia): hanya di cache memori Query
  * (tanpa persister), tidak di storage, log, atau URL.

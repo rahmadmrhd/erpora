@@ -1,4 +1,5 @@
-import { Button, ErrorPage, LoadingIcon } from "@erpora/ui";
+import { Button, Spinner } from "@erpora/ui";
+import { ErrorNotice } from "../components/notices";
 
 // Layar boot memakai kamus bawaan tiga kalimat id/en, BUKAN kunci i18n (PRD-000 Q36, PK-4): runtime i18n bergantung pada
 // bootstrap (tenantId, daftar bahasa), sehingga saat bootstrap gagal tidak ada katalog yang dapat dimuat.
@@ -35,9 +36,10 @@ export function BootLoading() {
     <div
       role="status"
       aria-busy="true"
+      aria-label={words.loading}
       className="flex min-h-svh items-center justify-center bg-background text-muted-foreground"
     >
-      <LoadingIcon aria-label={words.loading} className="size-8" />
+      <Spinner aria-hidden="true" role="presentation" className="size-8" />
     </div>
   );
 }
@@ -47,7 +49,7 @@ export function BootErrorScreen({ onRetry }: { onRetry: () => void }) {
   const words = BOOT_DICTIONARY[bootLanguage()];
   return (
     <div className="min-h-svh bg-background">
-      <ErrorPage
+      <ErrorNotice
         status={503}
         title={words.title}
         description={words.description}

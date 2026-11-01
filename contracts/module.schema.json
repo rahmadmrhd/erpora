@@ -116,6 +116,31 @@
         "defaultLocale": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$" }
       }
     },
+    "desk": {
+      "type": "object",
+      "description": "Revisi M3a (Q40 butir 10-13): Desk modul. label/icon/menu dibaca server untuk menyusun daftar Desk per pengguna (GET /api/platform/desks); Dashboard dibangkitkan platform dan tidak boleh dideklarasikan. Opsional di schema; module:check mewajibkannya untuk modul berdirektori web/.",
+      "additionalProperties": false,
+      "required": ["label", "icon", "menus"],
+      "properties": {
+        "label": { "$ref": "#/$defs/messageKey" },
+        "icon": { "$ref": "#/$defs/iconName" },
+        "dashboard": {
+          "type": "object",
+          "description": "Label dan ikon item Dashboard bawaan Desk; bila tidak diisi platform memakai label dan ikon bawaan.",
+          "additionalProperties": false,
+          "properties": {
+            "label": { "$ref": "#/$defs/messageKey" },
+            "icon": { "$ref": "#/$defs/iconName" }
+          }
+        },
+        "menus": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/deskMenu" }
+        },
+        "settings": { "type": "object", "description": "Pengaturan Desk; isi diperketat kemudian." }
+      }
+    },
     "artifact": { "type": "string", "description": "Marketplace: lokasi artefak modul." },
     "checksum": { "type": "string", "description": "Marketplace: checksum artefak." },
     "signature": { "type": "string", "description": "Marketplace: tanda tangan artefak." },
@@ -162,6 +187,55 @@
     "settings": {
       "type": "object",
       "description": "PRD-001 FR-120: definisi setting modul. Isi diperketat kemudian."
+    }
+  },
+  "$defs": {
+    "messageKey": {
+      "type": "string",
+      "description": "Kunci i18n bertitik pada katalog namespace modul (mis. nav.notes).",
+      "pattern": "^[a-z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_-]+)+$"
+    },
+    "iconName": {
+      "type": "string",
+      "description": "Nama ikon dari peta ikon platform.",
+      "pattern": "^[a-z0-9-]{1,40}$"
+    },
+    "deskMenuId": {
+      "type": "string",
+      "description": "Id menu, unik dalam satu Desk (item, grup, dan anak grup).",
+      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+    },
+    "deskItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "to", "permission"],
+      "properties": {
+        "id": { "$ref": "#/$defs/deskMenuId" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "icon": { "$ref": "#/$defs/iconName" },
+        "to": {
+          "type": "string",
+          "description": "Path internal relatif base route modul (/notes); tanpa skema, host, //, query, atau fragmen.",
+          "pattern": "^/([A-Za-z0-9._~%-]+(/[A-Za-z0-9._~%-]+)*)?$",
+          "maxLength": 200
+        },
+        "permission": { "type": "string", "minLength": 1, "description": "Salah satu capabilities modul; item disembunyikan bila pengguna tidak memilikinya." }
+      }
+    },
+    "deskGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/deskMenuId" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "icon": { "$ref": "#/$defs/iconName" },
+        "children": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/$defs/deskItem" } }
+      }
+    },
+    "deskMenu": {
+      "description": "Item menu atau grup satu tingkat (grup tidak boleh bersarang).",
+      "oneOf": [{ "$ref": "#/$defs/deskItem" }, { "$ref": "#/$defs/deskGroup" }]
     }
   }
 }

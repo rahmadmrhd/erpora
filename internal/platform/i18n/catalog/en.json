@@ -10,6 +10,37 @@
       "label": "Language"
     }
   },
+  "fixedItems": {
+    "search": "Search",
+    "todo": "ToDo"
+  },
+  "desksNavbar": {
+    "search": "Search…"
+  },
+  "dock": {
+    "label": "Desk dock",
+    "more": "+{count} more Desks",
+    "loadError": "Desk could not be loaded. Try again."
+  },
+  "panel": {
+    "noDesk": "Choose a Desk in the Dock to see its menu.",
+    "loadError": "The Desk menu could not be loaded."
+  },
+  "logoMenu": {
+    "label": "App menu",
+    "switchDesk": "Switch Desk",
+    "allDesks": "All Desks",
+    "editSidebar": "Edit sidebar",
+    "editSidebarHint": "Available in an upcoming update (M3b)",
+    "help": "Help and shortcuts",
+    "about": "About",
+    "version": "Version {version}"
+  },
+  "desk": {
+    "title": "Platform",
+    "modules": "Modules",
+    "dashboard": "Dashboard"
+  },
   "nav": {
     "home": "Home",
     "menu": "Menu",
@@ -23,14 +54,57 @@
     "loadError": "Notifications could not be loaded.",
     "actionError": "The notification action failed. Try again.",
     "markAllRead": "Mark all as read",
-    "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}"
+    "unreadLabel": "{count, plural, =0 {Notifications, none unread} other {Notifications, # unread}}",
+    "description": "Your notifications and events",
+    "tabsLabel": "Notification types",
+    "tabs": {
+      "all": "All",
+      "events": "Events"
+    },
+    "eventsEmpty": "No events yet"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Adjust your appearance, preferences, and shortcuts. Changes are saved automatically.",
+    "navLabel": "Settings sections",
+    "sections": {
+      "appearance": "Appearance",
+      "preferences": "Preferences",
+      "shortcuts": "Shortcuts"
+    },
+    "theme": {
+      "title": "Theme",
+      "description": "Light, dark, or follow your system setting.",
+      "automatic": "Automatic"
+    },
+    "dock": {
+      "title": "Dock",
+      "description": "The Dock stays attached to the screen edge or floats when needed.",
+      "pinned": "Pinned",
+      "floating": "Floating"
+    },
+    "timezone": {
+      "title": "Time zone",
+      "description": "Used to display dates and times.",
+      "automatic": "Automatic (follow browser)"
+    },
+    "shortcuts": {
+      "description": "Keyboard shortcuts that work across the whole app.",
+      "openPalette": "Open command palette",
+      "showShortcuts": "Show shortcuts",
+      "toggleSidebar": "Collapse or expand the panel",
+      "openDock": "Open the Dock",
+      "toggleTheme": "Switch theme"
+    }
   },
   "user": {
     "anonymous": "User",
     "menu": "Account menu",
     "manageAccount": "Manage Account",
     "signOut": "Sign Out",
-    "unavailable": "Not available in this version"
+    "unavailable": "Not available in this version",
+    "settings": "Settings",
+    "reload": "Reload"
   },
   "theme": {
     "label": "Theme",
@@ -58,10 +132,35 @@
   },
   "dashboard": {
     "title": "Dashboard Not Available Yet",
-    "description": "The dashboard will arrive in an upcoming update."
+    "description": "The dashboard will arrive in an upcoming update.",
+    "slots": "Dashboard widgets",
+    "unavailable": {
+      "title": "Dashboard unavailable",
+      "description": "This Desk does not exist or you do not have access."
+    }
   },
   "pageActions": {
     "more": "More actions"
+  },
+  "breadcrumb": {
+    "home": "Home",
+    "pathTitle": "Page path",
+    "pathDescription": "The full path to this page."
+  },
+  "palette": {
+    "title": "Command palette",
+    "description": "Search for a page or Desk, then press Enter to open it.",
+    "placeholder": "Search or type a command",
+    "empty": "No results.",
+    "groups": {
+      "pages": "Pages",
+      "desks": "Desks"
+    },
+    "hints": {
+      "navigate": "Select",
+      "open": "Open",
+      "close": "Close"
+    }
   },
   "errors": {
     "bad_request": "The request is not valid.",
@@ -94,7 +193,6 @@
     "unknown": "An unknown error occurred"
   },
   "modules": {
-    "title": "Modules",
     "description": "Compiled modules and their status for this tenant.",
     "empty": "No modules yet.",
     "required": "Required",
@@ -238,5 +336,20 @@
         "unknown": "{event}"
       }
     }
+  },
+  "desks": {
+    "title": "Desks",
+    "empty": {
+      "title": "No Desks yet",
+      "description": "You do not have access to any Desk. Contact your administrator if this is unexpected."
+    },
+    "loadError": {
+      "title": "The Desk list could not be loaded",
+      "description": "An error occurred while loading Desks. Try again."
+    }
+  },
+  "todo": {
+    "title": "ToDo",
+    "description": "The task list will arrive in a later update."
   }
 }

@@ -4,11 +4,9 @@ import { useBootstrap } from "../bootstrap";
 import type { ModuleStatus } from "../bootstrap/types";
 import {
   moduleStatus,
-  type NavNode,
   type RegistryWarning,
   type ResolvedModule,
   resolveModules,
-  selectNavigation,
   validateModules,
 } from "./registry";
 
@@ -16,8 +14,6 @@ export interface ModuleRegistry {
   /** Modul frontend yang ada di bootstrap saat dimuat pertama (dipakai router; dihitung sekali). */
   resolved: readonly ResolvedModule[];
   warnings: readonly RegistryWarning[];
-  /** Navigasi modul `enabled` pada bootstrap terbaru. */
-  navigation: readonly NavNode[];
   statusOf(key: string): ModuleStatus | undefined;
   isEnabled(key: string): boolean;
 }
@@ -43,19 +39,14 @@ export function ModuleRegistryProvider({
     validateModules(modules);
     return resolveModules(modules, bootstrap, { warn });
   });
-  const navigation = useMemo(
-    () => selectNavigation(resolution.resolved, bootstrap),
-    [resolution, bootstrap],
-  );
   const value = useMemo<ModuleRegistry>(
     () => ({
       resolved: resolution.resolved,
       warnings: resolution.warnings,
-      navigation,
       statusOf: (key) => moduleStatus(bootstrap, key),
       isEnabled: (key) => moduleStatus(bootstrap, key) === "enabled",
     }),
-    [resolution, navigation, bootstrap],
+    [resolution, bootstrap],
   );
   return <RegistryContext.Provider value={value}>{children}</RegistryContext.Provider>;
 }

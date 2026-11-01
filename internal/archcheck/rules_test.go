@@ -88,7 +88,8 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 		example + "/internal/infrastructure/persistence",
 		root + "/internal/platform/database",
 		root + "/internal/platform/modules/store",
-		root + "/internal/platform/i18n/store", // PRD-000 Q35 D-1
+		root + "/internal/platform/i18n/store",  // PRD-000 Q35 D-1
+		root + "/internal/platform/desks/store", // revisi M3a, design.md section 6 (timpaan Desk, hanya baca)
 		sdk + "/data",
 	} {
 		assertNone(t, Check(repoWith(pkg(ok, "gorm.io/gorm"))), "D3b")
@@ -96,6 +97,8 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 	// paket i18n lain (bukan store) tetap tidak boleh memakai GORM
 	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/i18n", "gorm.io/gorm"))), "D3b")
 	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/i18n/admin", "gorm.io/gorm"))), "D3b")
+	// paket desks lain (bukan store) tetap tidak boleh memakai GORM
+	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/desks", "gorm.io/gorm"))), "D3b")
 }
 
 func TestD4_ApplicationImportsInfrastructure(t *testing.T) {

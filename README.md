@@ -33,6 +33,10 @@ Setelah `task dev` berjalan, API ada di `http://127.0.0.1:8080` (cek `/healthz` 
 
 Batas dev server: halaman dev disajikan Bun apa adanya sehingga skrip `theme-init` (yang memasang tema sebelum paint pada build produksi lewat `web/build.ts`) tidak disuntikkan; di `task dev` pilihan tema eksplisit yang berbeda dari tema OS dapat berkedip sesaat saat muat. Build produksi (`bun run --filter @erpora/web build`) tidak terpengaruh.
 
+Dev server memakai `development: { hmr: false }` (`web/dev.ts`): dengan HMR Bun, siklus impor `router.js` ↔ `load-client.js` di `@tanstack/router-core` 1.171.x dievaluasi dengan urutan yang membuat `replaceRouteChunk` bernilai `null` dan halaman gagal dimuat. Tanpa HMR, perubahan kode tidak diterapkan otomatis; muat ulang halaman. Tinjau kembali setelah router-core atau Bun dinaikkan.
+
+Di laptop tanpa Docker, `web/dev-api.ts` (konfigurasi `api` di `.claude/launch.json`) menjalankan API dengan PostgreSQL di VPS: membuka tunnel SSH (`rhd_vps_ipv4`, lalu `rhd_vps_ipv6` bila gagal; verifikasi host key tetap aktif), membuat database `erpora_dev` di container `erpora-test-pg` bila belum ada, menjalankan `migrate up` dan `modules install --all --enable` (diulang bila tunnel putus), lalu `air` dengan `.air.vps.toml`. Variabel `ERP_DEV_VPS_ALIASES`, `ERP_DEV_TUNNEL_PORT`, `ERP_DEV_PG_CONTAINER`, dan `ERP_DEV_DB_NAME` mengubah bawaannya. Data `erpora_dev` hilang bila container (tmpfs) dimulai ulang; skrip membuatnya lagi saat dijalankan.
+
 Daftar perintah lengkap: `task --list`.
 
 ### Perintah developer

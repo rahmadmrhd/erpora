@@ -19,6 +19,26 @@
       "includes": ["**/*.gen.ts"],
       "linter": { "enabled": false },
       "assist": { "enabled": false }
+    },
+    {
+      "includes": [
+        "packages/ui/src/components/ui/*.tsx",
+        "!packages/ui/src/components/ui/*.test.tsx",
+        "packages/ui/src/hooks/*.ts",
+        "!packages/ui/src/hooks/*.test.ts"
+      ],
+      "linter": {
+        "enabled": true,
+        "rules": {
+          "recommended": false,
+          "security": {
+            "noDangerouslySetInnerHtml": "error",
+            "noDangerouslySetInnerHtmlWithChildren": "error"
+          }
+        }
+      },
+      "formatter": { "enabled": false },
+      "assist": { "enabled": false }
     }
   ],
   "assist": { "actions": { "source": { "organizeImports": "on" } } }

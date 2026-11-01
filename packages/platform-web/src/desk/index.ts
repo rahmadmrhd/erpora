@@ -1,0 +1,41 @@
+export {
+  createDesksFetcher,
+  DESKS_PATH,
+  DesksError,
+  parseDeskList,
+  useDesksQuery,
+} from "./api";
+export { deskContains, deskDashboardPath, matchMenu } from "./match-menu";
+export {
+  type DeskContextValue,
+  DeskProvider,
+  type DeskProviderProps,
+  isShowDesksState,
+  SHOW_DESKS_STATE,
+  useCurrentDesk,
+  useDeskContext,
+  useDesks,
+  useShowDesks,
+} from "./provider";
+export {
+  type ResolveInput,
+  type ResolveResult,
+  type ResolveStep,
+  resolveDesk,
+} from "./resolver";
+export {
+  DESK_STORAGE_KEYS,
+  isValidDeskId,
+  readRememberedDesk,
+  readTabDesk,
+  writeDeskChoice,
+} from "./storage";
+export { resolveDeskSwitchTarget } from "./switch-target";
+export type {
+  Desk,
+  DeskList,
+  DeskMenuGroup,
+  DeskMenuItem,
+  MessageRef,
+} from "./types";
+export { useDeskValidation } from "./validation";
