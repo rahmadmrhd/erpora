@@ -15,11 +15,13 @@ import (
 
 // noteRow adalah model GORM tabel example_notes, terpisah dari entity domain.
 type noteRow struct {
-	ID        uuid.UUID `gorm:"column:id;primaryKey"`
-	Title     string    `gorm:"column:title"`
-	Version   int64     `gorm:"column:version"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	ID        uuid.UUID  `gorm:"column:id;primaryKey"`
+	Title     string     `gorm:"column:title"`
+	Version   int64      `gorm:"column:version"`
+	CreatedAt time.Time  `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt time.Time  `gorm:"column:updated_at;autoUpdateTime"`
+	CreatedBy *uuid.UUID `gorm:"column:created_by"`
+	UpdatedBy *uuid.UUID `gorm:"column:updated_by"`
 }
 
 func (noteRow) TableName() string { return "example_notes" }
@@ -28,7 +30,28 @@ func (r noteRow) toDomain() domain.Note {
 	return domain.Note{
 		ID: r.ID.String(), Title: r.Title, Version: r.Version,
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
+		CreatedBy: userString(r.CreatedBy), UpdatedBy: userString(r.UpdatedBy),
 	}
+}
+
+func userString(id *uuid.UUID) *string {
+	if id == nil {
+		return nil
+	}
+	s := id.String()
+	return &s
+}
+
+// userUUID mengubah id pengguna domain menjadi uuid; nil tetap nil (tanpa principal).
+func userUUID(s *string) (*uuid.UUID, error) {
+	if s == nil {
+		return nil, nil
+	}
+	id, err := uuid.Parse(*s)
+	if err != nil {
+		return nil, fmt.Errorf("id pengguna tidak sah: %w", err)
+	}
+	return &id, nil
 }
 
 // NotesRepo adalah repository notes; koneksi diambil per panggilan dari context (tenant aktif).
@@ -79,7 +102,15 @@ func (NotesRepo) AddMany(ctx context.Context, notes []domain.Note) error {
 		if err != nil {
 			return fmt.Errorf("buat id: %w", err)
 		}
-		rows[i] = noteRow{ID: id, Title: n.Title, Version: 1}
+		createdBy, err := userUUID(n.CreatedBy)
+		if err != nil {
+			return err
+		}
+		updatedBy, err := userUUID(n.UpdatedBy)
+		if err != nil {
+			return err
+		}
+		rows[i] = noteRow{ID: id, Title: n.Title, Version: 1, CreatedBy: createdBy, UpdatedBy: updatedBy}
 	}
 	if len(rows) == 0 {
 		return nil

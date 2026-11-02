@@ -61,23 +61,96 @@ paths:
                     version: 1
                     createdAt: '2026-10-21T07:15:00Z'
                     updatedAt: '2026-10-21T07:15:00Z'
+                    createdBy: null
+                    updatedBy: null
                 page: { page: 1, pageSize: 25, total: 1, hasMore: false }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
 components:
   schemas:
-    Note:
-      type: object
-      required: [id, title, version, createdAt, updatedAt]
-      properties:
-        id: { $ref: 'erp:common#/components/schemas/Uuid' }
-        title:
-          type: string
-          x-erp-classification: internal
-        version: { type: integer, format: int64 }
-        createdAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
-        updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
     NoteCount:
       type: integer
       format: int64
       description: API publik untuk modul lain (contract.Notes.Count); jumlah notes tenant aktif.
+    Note:
+      type: object
+      description: Catatan sederhana modul referensi example (tabel example_notes).
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, title]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    NoteCreate:
+      type: object
+      description: Body pembuatan example.note; hanya field yang boleh ditulis.
+      required: [title]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    NoteUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) example.note; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true

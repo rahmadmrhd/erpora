@@ -13,8 +13,10 @@ const (
 	notes403Then    = "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\ncomponents:\n"
 	pingThenNotes   = "        '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }\n  /api/example/notes:\n"
 	pageParamsBlock = "      parameters:\n        - { $ref: 'erp:common#/components/parameters/Page' }\n        - { $ref: 'erp:common#/components/parameters/PageSize' }\n"
-	versionProp     = "        version: { type: integer, format: int64 }\n"
-	pageSizeParam   = "        - { $ref: 'erp:common#/components/parameters/PageSize' }\n"
+	// versionProp adalah jangkar properti version pada skema Note bangkitan (modul example dari metadata). Properti uji
+	// disisipkan SEBELUM jangkar ini sehingga blok properti lain tidak terpotong.
+	versionProp   = "        version:\n          type: integer\n          format: int64\n          minimum: 1\n"
+	pageSizeParam = "        - { $ref: 'erp:common#/components/parameters/PageSize' }\n"
 )
 
 func TestLint_RepositoryContractsClean(t *testing.T) {
@@ -49,7 +51,7 @@ func TestLint_Fixtures(t *testing.T) {
 		{
 			name: "ref_not_dependency",
 			edits: map[string][][2]string{
-				ex: {{versionProp, versionProp + "        extra: { $ref: 'erp:example-addon#/components/schemas/Extra' }\n"}},
+				ex: {{versionProp, "        extra: { $ref: 'erp:example-addon#/components/schemas/Extra' }\n" + versionProp}},
 				"modules/exampleaddon/openapi.yaml": {{
 					"        '500': { $ref: 'erp:common#/components/responses/InternalError' }\n",
 					"        '500': { $ref: 'erp:common#/components/responses/InternalError' }\ncomponents:\n  schemas:\n    Extra: { type: string }\n",
@@ -59,7 +61,7 @@ func TestLint_Fixtures(t *testing.T) {
 		},
 		{
 			name:  "number_total",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        total: { type: number }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        total: { type: number }\n" + versionProp}}},
 			want:  []string{"erp-decimal-not-number"}, msg: "api-guidelines §4.1",
 		},
 		{
@@ -74,7 +76,7 @@ func TestLint_Fixtures(t *testing.T) {
 		},
 		{
 			name:  "password_response",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        password: { type: string }\n" + versionProp}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
 		},
 		{
@@ -112,46 +114,46 @@ func TestLint_Fixtures(t *testing.T) {
 		{
 			// Bukti AC FR-24.2 "linter menolak password di respons": klasifikasi highly_confidential di respons ditolak.
 			name:  "highly_confidential_in_response",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string, x-erp-classification: highly_confidential }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        password: { type: string, x-erp-classification: highly_confidential }\n" + versionProp}}},
 			want:  []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
 		},
 		{
 			name: "highly_confidential_sibling_of_ref",
 			edits: map[string][][2]string{ex: {{versionProp,
-				versionProp + "        linkId: { $ref: 'erp:common#/components/schemas/Uuid', x-erp-classification: highly_confidential }\n"}}},
+				"        linkId: { $ref: 'erp:common#/components/schemas/Uuid', x-erp-classification: highly_confidential }\n" + versionProp}}},
 			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
 		},
 		{
 			name: "highly_confidential_under_if_keyword",
 			edits: map[string][][2]string{ex: {{versionProp,
-				versionProp + "        conditional: { type: object, if: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } }\n"}}},
+				"        conditional: { type: object, if: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } }\n" + versionProp}}},
 			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
 		},
 		{
 			name: "highly_confidential_under_dependent_schemas",
 			edits: map[string][][2]string{ex: {{versionProp,
-				versionProp + "        dep: { type: object, dependentSchemas: { a: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } } }\n"}}},
+				"        dep: { type: object, dependentSchemas: { a: { properties: { v: { type: string, x-erp-classification: highly_confidential } } } } }\n" + versionProp}}},
 			want: []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
 		},
 		{
 			name:  "new_password_needs_classification",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        newPassword: { type: string }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        newPassword: { type: string }\n" + versionProp}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
 		},
 		{
 			name:  "compound_secret_names_need_classification",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string }\n        apiToken: { type: string }\n        passwordHash: { type: string }\n        bankAccountNumber: { type: string }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        clientSecret: { type: string }\n        apiToken: { type: string }\n        passwordHash: { type: string }\n        bankAccountNumber: { type: string }\n" + versionProp}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "FR-24.2",
 		},
 		// R-2: istilah multi-kata yang ditulis menyambung atau huruf besar semua tetap tertangkap.
 		{
 			name:  "joined_lowercase_sensitive_names_in_response",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        apikey: { type: string }\n        privatekey: { type: string }\n        bankaccount: { type: string }\n        accesstoken: { type: string }\n        refreshtoken: { type: string }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        apikey: { type: string }\n        privatekey: { type: string }\n        bankaccount: { type: string }\n        accesstoken: { type: string }\n        refreshtoken: { type: string }\n" + versionProp}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
 		},
 		{
 			name:  "uppercase_sensitive_names_in_response",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        APIKEY: { type: string }\n        PRIVATEKEY: { type: string }\n        BANKACCOUNT: { type: string }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        APIKEY: { type: string }\n        PRIVATEKEY: { type: string }\n        BANKACCOUNT: { type: string }\n" + versionProp}}},
 			want:  []string{"erp-property-camel-case", "erp-sensitive-needs-classification"}, msg: "highly_confidential",
 		},
 		{
@@ -175,68 +177,68 @@ func TestLint_Fixtures(t *testing.T) {
 		// K-4 (Q32): nik, npwp, bankAccount*, dan salary (per token camelCase) wajib highly_confidential.
 		{
 			name:  "nik_needs_highly_confidential",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        nik: { type: string, x-erp-classification: confidential }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        nik: { type: string, x-erp-classification: confidential }\n" + versionProp}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
 		},
 		{
 			name:  "bank_account_number_needs_highly_confidential",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        bankAccountNumber: { type: string, x-erp-classification: confidential }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        bankAccountNumber: { type: string, x-erp-classification: confidential }\n" + versionProp}}},
 			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
 		},
 		{
 			name:  "salary_highly_without_exception_in_response",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        monthlySalary: { type: string, x-erp-classification: highly_confidential }\n" + versionProp}}},
 			want:  []string{"erp-no-highly-confidential-in-response"}, msg: "FR-24.2",
 		},
 		{
 			name:  "allow_highly_exception_empty_reason",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid", "erp-no-highly-confidential-in-response"}, msg: "alasan",
 		},
 		{
 			name:  "allow_highly_exception_not_a_string",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: true }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: true }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid", "erp-no-highly-confidential-in-response"}, msg: "alasan",
 		},
 		{
 			name:  "allow_highly_exception_without_highly_class",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        label: { type: string, x-erp-classification: internal, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        label: { type: string, x-erp-classification: internal, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "highly_confidential",
 		},
 		// R-3 (Q32 butir 14): pengecualian hanya untuk data HR (nik, npwp, bankAccount*, salary) pada properti respons 2xx.
 		{
 			name:  "allow_highly_on_password",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        password: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        password: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_api_key",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        apiKey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        apiKey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_joined_private_key",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        privatekey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        privatekey: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_client_secret",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        clientSecret: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        clientSecret: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_refresh_token",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        refreshToken: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        refreshToken: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_hr_name_with_credential_token",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        bankAccountPassword: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        bankAccountPassword: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_name_outside_hr_group",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        fullName: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        fullName: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
 			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "data HR",
 		},
 		{
@@ -256,7 +258,7 @@ func TestLint_Fixtures(t *testing.T) {
 		},
 		{
 			name:  "classification_invalid",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        flag: { type: string, x-erp-classification: top_secret }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        flag: { type: string, x-erp-classification: top_secret }\n" + versionProp}}},
 			want:  []string{"erp-classification-valid"}, msg: "security-guidelines §2",
 		},
 		{
@@ -276,12 +278,12 @@ func TestLint_Fixtures(t *testing.T) {
 		},
 		{
 			name:  "property_not_camel_case",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        Bad_Name: { type: string }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        Bad_Name: { type: string }\n" + versionProp}}},
 			want:  []string{"erp-property-camel-case"}, msg: "api-guidelines §4.1",
 		},
 		{
 			name:  "enum_not_snake_case",
-			edits: map[string][][2]string{ex: {{versionProp, versionProp + "        state: { type: string, enum: [CamelCase, ok_value] }\n"}}},
+			edits: map[string][][2]string{ex: {{versionProp, "        state: { type: string, enum: [CamelCase, ok_value] }\n" + versionProp}}},
 			want:  []string{"erp-enum-snake-case"}, msg: "api-guidelines §4.1",
 		},
 		{
@@ -358,7 +360,7 @@ func TestLint_HighlyConfidentialExceptionAllowedAndRecorded(t *testing.T) {
 	copyRepoSubset(t, root, "example", "exampleaddon")
 	const reason = "Modul HR menampilkan gaji kepada pengguna HR berizin"
 	editFile(t, root, "modules/example/openapi.yaml",
-		[2]string{versionProp, versionProp + "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '" + reason + "' }\n"})
+		[2]string{versionProp, "        monthlySalary: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: '" + reason + "' }\n" + versionProp})
 	repo, err := LoadRepo(root)
 	if err != nil {
 		t.Fatal(err)
@@ -459,7 +461,7 @@ const postBlock = `    post:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Note' } } }
-              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 1, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z' } }
+              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 1, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z', createdBy: null, updatedBy: null } }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '422': { $ref: 'erp:common#/components/responses/Unprocessable' }
@@ -489,7 +491,7 @@ func TestLint_HighlyConfidentialExceptionAllowedForHRNames(t *testing.T) {
 			root := t.TempDir()
 			copyRepoSubset(t, root, "example", "exampleaddon")
 			editFile(t, root, "modules/example/openapi.yaml",
-				[2]string{versionProp, versionProp + "        " + name + ": { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'Modul HR menampilkan data kepada HR berizin' }\n"})
+				[2]string{versionProp, "        " + name + ": { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'Modul HR menampilkan data kepada HR berizin' }\n" + versionProp})
 			repo, err := LoadRepo(root)
 			if err != nil {
 				t.Fatal(err)

@@ -78,14 +78,23 @@ func resultOf(t *testing.T, rs []BreakingResult, target string) BreakingResult {
 	return BreakingResult{}
 }
 
-const noteTitle = "        title:\n          type: string\n          x-erp-classification: internal\n"
+// Skema Note pada modul example dibangkitkan dari metadata (properti berurutan: bawaan sdk:audit lalu title; required memuat
+// createdBy dan updatedBy nullable). Jangkar di bawah menunjuk blok title Note (diikuti penanda skema berikutnya agar unik).
+const (
+	noteTitle           = "        title:\n          type: string\n          minLength: 1\n          maxLength: 200\n          x-erp-classification: internal\n          x-erp-field-group: general\n      x-erp-generated: true\n    NoteCreate:\n"
+	noteTitleGone       = "      x-erp-generated: true\n    NoteCreate:\n"
+	requiredAll         = "required: [id, version, createdAt, updatedAt, createdBy, updatedBy, title]"
+	requiredNoTitle     = "required: [id, version, createdAt, updatedAt, createdBy, updatedBy]"
+	requiredNoUpdatedAt = "required: [id, version, createdAt, createdBy, updatedBy]"
+	createdAtAnchor     = "        createdAt:\n          type: string\n          format: date-time\n          readOnly: true\n"
+)
 
 // AC FR-23: menghapus field respons terdeteksi sebagai breaking.
 func TestCheckBreaking_RemovedFieldFails(t *testing.T) {
 	root := releasedRepo(t)
 	editFile(t, root, "modules/example/openapi.yaml",
-		[2]string{noteTitle, ""},
-		[2]string{"required: [id, title, version, createdAt, updatedAt]", "required: [id, version, createdAt, updatedAt]"})
+		[2]string{noteTitle, noteTitleGone},
+		[2]string{requiredAll, requiredNoTitle})
 	rs := breaking(t, root, BreakingOptions{})
 	ex := resultOf(t, rs, "example")
 	if ex.BaseTag != "modules/example/v1.0.0" || len(ex.Changes) == 0 {
@@ -104,7 +113,7 @@ func TestCheckBreaking_RemovedFieldFails(t *testing.T) {
 func TestCheckBreaking_OptionalFieldPasses(t *testing.T) {
 	root := releasedRepo(t)
 	editFile(t, root, "modules/example/openapi.yaml",
-		[2]string{"        version: { type: integer, format: int64 }\n        createdAt:", "        version: { type: integer, format: int64 }\n        pinned: { type: boolean }\n        createdAt:"})
+		[2]string{createdAtAnchor, "        pinned: { type: boolean }\n" + createdAtAnchor})
 	rs := breaking(t, root, BreakingOptions{})
 	ex := resultOf(t, rs, "example")
 	if len(ex.Changes) != 0 || ex.Skipped != "" {
@@ -128,8 +137,8 @@ func TestCheckBreaking_UnreleasedSkipped(t *testing.T) {
 func TestCheckBreaking_ApprovedMajor(t *testing.T) {
 	root := releasedRepo(t)
 	editFile(t, root, "modules/example/openapi.yaml",
-		[2]string{noteTitle, ""},
-		[2]string{"required: [id, title, version, createdAt, updatedAt]", "required: [id, version, createdAt, updatedAt]"})
+		[2]string{noteTitle, noteTitleGone},
+		[2]string{requiredAll, requiredNoTitle})
 
 	// Label saja tanpa kenaikan MAJOR manifest: tetap gagal.
 	editFile(t, root, "modules/example/module.json", [2]string{`"version": "1.0.0"`, `"version": "1.1.0"`})
@@ -158,8 +167,8 @@ func TestCheckBreaking_ApprovedMajor(t *testing.T) {
 func TestCheckBreaking_AlreadyMergedBreakingDoesNotBlockLaterPRs(t *testing.T) {
 	root := releasedRepo(t)
 	editFile(t, root, "modules/example/openapi.yaml",
-		[2]string{noteTitle, ""},
-		[2]string{"required: [id, title, version, createdAt, updatedAt]", "required: [id, version, createdAt, updatedAt]"})
+		[2]string{noteTitle, noteTitleGone},
+		[2]string{requiredAll, requiredNoTitle})
 	editFile(t, root, "modules/example/module.json", [2]string{`"version": "1.0.0"`, `"version": "2.0.0"`})
 	git(t, root, "add", "-A")
 	git(t, root, "commit", "-q", "-m", "breaking disetujui di-merge (label + major 2.0.0)")
@@ -175,7 +184,7 @@ func TestCheckBreaking_AlreadyMergedBreakingDoesNotBlockLaterPRs(t *testing.T) {
 	}
 
 	// PR yang menambah breaking baru (menghapus field lain) tanpa label tetap gagal.
-	editFile(t, root, "modules/example/openapi.yaml", [2]string{"required: [id, version, createdAt, updatedAt]", "required: [id, version, createdAt]"})
+	editFile(t, root, "modules/example/openapi.yaml", [2]string{requiredNoTitle, requiredNoUpdatedAt})
 	rs = breaking(t, root, BreakingOptions{BaseRef: "main"})
 	if !Failed(rs) {
 		t.Errorf("breaking baru terhadap cabang dasar tanpa label harus gagal: %+v", resultOf(t, rs, "example"))
@@ -184,8 +193,8 @@ func TestCheckBreaking_AlreadyMergedBreakingDoesNotBlockLaterPRs(t *testing.T) {
 	// MAJOR tidak naik: BaseRef tidak memberi pengecualian.
 	root2 := releasedRepo(t)
 	editFile(t, root2, "modules/example/openapi.yaml",
-		[2]string{noteTitle, ""},
-		[2]string{"required: [id, title, version, createdAt, updatedAt]", "required: [id, version, createdAt, updatedAt]"})
+		[2]string{noteTitle, noteTitleGone},
+		[2]string{requiredAll, requiredNoTitle})
 	git(t, root2, "add", "-A")
 	git(t, root2, "commit", "-q", "-m", "breaking tanpa major")
 	if !Failed(breaking(t, root2, BreakingOptions{BaseRef: "main"})) {

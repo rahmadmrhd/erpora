@@ -14,6 +14,14 @@
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "example.note",
+      "label": "Catatan",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "Umum", "default": true }]
+    }
+  ],
   "desk": {
     "label": "desk.title",
     "icon": "file-text",

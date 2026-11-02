@@ -104,11 +104,11 @@ func TestExample_InstallViaPlatformMigrations(t *testing.T) {
 	if r := run(t, ctx, a, lifecycle.OpInstall, "acme.example"); r.Status != "succeeded" {
 		t.Fatalf("install = %+v", r)
 	}
-	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 2 {
-		t.Errorf("versi goose = %d, want 2", v)
+	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 3 {
+		t.Errorf("versi goose = %d, want 3", v)
 	}
-	if n := e.count("SELECT count(*) FROM module_migrations WHERE module_key = 'acme.example' AND execution_status = 'succeeded' AND length(checksum) = 64"); n != 2 {
-		t.Errorf("module_migrations = %d, want 2 berchecksum", n)
+	if n := e.count("SELECT count(*) FROM module_migrations WHERE module_key = 'acme.example' AND execution_status = 'succeeded' AND length(checksum) = 64"); n != 3 {
+		t.Errorf("module_migrations = %d, want 3 berchecksum", n)
 	}
 	if n := e.count("SELECT count(*) FROM example_notes"); n != 3 {
 		t.Errorf("notes tersemai = %d, want 3", n)
@@ -177,15 +177,16 @@ func TestExample_Upgrade_1_0_0_to_1_1_0(t *testing.T) {
 	if r.Status != "succeeded" || r.To != "enabled" {
 		t.Fatalf("upgrade = %+v", r)
 	}
-	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 2 {
-		t.Errorf("versi goose = %d, want 2", v)
+	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 3 {
+		t.Errorf("versi goose = %d, want 3", v)
 	}
 	var row struct {
-		Version int64
-		Same    bool
+		Version  int64
+		Same     bool
+		NoAuthor bool
 	}
-	if err := e.db.Raw("SELECT version, updated_at = created_at AS same FROM example_notes WHERE id = ?", oldNote).Scan(&row).Error; err != nil || row.Version != 1 || !row.Same {
-		t.Errorf("note lama = %+v (%v), want version=1 dan updated_at=created_at", row, err)
+	if err := e.db.Raw("SELECT version, updated_at = created_at AS same, (created_by IS NULL AND updated_by IS NULL) AS no_author FROM example_notes WHERE id = ?", oldNote).Scan(&row).Error; err != nil || row.Version != 1 || !row.Same || !row.NoAuthor {
+		t.Errorf("note lama = %+v (%v), want version=1, updated_at=created_at, created_by dan updated_by NULL", row, err)
 	}
 	if len(rec.calls) != 1 || rec.calls[0] != [2]string{"1.0.0", "1.1.0"} {
 		t.Errorf("Upgrade calls = %v", rec.calls)
@@ -348,4 +349,53 @@ func TestExampleMigration0002_BackfillDownUp(t *testing.T) {
 	if res, err := p.Up(ctx); err != nil || len(res) != 0 {
 		t.Fatalf("up kedua: %d hasil, err=%v; want no-op", len(res), err)
 	}
+}
+
+// Task 8.2 (K19): migrasi 0003 menambah created_by dan updated_by (sdk:audit) secara aditif; baris lama bernilai NULL;
+// down lalu up idempoten.
+func TestExampleMigration0003_NullableAuditUsers(t *testing.T) {
+	ctx := context.Background()
+	e := newRefEnv(t)
+	sqlDB, err := e.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := newGoose(sqlDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 2); err != nil {
+		t.Fatalf("up 0002: %v", err)
+	}
+	old := uuid.New()
+	if err := e.db.Exec("INSERT INTO example_notes (id, title) VALUES (?, 'lama')", old).Error; err != nil {
+		t.Fatal(err)
+	}
+	if hasColumn(e, "created_by") || hasColumn(e, "updated_by") {
+		t.Fatal("kolom 0003 tidak boleh ada sebelum migrasi 0003")
+	}
+	if _, err := p.UpTo(ctx, 3); err != nil {
+		t.Fatalf("up 0003: %v", err)
+	}
+	check := func(when string) {
+		t.Helper()
+		var row struct{ NoAuthor bool }
+		if err := e.db.Raw("SELECT (created_by IS NULL AND updated_by IS NULL) AS no_author FROM example_notes WHERE id = ?", old).Scan(&row).Error; err != nil || !row.NoAuthor {
+			t.Fatalf("baris lama %s: %+v (%v)", when, row, err)
+		}
+		if n := e.count("SELECT count(*) FROM information_schema.columns WHERE table_name = 'example_notes' AND column_name IN ('created_by', 'updated_by') AND is_nullable = 'YES' AND data_type = 'uuid'"); n != 2 {
+			t.Fatalf("kolom created_by/updated_by harus uuid nullable %s: %d", when, n)
+		}
+	}
+	check("setelah 0003")
+	if _, err := p.DownTo(ctx, 2); err != nil {
+		t.Fatalf("down 0003: %v", err)
+	}
+	if hasColumn(e, "created_by") || hasColumn(e, "updated_by") {
+		t.Fatal("kolom 0003 harus hilang setelah down")
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatalf("up ulang: %v", err)
+	}
+	check("setelah up ulang")
 }

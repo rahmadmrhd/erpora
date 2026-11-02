@@ -174,6 +174,16 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 		"contract/notes.go":                             "contract/doc.go",
 		"migrations/0001_create_example_notes.sql":      "migrations/0001_create_inventory_items.sql",
 		"migrations/0002_add_example_notes_version.sql": "", // version/updated_at sudah ada di migrasi awal
+		// Metadata resource (spec resource-metadata task 8.2): example dimigrasikan ke metadata; kerangka metadata pada
+		// make:module bersifat opsional dan baru menyusul (task 18.3), sehingga berkas ini belum punya padanan template.
+		"metadata/note.resource.yaml":                       "",
+		"migrations/0003_add_example_notes_audit_users.sql": "", // created_by/updated_by (sdk:audit) aditif pada example
+		"internal/infrastructure/notes_repo_test.go":        "", // uji konversi id pengguna nullable (sdk:audit) khusus example
+		"internal/domain/meta_runtime.gen.go":               "",
+		"internal/domain/note_meta.gen.go":                  "",
+		"internal/presentation/http/meta_runtime.gen.go":    "",
+		"internal/presentation/http/note_dto.gen.go":        "",
+		"web/src/metadata/note.meta.gen.ts":                 "",
 		// Frontend: halaman dan pendukung khusus example (notes, koleksi DB, test halaman) tidak ada di template; halaman awal
 		// generik items-page (anak /<slug>/items; indeks /<slug> adalah Dashboard bawaan shell) menggantikan notes-page. api/contract.gen.ts dibangkitkan oleh langkah Post contracts:generate.
 		"catalogs_test.go":                     "", // template menyertakan TestCatalogs di module_test.go

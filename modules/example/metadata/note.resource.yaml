@@ -1,0 +1,12 @@
+schemaVersion: "1"
+kind: resource
+key: example.note
+description: Catatan sederhana modul referensi example (tabel example_notes).
+fields:
+  title:
+    type: string
+    minLength: 1
+    maxLength: 200
+    classification: internal
+indexes:
+  - fields: [createdAt]

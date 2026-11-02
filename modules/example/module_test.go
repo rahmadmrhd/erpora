@@ -54,7 +54,8 @@ func TestManifest_Parses(t *testing.T) {
 
 func TestMigrations_Embedded(t *testing.T) {
 	names, err := fs.Glob(New().Migrations(), "*.sql")
-	if err != nil || len(names) != 2 || names[0] != "0001_create_example_notes.sql" || names[1] != "0002_add_example_notes_version.sql" {
+	if err != nil || len(names) != 3 || names[0] != "0001_create_example_notes.sql" || names[1] != "0002_add_example_notes_version.sql" ||
+		names[2] != "0003_add_example_notes_audit_users.sql" {
 		t.Fatalf("names = %v err = %v", names, err)
 	}
 }

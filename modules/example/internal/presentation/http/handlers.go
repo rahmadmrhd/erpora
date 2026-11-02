@@ -31,6 +31,9 @@ type noteDTO struct {
 	Version   int64  `json:"version"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+	// CreatedBy dan UpdatedBy bernilai null untuk data lama, seed, dan tindakan sistem (sdk:audit).
+	CreatedBy *string `json:"createdBy"`
+	UpdatedBy *string `json:"updatedBy"`
 }
 
 // Ping menjawab {"data":{"pong":true}}.
@@ -61,6 +64,7 @@ func (h *Handlers) ListNotes(w http.ResponseWriter, r *http.Request) {
 		out[i] = noteDTO{
 			ID: n.ID, Title: n.Title, Version: n.Version,
 			CreatedAt: n.CreatedAt.UTC().Format(time.RFC3339), UpdatedAt: n.UpdatedAt.UTC().Format(time.RFC3339),
+			CreatedBy: n.CreatedBy, UpdatedBy: n.UpdatedBy,
 		}
 	}
 	httpx.WritePage(w, http.StatusOK, out, httpx.Page{

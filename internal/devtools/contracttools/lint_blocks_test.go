@@ -104,7 +104,7 @@ const patchBlock = `  /api/example/notes/{id}:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Note' } } }
-              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 2, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z' } }
+              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 2, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z', createdBy: null, updatedBy: null } }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }
