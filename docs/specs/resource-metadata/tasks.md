@@ -8,7 +8,7 @@ Pola yang dipakai ulang: `contracts/embed.go` dan `module.schema.json` (skema di
 
 **Penafsiran yang dicatat (perancang tasks, untuk dikonfirmasi saat review rencana ini):** tabel Tahap menuntut paritas Go dan TS pada exit gate T1, sehingga **evaluator dan desimal TypeScript beserta pelari korpus vektor dibangun di T1** (grup 3), sedangkan T3 melengkapi sisanya (validator, registri tipe field, pemuat malas, anggaran bundle). Ini tidak menambah perilaku di luar spec.
 
-Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pemilik produk (1 Nov 2026); K19 sampai K24 (jawaban konfirmasi 1 dan 2 Nov 2026: `example` aditif, `math/big`, linter desimal nullable, `sdk:audit` otomatis, lifecycle status baku, dan `statusAxes`) beserta D-36 sampai D-38 juga disetujui pemilik produk; K25 sampai K34 dan D-39 sampai D-46 (konfirmasi 2 Nov 2026: regex identifier, kata tercadang per target, `reason` pelonggaran, `unmanagedColumns` berobjek, `lockWhen` hanya dokumen, penamaan status baku, pemicu TRUNCATE, `Down` hanya-development, siklus `transaction-data-standards.md`, modul tanpa tag) juga disetujui pemilik produk. Pengaman K18: `Down` tidak dapat dibalik untuk tahap contract disetujui (K32); penjaga data pada migrasi penghapusan masih usulan perancang yang menunggu konfirmasi. Konsep `unmanagedColumns` (K17) ditegakkan penuh sesuai K28 (entri `{name, classification: highly_confidential, reason}`). Penyimpangan lain dari spek **menunggu konfirmasi**; jangan memutuskan sendiri (lihat instruksi global "Menangani temuan review").
+Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pemilik produk (1 Nov 2026); K19 sampai K24 (jawaban konfirmasi 1 dan 2 Nov 2026: `example` aditif, `math/big`, linter desimal nullable, `sdk:audit` otomatis, lifecycle status baku, dan `statusAxes`) beserta D-36 sampai D-38 juga disetujui pemilik produk; K25 sampai K38 dan D-39 sampai D-50 (konfirmasi 2 Nov 2026: regex identifier, kata tercadang per target, `reason` pelonggaran, `unmanagedColumns` berobjek, `lockWhen` hanya dokumen, penamaan status baku, pemicu TRUNCATE, `Down` hanya-development, siklus `transaction-data-standards.md`, modul tanpa tag) juga disetujui pemilik produk. Pengaman K18 (penjaga data pada migrasi penghapusan dan `Down` tidak dapat dibalik) disetujui pemilik produk (K37, K32). Konsep `unmanagedColumns` (K17) ditegakkan penuh sesuai K28 (entri `{name, classification: highly_confidential, reason}`). Penyimpangan lain dari spek **menunggu konfirmasi**; jangan memutuskan sendiri (lihat instruksi global "Menangani temuan review").
 
 ## Tasks
 
@@ -169,7 +169,7 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
 
 - [x] 12. Aturan deprecated, rename, dan penghapusan (T2) (Kelas beban: Sonnet)
   - [x] 12.1 Tulis test aturan deprecated dan rename (merah dulu)
-    - Menghapus field tanpa tanda `deprecated` pada rilis sebelumnya ditolak (pembanding: metadata pada tag rilis terakhir modul, seperti `contracts:breaking`; modul tanpa tag dikecualikan); `migrateFrom` menghasilkan kolom baru plus salinan data (batch bila `large`) tanpa menghapus kolom lama; DTO menerima dan mengirim kedua bentuk dan kontrak menandai bentuk lama `deprecated: true`; kedua bentuk dengan nilai berbeda `422 validation_failed`; `removeAfter` harus versi MAJOR berikutnya atau sesudahnya, dan `metadata:migrate` menolak kerangka penghapusan sebelum `removeAfter` dinyatakan; migrasi penghapusan memuat penjaga (gagal bila ada baris dengan kolom lama terisi dan kolom pengganti kosong) dan `Down` ditandai tidak dapat dibalik; integrasi: lompatan beberapa versi menjalankan semua migrasi berurutan dengan hasil sama seperti upgrade bertahap, pada fixture. Pengaman K18: `Down` mengikuti K32; penjaga data pada migrasi penghapusan masih usulan perancang yang menunggu konfirmasi.
+    - Menghapus field tanpa tanda `deprecated` pada rilis sebelumnya ditolak (pembanding: metadata pada tag rilis terakhir modul, seperti `contracts:breaking`; modul tanpa tag dikecualikan); `migrateFrom` menghasilkan kolom baru plus salinan data (batch bila `large`) tanpa menghapus kolom lama; DTO menerima dan mengirim kedua bentuk dan kontrak menandai bentuk lama `deprecated: true`; kedua bentuk dengan nilai berbeda `422 validation_failed`; `removeAfter` harus versi MAJOR berikutnya atau sesudahnya, dan `metadata:migrate` menolak kerangka penghapusan sebelum `removeAfter` dinyatakan; migrasi penghapusan memuat penjaga (gagal bila ada baris dengan kolom lama terisi dan kolom pengganti kosong) dan `Down` ditandai tidak dapat dibalik; integrasi: lompatan beberapa versi menjalankan semua migrasi berurutan dengan hasil sama seperti upgrade bertahap, pada fixture. Pengaman K18 disetujui pemilik produk (K37; `Down` mengikuti K32).
     - **Validates: Requirements 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8**
   - [x] 12.2 Implementasi pemeriksa deprecated dan `removeAfter`
     - `metadata:check`: pembanding tag rilis memakai helper git `contracttools`; validasi `deprecated: {since, replacedBy?}` dan `removeAfter`; `contracts:breaking` dan mesin selisih tetap pengaman lapis kedua.
@@ -370,6 +370,8 @@ Pemetaan yang ditetapkan (paket `dbmodel`, `sqlgen`, `diff`; keputusan kecil, da
 
 Hal yang menunggu konfirmasi atau keputusan perancang spesifikasi (belum dikerjakan secara diam-diam):
 
+*Status 2 Nov 2026: seluruh butir di bawah sudah diputuskan pemilik produk (tabel transisi status oleh K23 dan K24; keputusan kecil lain oleh K38); daftar dipertahankan sebagai jejak.*
+
 1. **Tabel transisi status** (Requirement 13.8 butir a): skema `resource.schema.json` belum punya kunci transisi, sehingga `Derive` belum membuat pemicu penguncian; templat pemicu sudah menerima `LockSpec.Transitions`. Perlu ditetapkan dari mana pasangan (lama, baru) berasal (task 13). **Ditutup 2 Nov 2026 (K23, K24):** pasangan lifecycle berasal dari metadata bawaan `sdk:document` (tujuh pasangan sah) dan transisi sumbu dari `statusAxes`; skema memuat kunci `statusAxes` (task 4.5).
 2. **Nilai kolom `<relasi>_type` pada `morphTo`**: dipakai kunci resource bentuk manifest (`sales.invoice_line`); spek hanya menyebut "kunci resource".
 3. **Penamaan tabel pivot `belongsToMany`**: `<slug>_<pemilik>_<relasi>` dengan kolom `<pemilik>_id` dan `<target>_id`; pivot antar resource yang sama dan `morphToMany` belum didukung (galat jelas).
@@ -393,7 +395,7 @@ Paket `internal/devtools/metadatatools/migrate` dan perintah `metadata:migrate <
 
 - Pemicu dokumen (OLD): `DELETE` baris terkunci selalu ditolak; `UPDATE` lolos hanya bila (a) hanya status, version, updated_at, updated_by berubah dengan pasangan lifecycle sah, (a2) hanya kolom sumbu status (plus version, updated_at, updated_by) berubah, sekurangnya satu sumbu berubah, dan tiap sumbu yang berubah dengan pasangan sah (termasuk mundur), atau (b) hanya kolom tujuan `migrateFrom` diisi dari NULL menjadi salinan persis (dan sekurangnya satu berubah). Dokumen `draft` bebas; kolom turunan dikecualikan dari perbandingan baris (pada BEFORE belum dihitung).
 - Pemicu anak: induk dikunci `FOR SHARE` tanpa predikat kunci lalu diperiksa dengan pernyataan baru; pada READ COMMITTED predikat kunci saja tidak menunggu transaksi induk yang belum commit. Terbukti dengan tes balapan dua arah (INSERT anak versus transisi induk). Pada UPDATE yang memindahkan anak antar induk, kedua induk diperiksa. Tabel induk pada badan fungsi tidak dikualifikasi skema (badan identik di skema mana pun; dibandingkan mesin selisih).
-- **Keputusan pelaksana, perlu konfirmasi pemilik produk:** pemicu dibuat `ENABLE ALWAYS TRIGGER` (`tgenabled = A`), bukan `ENABLE` biasa, agar `session_replication_role = replica` (Requirement 13.9) tidak melewatinya; mesin selisih menganggap pemicu yang tidak ALWAYS sebagai `trigger_disabled`, dan migrasi tulis tangan yang menonaktifkan pemicu wajib mengaktifkannya kembali dengan `ENABLE ALWAYS`. Keterbatasan yang tidak dapat ditutup di database: pemilik tabel (role aplikasi tunggal `erp`) tetap dapat menjalankan `ALTER TABLE ... DISABLE TRIGGER`; yang dijaga adalah tidak adanya jalur pengecualian yang disediakan sistem, dan penonaktifan terdeteksi `metadata:diff`.
+- **Keputusan pelaksana, disetujui pemilik produk 2 Nov 2026 (K36):** pemicu dibuat `ENABLE ALWAYS TRIGGER` (`tgenabled = A`), bukan `ENABLE` biasa, agar `session_replication_role = replica` (Requirement 13.9) tidak melewatinya; mesin selisih menganggap pemicu yang tidak ALWAYS sebagai `trigger_disabled`, dan migrasi tulis tangan yang menonaktifkan pemicu wajib mengaktifkannya kembali dengan `ENABLE ALWAYS`. Keterbatasan yang tidak dapat ditutup di database: pemilik tabel (role aplikasi tunggal `erp`) tetap dapat menjalankan `ALTER TABLE ... DISABLE TRIGGER`; yang dijaga adalah tidak adanya jalur pengecualian yang disediakan sistem, dan penonaktifan terdeteksi `metadata:diff`.
 - Perbaikan tambahan di `Derive`: `hasOne` dikerjakan setelah semua `belongsTo` (sebelumnya bergantung urutan kunci resource).
 
 ### Rename dan penghapusan kolom 12.3 (pelaksana, 2 Nov 2026)
@@ -428,11 +430,14 @@ Disetujui dan dicatat di requirements (K25 sampai K34), design (D-39 sampai D-46
 8. Kunci resource selalu tunggal; tabel dan URL jamak turunan `naming.Plural`; capability tulis-tangan `example.notes.read` tidak diganti (K35; uji `TestResourceKeyMappingRule`).
 9. Modul tanpa tag rilis dikecualikan dari syarat `deprecated`/`removeAfter`/MAJOR (K34).
 
-### Masih menunggu konfirmasi pemilik produk
+### Persetujuan lanjutan (2 Nov 2026)
 
-10. Keputusan kecil implementer (semantik tiga-nilai evaluator, `contains` hanya melipat ASCII, batas ekspresi, ambang `overlapping_repeat` 32, format desimal klien, operator filter per tipe, kunci morph bentuk manifest, runtime bangkitan disalin per modul bukan di SDK, pesan validasi platform belum ada di katalog i18n `platform`, label i18n bangkitan belum ada): belum ditinjau pemilik produk; rekomendasi: setujui dan catat sebagai keputusan desain.
-11. `ENABLE ALWAYS TRIGGER` pada pemicu bangkitan (agar `session_replication_role = replica` tidak melewatinya) dan penjaga data pada migrasi penghapusan (K18): belum dikonfirmasi; rekomendasi: setujui keduanya.
-12. T4 (grup 19 sampai 25) menunggu PRD-001 authz.
+10. Keputusan kecil implementer disetujui sebagai keputusan desain (K38).
+11. `ENABLE ALWAYS TRIGGER` (K36) dan penjaga data serta `Down` tak dapat dibalik pada penghapusan kolom (K37) disetujui.
+
+### Masih menunggu
+
+12. T4 (grup 19 sampai 25) dan grup 26 menunggu PRD-001 authz (`sdk/authz` Require/Filter/Check/Fields/CheckWrite dan manifest `resources`/`field_groups`); tidak ada butir konfirmasi pemilik produk lain yang terbuka untuk T1 sampai T3.
 
 ## Notes
 
