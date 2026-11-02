@@ -507,3 +507,38 @@ func TestCheckGoPackage(t *testing.T) {
 		t.Error("PascalEnumValue")
 	}
 }
+
+// TestResourceKeyMappingRule mengunci aturan pemetaan satu kunci resource ke semua bentuk turunannya (K35,
+// 2 Nov 2026): kunci selalu tunggal; identitas (kunci manifest dan prefiks permission) tunggal snake_case,
+// sedangkan tabel dan segmen URL jamak. Capability tulis-tangan jamak seperti example.notes.read milik modul
+// example (sebelum metadata) bukan bagian aturan ini.
+func TestResourceKeyMappingRule(t *testing.T) {
+	cases := []struct {
+		key, manifest, table, url string
+	}{
+		{"example.note", "example.note", "example_notes", "notes"},
+		{"sales.invoiceLine", "sales.invoice_line", "sales_invoice_lines", "invoice-lines"},
+		{"inventory.category", "inventory.category", "inventory_categories", "categories"},
+		{"core.status", "core.status", "core_statuses", "statuses"},
+	}
+	for _, c := range cases {
+		t.Run(c.key, func(t *testing.T) {
+			slug, name, err := SplitResourceKey(c.key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := ManifestResourceKey(c.key); got != c.manifest {
+				t.Errorf("kunci manifest = %q, want %q", got, c.manifest)
+			}
+			if got, _ := TableName(slug, name); got != c.table {
+				t.Errorf("tabel = %q, want %q", got, c.table)
+			}
+			if got, _ := URLSegment(name); got != c.url {
+				t.Errorf("url = %q, want %q", got, c.url)
+			}
+			if back, _ := ResourceKeyFromManifest(c.manifest); back != c.key {
+				t.Errorf("balik dari manifest = %q, want %q", back, c.key)
+			}
+		})
+	}
+}

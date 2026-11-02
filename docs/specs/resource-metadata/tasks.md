@@ -425,11 +425,11 @@ Disetujui dan dicatat di requirements (K25 sampai K34), design (D-39 sampai D-46
 5. `lockWhen` hanya pada resource dokumen konkret (K29).
 6. Nama status baku `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done` (K30; `need_approval` diganti `pending_approval`, dapat dibatalkan); pemicu `BEFORE TRUNCATE` (K31); `Down` pembalik expand hanya-development (K32).
 7. `transaction-data-standards.md` §1 dan §2 serta `roadmap-and-risks.md` diselaraskan ke K23 (K33); `posted` dipetakan ke `accepted`.
+8. Kunci resource selalu tunggal; tabel dan URL jamak turunan `naming.Plural`; capability tulis-tangan `example.notes.read` tidak diganti (K35; uji `TestResourceKeyMappingRule`).
 9. Modul tanpa tag rilis dikecualikan dari syarat `deprecated`/`removeAfter`/MAJOR (K34).
 
 ### Masih menunggu konfirmasi pemilik produk
 
-8. Kunci resource `example.note` (tunggal) vs permission `example.notes.read` (jamak). Jawaban 2 Nov 2026 memilih menyamakan ke jamak, tetapi kunci jamak menuntut fungsi kebalikan `Plural` (singularisasi) untuk nama tipe Go/TS/OpenAPI (`Note`), yang ambigu (`cases` dari `case` atau `cas`) dan menyentuh manifest, kontrak, serta berkas bangkitan example. Rekomendasi: pertahankan kunci tunggal dan dokumentasikan aturan pemetaan (kunci tunggal, permission dan URL jamak turunan `Plural`) dengan uji konsistensi, atau tambahkan properti `singular` eksplisit bila tetap ingin kunci jamak. Belum dikerjakan.
 10. Keputusan kecil implementer (semantik tiga-nilai evaluator, `contains` hanya melipat ASCII, batas ekspresi, ambang `overlapping_repeat` 32, format desimal klien, operator filter per tipe, kunci morph bentuk manifest, runtime bangkitan disalin per modul bukan di SDK, pesan validasi platform belum ada di katalog i18n `platform`, label i18n bangkitan belum ada): belum ditinjau pemilik produk; rekomendasi: setujui dan catat sebagai keputusan desain.
 11. `ENABLE ALWAYS TRIGGER` pada pemicu bangkitan (agar `session_replication_role = replica` tidak melewatinya) dan penjaga data pada migrasi penghapusan (K18): belum dikonfirmasi; rekomendasi: setujui keduanya.
 12. T4 (grup 19 sampai 25) menunggu PRD-001 authz.
