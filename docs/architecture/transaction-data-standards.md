@@ -27,7 +27,7 @@ Kata **WAJIB**, **DILARANG**, dan **SEBAIKNYA** bersifat normatif.
 
 ## 1. Prinsip integritas
 
-1. **Rekaman sah tidak diubah, hanya dikoreksi.** Dokumen yang sudah `submitted`/`posted` tidak pernah di-`UPDATE` pada field bisnisnya dan tidak pernah di-`DELETE`. Koreksi dilakukan dengan `cancel` + `amend`, atau dokumen pembalik (*reversal*).
+1. **Rekaman sah tidak diubah, hanya dikoreksi.** Dokumen yang sudah keluar dari `draft` (status `accepted` dan sesudahnya) tidak pernah di-`UPDATE` pada field bisnisnya dan tidak pernah di-`DELETE`. Koreksi dilakukan dengan `cancel` + `amend`, atau dokumen pembalik (*reversal*).
 2. **Satu transaksi bisnis = satu transaksi database.** Perubahan data, entri ledger, nomor dokumen, catatan idempotensi, event outbox, dan audit log ditulis bersama atau tidak sama sekali.
 3. **Server adalah sumber kebenaran angka.** Total, pajak, diskon, kurs, dan saldo dihitung server.
 4. **Setiap invariant domain ditegakkan dua kali**: di kode domain **dan** di database (constraint/trigger) untuk invariant kritis.
@@ -35,23 +35,30 @@ Kata **WAJIB**, **DILARANG**, dan **SEBAIKNYA** bersifat normatif.
 
 ## 2. Siklus hidup dokumen
 
+Siklus hidup baku (spec `resource-metadata` K23/K30, 2 Nov 2026; menggantikan siklus lama `submitted`/`posted`): status persisten `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done`.
+
 ```
-draft ──submit──▶ [pending_approval ──approve──▶] submitted ──post──▶ posted
-                         └──reject──▶ draft (dengan alasan)
-(pending_approval hanya terjadi bila skema approval aktif untuk resource/aksi tersebut — §9;
- post opsional, untuk dokumen yang menghasilkan ledger)
-  │                  │                   │
-  │ PATCH/DELETE     └──cancel──▶ cancelled ──amend──▶ draft baru (amendedFromId)
-  │                                      ▲
-  └ hanya di draft                       └── posted: cancel = membuat dokumen/entri pembalik, bukan menghapus
+draft ──delete──▶ deleted
+  │
+  └─submit─▶ accepted ──cancel──▶ cancelled ──amend──▶ dokumen BARU draft (amendedFromId)
+  │             │
+  │             └──complete──▶ done
+  │
+  └─submit (skema approval aktif)─▶ pending_approval ──approve──▶ accepted
+                                           └──reject──▶ rejected ──amend──▶ dokumen BARU draft (amendedFromId)
 ```
+
+- `submit` tidak menghasilkan status `submitted`: hasilnya langsung `accepted` atau `pending_approval` (bila skema approval aktif untuk resource/aksi tersebut, §9).
+- `accepted` adalah dokumen terbit (dahulu `submitted`/`posted`). Dokumen yang menghasilkan ledger memposting entri pada transisi ke `accepted`; `cancel` dokumen terposting membuat dokumen/entri pembalik, bukan menghapus.
+- `amend` hanya dari `cancelled` atau `rejected` dan membuat dokumen **baru** berstatus `draft` dengan `amendedFromId`; dokumen lama tidak berubah.
+- Status turunan seperti penagihan atau pengiriman (`to_bill`, `to_deliver`, ...) bukan status lifecycle: dinyatakan sebagai **sumbu status** (`statusAxes`) yang boleh mundur dan hanya berubah lewat aksi atau kait server.
 
 | Aturan | Penegak |
 | --- | --- |
 | Field bisnis hanya dapat diubah di `draft` | Domain + **trigger DB** menolak `UPDATE` field bisnis bila status ≠ `draft` |
-| `DELETE` hanya untuk `draft` yang belum pernah di-submit | Domain + trigger |
+| `DELETE` hanya untuk `draft` yang belum pernah di-submit; `TRUNCATE` ditolak bila ada baris terkunci | Domain + trigger (baris dan statement) |
 | `cancel` dan `amend` **wajib** menyertakan alasan (disimpan & diaudit) | Validasi DTO |
-| Dokumen `posted` dibatalkan dengan entri pembalik bertanggal posting pembatalan (bukan menghapus entri lama) | Domain + test |
+| Dokumen `accepted` yang terposting dibatalkan dengan entri pembalik bertanggal posting pembatalan (bukan menghapus entri lama) | Domain + test |
 | Transisi status diperiksa di dalam transaksi dengan record terkunci (`SELECT … FOR UPDATE`) | Domain + test konkurensi |
 
 ## 3. Ledger (stok, jurnal, kartu piutang/hutang)
@@ -162,7 +169,7 @@ Penghapusan permanen dicatat di audit (apa, kapan, siapa, dasar).
 - **Property-based test** untuk invariant: Σ debit = Σ kredit, saldo proyeksi = agregat ledger, kuantitas tidak negatif bila dilarang, total dokumen = Σ baris + pajak − diskon setelah pembulatan.
 - **Test konkurensi**: N goroutine mem-posting/menyesuaikan saldo yang sama; hasil akhir konsisten dan tanpa deadlock.
 - **Test idempotensi**: permintaan sama dikirim 2× → satu efek.
-- **Test immutabilitas**: `UPDATE`/`DELETE` langsung ke dokumen `posted` dan ledger ditolak database.
+- **Test immutabilitas**: `UPDATE`/`DELETE`/`TRUNCATE` langsung ke dokumen terkunci (`accepted` dan sesudahnya) dan ledger ditolak database.
 - **Test periode**: posting ke periode tertutup ditolak.
 
 ## 15. Checklist resource transaksional (Kiro spec `design.md` & PR)

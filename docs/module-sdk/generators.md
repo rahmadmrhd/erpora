@@ -150,6 +150,17 @@ Sistem metadata resource (spec `docs/specs/resource-metadata/`, [ADR-0016](../ad
 
 Task: `task metadata:check`, `task metadata:generate` (`-- <modul>` membatasi), dan `task metadata:generate:check`. Kedua yang bersifat memeriksa ikut `task lint`, dan `task metadata:generate:check` ikut `task web:check` karena berkas `*.meta.gen.ts` harus sinkron sebelum typecheck dan lint. Modul tanpa `metadata/` tidak terpengaruh.
 
+Aturan penulisan metadata hasil konfirmasi pemilik produk 2 Nov 2026 (requirements K25 sampai K34):
+
+- **Identifier** camelCase ketat: akronim ditulis `taxId`, bukan `taxID` (pesan galat menyarankan bentuk yang benar). Kata seperti `type`, `order`, `user`, `group` sah sebagai nama field; `metadata:check` hanya menolak nama yang benar-benar menghasilkan kode tidak valid atau bentrok dengan anggota bangkitan di suatu target.
+- **Include `set`** (memperketat maupun melonggarkan) wajib memuat `reason` (string tidak kosong), dicetak di keluaran `metadata:check`; tanpa itu `metadata:check` melaporkan `include_set_missing_reason`.
+- **`unmanagedColumns`** berupa daftar objek `{name, classification: highly_confidential, reason}`; selain itu ditolak (`unmanaged_column_classification`, `unmanaged_column_reason_missing`).
+- **Bentrok identifier bangkitan Go** (mis. field tulis `validate`/`present`, atau nama resource yang bertabrakan dengan tipe runtime bangkitan seperti `StatusSpec`) ditolak dengan `name_reserved_go`; kode `name_reserved_sql` dan `name_reserved_typescript` kini berarti bentrok nyata, bukan daftar kata terlarang.
+- **`lockWhen`** hanya sah pada resource dokumen konkret (`lockwhen_not_document` untuk selain itu).
+- **Status lifecycle** baku: `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done`.
+- **Pemicu dokumen** mencakup `BEFORE TRUNCATE` (statement-level; juga pada tabel anak/pivot) yang menolak `TRUNCATE` bila ada baris terkunci dan bila isolation bukan `read committed`; semua fungsi pemicu bangkitan memakai `SET search_path = pg_catalog, pg_temp`; `Down` bangkitan yang berisi `DROP` pembalik expand diberi penanda "HANYA DEVELOPMENT", sedangkan `Down` penghapusan kolom tetap tidak dapat dibalik.
+- **Modul tanpa tag rilis** boleh menghapus field tanpa `deprecated`/`removeAfter`/MAJOR; penjaga data migrasi tetap berlaku.
+
 ### Keluaran per modul
 
 Semua jalur relatif `modules/<dir>/`; `<nama>` adalah bagian nama pada kunci resource (`sales.invoiceLine` menjadi `invoice_line` untuk Go dan `invoiceLine` untuk TS).

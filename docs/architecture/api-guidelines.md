@@ -115,7 +115,7 @@ Zona waktu: server selalu mengirim UTC. Konversi ke zona waktu user (PRD-001 FR-
 | `version` | Integer, naik setiap perubahan (optimistic concurrency, §7) |
 | `createdAt`, `updatedAt` | UTC |
 | `createdBy`, `updatedBy` | ID user (dipakai juga oleh scope `owner`, PRD-001 FR-111) |
-| `status` | Wajib untuk resource berstatus dokumen: `draft`, `deleted`, `need_approval`, `accepted`, `rejected`, `cancelled`, `done` (§11) |
+| `status` | Wajib untuk resource berstatus dokumen: `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done` (§11) |
 
 ### 4.4. Field yang tidak boleh dilihat
 
@@ -279,20 +279,20 @@ GET /api/platform/jobs/0193…
 
 ## 11. Dokumen ERP (resource berstatus)
 
-Resource dokumen (pesanan, penyesuaian stok, jurnal) mengikuti siklus standar yang selaras dengan aksi PRD-001. Nilai `status` (snake_case, persisten): `draft`, `deleted`, `need_approval`, `accepted`, `rejected`, `cancelled`, `done`.
+Resource dokumen (pesanan, penyesuaian stok, jurnal) mengikuti siklus standar yang selaras dengan aksi PRD-001. Nilai `status` (snake_case, persisten): `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done`.
 
 ```
 draft ──DELETE──▶ deleted
   │
   ├─ submit (tanpa skema persetujuan) ──▶ accepted
-  └─ submit (dengan skema persetujuan) ─▶ need_approval ──▶ accepted
+  └─ submit (dengan skema persetujuan) ─▶ pending_approval ──▶ accepted
                                                        └──▶ rejected
 accepted ──cancel──▶ cancelled
 accepted ──────────▶ done
 cancelled | rejected ──amend──▶ (dokumen baru, status draft, amendedFromId)
 ```
 
-- Aksi `submit` tidak menghasilkan status `submitted`: hasilnya langsung `accepted` atau `need_approval`, ditentukan resource atau kait (skema persetujuan di luar cakupan pedoman ini). Transisi di luar diagram menghasilkan `409 invalid_state`.
+- Aksi `submit` tidak menghasilkan status `submitted`: hasilnya langsung `accepted` atau `pending_approval`, ditentukan resource atau kait (skema persetujuan di luar cakupan pedoman ini). Transisi di luar diagram menghasilkan `409 invalid_state`.
 - `PATCH` hanya diizinkan pada `draft`; dokumen berstatus lain bersifat tidak dapat diubah (`409 invalid_state`).
 - `amend` hanya sah dari `cancelled` atau `rejected` dan membuat dokumen **baru** berstatus `draft` dengan `amendedFromId`, tidak mengubah dokumen lama (jejak audit tetap utuh).
 - Dokumen dapat punya **sumbu status tambahan** di luar lifecycle (mis. `billingStatus`, `deliveryStatus` pada pesanan penjualan), masing-masing bernilai enum hanya-baca dengan pasangan transisi sendiri yang boleh mundur (mis. pengiriman sebagian lalu semua barang diretur kembali ke `to_deliver`). Sumbu hanya berubah lewat aksi atau kait server, tidak lewat `PATCH`, dan tetap dapat berubah pada dokumen terkunci hanya dengan pasangan yang sah; perubahan di luar pasangan menghasilkan `409 invalid_state`.
