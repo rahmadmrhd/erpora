@@ -18,7 +18,7 @@ BEGIN
     RETURN NEW;
   END IF;
   -- pengisian kolom tujuan migrateFrom
-  IF (to_jsonb(NEW) - ARRAY['phone_e164']) = (to_jsonb(OLD) - ARRAY['phone_e164']) AND (NEW."phone_e164" IS NOT DISTINCT FROM OLD."phone_e164" OR (OLD."phone_e164" IS NULL AND NEW."phone_e164" IS NOT DISTINCT FROM OLD."phone")) AND (NEW."phone_e164" IS DISTINCT FROM OLD."phone_e164") THEN
+  IF (to_jsonb(NEW) - ARRAY['phone_e164']) = (to_jsonb(OLD) - ARRAY['phone_e164']) AND ((to_jsonb(NEW) -> 'phone_e164') = (to_jsonb(OLD) -> 'phone_e164') OR ((to_jsonb(OLD) -> 'phone_e164') = 'null'::jsonb AND (to_jsonb(NEW) -> 'phone_e164') = COALESCE(to_jsonb(OLD) -> 'phone', 'null'::jsonb))) AND ((to_jsonb(NEW) -> 'phone_e164') IS DISTINCT FROM (to_jsonb(OLD) -> 'phone_e164')) THEN
     RETURN NEW;
   END IF;
   RAISE EXCEPTION 'dokumen terkunci: perubahan ditolak (m_docs)' USING ERRCODE = '55000';

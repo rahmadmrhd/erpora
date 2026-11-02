@@ -1,11 +1,15 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,7 +20,8 @@ import (
 )
 
 func newMetadataDiff() *cobra.Command {
-	return &cobra.Command{
+	var timeout time.Duration
+	cmd := &cobra.Command{
 		Use:   "metadata:diff [modul]",
 		Short: "Bandingkan skema database hasil migrasi dengan skema turunan metadata (database sementara; hanya dev dan CI)",
 		Long: "Membuat database sementara di server " + diff.EnvAdminDSN + " (DSN admin; bukan database aplikasi), membuat role non-superuser, menjalankan\n" +
@@ -46,8 +51,10 @@ func newMetadataDiff() *cobra.Command {
 				return err
 			}
 			var rep *diff.Report
-			err = diff.WithTempDatabase(c.Context(), adminDSN, func(dsn string) error {
-				r, e := diff.Run(c.Context(), diff.Options{DSN: dsn, Sources: plan.sources, Model: plan.model, NotePrefixes: plan.prefixes})
+			ctx, cancel := metadataContext(c, timeout)
+			defer cancel()
+			err = diff.WithTempDatabase(ctx, adminDSN, func(dsn string) error {
+				r, e := diff.Run(ctx, diff.Options{DSN: dsn, Sources: plan.sources, Model: plan.model, NotePrefixes: plan.prefixes})
 				rep = r
 				return e
 			})
@@ -61,6 +68,8 @@ func newMetadataDiff() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().DurationVar(&timeout, "timeout", defaultMetadataTimeout, "batas waktu seluruh alur (0 = tanpa batas); Ctrl-C juga membatalkan dan membersihkan database sementara")
+	return cmd
 }
 
 type metadataDiffPlan struct {
@@ -174,3 +183,19 @@ func planMetadataDiff(root, only string, warn io.Writer) (*metadataDiffPlan, err
 
 // reindexSchema membangun Schema dari daftar tabel (tabel diurutkan menurut nama).
 func reindexSchema(s *dbmodel.Schema) *dbmodel.Schema { return dbmodel.NewSchema(s.Tables) }
+
+// defaultMetadataTimeout adalah batas waktu bawaan metadata:diff dan metadata:migrate (membuat database sementara,
+// menjalankan semua migrasi, introspeksi); dapat diubah dengan --timeout (0 = tanpa batas).
+const defaultMetadataTimeout = 10 * time.Minute
+
+// metadataContext menurunkan konteks yang dibatalkan oleh Ctrl-C atau SIGTERM dan oleh batas waktu. Pembersihan
+// database dan role sementara tetap berjalan setelah pembatalan (diff.Run dan diff.WithTempDatabase memakai
+// konteks tanpa pembatalan dengan batas sendiri).
+func metadataContext(c *cobra.Command, timeout time.Duration) (context.Context, context.CancelFunc) {
+	ctx, stop := signal.NotifyContext(c.Context(), os.Interrupt, syscall.SIGTERM)
+	if timeout <= 0 {
+		return ctx, stop
+	}
+	tctx, cancel := context.WithTimeout(ctx, timeout)
+	return tctx, func() { cancel(); stop() }
+}

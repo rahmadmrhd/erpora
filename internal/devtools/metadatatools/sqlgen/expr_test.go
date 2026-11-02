@@ -52,8 +52,6 @@ func TestStoredExpr_Golden(t *testing.T) {
 			`trunc(("quantity" + "unit_price" + "count"), 0)`},
 		{"sub", m("sub", []any{fld("qty"), fld("price")}, "scale", 2, "round", "half_up"),
 			`round(("quantity" - "unit_price"), 2)`},
-		{"div tanpa pembagian nol", m("div", []any{fld("qty"), fld("price")}, "scale", 4, "round", "half_up"),
-			`round(("quantity" / NULLIF("unit_price", 0)), 4)`},
 		{"concat", m("concat", []any{fld("name"), m("lit", " / "), fld("qty"), fld("count"), fld("ok")}),
 			`(COALESCE("name", '') || ' / '::text || COALESCE("quantity"::text, '') || COALESCE("count"::text, '') || COALESCE("ok"::text, ''))`},
 		{"coalesce", m("coalesce", []any{fld("qty"), m("dec", "0.00")}), `COALESCE("quantity", 0.00)`},
@@ -147,5 +145,35 @@ func TestStoredExpr_ResultType(t *testing.T) {
 	typ, err = StoredExprType(parseExpr(t, m("mul", []any{fld("qty"), fld("price")}, "scale", 2, "round", "half_up")), testEnv())
 	if err != nil || typ != metadata.TypeDecimal {
 		t.Errorf("mul -> %v, %v", typ, err)
+	}
+}
+
+// div memakai pembagian eksak atas bilangan bulat (bukan operator "/" numeric yang membulatkan dua kali).
+func TestStoredExpr_DivIsExactAndGuardsZero(t *testing.T) {
+	for _, mode := range []string{"half_up", "half_down", "half_even", "up", "down", "floor", "ceiling"} {
+		got, err := StoredExpr(parseExpr(t, m("div", []any{fld("qty"), fld("price")}, "scale", 4, "round", mode)), testEnv())
+		if err != nil {
+			t.Fatalf("%s: %v", mode, err)
+		}
+		wants := []string{"div((", "mod((", `NULLIF(("unit_price")::numeric, 0)`, "* 10000)", "* 0.0001)"}
+		if mode == "down" {
+			wants = append(wants[:1], wants[2:]...)
+		}
+		for _, want := range wants {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: tidak memuat %q:\n%s", mode, want, got)
+			}
+		}
+		if strings.Contains(got, " / ") {
+			t.Errorf("%s: tidak boleh memakai operator /:\n%s", mode, got)
+		}
+		if n := len(splitTopLevel(t, "SELECT "+got)); n != 1 {
+			t.Errorf("%s: pernyataan terpecah", mode)
+		}
+	}
+	// skala 0: satuan 1.
+	got, err := StoredExpr(parseExpr(t, m("div", []any{fld("qty"), fld("price")}, "scale", 0, "round", "half_even")), testEnv())
+	if err != nil || !strings.HasSuffix(got, " * 1)") {
+		t.Errorf("skala 0 = %s, %v", got, err)
 	}
 }

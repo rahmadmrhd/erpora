@@ -109,6 +109,13 @@ jobs:
         env:
           ERP_TEST_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/postgres?sslmode=disable
         run: task metadata:diff
+      # Alur CLI metadata:migrate dan metadata:diff ujung ke ujung (spec resource-metadata, Requirement 10.3, 11.6): tes
+      # bertag integration di internal/devtools/commands hanya berjalan bila ERP_TEST_DATABASE_URL diset, sehingga env
+      # dipasang pada langkah ini saja dan hanya memilih tes CLI metadata (test:integration tetap memakai testcontainers).
+      - name: metadata:migrate dan metadata:diff (tes CLI integrasi)
+        env:
+          ERP_TEST_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/postgres?sslmode=disable
+        run: task test:metadata-cli
 
   # Gate kontrak API (FR-14/FR-23): lint Spectral, hasil generate mutakhir, dan breaking change terhadap tag rilis terakhir.
   contracts:

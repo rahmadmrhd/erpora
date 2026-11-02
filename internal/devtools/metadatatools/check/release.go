@@ -156,6 +156,7 @@ func (c *checker) compareWithRelease(in Input, m Module, tag string) {
 	}
 	base := c.baselineCatalog(in, m, docs)
 	res := base.ResolveAll()
+	c.baselines[m.Manifest.Slug] = res
 	curVersion := m.Manifest.Version
 	baseVersion := strings.TrimPrefix(tag, strings.TrimSuffix(m.Dir, "/")+"/v")
 	for _, old := range res.Resources {

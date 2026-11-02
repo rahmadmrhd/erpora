@@ -23,6 +23,8 @@ const (
 // selisih untuk membangun skema "diharapkan" pada skema sementara); kosong = tanpa kualifikasi.
 type Options struct {
 	Schema string
+	// IfNotExists membuat AddColumn memakai ADD COLUMN IF NOT EXISTS (idempoten).
+	IfNotExists bool
 }
 
 // Statement adalah satu pernyataan SQL utuh (tanpa titik koma penutup).
@@ -272,7 +274,11 @@ func AddColumn(t *dbmodel.Table, c *dbmodel.Column, o Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "ALTER TABLE " + name + " ADD COLUMN " + def, nil
+	ine := ""
+	if o.IfNotExists {
+		ine = "IF NOT EXISTS "
+	}
+	return "ALTER TABLE " + name + " ADD COLUMN " + ine + def, nil
 }
 
 // CreateIndex menghasilkan CREATE INDEX btree biasa.

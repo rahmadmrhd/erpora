@@ -96,6 +96,12 @@ func compareColumns(r *Report, table string, act, exp *Table, unmanaged []string
 		if a.Generated != e.Generated {
 			r.Findings = append(r.Findings, Finding{Kind: KindColumnGenerated, Table: table, Object: e.Name, Message: "ekspresi kolom turunan berbeda", Expected: e.Generated, Actual: a.Generated})
 		}
+		if a.Collation != e.Collation {
+			r.Findings = append(r.Findings, Finding{Kind: KindColumnCollation, Table: table, Object: e.Name, Message: "kolasi kolom berbeda", Expected: e.Collation, Actual: a.Collation})
+		}
+		if a.Identity != e.Identity {
+			r.Findings = append(r.Findings, Finding{Kind: KindColumnIdentity, Table: table, Object: e.Name, Message: "identity kolom berbeda", Expected: e.Identity, Actual: a.Identity})
+		}
 	}
 	for _, a := range act.Columns {
 		if exp.Column(a.Name) != nil || contains(unmanaged, a.Name) {
@@ -211,6 +217,12 @@ func compareIndexes(r *Report, table string, act, exp *Table, unmanaged []string
 		return m
 	}
 	diffSets(r, table, KindIndexMissing, KindIndexExtra, build(act, true), build(exp, false))
+	// Indeks tidak valid (mis. CREATE INDEX CONCURRENTLY yang gagal) tidak melayani kueri dan tidak menegakkan unique.
+	for _, ix := range act.Indexes {
+		if ix.Invalid && !touchesUnmanaged(ix.Columns, ix.Key, unmanaged) {
+			r.Findings = append(r.Findings, Finding{Kind: KindIndexInvalid, Table: table, Object: ix.Name, Message: "indeks tidak valid (indisvalid false): bangun ulang atau hapus", Actual: ix.Key, Columns: ix.Columns})
+		}
+	}
 }
 
 func compareTriggers(r *Report, table string, act, exp *Table) {
@@ -230,13 +242,17 @@ func compareTriggers(r *Report, table string, act, exp *Table) {
 	for _, n := range names {
 		want := e[n]
 		got, ok := a[n]
-		switch {
-		case !ok:
+		if !ok {
 			r.Findings = append(r.Findings, Finding{Kind: KindTriggerMissing, Table: table, Object: n, Message: "pemicu bangkitan tidak ada di database"})
-		case !got.Enabled || (want.Always && !got.Always):
+			continue
+		}
+		if !got.Enabled || (want.Always && !got.Always) {
 			r.Findings = append(r.Findings, Finding{Kind: KindTriggerDisabled, Table: table, Object: n, Message: "pemicu nonaktif atau tidak ENABLE ALWAYS (dapat dilewati session_replication_role = replica); migrasi tulis tangan wajib mengaktifkannya kembali dengan ENABLE ALWAYS, Requirement 13.9 dan 13.10"})
-		case got.Type != want.Type || got.Function != want.Function || got.Body != want.Body:
-			r.Findings = append(r.Findings, Finding{Kind: KindTriggerChanged, Table: table, Object: n, Message: "jenis, fungsi, atau badan pemicu berbeda dari templat bangkitan"})
+		}
+		if got.Type != want.Type || got.Function != want.Function || got.Body != want.Body || got.Def != want.Def ||
+			got.SecDef != want.SecDef || got.Config != want.Config || got.Lang != want.Lang {
+			r.Findings = append(r.Findings, Finding{Kind: KindTriggerChanged, Table: table, Object: n,
+				Message: "pemicu berbeda dari templat bangkitan (jenis, definisi seperti klausa WHEN atau UPDATE OF, fungsi atau skemanya, badan, SET fungsi, SECURITY DEFINER)", Expected: want.Def, Actual: got.Def})
 		}
 	}
 	var extra []string
@@ -247,6 +263,37 @@ func compareTriggers(r *Report, table string, act, exp *Table) {
 	}
 	sort.Strings(extra)
 	for _, n := range extra {
+		if by := shadowedBy(a[n], exp.Triggers); by != "" {
+			r.Findings = append(r.Findings, Finding{Kind: KindTriggerShadow, Table: table, Object: n,
+				Message: "pemicu tulis tangan BEFORE ROW berjalan sesudah pemicu bangkitan " + by + " (urutan nama) dan dapat mengubah NEW setelah pemeriksaan penguncian: ganti nama agar berjalan lebih dulu, ubah menjadi AFTER, atau hapus (Requirement 13.6, 13.10)"})
+			continue
+		}
 		r.Notes = append(r.Notes, Finding{Kind: KindTriggerExtra, Table: table, Object: n, Message: "pemicu di database tidak berasal dari metadata"})
 	}
+}
+
+// Bit tgtype pemicu PostgreSQL.
+const (
+	tgRow    = 1
+	tgBefore = 2
+	tgInsert = 4
+	tgUpdate = 16
+)
+
+// shadowedBy mengembalikan nama pemicu bangkitan yang dapat dilangkahi pemicu tulis tangan extra: extra aktif,
+// BEFORE ROW, menangani INSERT atau UPDATE yang sama dengan pemicu bangkitan, dan namanya lebih besar (PostgreSQL
+// menjalankan pemicu BEFORE menurut urutan nama), sehingga dapat mengubah NEW sesudah pemicu bangkitan memeriksanya.
+func shadowedBy(extra Trigger, generated []Trigger) string {
+	if !extra.Enabled || extra.Type&tgRow == 0 || extra.Type&tgBefore == 0 {
+		return ""
+	}
+	for _, g := range generated {
+		if g.Type&tgBefore == 0 {
+			continue
+		}
+		if shared := extra.Type & g.Type & (tgInsert | tgUpdate); shared != 0 && extra.Name > g.Name {
+			return g.Name
+		}
+	}
+	return ""
 }

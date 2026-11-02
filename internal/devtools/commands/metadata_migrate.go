@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing/fstest"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +19,7 @@ import (
 
 func newMetadataMigrate() *cobra.Command {
 	var dryRun bool
+	var timeout time.Duration
 	cmd := &cobra.Command{
 		Use:   "metadata:migrate <modul> <nama> [--dry-run]",
 		Short: "Tulis migrasi goose dari selisih antara metadata dan database (tidak pernah diterapkan; hanya dev dan CI)",
@@ -62,8 +64,10 @@ func newMetadataMigrate() *cobra.Command {
 				return err
 			}
 			var rep *diff.Report
-			err = diff.WithTempDatabase(c.Context(), adminDSN, func(dsn string) error {
-				r, e := diff.Run(c.Context(), diff.Options{DSN: dsn, Sources: plan.sources, Model: plan.model, NotePrefixes: plan.prefixes})
+			ctx, cancel := metadataContext(c, timeout)
+			defer cancel()
+			err = diff.WithTempDatabase(ctx, adminDSN, func(dsn string) error {
+				r, e := diff.Run(ctx, diff.Options{DSN: dsn, Sources: plan.sources, Model: plan.model, NotePrefixes: plan.prefixes})
 				rep = r
 				return e
 			})
@@ -101,5 +105,6 @@ func newMetadataMigrate() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "cetak isi migrasi tanpa menulis berkas")
+	cmd.Flags().DurationVar(&timeout, "timeout", defaultMetadataTimeout, "batas waktu seluruh alur (0 = tanpa batas); Ctrl-C juga membatalkan dan membersihkan database sementara")
 	return cmd
 }

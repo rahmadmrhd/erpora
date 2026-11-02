@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"erpora/internal/devtools/metadatatools/naming"
+	"erpora/internal/devtools/metadatatools/resolve"
 	"erpora/sdk/metadata"
 )
 
@@ -16,6 +17,12 @@ func (x *rctx) checkMigrateFrom() {
 			continue
 		}
 		old := x.fields[src]
+		if old == nil && src != f.Name && !x.isAbs {
+			// Field asal sudah dihapus dari metadata (rilis MAJOR yang menghapus kolom lama, K18): sah bila baseline
+			// rilis terakhir memuatnya deprecated; diputuskan setelah baseline dibaca (resolvePendingMigrateFrom).
+			x.c.pendingMF = append(x.c.pendingMF, pendingMigrateFrom{x: x, f: f, src: src})
+			continue
+		}
 		if old == nil || src == f.Name {
 			if old == nil && x.isAbs {
 				continue
@@ -133,6 +140,57 @@ func (x *rctx) checkLockWhenSQL() {
 				bad("%s bukan kolom fisik (accessor expr atau func tidak dapat dipakai)", n)
 			}
 		}
+		if c.Ref != "" {
+			bad("ref (%s) tidak dapat diterjemahkan untuk pemicu: bandingkan dengan nilai literal", c.Ref)
+		}
+		// Accessor stored adalah kolom turunan (GENERATED): pada pemicu BEFORE nilainya belum dihitung dan penerjemah
+		// SQL menolaknya (design D-26: dapat diterjemahkan ke SQL); lockWhen harus memakai kolom fisik biasa.
+		for _, n := range []string{c.Field, c.Ref} {
+			if fld := x.fields[n]; n != "" && fld != nil {
+				if acc, ok := fld.Attrs["accessor"].(map[string]any); ok {
+					if k, _ := acc["kind"].(string); k == "stored" {
+						bad("%s adalah accessor stored (kolom turunan): lockWhen harus memakai kolom fisik biasa", n)
+					}
+				}
+			}
+		}
 	}
 	walk(cond, "$")
+}
+
+type pendingMigrateFrom struct {
+	x   *rctx
+	f   *resolve.Field
+	src string
+}
+
+// resolvePendingMigrateFrom memutuskan migrateFrom yang merujuk field yang tidak ada lagi di metadata
+// (Requirement 12.2, 12.4, 12.8; K18, D-35). Rename lintas rilis: rilis N menambah field baru dan menandai yang
+// lama deprecated; rilis MAJOR berikutnya menghapus field lama tetapi migrateFrom pada field baru tetap ada,
+// karena migrasi penghapusan memakainya sebagai penjaga (kolom pengganti harus terisi) dan pemicu dokumen
+// memakainya sebagai pengecualian salinan. Karena itu migrateFrom ke field yang sudah dihapus sah bila baseline
+// rilis terakhir memuat field itu dengan deprecated; baseline memuatnya tanpa deprecated atau tidak memuatnya
+// sama sekali adalah galat (salah ketik atau rename tanpa masa transisi); tanpa baseline (modul belum pernah
+// dirilis, tanpa git, atau baseline tidak terbaca) hanya peringatan karena tidak dapat diverifikasi.
+func (c *checker) resolvePendingMigrateFrom() {
+	for _, p := range c.pendingMF {
+		base := c.baselines[p.x.r.Module]
+		if base == nil {
+			p.x.atField(SeverityWarning, p.f, "migrateFrom", CodeMigrateFromUnbaselined,
+				"migrateFrom %q pada field %s merujuk field yang tidak ada di metadata dan tidak dapat diverifikasi terhadap rilis terakhir (modul tanpa tag rilis atau baseline tidak terbaca)", p.src, p.f.Name)
+			continue
+		}
+		var old *resolve.Field
+		if r := base.Resource(p.x.r.Key); r != nil {
+			old = r.Field(p.src)
+		}
+		if old == nil {
+			p.x.err(p.f, "migrateFrom", CodeMigrateFromUnknown, "migrateFrom %q pada field %s bukan field yang ada pada metadata saat ini maupun rilis terakhir", p.src, p.f.Name)
+			continue
+		}
+		if _, dep := old.Attrs["deprecated"].(map[string]any); !dep {
+			p.x.err(p.f, "migrateFrom", CodeMigrateFromUnknown,
+				"migrateFrom %q pada field %s: field asal sudah dihapus tetapi tidak ditandai deprecated pada rilis terakhir (tandai deprecated lebih dulu; Requirement 12.1)", p.src, p.f.Name)
+		}
+	}
 }

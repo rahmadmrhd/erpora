@@ -115,3 +115,19 @@ func TestDerive_DocumentWithoutAxesHasNoAxes(t *testing.T) {
 		t.Fatalf("pemicu = %+v", tr)
 	}
 }
+
+// migrateFrom ke field yang sudah dihapus dari metadata (rilis MAJOR, K18) tetap menjadi pasangan pemicu: kolom
+// asal dibaca dinamis sehingga fungsi tidak rusak setelah kolom lama dihapus.
+func TestDerive_MigrateFromPairWithoutOldFieldStillInLockSpec(t *testing.T) {
+	s := deriveOne(t, f("m/doc.resource.yaml", resourceNoAudit("m.doc", `
+include:
+  - source: sdk:document
+fields:
+  phoneE164: {type: string, maxLength: 20, nullable: true, migrateFrom: phone, label: m.doc.phoneE164}
+`)))
+	tb := table(t, s, "m_docs")
+	tr := triggerByName(tb, "m_docs_lock_trg")
+	if tb.Column("phone") != nil || tr == nil || len(tr.Lock.MigratePairs) != 1 || tr.Lock.MigratePairs[0] != [2]string{"phone_e164", "phone"} {
+		t.Fatalf("pemicu = %+v", tr)
+	}
+}

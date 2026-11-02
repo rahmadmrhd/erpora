@@ -71,6 +71,11 @@ tasks:
     cmds:
       - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
 
+  test:metadata-cli:
+    desc: Tes CLI metadata:migrate dan metadata:diff ujung ke ujung (butuh ERP_TEST_DATABASE_URL ke server PostgreSQL pengembangan atau CI)
+    cmds:
+      - go test -tags integration -count=1 -run "TestMetadata(Diff|Migrate)" ./internal/devtools/commands/
+
   test:generator:
     desc: Buktikan make:module lolos semua gate di salinan repo (lama; butuh Docker, Bun, dan jaringan Go module cache)
     cmds:

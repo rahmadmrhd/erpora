@@ -43,7 +43,9 @@ func WithTempDatabase(ctx context.Context, adminDSN string, fn func(dsn string) 
 		if !created {
 			return
 		}
-		if _, e := admin.ExecContext(context.WithoutCancel(ctx), `DROP DATABASE IF EXISTS `+q+` WITH (FORCE)`); e != nil && err == nil {
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		if _, e := admin.ExecContext(cctx, `DROP DATABASE IF EXISTS `+q+` WITH (FORCE)`); e != nil && err == nil {
 			err = fmt.Errorf("hapus database sementara %s: %w", name, e)
 		}
 	}()

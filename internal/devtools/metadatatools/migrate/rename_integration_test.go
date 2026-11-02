@@ -322,3 +322,50 @@ func TestRename_LockedDocumentRowsAreCopiedThroughTriggerException(t *testing.T)
 		t.Errorf("selisih harus kosong:\n%s", rep)
 	}
 }
+
+// Rename dan hapus pada dokumen terkunci dalam satu migrasi (field lama sudah tidak ada di metadata): pemicu
+// diganti dengan pasangan migrateFrom, baris terkunci tersalin, kolom lama dihapus, dan pemicu tetap berfungsi
+// (kolom asal dibaca dinamis) setelah kolom lama hilang.
+func TestRename_LockedDocumentRemovalInOneMigration(t *testing.T) {
+	doc := func(body string) *dbmodel.Schema {
+		return modelOf(t, f("m/doc.resource.yaml", resourceDoc("m.doc", "include:\n  - source: sdk:document\n"+body)))
+	}
+	v1 := doc("fields:\n  phone: {type: string, maxLength: 20, nullable: true, label: m.doc.phone}\n")
+	v3 := doc("fields:\n  phoneE164: {type: string, maxLength: 20, nullable: true, migrateFrom: phone, label: m.doc.phoneE164}\n")
+	files := baseFS(t, v1, nil)
+	res := genNext(t, v3, files, 0)
+	if !strings.Contains(res.SQL, "CREATE OR REPLACE FUNCTION") || !strings.Contains(res.SQL, `SET "phone_e164" = "phone"`) ||
+		!strings.Contains(res.SQL, "IF EXISTS (SELECT 1 FROM") {
+		t.Fatalf("migrasi harus mengganti pemicu, menyalin, dan menjaga penghapusan:\n%s", res.SQL)
+	}
+	files["0002_rename_drop.sql"] = &fstest.MapFile{Data: []byte(completeRemoval(res.SQL))}
+
+	ctx := context.Background()
+	dsn := pgtest.Start(t)
+	p, _ := newProvider(t, dsn, files)
+	if _, err := p.UpTo(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	db := openSQL(t, dsn)
+	for i := 1; i <= 2; i++ {
+		id := fmt.Sprintf("00000000-0000-0000-0000-%012d", i)
+		if _, err := db.Exec(`INSERT INTO m_docs (id, phone) VALUES ($1::uuid, '0899' || $2::text)`, id, fmt.Sprint(i)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`UPDATE m_docs SET status = 'accepted' WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := p.UpTo(ctx, 2); err != nil {
+		t.Fatalf("migrasi harus lolos pada dokumen terkunci: %v\n%s", err, completeRemoval(res.SQL))
+	}
+	var copied int
+	if err := db.QueryRow(`SELECT count(*) FROM m_docs WHERE phone_e164 LIKE '0899%'`).Scan(&copied); err != nil || copied != 2 {
+		t.Fatalf("tersalin %d (%v)", copied, err)
+	}
+	// Kolom lama sudah hilang; pemicu tetap menolak dengan pesan penguncian (bukan galat fungsi).
+	_, err := db.Exec(`UPDATE m_docs SET phone_e164 = 'lain' WHERE status = 'accepted'`)
+	if err == nil || !strings.Contains(err.Error(), "dokumen terkunci") {
+		t.Fatalf("pemicu harus tetap berfungsi setelah kolom lama dihapus, err = %v", err)
+	}
+}

@@ -4,12 +4,15 @@
 // Aturan yang ditegakkan:
 //   - Perubahan AMAN (expand) dihasilkan otomatis: tabel baru, kolom baru yang nullable atau berdefault, indeks
 //     baru, pelonggaran batasan (NOT NULL dilepas, batas panjang atau rentang dilebarkan, nilai enum extensible
-//     bertambah), perubahan nilai bawaan, pemicu bangkitan yang hilang atau nonaktif, dan constraint yang
-//     menyentuh hanya kolom yang baru ditambahkan pada migrasi yang sama.
-//   - Perubahan PERLU KEPUTUSAN (mengganti nama, ubah tipe, perkecil batas, NOT NULL pada kolom ada, unique
-//     atau foreign key pada data ada, menghapus apa pun, dan bentuk yang tidak dikenali) hanya menghasilkan
-//     kerangka berpenanda TodoMarker, seluruhnya sebagai komentar; metadata:check menggagalkan selama penanda
-//     ada (FindTodos). Tidak pernah ada pernyataan destruktif aktif.
+//     bertambah), perubahan nilai bawaan, pemicu bangkitan yang hilang, nonaktif, atau berbeda dari templat
+//     (diganti di tempat dengan CREATE OR REPLACE FUNCTION dan TRIGGER lalu ENABLE ALWAYS, tanpa DROP agar tidak
+//     ada celah tanpa pemicu), salinan data rename (migrateFrom), dan constraint yang menyentuh hanya kolom yang
+//     baru ditambahkan pada migrasi yang sama.
+//   - Perubahan PERLU KEPUTUSAN (ubah tipe, perkecil batas, NOT NULL pada kolom ada atau kolom baru NOT NULL tanpa
+//     nilai bawaan, unique atau foreign key pada data ada, menghapus apa pun, dan bentuk yang tidak dikenali)
+//     hanya menghasilkan kerangka berpenanda TodoMarker, seluruhnya sebagai komentar (kecuali penjaga penghapusan
+//     yang aktif dan hanya membaca); metadata:check menggagalkan selama penanda ada (FindTodos). Tidak pernah ada
+//     pernyataan destruktif aktif.
 //   - Down hanya berisi pembalikan yang aman (menghapus apa yang ditambahkan migrasi yang sama). Bila ada
 //     langkah yang tidak dapat dibalik tanpa memeriksa data, Down ditandai eksplisit dan memuat penjaga yang
 //     menggagalkan goose down.
@@ -74,6 +77,11 @@ type Result struct {
 type stmt struct {
 	sql   string
 	block bool // dibungkus StatementBegin dan StatementEnd
+	// alt (opsional) adalah varian idempoten yang dipakai pada berkas NO TRANSACTION: tanpa transaksi, kegagalan di
+	// tengah berkas meninggalkan sebagian langkah terterap sehingga pengulangan harus aman (mis. ADD COLUMN IF NOT EXISTS).
+	alt string
+	// txOnly menandai pernyataan yang hanya bermakna dalam transaksi (mis. LOCK TABLE) dan dilewati pada berkas NO TRANSACTION.
+	txOnly bool
 }
 
 type step struct {
@@ -227,11 +235,20 @@ func (g *generator) columnMissing(f diff.Finding) error {
 		if q, err := sqlgen.AddColumn(t, &nullable, sqlgen.Options{}); err == nil {
 			sug = append(sug, q)
 		}
-		sug = append(sug, "(isi nilai awal kolom untuk baris yang ada)")
+		// Rename (migrateFrom): langkah salin dari kolom lama ikut dalam kerangka (komentar) bila kolom lama diketahui.
+		copySug, copied := g.copySuggestion(t, c)
+		sug = append(sug, copySug...)
+		if !copied {
+			sug = append(sug, "(isi nilai awal kolom untuk baris yang ada)")
+		}
 		if q, err := sqlgen.SetNotNull(t, c.Name, sqlgen.Options{}); err == nil {
 			sug = append(sug, q)
 		}
-		return g.skeleton(f, "kolom NOT NULL tanpa nilai bawaan pada tabel yang sudah ada: tentukan nilai awal (expand, migrate, contract)", sug, c.Name, true)
+		placeholder := c.Name
+		if copied {
+			placeholder = "" // templat salin sudah tersedia; tanpa templat ekspresi bebas
+		}
+		return g.skeleton(f, "kolom NOT NULL tanpa nilai bawaan pada tabel yang sudah ada: tentukan nilai awal (expand, migrate, contract)", sug, placeholder, true)
 	}
 	add, err := sqlgen.AddColumn(t, c, sqlgen.Options{})
 	if err != nil {
@@ -241,7 +258,11 @@ func (g *generator) columnMissing(f diff.Finding) error {
 	if err != nil {
 		return err
 	}
-	g.add(phColumn, &step{up: []stmt{{sql: add}}, down: []stmt{{sql: drop}}})
+	addAlt, err := sqlgen.AddColumn(t, c, sqlgen.Options{IfNotExists: true})
+	if err != nil {
+		return err
+	}
+	g.add(phColumn, &step{up: []stmt{{sql: add, alt: addAlt}}, down: []stmt{{sql: drop}}})
 	if g.newCols[t.Name] == nil {
 		g.newCols[t.Name] = map[string]bool{}
 	}
@@ -340,7 +361,7 @@ func (g *generator) checks() error {
 			if pair >= 0 {
 				old := g.rep.Findings[pair]
 				g.consumed[pair] = true
-				if isLoosening(ck, old.Actual) {
+				if isLoosening(ck, old.Actual) && safeIdent(old.Object) {
 					drop, err := sqlgen.DropConstraint(t, old.Object, sqlgen.Options{})
 					if err != nil {
 						return err
@@ -624,6 +645,10 @@ func (g *generator) skeletonStep(f diff.Finding, reason string, suggestions []st
 		s.comment = append(s.comment, fmt.Sprintf("diharapkan %s; aktual %s", safeComment(f.Expected), safeComment(f.Actual)))
 	}
 	for _, q := range suggestions {
+		if strings.HasPrefix(q, "\x00") {
+			s.comment = append(s.comment, q)
+			continue
+		}
 		if strings.HasPrefix(q, "(") {
 			s.comment = append(s.comment, safeSuggestion(q))
 			continue
@@ -693,7 +718,7 @@ func (g *generator) render() {
 	if len(g.res.Todos) > 0 {
 		fmt.Fprintf(&sb, "-- %s: %d butir perlu keputusan di bawah; lengkapi lalu hapus penanda TODO. metadata:check gagal selama penanda ada.\n", TodoMarker, len(g.res.Todos))
 	}
-	writeStmts(&sb, up)
+	writeStmts(&sb, up, g.res.NoTransaction)
 	for _, c := range commentUp {
 		if strings.HasPrefix(c, "\x00") {
 			sb.WriteString(c[1:] + "\n")
@@ -712,9 +737,9 @@ func (g *generator) render() {
 		sort.Strings(rs)
 		sb.WriteString("-- TIDAK DAPAT DIBALIK: " + strings.Join(rs, "; ") + ".\n")
 		body := "BEGIN RAISE EXCEPTION " + mustLiteral("migrasi tidak dapat dibalik: "+strings.ReplaceAll(strings.Join(rs, "; "), "%", "%%")) + "; END"
-		writeStmts(&sb, []stmt{{sql: "DO " + sqlgen.DollarQuote(body), block: true}})
+		writeStmts(&sb, []stmt{{sql: "DO " + sqlgen.DollarQuote(body), block: true}}, g.res.NoTransaction)
 	} else {
-		writeStmts(&sb, down)
+		writeStmts(&sb, down, g.res.NoTransaction)
 	}
 	if len(g.res.Todos) > 0 {
 		fmt.Fprintf(&sb, "-- %s: tulis Down untuk butir perlu keputusan di atas.\n", TodoMarker)
@@ -730,8 +755,14 @@ func mustLiteral(s string) string {
 	return l
 }
 
-func writeStmts(sb *strings.Builder, stmts []stmt) {
+func writeStmts(sb *strings.Builder, stmts []stmt, noTx bool) {
 	for _, s := range stmts {
+		if noTx && s.txOnly {
+			continue
+		}
+		if noTx && s.alt != "" {
+			s.sql = s.alt
+		}
 		if s.block {
 			sb.WriteString("-- +goose StatementBegin\n" + s.sql + ";\n-- +goose StatementEnd\n")
 			continue
@@ -750,17 +781,17 @@ func (g *generator) triggerReplace(t *dbmodel.Table, tr *dbmodel.Trigger) error 
 	if err != nil {
 		return err
 	}
-	drop, err := sqlgen.DropTrigger(t, tr.Name, sqlgen.Options{})
-	if err != nil {
-		return err
-	}
-	const prefix = "CREATE FUNCTION "
-	if len(sts) != 3 || !strings.HasPrefix(sts[0].SQL, prefix) {
+	const fnPrefix, trgPrefix = "CREATE FUNCTION ", "CREATE TRIGGER "
+	if len(sts) != 3 || !strings.HasPrefix(sts[0].SQL, fnPrefix) || !strings.HasPrefix(sts[1].SQL, trgPrefix) {
 		return fmt.Errorf("pemicu %s: keluaran templat tak terduga", tr.Name)
 	}
-	fn := "CREATE OR REPLACE FUNCTION " + strings.TrimPrefix(sts[0].SQL, prefix)
+	// Tanpa DROP TRIGGER: berkas NO TRANSACTION (tabel large) menjalankan tiap pernyataan dengan autocommit,
+	// sehingga lepas lalu buat ulang membuka celah tanpa pemicu. OR REPLACE mengganti pemicu di tempat; pemicu
+	// tetap aktif (ENABLE ALWAYS menyusul dan idempoten).
+	fn := "CREATE OR REPLACE FUNCTION " + strings.TrimPrefix(sts[0].SQL, fnPrefix)
+	trg := "CREATE OR REPLACE TRIGGER " + strings.TrimPrefix(sts[1].SQL, trgPrefix)
 	g.add(phTrigger, &step{
-		up:           []stmt{{sql: drop}, {sql: fn, block: true}, {sql: sts[1].SQL}, {sql: sts[2].SQL}},
+		up:           []stmt{{sql: fn, block: true}, {sql: trg}, {sql: sts[2].SQL}},
 		irreversible: reasonTriggerReplace,
 	})
 	g.change("ganti pemicu %s", tr.Name)
@@ -821,10 +852,79 @@ func (g *generator) columnRemoval(f diff.Finding, t *dbmodel.Table) error {
 		s.comment = append(s.comment, "tanpa kolom pengganti (tidak ada field dengan migrateFrom ke kolom ini): pastikan data kolom tidak diperlukan")
 		return nil
 	}
+	// Saran salin data dari kolom lama ke pengganti sebelum DROP (komentar; hasil tinjauan manusia).
+	if copySug, ok := g.copySuggestion(t, repl); ok {
+		s.comment = append(s.comment, "salin data yang belum tersalin ke kolom pengganti sebelum DROP (penjaga di atas menolak bila masih ada):")
+		for _, q := range copySug {
+			if strings.HasPrefix(q, "\x00") {
+				s.comment = append(s.comment, q)
+				continue
+			}
+			s.comment = append(s.comment, safeSuggestion(q)+";")
+		}
+	}
+	if !safeIdent(f.Object) {
+		// Nama kolom dari katalog database tidak lolos pola identifier sah: tidak dipakai di SQL aktif (M5).
+		s.comment = append(s.comment, "nama kolom tidak lolos pola identifier sah: penjaga otomatis tidak dibangkitkan; tulis tangan")
+		return nil
+	}
+	lock, err := sqlgen.LockTable(t, sqlgen.Options{})
+	if err != nil {
+		return err
+	}
 	guard, err := sqlgen.GuardUnsyncedRows(t, f.Object, repl.Name, sqlgen.Options{})
 	if err != nil {
 		return err
 	}
-	s.up = append(s.up, stmt{sql: guard, block: true})
+	// LOCK TABLE menahan penulis lain sampai transaksi selesai sehingga tidak ada baris baru di antara penjaga
+	// dan DROP COLUMN (TOCTOU); dilewati pada berkas NO TRANSACTION (kunci akan langsung lepas).
+	s.up = append(s.up, stmt{sql: lock, txOnly: true}, stmt{sql: guard, block: true})
 	return nil
+}
+
+var identRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+// safeIdent menyatakan nama berpola identifier sah (snake_case, Requirement 1.4). Nama dari katalog database
+// (objek berlebih) tidak dipercaya: yang tidak lolos tidak boleh masuk SQL aktif karena baris baru atau anotasi
+// goose di dalam identifier terkutip tetap dapat mengacaukan pemisahan pernyataan oleh goose.
+func safeIdent(s string) bool { return identRe.MatchString(s) }
+
+// oldColumnKnown menyatakan kolom asal migrateFrom ada pada model atau akan dihapus pada migrasi yang sama.
+func (g *generator) oldColumnKnown(t *dbmodel.Table, from string) bool {
+	return from != "" && (t.Column(from) != nil || g.removed[t.Name][from])
+}
+
+// commentedBlock mengubah teks SQL menjadi baris komentar yang sudah berawalan "-- " (ditandai \x00 agar
+// tidak diberi awalan lagi saat dirender).
+func commentedBlock(sqlText string) []string {
+	var out []string
+	for _, l := range strings.Split(strings.TrimRight(sqlText, "\n"), "\n") {
+		if l == "" {
+			out = append(out, "\x00--")
+			continue
+		}
+		out = append(out, "\x00-- "+safeSuggestion(l))
+	}
+	return out
+}
+
+// copySuggestion menghasilkan langkah salin dari kolom lama (migrateFrom) sebagai saran komentar untuk kerangka:
+// UPDATE biasa, atau blok batch pada tabel large: true (berkas lalu berpenanda NO TRANSACTION).
+func (g *generator) copySuggestion(t *dbmodel.Table, c *dbmodel.Column) (sug []string, ok bool) {
+	if !g.oldColumnKnown(t, c.MigrateFrom) {
+		return nil, false
+	}
+	if t.Large {
+		q, err := sqlgen.BatchCopyBackfill(t, c.Name, c.MigrateFrom, g.o.Batch, sqlgen.Options{})
+		if err != nil {
+			return nil, false
+		}
+		g.res.NoTransaction = true
+		return append([]string{"\x00-- salin data dari kolom lama per batch (tabel large: true; berkas NO TRANSACTION):"}, commentedBlock(q)...), true
+	}
+	q, err := sqlgen.CopyColumn(t, c.Name, c.MigrateFrom, sqlgen.Options{})
+	if err != nil {
+		return nil, false
+	}
+	return []string{q}, true
 }

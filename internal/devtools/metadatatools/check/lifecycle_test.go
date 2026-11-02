@@ -13,7 +13,8 @@ func TestMigrateFromPairs(t *testing.T) {
 	wantErr(t, mk(base+", fieldGroup: contact", "type: string, maxLength: 20, migrateFrom: phone, fieldGroup: other"), CodeMigrateFromGroup, "/fields/phoneE164")
 	wantErr(t, mk(base+", classification: confidential", "type: string, maxLength: 20, migrateFrom: phone"), CodeMigrateFromClassification, "/fields/phoneE164")
 	wantErr(t, mk(base, "type: string, maxLength: 20, migrateFrom: phone, classification: confidential"), CodeMigrateFromClassification, "/fields/phoneE164")
-	wantErr(t, mk(base, "type: string, maxLength: 20, migrateFrom: ghost"), CodeMigrateFromUnknown, "/fields/phoneE164")
+	// Field asal yang sudah dihapus: tanpa baseline rilis hanya peringatan (K18, rename lintas rilis).
+	wantWarning(t, mk(base, "type: string, maxLength: 20, migrateFrom: ghost"), CodeMigrateFromUnbaselined, "/fields/phoneE164")
 	wantErr(t, mk(base, "type: string, maxLength: 20, migrateFrom: phoneE164"), CodeMigrateFromUnknown, "/fields/phoneE164")
 }
 
@@ -101,7 +102,8 @@ lockWhen: `+lock+"\n")))
 	}
 	noErrors(t, doc("{field: paid, op: eq, value: true}"))
 	noErrors(t, doc("{any: [{field: paid, op: ne, value: false}, {field: qty, op: in, value: [1, 2]}, {not: {field: qty, op: isnull, value: true}}]}"))
-	noErrors(t, doc("{field: stored, op: eq, value: 3}"))
+	// Accessor stored adalah kolom turunan: tidak dapat dipakai pada pemicu BEFORE (design D-26, M9).
+	wantErr(t, doc("{field: stored, op: eq, value: 3}"), CodeLockWhenNotSQL, "/lockWhen")
 	wantErr(t, doc("{field: total, op: gt, value: \"10\"}"), CodeLockWhenNotSQL, "/lockWhen")
 	wantErr(t, doc("{field: qty, op: contains, value: \"1\"}"), CodeLockWhenNotSQL, "/lockWhen")
 	wantErr(t, doc("{field: calc, op: eq, value: 3}"), CodeLockWhenNotSQL, "/lockWhen")

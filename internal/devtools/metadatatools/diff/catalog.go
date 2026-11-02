@@ -31,6 +31,10 @@ type Column struct {
 	Default string
 	// Generated adalah ekspresi kolom turunan stored; kosong bila kolom biasa.
 	Generated string
+	// Collation adalah nama kolasi eksplisit kolom (kosong = kolasi bawaan tipe); Identity adalah a (ALWAYS) atau d
+	// (BY DEFAULT) bila kolom identity.
+	Collation string
+	Identity  string
 }
 
 // Constraint adalah primary key (Kind "p"), unique ("u"), foreign key ("f"), atau CHECK ("c").
@@ -45,9 +49,12 @@ type Constraint struct {
 // Index adalah indeks yang tidak mendukung constraint (constraint dilaporkan sebagai Constraint).
 type Index struct {
 	Name string
-	// Key menggabungkan metode, keunikan, kolom atau ekspresi, dan predikat; dasar perbandingan.
+	// Key adalah definisi indeks lengkap tanpa nama (pg_get_indexdef: metode, keunikan, kolom beserta opclass, DESC,
+	// NULLS, INCLUDE, NULLS NOT DISTINCT, dan predikat); dasar perbandingan.
 	Key     string
 	Columns []string
+	// Invalid bernilai true bila indeks tidak valid (indisvalid false, mis. CREATE INDEX CONCURRENTLY yang gagal).
+	Invalid bool
 }
 
 // Trigger adalah pemicu non-internal.
@@ -61,6 +68,13 @@ type Trigger struct {
 	Function string
 	// Body adalah teks fungsi pemicu (prosrc).
 	Body string
+	// Def adalah pg_get_triggerdef (waktu, peristiwa, UPDATE OF kolom, klausa WHEN, skema fungsi); SecDef menandai
+	// SECURITY DEFINER; Config adalah proconfig (mis. SET search_path); Lang adalah bahasa fungsi. Semuanya menentukan
+	// apakah pemicu benar-benar berperilaku seperti templat bangkitan.
+	Def    string
+	SecDef bool
+	Config string
+	Lang   string
 }
 
 // Table adalah satu tabel hasil introspeksi.
@@ -121,6 +135,12 @@ const (
 	KindTriggerDisabled   = "trigger_disabled"
 	KindTriggerChanged    = "trigger_changed"
 	KindTriggerExtra      = "trigger_extra"
+	// KindTriggerShadow: pemicu tulis tangan BEFORE ROW pada tabel pemicu bangkitan yang berjalan sesudahnya (urutan
+	// nama) dan dapat mengubah NEW sesudah pemeriksaan penguncian (Requirement 13.6, 13.10).
+	KindTriggerShadow   = "trigger_after_lock"
+	KindIndexInvalid    = "index_invalid"
+	KindColumnCollation = "column_collation"
+	KindColumnIdentity  = "column_identity"
 )
 
 // Finding adalah satu selisih (atau catatan). Expected dan Actual memuat definisi hasil normalisasi

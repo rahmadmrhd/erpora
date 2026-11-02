@@ -218,16 +218,26 @@ func lockFunctionBody(t *dbmodel.Table, tr *dbmodel.Trigger) (string, error) {
 		var to, conds, changed []string
 		for _, p := range ls.MigratePairs {
 			to = append(to, p[0])
-			oldTo, err := colRef(t, "OLD", p[0])
-			if err != nil {
-				return "", fmt.Errorf("pemicu %s: %w", tr.Name, err)
+			if findColumn(t, p[0]) == nil {
+				return "", fmt.Errorf("pemicu %s: kolom tujuan %q tidak ada pada %s", tr.Name, p[0], t.Name)
 			}
-			newTo, _ := colRef(t, "NEW", p[0])
-			oldFrom, err := colRef(t, "OLD", p[1])
-			if err != nil {
-				return "", fmt.Errorf("pemicu %s: %w", tr.Name, err)
+			// Kolom asal dibaca lewat jsonb: boleh sudah tidak ada pada tabel (field lama dihapus pada rilis MAJOR,
+			// K18) tanpa membuat fungsi rusak; kolom yang tidak ada dianggap null (tidak ada yang disalin).
+			if _, err := QuoteIdent(p[1]); err != nil {
+				return "", fmt.Errorf("pemicu %s: kolom asal: %w", tr.Name, err)
 			}
-			conds = append(conds, "("+newTo+" IS NOT DISTINCT FROM "+oldTo+" OR ("+oldTo+" IS NULL AND "+newTo+" IS NOT DISTINCT FROM "+oldFrom+"))")
+			toLit, err := Literal(p[0])
+			if err != nil {
+				return "", err
+			}
+			fromLit, err := Literal(p[1])
+			if err != nil {
+				return "", err
+			}
+			newTo := "(to_jsonb(NEW) -> " + toLit + ")"
+			oldTo := "(to_jsonb(OLD) -> " + toLit + ")"
+			oldFrom := "COALESCE(to_jsonb(OLD) -> " + fromLit + ", 'null'::jsonb)"
+			conds = append(conds, "("+newTo+" = "+oldTo+" OR ("+oldTo+" = 'null'::jsonb AND "+newTo+" = "+oldFrom+"))")
 			changed = append(changed, newTo+" IS DISTINCT FROM "+oldTo)
 		}
 		same, err := sameExcept(to)

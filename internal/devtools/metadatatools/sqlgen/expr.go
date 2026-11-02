@@ -543,7 +543,7 @@ func ifExpr(e *metadata.Expr, env Env) (sqlExpr, error) {
 
 func arithExpr(e *metadata.Expr, env Env) (sqlExpr, error) {
 	parts := make([]string, 0, len(e.Args))
-	for i, a := range e.Args {
+	for _, a := range e.Args {
 		x, err := expr(a, env)
 		if err != nil {
 			return sqlExpr{}, err
@@ -551,13 +551,16 @@ func arithExpr(e *metadata.Expr, env Env) (sqlExpr, error) {
 		if !numeric(x.fam) && x.fam != famNull {
 			return sqlExpr{}, terr(ErrType, "aritmetika membutuhkan integer atau decimal, bukan %s", x.ft)
 		}
-		s := x.sql
-		if e.Kind == metadata.ExprDiv && i == 1 {
-			s = "NULLIF(" + s + ", 0)" // pembagian nol: hasil tak tentu pada evaluator, NULL pada database
-		}
-		parts = append(parts, s)
+		parts = append(parts, x.sql)
 	}
-	op := map[metadata.ExprKind]string{metadata.ExprAdd: " + ", metadata.ExprSub: " - ", metadata.ExprMul: " * ", metadata.ExprDiv: " / "}[e.Kind]
+	if e.Kind == metadata.ExprDiv {
+		r, err := divExact(parts[0], parts[1], e.Scale, e.Round)
+		if err != nil {
+			return sqlExpr{}, err
+		}
+		return sqlExpr{r, famNum, metadata.TypeDecimal}, nil
+	}
+	op := map[metadata.ExprKind]string{metadata.ExprAdd: " + ", metadata.ExprSub: " - ", metadata.ExprMul: " * "}[e.Kind]
 	raw := "(" + strings.Join(parts, op) + ")"
 	r, err := roundSQL(raw, e.Scale, e.Round)
 	if err != nil {
@@ -604,4 +607,53 @@ func roundSQL(x string, scale int, mode metadata.RoundMode) (string, error) {
 	// half_even
 	return "CASE WHEN abs(" + x + " - " + tr + ") = " + half + " THEN CASE WHEN mod(trunc(" + x + " * " + k + ", 0), 2) = 0 THEN " +
 		tr + " WHEN " + x + " > 0 THEN " + tr + " + " + unit + " ELSE " + tr + " - " + unit + " END ELSE " + rd + " END", nil
+}
+
+// divExact membagi a dengan b secara eksak lalu membulatkan ke scale digit dengan mode yang sama dengan
+// evaluator (sdk/metadata Decimal.Div: hasil dibulatkan sekali dari hasil bagi sejati). Operator "/" numeric
+// PostgreSQL hanya menghitung ±16 digit signifikan sehingga membulatkan dua kali; di sini bagi eksak atas
+// bilangan bulat: N = a * 10^scale, q = div(N, b) (dipotong ke nol), r = mod(N, b), lalu arah pembulatan
+// dipilih dari sisa r dan pembagi (2*|r| dibanding |b|); hasil dikalikan 10^-scale (perkalian eksak, bukan
+// pembagian). Pembagi nol menjadi NULL (evaluator: tak tentu).
+func divExact(a, b string, scale int, mode metadata.RoundMode) (string, error) {
+	if scale < 0 || scale > metadata.MaxScale || !mode.Valid() {
+		return "", terr(ErrInvalid, "skala atau mode pembulatan tidak sah")
+	}
+	if len(a)*6+len(b)*8 > MaxSQLBytes {
+		return "", terr(ErrTooLarge, "ekspresi pembagian terlalu besar")
+	}
+	k := "1" + zeros(scale)
+	unit := "1"
+	if scale > 0 {
+		unit = "0." + zeros(scale-1) + "1"
+	}
+	n := "((" + a + ")::numeric * " + k + ")"
+	d := "NULLIF((" + b + ")::numeric, 0)"
+	q := "div(" + n + ", " + d + ")"
+	r := "mod(" + n + ", " + d + ")"
+	sg := "(sign(" + n + ") * sign(" + d + "))"
+	twice := "2 * abs(" + r + ")"
+	ad := "abs(" + d + ")"
+	var cand string
+	switch mode {
+	case metadata.RoundDown:
+		cand = q
+	case metadata.RoundUp:
+		cand = "CASE WHEN " + r + " = 0 THEN " + q + " ELSE " + q + " + " + sg + " END"
+	case metadata.RoundFloor:
+		cand = "CASE WHEN " + r + " = 0 OR " + sg + " > 0 THEN " + q + " ELSE " + q + " - 1 END"
+	case metadata.RoundCeiling:
+		cand = "CASE WHEN " + r + " = 0 OR " + sg + " < 0 THEN " + q + " ELSE " + q + " + 1 END"
+	case metadata.RoundHalfUp:
+		cand = "CASE WHEN " + twice + " >= " + ad + " THEN " + q + " + " + sg + " ELSE " + q + " END"
+	case metadata.RoundHalfDown:
+		cand = "CASE WHEN " + twice + " > " + ad + " THEN " + q + " + " + sg + " ELSE " + q + " END"
+	default: // half_even
+		cand = "CASE WHEN " + twice + " > " + ad + " OR (" + twice + " = " + ad + " AND mod(" + q + ", 2) <> 0) THEN " + q + " + " + sg + " ELSE " + q + " END"
+	}
+	out := "((" + cand + ") * " + unit + ")"
+	if len(out) > MaxSQLBytes {
+		return "", terr(ErrTooLarge, "ekspresi pembagian terlalu besar")
+	}
+	return out, nil
 }

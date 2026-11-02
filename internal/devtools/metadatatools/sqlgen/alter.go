@@ -305,3 +305,14 @@ func GuardUnsyncedRows(t *dbmodel.Table, oldColumn, newColumn string, o Options)
 	body := "\nBEGIN\n  IF EXISTS (SELECT 1 FROM " + table + " WHERE " + oldQ + " IS NOT NULL AND " + newQ + " IS NULL) THEN\n    RAISE EXCEPTION " + msg + ";\n  END IF;\nEND\n"
 	return "DO " + DollarQuote(body), nil
 }
+
+// LockTable menghasilkan LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE: menahan penulis lain (pembaca tetap boleh)
+// sampai transaksi selesai, dipakai sebelum penjaga dan DROP COLUMN agar tidak ada baris yang masuk di antara
+// pemeriksaan dan penghapusan (TOCTOU). Hanya bermakna di dalam transaksi.
+func LockTable(t *dbmodel.Table, o Options) (string, error) {
+	n, err := o.table(t)
+	if err != nil {
+		return "", err
+	}
+	return "LOCK TABLE " + n + " IN SHARE ROW EXCLUSIVE MODE", nil
+}

@@ -89,7 +89,7 @@ func (d *deriver) documentLock(r *resolve.Resolved, t *Table, funcs *naming.Name
 		spec.Axes = append(spec.Axes, la)
 	}
 	for _, c := range t.Columns {
-		if c.MigrateFrom != "" && t.Column(c.MigrateFrom) != nil {
+		if c.MigrateFrom != "" {
 			spec.MigratePairs = append(spec.MigratePairs, [2]string{c.Name, c.MigrateFrom})
 		}
 	}

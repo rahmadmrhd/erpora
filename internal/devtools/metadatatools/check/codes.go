@@ -123,6 +123,7 @@ const (
 	CodeFieldRemovedBeforeMajor        = "field_removed_before_major"
 	CodeReleaseBaselineUnavailable     = "release_baseline_unavailable"
 	CodeReleaseBaselineInvalid         = "release_baseline_invalid"
+	CodeMigrateFromUnbaselined         = "migrate_from_unbaselined"
 
 	// Identitas modul (Requirement 3.5, 19.3, 19.4): direktori, slug, slug tercadang, duplikat, require go.mod.
 	CodeModuleDirMismatch   = "module_dir_mismatch"

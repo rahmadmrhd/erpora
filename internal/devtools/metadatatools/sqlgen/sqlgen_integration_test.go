@@ -143,12 +143,12 @@ func TestStoredExpr_ParityWithGoEvaluator(t *testing.T) {
 					t.Fatal(err)
 				}
 				col := fmt.Sprintf("g_%s_%s_%d", op, mode, scale)
-				cols = append(cols, `"`+col+`" numeric(38,10) GENERATED ALWAYS AS (`+sqlText+`) STORED`)
+				cols = append(cols, `"`+col+`" numeric(60,24) GENERATED ALWAYS AS (`+sqlText+`) STORED`)
 				cases = append(cases, exprCase{col, raw})
 			}
 		}
 	}
-	exec(t, db, `CREATE TABLE p (id serial PRIMARY KEY, a numeric(18,4), b numeric(18,4), `+strings.Join(cols, ", ")+`)`)
+	exec(t, db, `CREATE TABLE p (id serial PRIMARY KEY, a numeric(38,22), b numeric(38,22), `+strings.Join(cols, ", ")+`)`)
 
 	rng := rand.New(rand.NewSource(20261101))
 	dec := func() string {
@@ -161,6 +161,13 @@ func TestStoredExpr_ParityWithGoEvaluator(t *testing.T) {
 			whole = -whole
 		}
 		return fmt.Sprintf("%s%d.%04d", sign, whole, frac)
+	}
+	dec22 := func() string {
+		sign := ""
+		if rng.Intn(2) == 0 {
+			sign = "-"
+		}
+		return fmt.Sprintf("%s%d.%011d%011d", sign, rng.Intn(3), rng.Int63n(100_000_000_000), rng.Int63n(100_000_000_000))
 	}
 	type row struct{ a, b string }
 	var rows []row
@@ -178,12 +185,20 @@ func TestStoredExpr_ParityWithGoEvaluator(t *testing.T) {
 		if i == 3 {
 			r = row{"0.1250", "1.0000"}
 		}
+		if i >= 4 && i < 40 {
+			r = row{dec22(), dec22()} // digit panjang: bagi sejati vs pembulatan ganda
+		}
 		rows = append(rows, r)
 		exec(t, db, `INSERT INTO p (a, b) VALUES ($1, $2)`, r.a, r.b)
 	}
 	// NULL merambat.
 	exec(t, db, `INSERT INTO p (a, b) VALUES (NULL, 1.5000), (1.5000, NULL)`)
 	rows = append(rows, row{"", "1.5000"}, row{"1.5000", ""})
+	// Kasus pembulatan ganda dan titik tengah pada pembagian (M3).
+	for _, r := range []row{{"0.0149999999999999999999", "3"}, {"-0.0149999999999999999999", "3"}, {"0.0150000000000000000001", "1"}, {"5", "2"}, {"-5", "2"}, {"7", "2"}, {"-7", "2"}, {"0.125", "1"}, {"-0.125", "1"}, {"1", "3"}, {"2", "3"}, {"0.001", "7"}} {
+		exec(t, db, `INSERT INTO p (a, b) VALUES ($1, $2)`, r.a, r.b)
+		rows = append(rows, r)
+	}
 
 	mismatches := 0
 	for _, c := range cases {
@@ -317,4 +332,49 @@ func mustExpr(t *testing.T, raw any) *metadata.Expr {
 		t.Fatal(err)
 	}
 	return e
+}
+
+// Pasangan migrateFrom dengan kolom asal yang sudah dihapus dari tabel: fungsi tidak rusak dan tidak ada yang
+// disalin (kolom asal dianggap null); perubahan lain pada baris terkunci tetap ditolak 55000.
+func TestLockTrigger_MigratePairWithDroppedSourceColumn(t *testing.T) {
+	db := openDB(t)
+	tb := &dbmodel.Table{
+		Name: "m_docs", Kind: dbmodel.KindResource,
+		Columns: []*dbmodel.Column{
+			{Name: "id", Type: dbmodel.TypeUUID, NotNull: true, FieldType: metadata.TypeUUID},
+			{Name: "status", Type: dbmodel.TypeText, NotNull: true, Field: "status", FieldType: metadata.TypeEnum, Default: &dbmodel.Default{Type: metadata.TypeEnum, Value: "draft"}},
+			{Name: "note", Type: dbmodel.TypeText, Field: "note", FieldType: metadata.TypeText},
+			{Name: "phone_e164", Type: dbmodel.TypeText, Field: "phoneE164", FieldType: metadata.TypeString, MigrateFrom: "phone"},
+		},
+		PrimaryKey: []string{"id"},
+	}
+	cond, err := metadata.ParseCondition(map[string]any{"field": "status", "op": "ne", "value": "draft"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb.Triggers = []*dbmodel.Trigger{{Name: "m_docs_lock_trg", Function: "m_docs_lock_fn", Events: []string{"DELETE", "UPDATE"}, Lock: &dbmodel.LockSpec{
+		Condition: cond, StatusColumn: "status", VersionColumn: "status", UpdatedAtColumn: "status", UpdatedByColumn: "status",
+		MigratePairs: [][2]string{{"phone_e164", "phone"}},
+	}}}
+	stmts, err := CreateSchema(&dbmodel.Schema{Tables: []*dbmodel.Table{tb}}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range stmts {
+		exec(t, db, s.SQL)
+	}
+	id := "00000000-0000-0000-0000-000000000001"
+	exec(t, db, `INSERT INTO m_docs (id, status) VALUES ($1, 'accepted')`, id)
+	for name, q := range map[string]string{
+		"isi dari kolom asal yang tidak ada": `UPDATE m_docs SET phone_e164 = 'x' WHERE id = $1`,
+		"ubah kolom lain":                    `UPDATE m_docs SET note = 'x' WHERE id = $1`,
+	} {
+		if _, err := db.Exec(q, id); sqlState(err) != "55000" {
+			t.Errorf("%s: harus ditolak 55000, err = %v", name, err)
+		}
+	}
+	// Tanpa perubahan nyata pada kolom tujuan (tetap null) bukan pengecualian.
+	if _, err := db.Exec(`UPDATE m_docs SET phone_e164 = NULL WHERE id = $1`, id); sqlState(err) != "55000" {
+		t.Errorf("tanpa perubahan harus ditolak 55000, err = %v", err)
+	}
 }

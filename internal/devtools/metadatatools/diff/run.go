@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/url"
+	"strings"
+	"time"
 
 	tnoop "go.opentelemetry.io/otel/trace/noop"
 
@@ -18,6 +20,9 @@ import (
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/migrate"
 )
+
+// cleanupTimeout membatasi pembersihan role dan database sementara (berjalan walau konteks dibatalkan).
+const cleanupTimeout = 30 * time.Second
 
 // expectedSchema adalah skema sementara tempat DDL bangkitan dari model diterapkan untuk dinormalkan.
 const expectedSchema = "erpora_expected"
@@ -45,6 +50,9 @@ type Options struct {
 	NotePrefixes []string
 	// Log menerima pesan diagnostik (nil = dibuang).
 	Log *slog.Logger
+	// RoleName (opsional) menetapkan nama role migrasi sementara (harus berawalan erpora_mig_); kosong = acak. Dipakai tes
+	// agar pembersihan dapat diperiksa per nama.
+	RoleName string
 }
 
 // ExpectedSchemaError dikembalikan bila DDL bangkitan dari model ditolak PostgreSQL (model atau templat
@@ -117,6 +125,12 @@ func Run(ctx context.Context, o Options) (rep *Report, err error) {
 	}
 
 	role := "erpora_mig_" + randHex(6)
+	if o.RoleName != "" {
+		if !strings.HasPrefix(o.RoleName, "erpora_mig_") {
+			return nil, errors.New("diff: RoleName harus berawalan erpora_mig_")
+		}
+		role = o.RoleName
+	}
 	password := randHex(16)
 	qRole, err := sqlgen.QuoteIdent(role)
 	if err != nil {
@@ -141,8 +155,12 @@ func Run(ctx context.Context, o Options) (rep *Report, err error) {
 		if !created {
 			return
 		}
-		cctx := context.WithoutCancel(ctx)
+		// Pembersihan tidak ikut dibatalkan (Ctrl-C, batas waktu) tetapi diberi batas sendiri.
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
 		var errs []error
+		// Putus sesi role yang mungkin masih menjalankan migrasi (mis. setelah dibatalkan) agar DROP OWNED tidak menunggu kunci.
+		_, _ = admin.ExecContext(cctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = $1 AND pid <> pg_backend_pid()`, role)
 		if _, e := admin.ExecContext(cctx, `DROP OWNED BY `+qRole); e != nil {
 			errs = append(errs, e)
 		}

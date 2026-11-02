@@ -19,19 +19,24 @@ type modCtx struct {
 }
 
 type checker struct {
-	cat    *resolve.Catalog
-	res    *resolve.Result
-	rep    *Report
-	mods   map[string]*modCtx
-	probs  []Problem
-	eff    map[string]*effInfo
-	tables *naming.Namespace
+	cat   *resolve.Catalog
+	res   *resolve.Result
+	rep   *Report
+	mods  map[string]*modCtx
+	probs []Problem
+	// pendingMF adalah migrateFrom yang merujuk field yang tidak ada di metadata saat ini; diputuskan setelah baseline
+	// rilis dibaca (resolvePendingMigrateFrom). baselines menyimpan hasil resolusi metadata pada tag rilis terakhir
+	// per slug modul (tidak ada bila modul tanpa tag, tanpa git, atau baseline tidak terbaca).
+	pendingMF []pendingMigrateFrom
+	baselines map[string]*resolve.Result
+	eff       map[string]*effInfo
+	tables    *naming.Namespace
 }
 
 // Run menjalankan semua pemeriksaan semantik pada Input dan mengembalikan laporan. Run tidak menulis apa pun.
 func Run(in Input) *Report {
 	rep := &Report{Resources: map[string]*ResourceInfo{}, ModuleDirs: map[string]string{}}
-	c := &checker{rep: rep, mods: map[string]*modCtx{}, eff: map[string]*effInfo{}, tables: naming.NewNamespace("skema database")}
+	c := &checker{rep: rep, mods: map[string]*modCtx{}, eff: map[string]*effInfo{}, tables: naming.NewNamespace("skema database"), baselines: map[string]*resolve.Result{}}
 	cat := resolve.NewCatalog()
 	c.cat = cat
 	for _, p := range cat.AddBuiltin() {
@@ -65,6 +70,7 @@ func Run(in Input) *Report {
 	}
 	c.checkMigrationTodos(in.Modules)
 	c.checkReleaseBaselines(in)
+	c.resolvePendingMigrateFrom()
 	rep.Problems = sortProblems(c.probs)
 	return rep
 }

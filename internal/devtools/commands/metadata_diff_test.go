@@ -93,3 +93,15 @@ func TestMetadataDiff_UnknownModule(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestMetadataDiffAndMigrate_HaveTimeoutFlag(t *testing.T) {
+	for _, c := range newTestRoot(t).Commands() {
+		if c.Name() != "metadata:diff" && c.Name() != "metadata:migrate" {
+			continue
+		}
+		fl := c.Flags().Lookup("timeout")
+		if fl == nil || fl.DefValue != "10m0s" {
+			t.Errorf("%s: flag --timeout = %+v, want bawaan 10m0s", c.Name(), fl)
+		}
+	}
+}

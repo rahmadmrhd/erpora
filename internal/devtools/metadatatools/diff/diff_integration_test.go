@@ -6,9 +6,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"erpora/internal/devtools/metadatatools/dbmodel"
 	"erpora/internal/devtools/metadatatools/load"
@@ -84,6 +86,21 @@ func TestRun_DetectsDifferences(t *testing.T) {
 		{"pemicu ENABLE biasa (dapat dilewati session_replication_role)", true, "fixturesales", `ALTER TABLE fixturesales_invoices ENABLE TRIGGER fixturesales_invoices_lock_trg;`, []string{KindTriggerDisabled}},
 		{"pemicu anak dihapus", true, "fixturesales", `DROP TRIGGER fixturesales_invoice_lines_invoice_id_lock_trg ON fixturesales_invoice_lines;`, []string{KindTriggerMissing}},
 		{"pemicu pivot dinonaktifkan", true, "fixturesales", `ALTER TABLE fixturesales_invoice_tags DISABLE TRIGGER fixturesales_invoice_tags_invoice_id_lock_trg;`, []string{KindTriggerDisabled}},
+		{"pemicu dibuat ulang dengan WHEN (false) dan ENABLE ALWAYS", true, "fixturesales", `DROP TRIGGER fixturesales_invoices_lock_trg ON fixturesales_invoices;
+CREATE TRIGGER fixturesales_invoices_lock_trg BEFORE DELETE OR UPDATE ON fixturesales_invoices FOR EACH ROW WHEN (false) EXECUTE FUNCTION fixturesales_invoices_lock_fn();
+ALTER TABLE fixturesales_invoices ENABLE ALWAYS TRIGGER fixturesales_invoices_lock_trg;`, []string{KindTriggerChanged}},
+		{"pemicu dibuat ulang dengan UPDATE OF kolom tertentu", true, "fixturesales", `DROP TRIGGER fixturesales_invoices_lock_trg ON fixturesales_invoices;
+CREATE TRIGGER fixturesales_invoices_lock_trg BEFORE DELETE OR UPDATE OF approval_note ON fixturesales_invoices FOR EACH ROW EXECUTE FUNCTION fixturesales_invoices_lock_fn();
+ALTER TABLE fixturesales_invoices ENABLE ALWAYS TRIGGER fixturesales_invoices_lock_trg;`, []string{KindTriggerChanged}},
+		{"fungsi pemicu diberi SET search_path", true, "fixturesales", `ALTER FUNCTION fixturesales_invoices_lock_fn() SET search_path = pg_catalog;`, []string{KindTriggerChanged}},
+		{"fungsi pemicu SECURITY DEFINER", true, "fixturesales", `ALTER FUNCTION fixturesales_invoices_lock_fn() SECURITY DEFINER;`, []string{KindTriggerChanged}},
+		{"pemicu menunjuk fungsi di skema lain", true, "fixturesales", "CREATE SCHEMA zz_evil;\n-- +goose StatementBegin\nCREATE FUNCTION zz_evil.fixturesales_invoices_lock_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\n-- +goose StatementEnd\nDROP TRIGGER fixturesales_invoices_lock_trg ON fixturesales_invoices;\nCREATE TRIGGER fixturesales_invoices_lock_trg BEFORE DELETE OR UPDATE ON fixturesales_invoices FOR EACH ROW EXECUTE FUNCTION zz_evil.fixturesales_invoices_lock_fn();\nALTER TABLE fixturesales_invoices ENABLE ALWAYS TRIGGER fixturesales_invoices_lock_trg;", []string{KindTriggerChanged}},
+		{"pemicu tulis tangan sesudah pemicu penguncian dapat mengubah NEW", true, "fixturesales", "-- +goose StatementBegin\nCREATE FUNCTION zz_modify_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.status := 'draft'; RETURN NEW; END $$;\n-- +goose StatementEnd\nCREATE TRIGGER zz_modify_trg BEFORE UPDATE ON fixturesales_invoices FOR EACH ROW EXECUTE FUNCTION zz_modify_fn();", []string{KindTriggerShadow}},
+		{"pemicu tulis tangan sebelum pemicu penguncian hanya catatan", true, "fixturesales", "-- +goose StatementBegin\nCREATE FUNCTION aa_audit_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\n-- +goose StatementEnd\nCREATE TRIGGER aa_audit_trg BEFORE UPDATE ON fixturesales_invoices FOR EACH ROW EXECUTE FUNCTION aa_audit_fn();", nil},
+		{"indeks DESC (opclass dan urutan ikut dibandingkan)", false, "fixturecore", `DROP INDEX fixturecore_customers_status_name_idx; CREATE INDEX fixturecore_customers_status_name_idx ON fixturecore_customers (status, name DESC);`, []string{KindIndexExtra, KindIndexMissing}},
+		{"indeks parsial", false, "fixturecore", `DROP INDEX fixturecore_customers_status_name_idx; CREATE INDEX fixturecore_customers_status_name_idx ON fixturecore_customers (status, name) WHERE status = 'active';`, []string{KindIndexExtra, KindIndexMissing}},
+		{"kolasi kolom berbeda", false, "fixturecore", `ALTER TABLE fixturecore_branches ALTER COLUMN name TYPE text COLLATE "C";`, []string{KindColumnCollation}},
+		{"objek non-tabel (matview, view, INSTEAD OF) diabaikan tanpa panik", false, "fixturecore", "CREATE MATERIALIZED VIEW zz_mv AS SELECT id FROM fixturecore_branches;\nCREATE INDEX zz_mv_idx ON zz_mv (id);\nCREATE VIEW zz_v AS SELECT id FROM fixturecore_branches;\n-- +goose StatementBegin\nCREATE FUNCTION zz_v_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\n-- +goose StatementEnd\nCREATE TRIGGER zz_v_trg INSTEAD OF INSERT ON zz_v FOR EACH ROW EXECUTE FUNCTION zz_v_fn();", nil},
 		{"badan pemicu diganti", true, "fixturesales", "-- +goose StatementBegin\nCREATE OR REPLACE FUNCTION fixturesales_invoices_lock_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\n-- +goose StatementEnd", []string{KindTriggerChanged}},
 	}
 	for _, c := range cases {
@@ -282,5 +299,56 @@ func TestWithTempDatabase_CreatesAndDrops(t *testing.T) {
 	}
 	if exists(seen) {
 		t.Errorf("database %s harus sudah dihapus", seen)
+	}
+}
+
+// Pembatalan (Ctrl-C atau batas waktu) di tengah migrasi: Run kembali dengan galat, sesi role diputus, dan role
+// serta database sementara tetap dibersihkan (M6).
+func TestRun_CancelledContextStillCleansUp(t *testing.T) {
+	admin := os.Getenv(pgtest.EnvExternal)
+	if admin == "" {
+		t.Skip(pgtest.EnvExternal + " tidak diset")
+	}
+	probe, err := sql.Open("pgx", admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	count := func(q string, arg string) int {
+		var n int
+		if err := probe.QueryRow(q, arg).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	model := fixtureModel(t)
+	src := fixtureSources(t, model, map[string]map[string]string{
+		"fixturecore": {"0002_slow.sql": "-- +goose Up\nSELECT pg_sleep(60);\n-- +goose Down\nSELECT 1;\n"},
+	})
+	role := "erpora_mig_cancel_" + randHex(4)
+	var dbName string
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	start := time.Now()
+	err = WithTempDatabase(ctx, admin, func(dsn string) error {
+		u, perr := url.Parse(dsn)
+		if perr != nil {
+			return perr
+		}
+		dbName = strings.TrimPrefix(u.Path, "/")
+		_, rerr := Run(ctx, Options{DSN: dsn, Sources: src, Model: model, RoleName: role})
+		return rerr
+	})
+	if err == nil {
+		t.Fatal("Run harus gagal saat konteks habis")
+	}
+	if d := time.Since(start); d > 40*time.Second {
+		t.Errorf("pembatalan terlalu lambat: %s", d)
+	}
+	if n := count(`SELECT count(*) FROM pg_roles WHERE rolname = $1`, role); n != 0 {
+		t.Errorf("role %s tersisa setelah pembatalan", role)
+	}
+	if n := count(`SELECT count(*) FROM pg_database WHERE datname = $1`, dbName); n != 0 {
+		t.Errorf("database %s tersisa setelah pembatalan", dbName)
 	}
 }
