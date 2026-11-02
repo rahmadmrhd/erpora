@@ -76,6 +76,21 @@ jobs:
   integration:
     name: integration
     runs-on: ubuntu-latest # Docker tersedia untuk testcontainers; termasuk TestServe_GracefulShutdown (!windows)
+    # PostgreSQL untuk `metadata:diff` saja (langkah terakhir). Role erp superuser bawaan image: mesin selisih membuat
+    # database sementara dan role migrasi non-superuser (Requirement 10.8) lewat DSN admin ini.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,6 +103,12 @@ jobs:
           version: ${{ env.TASK_VERSION }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: task test:integration
+      # Selisih kosong antara metadata dan skema hasil migrasi (spec resource-metadata, Requirement 10.3, 20.2). Env hanya
+      # untuk langkah ini agar test:integration tetap memakai testcontainers.
+      - name: metadata:diff (selisih metadata dan database)
+        env:
+          ERP_TEST_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/postgres?sslmode=disable
+        run: task metadata:diff
 
   # Gate kontrak API (FR-14/FR-23): lint Spectral, hasil generate mutakhir, dan breaking change terhadap tag rilis terakhir.
   contracts:
@@ -286,7 +307,7 @@ jobs:
       - name: Bukti binary release tanpa developer tools
         run: |
           ./erpora version | grep -q "flavor: release"
-          for cmd in "make:module x" "make:handler" "make:migration" "make:entity" "make:usecase" "make:contract" "make:command" "make:repository" "db:fresh" "db:seed" "contracts:lint" "contracts:generate" "contracts:breaking" "module:check" "doctor" "release:verify-tag v1"; do
+          for cmd in "make:module x" "make:handler" "make:migration" "make:entity" "make:usecase" "make:contract" "make:command" "make:repository" "db:fresh" "db:seed" "contracts:lint" "contracts:generate" "contracts:breaking" "module:check" "doctor" "release:verify-tag v1" "metadata:check" "metadata:generate" "metadata:diff" "metadata:migrate"; do
             if out="$(./erpora $cmd 2>&1)"; then echo "perintah dev '$cmd' seharusnya gagal" >&2; exit 1; fi
             echo "$out" | grep -q "unknown command" || { echo "keluaran '$cmd' tidak memuat 'unknown command': $out" >&2; exit 1; }
           done

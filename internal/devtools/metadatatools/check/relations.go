@@ -55,6 +55,7 @@ func (x *rctx) resolveTarget(ptr, key string) (*resolve.Resolved, bool) {
 				"relasi lintas modul ke %s ditolak: modul %q tidak tercantum di dependencies manifest %s (D1, D8; Requirement 6.2)", key, slug, x.mod.slug)
 			return nil, false
 		}
+		x.requireGoModForTarget(slug, ptr, key)
 	}
 	doc := x.c.cat.Doc(key)
 	if doc == nil || doc.Kind != "resource" {
@@ -91,6 +92,7 @@ func (x *rctx) checkRelations() {
 				}
 			}
 		}
+		x.checkPivotFields(rel)
 		if raw, ok := rel.Attrs["filter"]; ok {
 			x.checkRelationFilter(rel, raw, main, mainOK, relSet, graph)
 		}

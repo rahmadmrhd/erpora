@@ -5,6 +5,7 @@ package commands
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -91,5 +92,68 @@ func TestMetadataMigrate_EndToEndOnFixture(t *testing.T) {
 	}
 	if treeHash(t, dry) != hashBefore {
 		t.Error("--dry-run tidak boleh menulis berkas")
+	}
+}
+
+// Requirement 10.3: selisih kosong untuk modul referensi example (migrasi tulis tangan 0001-0003 dan metadata
+// nyata di repo) dan untuk modul fixture (migrasi dibangkitkan metadata:migrate); gagal bila metadata dan
+// migrasi menyimpang; exampleaddon (tanpa tabel dan metadata) tidak diperiksa.
+func TestMetadataDiff_ExampleAndFixtureEmpty(t *testing.T) {
+	if os.Getenv(diff.EnvAdminDSN) == "" {
+		t.Skip(diff.EnvAdminDSN + " tidak diset")
+	}
+	repo, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := t.TempDir()
+	copyTree(t, metadataFixtureDir, fixture)
+
+	exec := func(dir string, args ...string) (string, error) {
+		t.Chdir(dir)
+		root := newTestRoot(t)
+		var out, errOut bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&errOut)
+		root.SetArgs(args)
+		err := root.Execute()
+		return out.String() + errOut.String(), err
+	}
+
+	// Repo nyata: example kosong; exampleaddon tidak diperiksa (tidak punya metadata).
+	if out, err := exec(repo, "metadata:diff", "example"); err != nil || !strings.Contains(out, "selisih kosong") {
+		t.Fatalf("example harus berselisih kosong: %v\n%s", err, out)
+	}
+	if _, err := exec(repo, "metadata:diff", "exampleaddon"); exitCodeOf(err) != exitMetadataValidation {
+		t.Errorf("exampleaddon tidak punya resource bermetadata dan tidak diperiksa: %v", err)
+	}
+	if out, err := exec(repo, "metadata:diff"); err != nil || strings.Contains(out, "exampleaddon") {
+		t.Fatalf("semua modul bermetadata harus kosong tanpa exampleaddon: %v\n%s", err, out)
+	}
+
+	// Fixture: migrasi dibangkitkan lalu selisih kosong untuk semua modul; menyimpang gagal.
+	for _, mod := range []string{"fixturecore", "fixturesales"} {
+		if out, err := exec(fixture, "metadata:migrate", mod, "initial_schema"); err != nil {
+			t.Fatalf("migrate %s: %v\n%s", mod, err, out)
+		}
+	}
+	if out, err := exec(fixture, "metadata:diff"); err != nil || !strings.Contains(out, "selisih kosong") {
+		t.Fatalf("fixture harus berselisih kosong: %v\n%s", err, out)
+	}
+	branch := filepath.Join(fixture, "modules", "fixturecore", "metadata", "branch.resource.yaml")
+	b, err := os.ReadFile(branch) //nolint:gosec // salinan fixture sementara
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := strings.Replace(string(b), "fields:\n", "fields:\n  extra: { type: string, maxLength: 10, nullable: true, label: fixturecore.branch.extra }\n", 1)
+	if mutated == string(b) {
+		t.Fatal("mutasi metadata tidak diterapkan")
+	}
+	if err := os.WriteFile(branch, []byte(mutated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec(fixture, "metadata:diff")
+	if exitCodeOf(err) != exitMetadataValidation || !strings.Contains(out, "[column_missing] fixturecore_branches.extra") {
+		t.Fatalf("metadata menyimpang dari migrasi harus gagal dengan selisih: %v\n%s", err, out)
 	}
 }

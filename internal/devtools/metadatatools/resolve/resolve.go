@@ -499,6 +499,18 @@ func (b *builder) include(i int, item map[string]any) {
 		}
 		contrib = append(contrib, f.clone(R.Key))
 	}
+	if prefix != "" {
+		// Field bawaan terlindungi (sdk:audit, sdk:document) dikenali menurut namanya oleh pemicu penguncian,
+		// siklus hidup, dan pembangkit; mengganti namanya dengan prefix akan mematikan semuanya (Requirement
+		// 13.1, 13.2, 2.6, 3.6).
+		for _, f := range contrib {
+			if f.ProtectedBy != "" {
+				b.fail(base+"/prefix", CodeIncludePrefixProtected, fmt.Sprintf(
+					"prefix tidak boleh dipakai pada penyertaan %s: field bawaan %q (dari %s) tidak boleh diganti nama (Requirement 3.6, 13.1)", key, f.Name, f.ProtectedBy))
+				return
+			}
+		}
+	}
 
 	if om, ok := item["omit"].([]any); ok {
 		for j, v := range om {

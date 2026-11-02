@@ -345,6 +345,8 @@ const (
 	CodeLockWhenLimit                = "lockwhen_limit"
 	CodeDuplicateKey                 = "duplicate_key"
 	CodeKeyModule                    = "key_module"
+	CodeModuleSlugReserved           = "module_slug_reserved"
+	CodeIncludePrefixProtected       = "include_prefix_protected"
 )
 
 func (o Origin) String() string { return fmt.Sprintf("%s:%d (%s %s)", o.File, o.Line, o.Doc, o.Op) }

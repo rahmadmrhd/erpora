@@ -17,6 +17,13 @@
 //     (komentar); BatchCopyBackfill di sqlgen membangkitkan salinan per batch yang aktif (task 12.3).
 //   - Semua SQL aktif berasal dari sqlgen (identifier dikutip, literal lewat satu fungsi escape). Teks dari
 //     database (nama objek berlebih, definisi) hanya muncul di komentar dan disaring (safeComment).
+//   - Rename (Requirement 12.2): kolom baru dengan migrateFrom ditambahkan dan datanya disalin dari kolom lama
+//     (UPDATE, atau per batch NO TRANSACTION pada tabel large: true) tanpa menghapus kolom lama; pemicu bangkitan
+//     yang berubah diganti lebih dulu agar baris terkunci ikut tersalin lewat pengecualian (b).
+//   - Penghapusan kolom (K18, Requirement 12.4, 12.8): hanya kerangka TODO dengan penjaga aktif (gagal bila ada
+//     baris belum disalin), DROP COLUMN sebagai komentar, dan Down tidak dapat dibalik. Syarat removeAfter dan
+//     rilis MAJOR ditegakkan metadata:check terhadap tag rilis terakhir (dijalankan lebih dulu oleh
+//     metadata:migrate); paket ini tidak menduplikasi git.
 //   - Berkas tidak pernah diterapkan oleh paket ini.
 package migrate
 
@@ -84,6 +91,7 @@ const (
 	phIndex
 	phForeignKey
 	phTrigger
+	phBackfill
 	phTodo
 	phCount
 )
@@ -96,6 +104,8 @@ type generator struct {
 	res      *Result
 	newCols  map[string]map[string]bool
 	consumed map[int]bool
+	// removed adalah kolom yang akan dihapus (temuan column_extra) per tabel.
+	removed map[string]map[string]bool
 }
 
 // Generate membangkitkan migrasi dari laporan selisih. Temuan harus merujuk tabel dan objek yang ada pada
@@ -104,7 +114,7 @@ func Generate(rep *diff.Report, model *dbmodel.Schema, o Options) (*Result, erro
 	if o.Batch == 0 {
 		o.Batch = DefaultBatch
 	}
-	g := &generator{model: model, rep: rep, o: o, res: &Result{}, newCols: map[string]map[string]bool{}, consumed: map[int]bool{}}
+	g := &generator{model: model, rep: rep, o: o, res: &Result{}, newCols: map[string]map[string]bool{}, consumed: map[int]bool{}, removed: map[string]map[string]bool{}}
 	if len(rep.Findings) == 0 {
 		g.res.Empty = true
 		return g.res, nil
@@ -112,6 +122,14 @@ func Generate(rep *diff.Report, model *dbmodel.Schema, o Options) (*Result, erro
 	for _, f := range rep.Findings {
 		if model.Table(f.Table) == nil {
 			return nil, fmt.Errorf("temuan %s: tabel %q tidak ada pada model", f.Kind, f.Table)
+		}
+	}
+	for _, f := range rep.Findings {
+		if f.Kind == diff.KindColumnExtra {
+			if g.removed[f.Table] == nil {
+				g.removed[f.Table] = map[string]bool{}
+			}
+			g.removed[f.Table][f.Object] = true
 		}
 	}
 	// Tiga lintasan: tabel baru, kolom baru (agar constraint pada kolom baru dikenali), lalu sisanya.
@@ -139,6 +157,9 @@ func Generate(rep *diff.Report, model *dbmodel.Schema, o Options) (*Result, erro
 			continue
 		}
 		g.consumed[i] = true
+		if g.foldedIntoColumnRemoval(f) {
+			continue
+		}
 		if err := g.other(f); err != nil {
 			return nil, err
 		}
@@ -226,6 +247,33 @@ func (g *generator) columnMissing(f diff.Finding) error {
 	}
 	g.newCols[t.Name][c.Name] = true
 	g.change("kolom baru %s.%s", t.Name, c.Name)
+	return g.copyFromOld(t, c)
+}
+
+// copyFromOld menambahkan langkah salinan data bila kolom baru punya migrateFrom (Requirement 12.2): dari kolom lama
+// yang masih ada pada model, atau yang akan dihapus pada migrasi yang sama. Kolom lama tidak dihapus di sini.
+func (g *generator) copyFromOld(t *dbmodel.Table, c *dbmodel.Column) error {
+	if c.MigrateFrom == "" {
+		return nil
+	}
+	if t.Column(c.MigrateFrom) == nil && !g.removed[t.Name][c.MigrateFrom] {
+		return nil // kolom lama tidak ada di database ataupun model: tidak ada yang disalin
+	}
+	if t.Large {
+		q, err := sqlgen.BatchCopyBackfill(t, c.Name, c.MigrateFrom, g.o.Batch, sqlgen.Options{})
+		if err != nil {
+			return err
+		}
+		g.add(phBackfill, &step{up: []stmt{{sql: q, block: true}}})
+		g.res.NoTransaction = true
+	} else {
+		q, err := sqlgen.CopyColumn(t, c.Name, c.MigrateFrom, sqlgen.Options{})
+		if err != nil {
+			return err
+		}
+		g.add(phBackfill, &step{up: []stmt{{sql: q}}})
+	}
+	g.change("salin data %s.%s dari %s", t.Name, c.Name, c.MigrateFrom)
 	return nil
 }
 
@@ -424,6 +472,13 @@ func (g *generator) other(f diff.Finding) error {
 			}
 		}
 		return fmt.Errorf("pemicu %s.%s tidak ada pada model", f.Table, f.Object)
+	case diff.KindTriggerChanged:
+		for _, tr := range t.Triggers {
+			if tr.Name == f.Object {
+				return g.triggerReplace(t, tr)
+			}
+		}
+		return g.decision(f, t)
 	case diff.KindTriggerDisabled:
 		q, err := sqlgen.EnableTrigger(t, f.Object, opts)
 		if err != nil {
@@ -528,12 +583,7 @@ func (g *generator) decision(f diff.Finding, t *dbmodel.Table) error {
 	case diff.KindColumnGenerated:
 		reason = "mengganti ekspresi kolom turunan membutuhkan hapus dan tambah kolom"
 	case diff.KindColumnExtra:
-		reason = "kolom di database tidak ada di metadata: hapus hanya pada rilis MAJOR setelah deprecated, atau deklarasikan di metadata"
-		if n, err := sqlgen.QuoteIdent(t.Name); err == nil {
-			if cq, err := sqlgen.QuoteIdent(f.Object); err == nil {
-				sug = append(sug, "ALTER TABLE "+n+" DROP COLUMN "+cq)
-			}
-		}
+		return g.columnRemoval(f, t)
 	case diff.KindUniqueExtra, diff.KindForeignKeyExtra, diff.KindCheckExtra:
 		reason = "constraint di database tidak ada di metadata: hapus atau deklarasikan"
 		if q, err := sqlgen.DropConstraint(t, f.Object, opts); err == nil {
@@ -555,6 +605,12 @@ func (g *generator) decision(f diff.Finding, t *dbmodel.Table) error {
 // skeleton menambahkan butir kerangka (komentar saja). backfillColumn tidak kosong pada tabel large: true
 // menambahkan templat backfill per batch dan menandai berkas NO TRANSACTION.
 func (g *generator) skeleton(f diff.Finding, reason string, suggestions []string, backfillColumn string, needsValue bool) error {
+	_, err := g.skeletonStep(f, reason, suggestions, backfillColumn, needsValue)
+	return err
+}
+
+// skeletonStep seperti skeleton dan mengembalikan butir yang ditambahkan (untuk dilengkapi pemanggil).
+func (g *generator) skeletonStep(f diff.Finding, reason string, suggestions []string, backfillColumn string, needsValue bool) (*step, error) {
 	t := g.model.Table(f.Table)
 	obj := f.Object
 	g.res.Todos = append(g.res.Todos, Todo{Table: f.Table, Object: obj, Kind: f.Kind, Reason: reason})
@@ -585,7 +641,7 @@ func (g *generator) skeleton(f diff.Finding, reason string, suggestions []string
 		}
 	}
 	g.add(phTodo, s)
-	return nil
+	return s, nil
 }
 
 var unsafeComment = regexp.MustCompile(`[^A-Za-z0-9_.:=<>,() "'/-]`)
@@ -682,4 +738,93 @@ func writeStmts(sb *strings.Builder, stmts []stmt) {
 		}
 		sb.WriteString(s.sql + ";\n")
 	}
+}
+
+const reasonTriggerReplace = "badan pemicu lama tidak dapat dipulihkan otomatis"
+
+// triggerReplace mengganti pemicu bangkitan dengan versi dari templat (parameter berasal dari metadata, mis.
+// pasangan migrateFrom baru atau perubahan transisi): lepas pemicu, ganti fungsi, buat ulang pemicu, aktifkan
+// ALWAYS; semuanya dalam migrasi yang sama sehingga tidak ada celah tanpa pemicu.
+func (g *generator) triggerReplace(t *dbmodel.Table, tr *dbmodel.Trigger) error {
+	sts, err := sqlgen.TriggerStatements(t, tr, sqlgen.Options{})
+	if err != nil {
+		return err
+	}
+	drop, err := sqlgen.DropTrigger(t, tr.Name, sqlgen.Options{})
+	if err != nil {
+		return err
+	}
+	const prefix = "CREATE FUNCTION "
+	if len(sts) != 3 || !strings.HasPrefix(sts[0].SQL, prefix) {
+		return fmt.Errorf("pemicu %s: keluaran templat tak terduga", tr.Name)
+	}
+	fn := "CREATE OR REPLACE FUNCTION " + strings.TrimPrefix(sts[0].SQL, prefix)
+	g.add(phTrigger, &step{
+		up:           []stmt{{sql: drop}, {sql: fn, block: true}, {sql: sts[1].SQL}, {sql: sts[2].SQL}},
+		irreversible: reasonTriggerReplace,
+	})
+	g.change("ganti pemicu %s", tr.Name)
+	return nil
+}
+
+// foldedIntoColumnRemoval menyatakan temuan constraint atau indeks berlebih yang seluruh kolomnya akan dihapus:
+// objek itu hilang bersama DROP COLUMN sehingga tidak perlu kerangka tersendiri.
+func (g *generator) foldedIntoColumnRemoval(f diff.Finding) bool {
+	switch f.Kind {
+	case diff.KindUniqueExtra, diff.KindIndexExtra, diff.KindCheckExtra, diff.KindForeignKeyExtra:
+	default:
+		return false
+	}
+	if len(f.Columns) == 0 {
+		return false
+	}
+	for _, c := range f.Columns {
+		if !g.removed[f.Table][c] {
+			return false
+		}
+	}
+	return true
+}
+
+const (
+	reasonDrop   = "penghapusan kolom tidak dapat dibalik: data kolom hilang"
+	backupNotice = "BACKUP WAJIB sebelum migrasi MAJOR yang menghapus kolom (docs/module-sdk/lifecycle.md): penghapusan tidak dapat dibalik"
+)
+
+// columnRemoval membangkitkan kerangka penghapusan kolom (Requirement 12.4, 12.8; K18, D-35): penjaga aktif yang
+// menggagalkan migrasi bila masih ada baris dengan kolom lama terisi dan kolom pengganti (field dengan
+// migrateFrom ke kolom ini) kosong, DROP COLUMN hanya sebagai komentar untuk ditinjau, dan Down tidak dapat
+// dibalik. Syarat removeAfter dan rilis MAJOR ditegakkan metadata:check terhadap tag rilis terakhir modul
+// (pembanding yang sama; dijalankan lebih dulu oleh metadata:migrate), sehingga paket ini tidak menduplikasi git.
+func (g *generator) columnRemoval(f diff.Finding, t *dbmodel.Table) error {
+	var repl *dbmodel.Column
+	for _, c := range t.Columns {
+		if c.MigrateFrom == f.Object {
+			repl = c
+			break
+		}
+	}
+	var sug []string
+	if n, err := sqlgen.QuoteIdent(t.Name); err == nil {
+		if cq, err := sqlgen.QuoteIdent(f.Object); err == nil {
+			sug = append(sug, "ALTER TABLE "+n+" DROP COLUMN "+cq)
+		}
+	}
+	reason := "kolom di database tidak ada di metadata: hapus hanya pada rilis MAJOR setelah deprecated dan removeAfter, atau deklarasikan di metadata"
+	s, err := g.skeletonStep(f, reason, sug, "", false)
+	if err != nil {
+		return err
+	}
+	s.comment = append(s.comment, backupNotice)
+	s.irreversible = reasonDrop
+	if repl == nil {
+		s.comment = append(s.comment, "tanpa kolom pengganti (tidak ada field dengan migrateFrom ke kolom ini): pastikan data kolom tidak diperlukan")
+		return nil
+	}
+	guard, err := sqlgen.GuardUnsyncedRows(t, f.Object, repl.Name, sqlgen.Options{})
+	if err != nil {
+		return err
+	}
+	s.up = append(s.up, stmt{sql: guard, block: true})
+	return nil
 }

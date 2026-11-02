@@ -141,7 +141,7 @@ func describe(ve *jsonschema.ValidationError, base string) string {
 				hint = "harus sesuai pola " + k.Want
 			}
 		}
-		return fmt.Sprintf("nilai %q tidak valid: %s", k.Got, hint)
+		return "nilai tidak valid: " + hint
 	case *kind.Enum:
 		return strings.Replace(k.LocalizedString(printer), "value must be one of", "nilai harus salah satu dari", 1)
 	case *kind.Const:

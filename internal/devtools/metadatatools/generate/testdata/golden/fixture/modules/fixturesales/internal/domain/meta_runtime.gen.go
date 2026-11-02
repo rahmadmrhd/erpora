@@ -192,13 +192,15 @@ func (s *ResourceSpec) ReadOnlyNames() map[string]struct{} {
 	return out
 }
 
-// Locked melaporkan apakah record terkunci menurut lockWhen (hasil tak tentu dianggap tidak terkunci di sini;
-// pemanggil tetap menegakkan penguncian lapis database). Penegakan (409 invalid_state) milik pemanggil.
+// Locked melaporkan apakah record terkunci menurut lockWhen. Gagal tertutup (Requirement 9.4, D-26): hasil tak
+// tentu (mis. record tanpa field status, tipe salah) dianggap TERKUNCI, sehingga record yang tidak dapat dinilai
+// tidak pernah dianggap boleh diubah. Penegakan (409 invalid_state) milik pemanggil; database tetap lapis terakhir.
 func (s *ResourceSpec) Locked(rec metadata.Record) bool {
 	if s.LockWhen == nil {
 		return false
 	}
-	return s.LockWhen.Eval(s.Types(), rec).Value
+	res := s.LockWhen.Eval(s.Types(), rec)
+	return res.Value || len(res.Reasons) > 0
 }
 
 func structural(field, code string) Violation { return Violation{Field: field, Code: code} }

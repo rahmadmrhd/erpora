@@ -154,7 +154,7 @@ func TestMakeModule_ApplyTwiceWithoutForce(t *testing.T) {
 // Mencegah template tertinggal dari sumbernya: setiap file non-notes modules/example punya padanan di template.
 func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 	root := fixtureRepo(t)
-	plan, err := MakeModule(root, ModuleOptions{Name: "inventory", Frontend: true, Depends: []string{"acme.example"}})
+	plan, err := MakeModule(root, ModuleOptions{Name: "inventory", Frontend: true, Depends: []string{"acme.example"}, Metadata: true, MetadataGenerate: noopGenerate})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,9 +174,9 @@ func TestMakeModule_TemplateMatchesExampleShape(t *testing.T) {
 		"contract/notes.go":                             "contract/doc.go",
 		"migrations/0001_create_example_notes.sql":      "migrations/0001_create_inventory_items.sql",
 		"migrations/0002_add_example_notes_version.sql": "", // version/updated_at sudah ada di migrasi awal
-		// Metadata resource (spec resource-metadata task 8.2): example dimigrasikan ke metadata; kerangka metadata pada
-		// make:module bersifat opsional dan baru menyusul (task 18.3), sehingga berkas ini belum punya padanan template.
-		"metadata/note.resource.yaml":                       "",
+		// Metadata resource (spec resource-metadata task 8.2 dan 18.3): example dimigrasikan ke metadata; kerangka metadata
+		// pada make:module bersifat opsional (--metadata) dan menghasilkan metadata/item.resource.yaml.
+		"metadata/note.resource.yaml":                       "metadata/item.resource.yaml",
 		"migrations/0003_add_example_notes_audit_users.sql": "", // created_by/updated_by (sdk:audit) aditif pada example
 		"internal/infrastructure/notes_repo_test.go":        "", // uji konversi id pengguna nullable (sdk:audit) khusus example
 		"internal/domain/meta_runtime.gen.go":               "",
@@ -337,5 +337,89 @@ func TestMakeModule_WithoutFrontendHasNoDeskAndNoOrphanI18nKeys(t *testing.T) {
 		if strings.Contains(path, "/web/") {
 			t.Errorf("tanpa --frontend tidak boleh ada berkas web: %s", path)
 		}
+	}
+}
+
+func noopGenerate(context.Context, string, string) error { return nil }
+
+// Task 18.3: make:module --metadata menambah kerangka metadata resource; tanpa flag keluaran tidak berubah.
+func TestMakeModule_MetadataSkeleton(t *testing.T) {
+	root := fixtureRepo(t)
+	ops := func(o ModuleOptions) map[string]string {
+		plan, err := MakeModule(root, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, op := range plan.Ops {
+			out[op.Path] = string(op.Content)
+		}
+		return out
+	}
+	plain := ops(ModuleOptions{Name: "inventory"})
+	withMeta := ops(ModuleOptions{Name: "inventory", Metadata: true, MetadataGenerate: noopGenerate})
+
+	if _, ok := plain["modules/inventory/metadata/item.resource.yaml"]; ok {
+		t.Error("tanpa --metadata tidak boleh ada berkas metadata")
+	}
+	for _, f := range []string{"module.json", "openapi.yaml", "README.md"} {
+		c := plain["modules/inventory/"+f]
+		if strings.Contains(c, "x-erp-generated") || strings.Contains(c, "inventory.item.read") || strings.Contains(c, "metadata/item.resource.yaml") {
+			t.Errorf("%s tanpa --metadata tidak boleh menyinggung metadata", f)
+		}
+	}
+	meta := withMeta["modules/inventory/metadata/item.resource.yaml"]
+	for _, want := range []string{"key: inventory.item", "kind: resource", "title:", "label: fields.item.title"} {
+		if !strings.Contains(meta, want) {
+			t.Errorf("metadata tidak memuat %q:\n%s", want, meta)
+		}
+	}
+	if !strings.Contains(withMeta["modules/inventory/module.json"], `"inventory.items.read", "inventory.item.read"`) {
+		t.Error("module.json harus menambah capability inventory.item.read (awalan kunci resource metadata)")
+	}
+	if !strings.Contains(withMeta["modules/inventory/openapi.yaml"], "    Item:\n      type: object\n      x-erp-generated: true\n") {
+		t.Error("skema Item harus bertanda x-erp-generated agar digantikan pembangkit")
+	}
+	// Selain tiga berkas itu, semua keluaran identik dengan tanpa flag.
+	for p, c := range plain {
+		if strings.HasSuffix(p, "/module.json") || strings.HasSuffix(p, "/openapi.yaml") || strings.HasSuffix(p, "/README.md") {
+			continue
+		}
+		if withMeta[p] != c {
+			t.Errorf("%s berubah oleh --metadata", p)
+		}
+	}
+}
+
+func TestMakeModule_MetadataGenerateStepAndRequirement(t *testing.T) {
+	root := fixtureRepo(t)
+	if _, err := MakeModule(root, ModuleOptions{Name: "inventory", Metadata: true}); err == nil {
+		t.Fatal("--metadata tanpa pembangkit harus galat")
+	}
+	var gotDir string
+	plan, err := MakeModule(root, ModuleOptions{Name: "stock-opname", Metadata: true, MetadataGenerate: func(_ context.Context, _ string, dir string) error {
+		gotDir = dir
+		return nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Post) != 2 || !strings.HasPrefix(plan.Post[1].Name, "metadata:generate stockopname") {
+		t.Fatalf("Post = %v", plan.Post)
+	}
+	if err := plan.Post[1].Run(context.Background(), root); err != nil || gotDir != "stockopname" {
+		t.Errorf("err=%v dir=%q", err, gotDir)
+	}
+	// dengan frontend: metadata:generate sebelum contracts:generate
+	plan, err = MakeModule(root, ModuleOptions{Name: "inventory", Frontend: true, Metadata: true, MetadataGenerate: noopGenerate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Post) != 5 || !strings.HasPrefix(plan.Post[1].Name, "metadata:generate") || !strings.HasPrefix(plan.Post[2].Name, "contracts:generate") {
+		var names []string
+		for _, p := range plan.Post {
+			names = append(names, p.Name)
+		}
+		t.Errorf("urutan Post = %v", names)
 	}
 }

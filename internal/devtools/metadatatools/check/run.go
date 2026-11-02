@@ -30,7 +30,7 @@ type checker struct {
 
 // Run menjalankan semua pemeriksaan semantik pada Input dan mengembalikan laporan. Run tidak menulis apa pun.
 func Run(in Input) *Report {
-	rep := &Report{Resources: map[string]*ResourceInfo{}}
+	rep := &Report{Resources: map[string]*ResourceInfo{}, ModuleDirs: map[string]string{}}
 	c := &checker{rep: rep, mods: map[string]*modCtx{}, eff: map[string]*effInfo{}, tables: naming.NewNamespace("skema database")}
 	cat := resolve.NewCatalog()
 	c.cat = cat
@@ -38,6 +38,7 @@ func Run(in Input) *Report {
 		c.add(Problem{Severity: SeverityError, File: p.File, Line: p.Line, Column: p.Column, Pointer: p.Pointer, Code: CodeBuiltinInvalid, Message: "metadata bawaan SDK tidak valid: " + p.Message})
 	}
 
+	in = c.checkModuleIdentities(in)
 	addModules(cat, in, func(m Module) []*load.Document { return m.Docs }, func(m Module, mc *modCtx, ps []load.Problem) {
 		c.mods[m.Manifest.Slug] = mc
 		for _, p := range ps {
@@ -249,33 +250,16 @@ func (c *checker) effective(r *resolve.Resolved) *effInfo {
 	return e
 }
 
-// accessorInputs mengembalikan nama field masukan accessor expr/stored (terurut kemunculan, tanpa duplikat).
+// accessorInputs mengembalikan nama field masukan accessor expr/stored (terurut kemunculan, tanpa duplikat):
+// field pada ekspresi serta field dan ref pada kondisi di dalam if (Requirement 5.8). Ekspresi yang tidak
+// dapat di-parse dilaporkan terpisah (accessor_expr_invalid) dan tidak memberi masukan.
 func accessorInputs(acc map[string]any) []string {
-	var out []string
-	seen := map[string]bool{}
-	var walk func(v any)
-	walk = func(v any) {
-		switch t := v.(type) {
-		case map[string]any:
-			if s, ok := t["field"].(string); ok && !seen[s] {
-				seen[s] = true
-				out = append(out, s)
-			}
-			keys := make([]string, 0, len(t))
-			for k := range t {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				walk(t[k])
-			}
-		case []any:
-			for _, x := range t {
-				walk(x)
-			}
-		}
+	expr, err := metadata.ParseExpr(acc["expr"])
+	if err != nil {
+		return nil
 	}
-	walk(acc["expr"])
+	var out []string
+	exprRefs(expr, &out, map[string]bool{})
 	return out
 }
 
@@ -292,6 +276,10 @@ type rctx struct {
 	isDoc  bool
 	isAbs  bool
 	fields map[string]*resolve.Field
+	// pivotRel dan pivotPtr (opsional) mengalihkan lokasi temuan field ke kolom pivot sebuah relasi
+	// (/relations/<r>/pivotFields/<n>) saat checkField dipakai untuk pivotFields.
+	pivotRel *resolve.Relation
+	pivotPtr string
 }
 
 func (c *checker) checkResolved(r *resolve.Resolved, mc *modCtx) {
@@ -309,7 +297,7 @@ func (c *checker) checkResolved(r *resolve.Resolved, mc *modCtx) {
 	}
 	if !x.isAbs {
 		x.info = &ResourceInfo{Key: r.Key, Module: r.Module, Document: x.isDoc, RuleScope: map[string]string{}, ConditionScope: map[string]string{},
-			Class: x.eff.class, Group: x.eff.group}
+			Class: x.eff.class, Group: x.eff.group, Dir: mc.in.Dir}
 		c.rep.Resources[r.Key] = x.info
 	}
 
@@ -317,6 +305,8 @@ func (c *checker) checkResolved(r *resolve.Resolved, mc *modCtx) {
 	for _, f := range r.Fields {
 		x.checkField(f)
 	}
+	x.checkGroupLoosening()
+	x.checkCrossModuleRequires()
 	x.checkAccessors()
 	x.checkFieldConditions()
 	if !x.isAbs {
@@ -358,6 +348,14 @@ func (x *rctx) atDoc(sev Severity, ptr, code, format string, args ...any) {
 
 // atField menunjuk atribut field (asal nilai terakhir), atau field itu bila atribut kosong/tidak ada.
 func (x *rctx) atField(sev Severity, f *resolve.Field, attr, code, format string, args ...any) {
+	if x.pivotRel != nil {
+		ptr := x.pivotPtr
+		if attr != "" {
+			ptr += "/" + attr
+		}
+		x.atRelation(sev, x.pivotRel, ptr, code, format, args...)
+		return
+	}
 	ptr := "/fields/" + f.Name
 	o := f.Origin
 	if attr != "" {

@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/mod/modfile"
+
 	"erpora/internal/devtools/metadatatools/load"
 	"erpora/internal/devtools/metadatatools/resolve"
 )
@@ -146,6 +148,10 @@ type Module struct {
 	// MigrationsFS adalah isi direktori migrations modul (berkas .sql di akar); nil bila modul tanpa migrasi.
 	// Dipakai untuk menggagalkan pemeriksaan bila masih ada kerangka migrasi bertanda TODO(metadata:migrate).
 	MigrationsFS fs.FS
+	// GoRequires adalah path modul Go yang tercantum pada require di modules/<dir>/go.mod modul ini (mis.
+	// erpora/modules/crm). nil berarti go.mod tidak diketahui (Input dibangun manual) dan pemeriksaan require
+	// dilewati; LoadWorkspace mengisinya bila go.mod terbaca (Requirement 6.2, 6.3, 3.5).
+	GoRequires map[string]bool
 }
 
 // Input adalah semua modul yang menjadi konteks pemeriksaan (relasi dan include lintas modul diselesaikan
@@ -172,6 +178,9 @@ type ResourceInfo struct {
 	// paling ketat dari field masukannya; Requirement 5.8). Grup memakai kunci manifest (snake_case).
 	Class map[string]string
 	Group map[string]string
+	// Dir adalah direktori modul pemilik (modules/<dir>) yang sudah divalidasi sama dengan slug modul tanpa
+	// tanda hubung; pembangkit memakainya sebagai satu-satunya tujuan tulis modul itu.
+	Dir string
 }
 
 // Report adalah hasil Run.
@@ -179,6 +188,8 @@ type Report struct {
 	Problems  []Problem
 	Resolved  *resolve.Result
 	Resources map[string]*ResourceInfo
+	// ModuleDirs memetakan slug modul yang lolos pemeriksaan identitas ke direktorinya (modules/<dir>).
+	ModuleDirs map[string]string
 }
 
 // Resource mengembalikan info turunan resource menurut kunci, nil bila tidak ada.
@@ -224,6 +235,7 @@ func LoadWorkspace(root string) (Input, []Problem) {
 		if st, err := os.Stat(filepath.Join(root, "modules", dir, "migrations")); err == nil && st.IsDir() {
 			mod.MigrationsFS = os.DirFS(filepath.Join(root, "modules", dir, "migrations"))
 		}
+		mod.GoRequires = readGoRequires(filepath.Join(root, "modules", dir, "go.mod"))
 		docs, lps := load.LoadFS(fsys, rel+"/metadata")
 		mod.Docs = docs
 		for _, p := range lps {
@@ -232,6 +244,23 @@ func LoadWorkspace(root string) (Input, []Problem) {
 		in.Modules = append(in.Modules, mod)
 	}
 	return in, probs
+}
+
+// readGoRequires membaca path modul pada require go.mod; nil bila berkas tidak ada atau tidak dapat dibaca.
+func readGoRequires(path string) map[string]bool {
+	raw, err := os.ReadFile(path) //nolint:gosec // path dari root repo
+	if err != nil {
+		return nil
+	}
+	mf, err := modfile.ParseLax(path, raw, nil)
+	if err != nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, r := range mf.Require {
+		out[r.Mod.Path] = true
+	}
+	return out
 }
 
 func fromLoad(p load.Problem, module, resource string) Problem {

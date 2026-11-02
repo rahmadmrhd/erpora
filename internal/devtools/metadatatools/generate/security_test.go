@@ -249,7 +249,7 @@ func TestHostileInputTypeScriptIsDataOnly(t *testing.T) {
 			f.Enum = append(f.Enum, hostile)
 		}
 	}
-	out, _, err := buildTS(m, func(string) int { return 0 })
+	out, _, err := buildTS(m, func(string) int { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

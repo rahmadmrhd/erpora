@@ -145,7 +145,11 @@ func renderDomain(m *resModel, pkg string) ([]byte, error) {
 
 // renderDTO membangkitkan <nama>_dto.gen.go (presentation/http).
 func renderDTO(m *resModel, pkg, domainImport string) ([]byte, error) {
-	d := dtoData{Header: GeneratedHeader, Pkg: pkg, Pascal: m.Pascal, DomainImport: domainImport}
+	if !importPathRe.MatchString(domainImport) {
+		return nil, inputErr("path import domain %q tidak sah", domainImport)
+	}
+	// Impor domain adalah literal terkutip (goString), bukan teks mentah dari go.mod.
+	d := dtoData{Header: GeneratedHeader, Pkg: pkg, Pascal: m.Pascal, DomainImport: goString(domainImport)}
 	for _, f := range m.writable() {
 		gt, ok := goTypeOf[f.Type]
 		if !ok {

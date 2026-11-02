@@ -20,7 +20,7 @@ Semua command dijalankan dari dalam repo (`task erpora -- make:... ` atau binary
 
 | Command | Hasil |
 | --- | --- |
-| `make:module <name> [--frontend] [--depends k1,k2] [--publisher id]` | Modul baru turunan `example` di `modules/<dir>`: go.mod, `module.json`, `openapi.yaml`, empat lapisan Clean Architecture, migrasi, command `recount`, `DevSeeder`, dan test. Didaftarkan di `go.work`, `go.mod` root (`replace`), dan `internal/app/modules.go` |
+| `make:module <name> [--frontend] [--metadata] [--depends k1,k2] [--publisher id]` | Modul baru turunan `example` di `modules/<dir>`: go.mod, `module.json`, `openapi.yaml`, empat lapisan Clean Architecture, migrasi, command `recount`, `DevSeeder`, dan test. Didaftarkan di `go.work`, `go.mod` root (`replace`), dan `internal/app/modules.go`. `--metadata` menambah kerangka metadata resource (bagian 10) |
 | `make:migration <module> <name>` | `migrations/NNNN_<name>.sql` goose bernomor berikutnya (modul, atau `--platform control\|tenant`) |
 | `make:entity <module> <Name>` | Entity + test di `internal/domain` |
 | `make:usecase <module> <Name> [--query]` | Use case (command atau query) + test di `internal/application` |
@@ -144,6 +144,7 @@ Sistem metadata resource (spec `docs/specs/resource-metadata/`, [ADR-0016](../ad
 | --- | --- | --- |
 | `metadata:check` | Memuat `modules/*/metadata/**` dan `modules/*/module.json`, menyelesaikan penyertaan, timpaan, tipe domain, dan blok, lalu memeriksa skema, tipe dan batasan, kondisi, accessor, templat label, relasi, integrasi manifest, penamaan, dan aturan deprecated, salinan, dan penguncian. Hanya membaca. Exit 0 (peringatan boleh ada), 2 ada galat, 3 root repo tidak ditemukan | tersedia |
 | `metadata:generate [modul...] [--check]` | Menjalankan `metadata:check` lalu membangkitkan keluaran di bawah. Argumen modul (nama direktori, mis. `sales`) membatasi cakupan; kosong berarti semua modul bermetadata. `--check` hanya membandingkan dan tidak menulis. Exit 0, 2 (galat check, drift, edit tangan, bentrok, masukan tidak sah), 3, 4 (penulisan gagal) | tersedia |
+| `make:module <name> --metadata` | Kerangka metadata pada modul baru: lihat di bawah | tersedia |
 | `metadata:diff`, `metadata:migrate` | Selisih metadata terhadap skema database hasil migrasi dan pembangkit migrasi goose (T2) | menyusul |
 | `metadata:eject` | Menyalin keluaran bangkitan menjadi kode biasa (jalan keluar tanpa kunci mati) | menyusul |
 
@@ -194,3 +195,14 @@ Resource transaksional menyertakan `sdk:document` (field `status`, `amendedFromI
 | 13 Tes properti, konkurensi, idempotensi, immutabilitas | Tes validasi dan paritas; tes immutabilitas dan idempotensi bangkitan menyusul (T2, T4) | Properti dan konkurensi domain |
 
 Perkara yang **selalu tetap per resource dan wajib ditulis tangan serta dicakup spec resource itu**: penomoran, ledger append-only, maker-checker (pemisahan tugas), periode akuntansi, dan rekonsiliasi saldo (juga retensi dan pembulatan domain). Sistem metadata tidak membangkitkan dan tidak menggantikannya.
+
+### Kerangka metadata pada `make:module --metadata`
+
+Tanpa `--metadata` keluaran `make:module` tidak berubah. Dengan flag itu modul baru juga memuat (spec `resource-metadata`, task 18.3):
+
+- `metadata/item.resource.yaml`: resource `<slug>.item` dengan satu field `title` (`string` 1 sampai 200, `sortable`, `filterable`) dan `labelTemplate: "{title}"`. Field audit (`id`, `version`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`) ikut otomatis dari `sdk:audit`.
+- Capability `<slug>.item.read` di `module.json` (awalan kunci resource yang diminta `metadata:check` sebelum manifest memakai `resources`), di samping `<slug>.items.read` bawaan.
+- Skema `Item` pada `openapi.yaml` bertanda `x-erp-generated: true`, sehingga digantikan pembangkit di tempatnya.
+- Langkah akhir `metadata:generate <dir>` (sebelum `contracts:generate` bila `--frontend`): membangkitkan skema `ItemCreate` dan `ItemUpdate`, `internal/domain/item_meta.gen.go`, `internal/presentation/http/item_dto.gen.go` beserta runtime per modul, dan (dengan `--frontend`) `web/src/metadata/item.meta.gen.ts`. Hasilnya langsung hijau untuk `metadata:check`, `metadata:generate --check`, dan `module:check`. Bila `metadata:check` bergalat (di modul mana pun pada repo), langkah ini gagal dan modul sudah tertulis; perbaiki lalu jalankan `task erpora -- metadata:generate <dir>`.
+
+Kerangka ini hanya titik awal: tabel awal belum memuat `created_by`/`updated_by` dan handler belum mengirimnya (tambahkan migrasi dan handler, atau lihat selisihnya dengan `metadata:diff`, menyusul penuh di T2).

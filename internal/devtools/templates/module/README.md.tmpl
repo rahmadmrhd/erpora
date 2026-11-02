@@ -4,7 +4,12 @@ Modul ERPora yang dibuat `erpora make:module [[.Slug]]` dan diturunkan dari modu
 
 - Kontrak API: `openapi.yaml` (lint: `erpora contracts:lint [[.Slug]]`). Route, permission, dan klasifikasi respons dicocokkan dengan
   `module.go` oleh test di `internal/app`.
-- Tabel: `[[.Snake]]_items` (migrasi `migrations/`, tabel goose `goose_module_[[.Snake]]`).
+[[if .Metadata]]- Metadata resource: `metadata/item.resource.yaml` adalah sumber kebenaran resource `[[.Slug]].item` (spec `docs/specs/resource-metadata/`).
+  Ubah metadata, lalu jalankan `task erpora -- metadata:generate [[.Dir]]` untuk membangkitkan skema `Item` pada `openapi.yaml`, kode
+  `internal/domain/*_meta.gen.go`, `internal/presentation/http/*_dto.gen.go`, dan metadata TS; berkas `*.gen.*` tidak diedit tangan.
+  `task metadata:check` dan `task metadata:generate:check` ikut gerbang. Field audit (`createdBy`, `updatedBy`) otomatis ada di metadata
+  tetapi belum ada di tabel awal: sesuaikan migrasi dan handler (`task erpora -- metadata:diff [[.Dir]]` menunjukkan selisihnya).
+[[end]]- Tabel: `[[.Snake]]_items` (migrasi `migrations/`, tabel goose `goose_module_[[.Snake]]`).
 - Lapisan: `internal/domain` (tanpa I/O), `internal/application` (use case), `internal/infrastructure` (GORM lewat `sdk/data`),
   `internal/presentation/http` (handler, amplop `sdk/httpx`). Antarmodul hanya lewat `contract/`.
 - Tambah kode dengan generator: `erpora make:handler`, `make:entity`, `make:usecase`, `make:contract`, `make:command`,

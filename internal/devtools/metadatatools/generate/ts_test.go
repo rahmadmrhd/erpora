@@ -116,7 +116,7 @@ func TestTypeScriptClientVisibleFalseAndUnsafeRefs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, omitted, err := buildTS(m, func(string) int { return 0 })
+	out, omitted, err := buildTS(m, func(string) int { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestTypeScriptAccessorExprOnlyWhenRefsAreClientSafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, omitted, err := buildTS(m, func(string) int { return 0 })
+	out, omitted, err := buildTS(m, func(string) int { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestTypeScriptPivotFieldsFilteredByClassificationAndConditions(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, omitted, err := buildTS(m, func(ptr string) int { return len(ptr) })
+	out, omitted, err := buildTS(m, func(ptr string) int { return len(ptr) }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,4 +310,113 @@ func fieldSection(t *testing.T, s, name string) string {
 		rest = rest[:10+j]
 	}
 	return rest
+}
+
+// I-2: filter relasi merujuk field RESOURCE SEBERANG; ambang dan nama field seberang yang confidential, di luar grup
+// default, tersembunyi dari klien, atau tak dapat diperiksa tidak boleh terkirim ke chunk publik.
+func TestTypeScriptRelationFilterChecksRemoteResource(t *testing.T) {
+	mk := func(filter map[string]any) *resModel {
+		r := hostileResolved(t)
+		r.Relations = []*resolve.Relation{{Name: "customer", Attrs: map[string]any{
+			"type": "belongsTo", "to": "evil.customer", "filter": filter,
+		}}}
+		m, err := buildModel(r, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	remote := func(key, field string) (remoteField, bool) {
+		if key != "evil.customer" {
+			return remoteField{}, false
+		}
+		switch field {
+		case "status":
+			return remoteField{Class: "internal", Group: "general", DefaultGroup: "general", ClientVisible: true}, true
+		case "creditLimit":
+			return remoteField{Class: "confidential", Group: "finance", DefaultGroup: "general", ClientVisible: true}, true
+		case "internalFinance":
+			return remoteField{Class: "internal", Group: "finance", DefaultGroup: "general", ClientVisible: true}, true
+		case "hiddenField":
+			return remoteField{Class: "internal", Group: "general", DefaultGroup: "general", ClientVisible: false}, true
+		}
+		return remoteField{}, false
+	}
+	leak := map[string]any{"field": "creditLimit", "op": "lte", "value": "987654321.00"}
+	for name, f := range map[string]map[string]any{
+		"confidential": leak,
+		"group":        {"field": "internalFinance", "op": "eq", "value": "987654321.00"},
+		"hidden":       {"field": "hiddenField", "op": "eq", "value": "987654321.00"},
+		"unknown":      {"field": "tidakAda", "op": "eq", "value": "987654321.00"},
+		"mixed":        {"all": []any{map[string]any{"field": "status", "op": "eq", "value": "active"}, leak}},
+	} {
+		out, omitted, err := buildTS(mk(f), func(string) int { return 0 }, remote)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(out), "987654321") || strings.Contains(string(out), "creditLimit") {
+			t.Errorf("%s: ambang atau nama field seberang bocor:\n%s", name, out)
+		}
+		if !strings.Contains(strings.Join(omitted, "\n"), "relation customer.filter") {
+			t.Errorf("%s: catatan Omitted tidak memuat relation customer.filter: %v", name, omitted)
+		}
+	}
+	// aman: field seberang internal di grup default dan terlihat
+	out, _, err := buildTS(mk(map[string]any{"field": "status", "op": "eq", "value": "active"}), func(string) int { return 0 }, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `filter: {`) || !strings.Contains(string(out), `value: "active"`) {
+		t.Errorf("filter aman harus dipancarkan:\n%s", out)
+	}
+	// gagal tertutup: pencari seberang tidak tersedia
+	out, omitted, err := buildTS(mk(map[string]any{"field": "status", "op": "eq", "value": "active"}), func(string) int { return 0 }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), `value: "active"`) || !strings.Contains(strings.Join(omitted, "\n"), "relation customer.filter") {
+		t.Errorf("tanpa informasi resource seberang filter tidak boleh dipancarkan: %v", omitted)
+	}
+}
+
+// M-4: nama field yang tidak dipancarkan ke klien tidak boleh bocor lewat rujukan lain.
+func TestTypeScriptNoLeakOfHiddenFieldNames(t *testing.T) {
+	r := hostileResolved(t)
+	r.LabelTemplate = "{title} - {hiddenTotal}"
+	r.Fields = append(r.Fields,
+		fieldNamed("hiddenTotal", map[string]any{"type": "string", "nullable": true, "clientVisible": false, "clientVisibleReason": "sensitif"}),
+		fieldNamed("oldName", map[string]any{"type": "string", "nullable": true, "deprecated": map[string]any{"since": "1.0.0", "replacedBy": "hiddenTotal"}}),
+		fieldNamed("snapTarget", map[string]any{"type": "string", "nullable": true}),
+	)
+	r.Relations = []*resolve.Relation{{Name: "customer", Attrs: map[string]any{
+		"type": "belongsTo", "to": "evil.customer",
+		"snapshot": []any{
+			map[string]any{"from": "name", "to": "snapTarget"},
+			map[string]any{"from": "name", "to": "hiddenTotal"},
+		},
+	}}}
+	m, err := buildModel(r, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, omitted, err := buildTS(m, func(string) int { return 0 }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Contains(s, "hiddenTotal") {
+		t.Errorf("nama field tersembunyi bocor:\n%s", s)
+	}
+	if !strings.Contains(s, `to: "snapTarget"`) || !strings.Contains(s, `since: "1.0.0"`) {
+		t.Errorf("rujukan aman harus tetap ada:\n%s", s)
+	}
+	if strings.Contains(s, "labelTemplate") {
+		t.Error("labelTemplate yang merujuk field tersembunyi tidak boleh dipancarkan")
+	}
+	notes := strings.Join(omitted, "\n")
+	for _, want := range []string{"labelTemplate", "deprecated.replacedBy", "snapshot"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("catatan tidak memuat %q:\n%s", want, notes)
+		}
+	}
 }

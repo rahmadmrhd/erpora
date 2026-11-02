@@ -8,8 +8,8 @@ import (
 
 // checkUnmanaged memeriksa unmanagedColumns (Requirement 2.9) dan larangan bersama generate.crud.
 //
-// Catatan: konsep unmanagedColumns adalah usulan perancang yang menunggu konfirmasi pemilik produk (tasks.md
-// Overview). Pemeriksa tidak dapat membuktikan bahwa sebuah kolom di luar metadata berklasifikasi
+// Catatan: konsep unmanagedColumns sudah ada di spek (K17), tetapi penegakan penuh Requirement 2.9 menunggu
+// konfirmasi pemilik produk (K-a, tasks.md Overview). Pemeriksa tidak dapat membuktikan bahwa sebuah kolom di luar metadata berklasifikasi
 // highly_confidential; yang dapat ditegakkan secara statis hanya: nama sah, tidak ganda, tidak bentrok dengan
 // kolom yang dikelola metadata, dan tidak bersama generate.crud. Seluruh logika ini ada di berkas ini.
 func (x *rctx) checkUnmanaged() {

@@ -46,6 +46,9 @@ components:
   schemas:
     Item:
       type: object
+[[- if .Metadata]]
+      x-erp-generated: true
+[[- end]]
       required: [id, title, version, createdAt, updatedAt]
       properties:
         id: { $ref: 'erp:common#/components/schemas/Uuid' }

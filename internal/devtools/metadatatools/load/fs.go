@@ -29,6 +29,11 @@ func LoadFS(fsys fs.FS, root string) ([]*Document, []Problem) {
 func LoadFSWithLimits(fsys fs.FS, root string, lim Limits) ([]*Document, []Problem) {
 	var docs []*Document
 	var probs []Problem
+	// Direktori metadata dan induknya tidak boleh tautan simbolik atau junction: isinya berasal dari luar pohon
+	// modul dan tidak boleh dibaca (Requirement 1.2).
+	if p, linked := linkedPrefix(fsys, root); linked {
+		return nil, []Problem{{File: p, Code: CodeSymlink, Message: "direktori metadata (atau induknya) adalah tautan simbolik atau junction; tidak diikuti"}}
+	}
 	err := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if p == root && errors.Is(err, fs.ErrNotExist) {
@@ -37,15 +42,15 @@ func LoadFSWithLimits(fsys fs.FS, root string, lim Limits) ([]*Document, []Probl
 			probs = append(probs, Problem{File: p, Code: CodeRead, Message: "tidak dapat dibaca: " + err.Error()})
 			return nil
 		}
+		if d.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
+			probs = append(probs, Problem{File: p, Code: CodeSymlink, Message: "tautan simbolik atau junction tidak diikuti"})
+			return nil
+		}
 		if d.IsDir() {
 			return nil
 		}
 		name := d.Name()
 		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			return nil
-		}
-		if d.Type()&fs.ModeSymlink != 0 {
-			probs = append(probs, Problem{File: p, Code: CodeSymlink, Message: "tautan simbolik tidak diikuti"})
 			return nil
 		}
 		want := ""
@@ -83,6 +88,27 @@ func LoadFSWithLimits(fsys fs.FS, root string, lim Limits) ([]*Document, []Probl
 	}
 	sortProblems(probs)
 	return docs, probs
+}
+
+// linkedPrefix memeriksa root dan tiap komponen induknya (dari yang teratas) dengan Lstat; mengembalikan jalur
+// pertama yang berupa tautan simbolik atau junction (ModeIrregular). Komponen yang tidak ada diabaikan.
+func linkedPrefix(fsys fs.FS, root string) (string, bool) {
+	root = path.Clean(root)
+	if root == "." {
+		return "", false
+	}
+	parts := strings.Split(root, "/")
+	for i := range parts {
+		p := strings.Join(parts[:i+1], "/")
+		fi, err := fs.Lstat(fsys, p)
+		if err != nil {
+			return "", false
+		}
+		if fi.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
+			return p, true
+		}
+	}
+	return "", false
 }
 
 // readLimited membaca paling banyak max+1 byte agar berkas raksasa tidak dimuat penuh ke memori.

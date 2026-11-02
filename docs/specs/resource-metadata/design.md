@@ -483,7 +483,7 @@ Hal berikut sengaja tidak diputuskan di spec ini dan menjadi keputusan pelaksana
 
 Keputusan pelaksana yang sudah dicatat (task 1.2, 1 Nov 2026; rincian dan alasan di "Catatan hasil" `tasks.md`):
 
-- **YAML**: `go.yaml.in/yaml/v3 v3.0.5`; pemuat membatasi ukuran sebelum parse, parse ke `yaml.Node`, menolak seluruh anchor dan alias, tag kustom, kunci non-string, dokumen ganda, serta kedalaman dan jumlah node di atas batas.
+- **YAML**: `go.yaml.in/yaml/v3 v3.0.5`; pemuat membatasi ukuran sebelum parse, parse ke `yaml.Node`, membatasi alias (paling banyak 16 alias per berkas dan perluasan alias paling banyak 10000 simpul tambahan; Requirement 1.2), tag kustom, kunci gabungan (`<<`), kunci non-string, dokumen ganda, serta kedalaman dan jumlah node di atas batas.
 - **JSON Schema**: `santhosh-tekuri/jsonschema/v6 v6.0.3`; galat dipetakan ke baris lewat JSON pointer.
 - **Desimal Go**: `math/big` standar dengan skala dan pembulatan eksplisit (K20, 1 Nov 2026, disetujui pemilik produk: `shopspring/decimal` tidak dipakai, SDK tanpa dependensi baru). **Desimal TypeScript**: buatan sendiri di atas `BigInt`.
 - **Property test**: Go memakai PRNG berseed stdlib (tanpa dependensi baru; `rapid` ditolak karena MPL-2.0 dan belum ada di `go.mod`), TypeScript memakai `fast-check 4.10.2` (sudah ada). Paritas dua sisi lewat korpus acak berseed yang dikomit di `contracts/metadata-vectors/random/`.

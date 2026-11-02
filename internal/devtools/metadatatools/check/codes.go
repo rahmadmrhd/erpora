@@ -124,6 +124,18 @@ const (
 	CodeReleaseBaselineUnavailable     = "release_baseline_unavailable"
 	CodeReleaseBaselineInvalid         = "release_baseline_invalid"
 
+	// Identitas modul (Requirement 3.5, 19.3, 19.4): direktori, slug, slug tercadang, duplikat, require go.mod.
+	CodeModuleDirMismatch   = "module_dir_mismatch"
+	CodeModuleSlugInvalid   = "module_slug_invalid"
+	CodeModuleSlugReserved  = "module_slug_reserved"
+	CodeModuleSlugDuplicate = "module_slug_duplicate"
+	CodeModuleKeyDuplicate  = "module_key_duplicate"
+	CodeModuleGoModRequire  = "module_gomod_require"
+
+	// Pelonggaran grup lewat set (Requirement 3.6, 3.11) dan kolom pivot (Requirement 2).
+	CodeFieldGroupLoosened = "field_group_loosened"
+	CodePivotFieldType     = "pivot_field_type"
+
 	// Internal.
 	CodeBuiltinInvalid = "builtin_invalid"
 	CodeManifestParse  = "manifest_parse"

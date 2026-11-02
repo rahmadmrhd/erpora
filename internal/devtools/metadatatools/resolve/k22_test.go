@@ -93,13 +93,12 @@ func TestK22AuditFieldsRemainProtectedAndNamesReserved(t *testing.T) {
 			t.Fatalf("temuan = %v", ps)
 		}
 	})
-	t.Run("include audit berprefix tetap sah dan tidak menghapus audit implisit", func(t *testing.T) {
+	t.Run("include audit berprefix ditolak (field bawaan terlindungi tidak boleh diganti nama)", func(t *testing.T) {
 		c := newCatalog(t, func(c *Catalog) {
 			addModule(t, c, Module{Slug: "m"}, f("m/r.resource.yaml", resource("m.r", "include:\n  - {source: sdk:audit, prefix: legacy}\n")))
 		})
-		r := mustResolve(t, c, "m.r")
-		if r.Field("id") == nil || r.Field("legacyId") == nil {
-			t.Fatalf("field = %s", joined(r))
+		if _, ps := c.Resolve("m.r"); !hasCode(ps, CodeIncludePrefixProtected) {
+			t.Fatalf("temuan = %v", ps)
 		}
 	})
 }

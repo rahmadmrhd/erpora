@@ -397,3 +397,15 @@ func TestMetadataCheck_RemovedFieldAgainstReleaseTag(t *testing.T) {
 		t.Errorf("keluaran:\n%s", out)
 	}
 }
+
+func TestMakeModule_HasMetadataFlag(t *testing.T) {
+	root := newTestRoot(t)
+	cmd, _, err := root.Find([]string{"make:module"})
+	if err != nil || cmd.Name() != "make:module" {
+		t.Fatalf("make:module tidak terdaftar: %v", err)
+	}
+	f := cmd.Flags().Lookup("metadata")
+	if f == nil || f.DefValue != "false" {
+		t.Fatalf("flag --metadata harus ada dengan bawaan false: %+v", f)
+	}
+}

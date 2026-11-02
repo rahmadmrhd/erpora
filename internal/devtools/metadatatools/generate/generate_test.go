@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -381,5 +382,157 @@ func TestStatusLifecycleAndAxesOutput(t *testing.T) {
 				t.Errorf("%s.%s tidak boleh ada (hanya-baca)", w, name)
 			}
 		}
+	}
+}
+
+// M-3: resource terakhir sebuah modul dihapus; keluaran bangkitan dan skema x-erp-generated yatim harus terdeteksi.
+func TestStaleModuleWithoutResourcesIsDetectedAndCleaned(t *testing.T) {
+	root, cat := fixtureRepo(t)
+	if _, err := runGen(t, root, Options{}, cat); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"branch", "customer"} {
+		if err := os.Remove(filepath.Join(root, "modules", "fixturecore", "metadata", f+".resource.yaml")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cat2 := fixtureCatalog(t, root)
+	res, err := runGen(t, root, Options{Check: true}, cat2)
+	if !errors.Is(err, ErrDrift) {
+		t.Fatalf("--check harus gagal: err=%v stale=%v", err, res.Stale)
+	}
+	joined := strings.Join(res.Stale, "\n")
+	for _, want := range []string{
+		"modules/fixturecore/internal/domain/customer_meta.gen.go", "modules/fixturecore/internal/domain/meta_runtime.gen.go",
+		"modules/fixturecore/internal/presentation/http/branch_dto.gen.go", "modules/fixturecore/internal/presentation/http/meta_runtime.gen.go",
+		"modules/fixturecore/openapi.yaml",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("stale tidak memuat %s:\n%s", want, joined)
+		}
+	}
+	res, err = runGen(t, root, Options{}, cat2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Removed) < 6 {
+		t.Errorf("berkas yatim harus dihapus: %v", res.Removed)
+	}
+	if strings.Contains(readFile(t, root, "modules/fixturecore/openapi.yaml"), "x-erp-generated") {
+		t.Error("skema bangkitan yatim harus dibuang dari openapi.yaml")
+	}
+	if _, err := runGen(t, root, Options{Check: true}, cat2); err != nil {
+		t.Errorf("setelah dibersihkan --check harus hijau: %v", err)
+	}
+	// Modul tanpa metadata dan tanpa artefak bangkitan tidak tersentuh.
+	writeFile(t, root, "modules/plain/openapi.yaml", "openapi: 3.1.0\ncomponents: {schemas: {X: {type: string}}}\n")
+	writeFile(t, root, "modules/plain/go.mod", "module erpora/modules/plain\n")
+	if _, err := runGen(t, root, Options{Check: true}, cat2); err != nil {
+		t.Errorf("modul tanpa artefak bangkitan tidak boleh memicu drift atau galat: %v", err)
+	}
+}
+
+// M-5: path import domain berasal dari go.mod modul dan harus berbentuk path sah; selalu dikutip.
+func TestHostileModulePathRejected(t *testing.T) {
+	root, cat := fixtureRepo(t)
+	for _, bad := range []string{`erpora/m"; import "os`, "erpora/m with space", "erpora/m\ninjected"} {
+		writeFile(t, root, "modules/fixturesales/go.mod", "module "+strconv.Quote(bad)+"\n")
+		before := treeSum(t, root)
+		if _, err := runGen(t, root, Options{}, cat); !errors.Is(err, ErrInput) {
+			t.Errorf("%q: err = %v", bad, err)
+		}
+		if treeSum(t, root) != before {
+			t.Errorf("%q: tidak boleh menulis", bad)
+		}
+	}
+}
+
+func TestDomainImportIsQuotedLiteral(t *testing.T) {
+	root, cat := fixtureRepo(t)
+	res, _ := runGen(t, root, Options{Check: true}, cat)
+	dto := fileContent(t, res, "modules/fixturesales/internal/presentation/http/invoice_dto.gen.go")
+	if !strings.Contains(dto, "\t\"erpora/modules/fixturesales/internal/domain\"\n") {
+		t.Errorf("impor domain harus literal terkutip:\n%s", dto[:400])
+	}
+}
+
+// Runtime disalin per modul: identifier bangkitan yang bentrok dengan kode tulis tangan harus gagal sebelum menulis.
+func TestRuntimeIdentifierCollisionDetected(t *testing.T) {
+	for dir, src := range map[string]string{
+		"modules/fixturesales/internal/domain/mine.go":                 "package domain\n\ntype Mode int\n",
+		"modules/fixturesales/internal/domain/mine2.go":                "package domain\n\nconst InvoiceKey = \"x\"\n",
+		"modules/fixturesales/internal/presentation/http/mine.go":      "package httpapi\n\nfunc clone() {}\n",
+		"modules/fixturesales/internal/presentation/http/mine_test.go": "package httpapi\n\nfunc violationsError() {}\n",
+		"modules/fixturesales/internal/presentation/http/mine3.go":     "package httpapi\n\ntype InvoiceCreate struct{}\n",
+	} {
+		root, cat := fixtureRepo(t)
+		writeFile(t, root, dir, src)
+		before := treeSum(t, root)
+		_, err := runGen(t, root, Options{}, cat)
+		if !errors.Is(err, ErrInput) || !strings.Contains(err.Error(), "bentrok") {
+			t.Errorf("%s: err = %v", dir, err)
+		}
+		if treeSum(t, root) != before {
+			t.Errorf("%s: tidak boleh menulis", dir)
+		}
+	}
+	// nama yang tidak bentrok tidak mengganggu
+	root, cat := fixtureRepo(t)
+	writeFile(t, root, "modules/fixturesales/internal/domain/mine.go", "package domain\n\ntype Customer struct{}\n\nfunc helper() {}\n")
+	if _, err := runGen(t, root, Options{}, cat); err != nil {
+		t.Errorf("tanpa bentrok harus lolos: %v", err)
+	}
+}
+
+// I-1: direktori tulis modul berasal dari pemeriksaan identitas modul, bukan dari slug yang diubah menjadi nama
+// direktori; modul bermanifest slug milik modul lain tidak boleh menulis ke direktori modul lain.
+func TestResolveModuleDir(t *testing.T) {
+	if d, err := resolveModuleDir("stock-opname", nil); err != nil || d != "stockopname" {
+		t.Errorf("tanpa dirs: %q %v", d, err)
+	}
+	if d, err := resolveModuleDir("sales", map[string]string{"sales": "modules/sales"}); err != nil || d != "sales" {
+		t.Errorf("cocok: %q %v", d, err)
+	}
+	for name, c := range map[string]struct {
+		slug string
+		dirs map[string]string
+	}{
+		"slug lain":      {"core", map[string]string{"core": "modules/evil"}},
+		"tidak dikenal":  {"core", map[string]string{"sales": "modules/sales"}},
+		"tanpa awalan":   {"core", map[string]string{"core": "core"}},
+		"traversal":      {"core", map[string]string{"core": "modules/../core"}},
+		"slug tak sah":   {"Bad_Slug", nil},
+		"berstrip salah": {"stock-opname", map[string]string{"stock-opname": "modules/stock-opname"}},
+	} {
+		if _, err := resolveModuleDir(c.slug, c.dirs); !errors.Is(err, ErrInput) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}
+
+func TestWorkspaceRejectsModuleWithForeignSlug(t *testing.T) {
+	root, _ := fixtureRepo(t)
+	// modules/evil menyalin manifest fixturecore (slug fixturecore) tanpa metadata sendiri
+	writeFile(t, root, "modules/evil/module.json", readFile(t, root, "modules/fixturecore/module.json"))
+	writeFile(t, root, "modules/evil/go.mod", "module erpora/modules/evil\n")
+	before := treeSum(t, root)
+	res, err := GenerateWorkspace(root, Options{})
+	if !errors.Is(err, ErrCheckFailed) || len(res.Problems) == 0 {
+		t.Fatalf("err=%v problems=%v", err, res.Problems)
+	}
+	if treeSum(t, root) != before {
+		t.Error("tidak boleh menulis apa pun")
+	}
+	// direktori modul tidak sama dengan slug
+	root, _ = fixtureRepo(t)
+	if err := os.Rename(filepath.Join(root, "modules", "fixturecore"), filepath.Join(root, "modules", "renamed")); err != nil {
+		t.Fatal(err)
+	}
+	before = treeSum(t, root)
+	if _, err := GenerateWorkspace(root, Options{}); !errors.Is(err, ErrCheckFailed) {
+		t.Fatalf("err = %v", err)
+	}
+	if treeSum(t, root) != before {
+		t.Error("tidak boleh menulis apa pun")
 	}
 }

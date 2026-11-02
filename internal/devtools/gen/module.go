@@ -3,6 +3,7 @@ package gen
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -23,6 +24,12 @@ type ModuleOptions struct {
 	Name, Publisher string   // Publisher default "acme"
 	Frontend        bool     // buat modules/<dir>/web (@erpora/module-<dir>)
 	Depends         []string // key modul, mis. "acme.example"; platform.core selalu ditambahkan
+	// Metadata menambah kerangka metadata resource (modules/<dir>/metadata/item.resource.yaml, capability
+	// <slug>.item.read, skema Item bertanda x-erp-generated) dan langkah Post yang membangkitkan keluarannya.
+	Metadata bool
+	// MetadataGenerate menjalankan pembangkit metadata untuk satu direktori modul (dipasang oleh command make:module,
+	// karena paket gen tidak boleh mengimpor pembangkit). Wajib bila Metadata true.
+	MetadataGenerate func(ctx context.Context, root, dir string) error
 }
 
 // moduleDep adalah dependensi modul pada data template.
@@ -37,6 +44,7 @@ type moduleData struct {
 	PublisherName string
 	Dependencies  []moduleDep
 	Frontend      bool
+	Metadata      bool
 	// NSKey adalah kunci namespace i18n modul pada keys.gen.ts: tanpa kutip bila pengenal TS sah, selain itu dikutip.
 	NSKey string
 }
@@ -75,7 +83,10 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 	if err := CheckModuleDir(name.Dir, modulesGo); err != nil {
 		return Plan{}, err
 	}
-	data := moduleData{ModuleName: name, PublisherName: titleCase(o.Publisher), Frontend: o.Frontend, NSKey: tsPropKey(name.Slug)}
+	if o.Metadata && o.MetadataGenerate == nil {
+		return Plan{}, errors.New("--metadata memerlukan pembangkit metadata (MetadataGenerate); command make:module memasangnya")
+	}
+	data := moduleData{ModuleName: name, PublisherName: titleCase(o.Publisher), Frontend: o.Frontend, Metadata: o.Metadata, NSKey: tsPropKey(name.Slug)}
 	for _, key := range o.Depends {
 		ref, err := ResolveModule(root, key)
 		if err != nil {
@@ -101,6 +112,9 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 		if strings.HasPrefix(rel, "web/") && !o.Frontend {
 			return nil
 		}
+		if strings.HasPrefix(rel, "metadata/") && !o.Metadata {
+			return nil
+		}
 		content, err := Render(p, data)
 		if err != nil {
 			return err
@@ -124,7 +138,7 @@ func MakeModule(root string, o ModuleOptions) (Plan, error) {
 		return Plan{}, err
 	}
 	plan.Ops = append(plan.Ops, mods...)
-	plan.Post = modulePost(name, o.Frontend)
+	plan.Post = modulePost(name, o.Frontend, o.Metadata, o.MetadataGenerate)
 	plan.NoForce = true
 	return plan, nil
 }
@@ -238,13 +252,20 @@ func modifyRepoFiles(root string, n ModuleName, frontend bool) ([]FileOp, error)
 }
 
 // modulePost menyusun langkah setelah file ditulis.
-func modulePost(n ModuleName, frontend bool) []PostStep {
+func modulePost(n ModuleName, frontend, metadata bool, generate func(ctx context.Context, root, dir string) error) []PostStep {
 	steps := []PostStep{{
 		Name: "go mod tidy (modules/" + n.Dir + ")",
 		Run: func(ctx context.Context, root string) error {
 			return runCmd(ctx, filepath.Join(root, "modules", n.Dir), []string{"GOWORK=off"}, "go", "mod", "tidy")
 		},
 	}}
+	if metadata {
+		// Sebelum contracts:generate: skema Item bangkitan mengubah openapi.yaml (dan tipe TS kontrak).
+		steps = append(steps, PostStep{
+			Name: "metadata:generate " + n.Dir,
+			Run:  func(ctx context.Context, root string) error { return generate(ctx, root, n.Dir) },
+		})
+	}
 	if !frontend {
 		return steps
 	}

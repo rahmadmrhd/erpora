@@ -228,7 +228,8 @@ func BatchCopyBackfill(t *dbmodel.Table, to, from string, batch int, o Options) 
 	if err != nil {
 		return "", err
 	}
-	fromQ, err := o.column(t, from)
+	// Kolom asal boleh sudah tidak ada pada model (akan dihapus pada migrasi yang sama).
+	fromQ, err := QuoteIdent(from)
 	if err != nil {
 		return "", err
 	}
@@ -259,4 +260,48 @@ func BatchBackfillTemplate(t *dbmodel.Table, column string, batch int, o Options
 		sb.WriteString("-- " + line + "\n")
 	}
 	return sb.String(), nil
+}
+
+// CopyColumn menghasilkan UPDATE yang menyalin kolom asal ke kolom tujuan untuk baris yang tujuannya masih NULL
+// dan asalnya terisi (rename lewat migrateFrom, Requirement 12.2). Kolom tujuan harus ada pada model; kolom asal
+// boleh sudah tidak ada pada model (akan dihapus pada migrasi yang sama). Aman diulang. Untuk tabel
+// large: true pakai BatchCopyBackfill.
+func CopyColumn(t *dbmodel.Table, to, from string, o Options) (string, error) {
+	table, err := o.table(t)
+	if err != nil {
+		return "", err
+	}
+	toQ, err := o.column(t, to)
+	if err != nil {
+		return "", err
+	}
+	fromQ, err := QuoteIdent(from)
+	if err != nil {
+		return "", err
+	}
+	return "UPDATE " + table + " SET " + toQ + " = " + fromQ + " WHERE " + toQ + " IS NULL AND " + fromQ + " IS NOT NULL", nil
+}
+
+// GuardUnsyncedRows menghasilkan blok DO penjaga penghapusan kolom (Requirement 12.8): migrasi gagal bila masih
+// ada baris dengan kolom lama terisi dan kolom pengganti kosong. Kolom pengganti harus ada pada model; kolom
+// lama boleh sudah tidak ada pada model. Pemanggil membungkusnya dengan StatementBegin dan StatementEnd.
+func GuardUnsyncedRows(t *dbmodel.Table, oldColumn, newColumn string, o Options) (string, error) {
+	table, err := o.table(t)
+	if err != nil {
+		return "", err
+	}
+	oldQ, err := QuoteIdent(oldColumn)
+	if err != nil {
+		return "", err
+	}
+	newQ, err := o.column(t, newColumn)
+	if err != nil {
+		return "", err
+	}
+	msg, err := Literal(strings.ReplaceAll("penghapusan kolom ditolak: masih ada baris dengan kolom lama terisi dan kolom pengganti kosong ("+t.Name+")", "%", "%%"))
+	if err != nil {
+		return "", err
+	}
+	body := "\nBEGIN\n  IF EXISTS (SELECT 1 FROM " + table + " WHERE " + oldQ + " IS NOT NULL AND " + newQ + " IS NULL) THEN\n    RAISE EXCEPTION " + msg + ";\n  END IF;\nEND\n"
+	return "DO " + DollarQuote(body), nil
 }

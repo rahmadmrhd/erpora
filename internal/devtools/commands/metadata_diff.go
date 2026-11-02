@@ -73,6 +73,7 @@ type metadataDiffPlan struct {
 // dan menyusun urutan migrasi (dependensi lebih dulu).
 func planMetadataDiff(root, only string, warn io.Writer) (*metadataDiffPlan, error) {
 	ws, loadProblems := check.LoadWorkspace(root)
+	ws.Git = check.ExecGit(root) // penghapusan kolom hanya sah bila lolos aturan deprecate-before-remove terhadap tag rilis terakhir (Requirement 12.1, 12.4)
 	rep := check.Run(ws)
 	problems := append(append([]check.Problem(nil), loadProblems...), rep.Problems...)
 	sortCheckProblems(problems)

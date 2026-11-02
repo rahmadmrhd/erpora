@@ -222,8 +222,14 @@ func TestLockedAndHelpers(t *testing.T) {
 	if s.Locked(metadata.Record{"status": "draft"}) || !s.Locked(metadata.Record{"status": "accepted"}) {
 		t.Error("Locked salah")
 	}
-	if s.Locked(metadata.Record{}) {
-		t.Error("tak tentu bukan terkunci")
+	// Gagal tertutup (Requirement 9.4, D-26): hasil tak tentu (record tanpa status, tipe salah) dianggap TERKUNCI.
+	for _, rec := range []metadata.Record{{}, {"status": 5}, {"status": nil}} {
+		if !s.Locked(rec) {
+			t.Errorf("record %v: hasil tak tentu harus dianggap terkunci", rec)
+		}
+	}
+	if (&ResourceSpec{}).Locked(metadata.Record{}) {
+		t.Error("tanpa lockWhen tidak pernah terkunci")
 	}
 	ro := s.ReadOnlyNames()
 	for _, n := range []string{"id", "status", "label"} {

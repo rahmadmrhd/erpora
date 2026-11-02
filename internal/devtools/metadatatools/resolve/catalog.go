@@ -56,7 +56,19 @@ func problemAtDoc(d *load.Document, ptr, code, msg string) load.Problem {
 
 // AddModule mendaftarkan modul dan dokumennya. Slug pada kunci dokumen harus sama dengan slug modul dan kunci
 // tidak boleh ganda; dokumen yang melanggar dilaporkan dan tidak didaftarkan.
+//
+// Slug sdk dicadangkan untuk metadata bawaan SDK: modul lain tidak boleh memakainya (Requirement 3.5, 19.3);
+// metadata bawaan didaftarkan lewat AddBuiltin.
 func (c *Catalog) AddModule(m Module, docs ...*load.Document) []load.Problem {
+	if m.Slug == SDKSlug {
+		return []load.Problem{{Code: CodeModuleSlugReserved, Message: fmt.Sprintf(
+			"slug modul %q dicadangkan untuk metadata bawaan SDK dan tidak boleh dipakai modul (Requirement 3.5)", SDKSlug)}}
+	}
+	return c.addModule(m, docs...)
+}
+
+// addModule mendaftarkan modul tanpa pemeriksaan slug tercadang (jalur bawaan SDK dan pengujian internal).
+func (c *Catalog) addModule(m Module, docs ...*load.Document) []load.Problem {
 	var probs []load.Problem
 	if m.Slug == "" {
 		return []load.Problem{{Code: CodeKeyModule, Message: "slug modul kosong"}}

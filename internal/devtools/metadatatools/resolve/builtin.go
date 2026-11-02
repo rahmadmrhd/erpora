@@ -25,7 +25,7 @@ func BuiltinDocs() ([]*load.Document, []load.Problem) {
 // dependensi manifest).
 func (c *Catalog) AddBuiltin() []load.Problem {
 	docs, probs := BuiltinDocs()
-	return append(probs, c.AddModule(Module{Slug: SDKSlug}, docs...)...)
+	return append(probs, c.addModule(Module{Slug: SDKSlug}, docs...)...)
 }
 
 // NewCatalogWithBuiltin membuat katalog yang sudah memuat metadata bawaan SDK.

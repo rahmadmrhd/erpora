@@ -38,7 +38,11 @@ func addModule(t *testing.T, c *Catalog, m Module, files ...file) {
 	for _, fl := range files {
 		docs = append(docs, mustDoc(t, fl.name, fl.src))
 	}
-	if ps := c.AddModule(m, docs...); len(ps) != 0 {
+	add := c.AddModule
+	if m.Slug == SDKSlug {
+		add = c.addModule // metadata bawaan: jalur internal
+	}
+	if ps := add(m, docs...); len(ps) != 0 {
 		t.Fatalf("AddModule(%s): %v", m.Slug, ps)
 	}
 }

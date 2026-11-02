@@ -199,6 +199,40 @@ func condTS(c *metadata.Condition) (any, error) {
 type clientCtx struct {
 	fields       map[string]*fld
 	defaultGroup string
+	// remote mencari klasifikasi dan grup field resource seberang (untuk filter relasi); relTarget adalah kunci
+	// resource seberang relasi yang sedang diperiksa. Tanpa remote (atau target) filter relasi tidak dipancarkan.
+	remote    remoteLookup
+	relTarget string
+}
+
+// remoteField adalah informasi field pada resource seberang yang dibutuhkan untuk menilai kebocoran ke klien.
+type remoteField struct {
+	Class, Group, DefaultGroup string
+	ClientVisible              bool
+}
+
+// remoteLookup mengembalikan informasi field resource seberang (klasifikasi dan grup efektif); ok false bila resource
+// atau field tidak dikenal.
+type remoteLookup func(resourceKey, field string) (remoteField, bool)
+
+// remoteSafe menilai rujukan field pada resource seberang (kunci field pada filter relasi): gagal tertutup bila tidak
+// dapat diperiksa, dan menolak field confidential ke atas, di luar grup default, atau yang tidak ikut ke klien.
+func (c *clientCtx) remoteSafe(field string) (bool, string) {
+	if c.remote == nil || c.relTarget == "" {
+		return false, "resource seberang tidak dapat diperiksa (tanpa informasi klasifikasi)"
+	}
+	rf, ok := c.remote(c.relTarget, field)
+	switch {
+	case !ok:
+		return false, fmt.Sprintf("merujuk field %q pada %s yang tidak dikenal", field, c.relTarget)
+	case !rf.ClientVisible:
+		return false, fmt.Sprintf("merujuk field %q pada %s yang tidak ikut ke klien", field, c.relTarget)
+	case rf.Class != "public" && rf.Class != "internal":
+		return false, fmt.Sprintf("merujuk field %q pada %s berklasifikasi %s", field, c.relTarget, rf.Class)
+	case rf.Group != rf.DefaultGroup:
+		return false, fmt.Sprintf("merujuk field %q pada %s di luar grup default", field, c.relTarget)
+	}
+	return true, ""
 }
 
 func (c *clientCtx) refsSafe(cond *metadata.Condition, relFilter bool) (bool, string) {
@@ -212,7 +246,11 @@ func (c *clientCtx) refsSafe(cond *metadata.Condition, relFilter bool) (bool, st
 		return true, ""
 	}
 	names := []string{}
-	if !relFilter { // pada filter relasi, field menunjuk resource seberang
+	if relFilter { // pada filter relasi, field menunjuk resource seberang
+		if ok, why := c.remoteSafe(cond.Field); !ok {
+			return false, why
+		}
+	} else {
 		names = append(names, cond.Field)
 	}
 	if cond.Ref != "" {
@@ -368,7 +406,11 @@ func (b *tsBuilder) fieldMeta(f *fld) (any, error) {
 	if f.Deprecated {
 		d := tsObj{{"since", jsonLit(f.DeprecatedMap["since"])}}
 		if r := f.DeprecatedMap["replacedBy"]; r != "" {
-			d = append(d, tsKV{"replacedBy", jsonLit(r)})
+			if _, visible := b.ctx.fields[r]; visible {
+				d = append(d, tsKV{"replacedBy", jsonLit(r)})
+			} else {
+				b.omit("field %s: deprecated.replacedBy tidak dipancarkan (field tujuan tidak ikut ke klien)", f.Name)
+			}
 		}
 		o = append(o, tsKV{"deprecated", d})
 	}
@@ -494,9 +536,17 @@ func (b *tsBuilder) relation(rel *resolve.Relation) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if v, ok, err := b.cond("relation "+rel.Name+".filter", fc, true); err != nil {
-		return nil, err
-	} else if ok {
+	target := attrString(a, "to")
+	if target == "" {
+		target = attrString(a, "of")
+	}
+	b.ctx.relTarget = target
+	v, okFilter, ferr := b.cond("relation "+rel.Name+".filter", fc, true)
+	b.ctx.relTarget = ""
+	if ferr != nil {
+		return nil, ferr
+	}
+	if okFilter {
 		o = append(o, tsKV{"filter", v})
 	}
 	if list, ok := a["snapshot"].([]any); ok {
@@ -507,9 +557,15 @@ func (b *tsBuilder) relation(rel *resolve.Relation) (any, error) {
 			if !naming.IdentifierRegexp().MatchString(from) || !naming.IdentifierRegexp().MatchString(to) {
 				return nil, inputErr("relasi %s: snapshot tidak sah", rel.Name)
 			}
+			if _, visible := b.ctx.fields[to]; !visible {
+				b.omit("relation %s: snapshot ke field %q tidak dipancarkan (field tujuan tidak ikut ke klien)", rel.Name, to)
+				continue
+			}
 			arr = append(arr, tsObj{{"from", jsonLit(from)}, {"to", jsonLit(to)}})
 		}
-		o = append(o, tsKV{"snapshot", arr})
+		if len(arr) > 0 {
+			o = append(o, tsKV{"snapshot", arr})
+		}
 	}
 	if pf, ok := a["pivotFields"].(map[string]any); ok && len(pf) > 0 {
 		names := sortedKeys(pf)
@@ -573,8 +629,8 @@ func escapePtr(s string) string {
 }
 
 // buildTS membangun isi berkas <nama>.meta.gen.ts dan daftar catatan bagian yang sengaja tidak dipancarkan.
-func buildTS(m *resModel, docPos func(string) int) ([]byte, []string, error) {
-	ctx := &clientCtx{fields: map[string]*fld{}, defaultGroup: m.DefaultGroup}
+func buildTS(m *resModel, docPos func(string) int, remote remoteLookup) ([]byte, []string, error) {
+	ctx := &clientCtx{fields: map[string]*fld{}, defaultGroup: m.DefaultGroup, remote: remote}
 	var emitted []*fld
 	for _, f := range m.Fields {
 		if f.Column {
@@ -589,7 +645,11 @@ func buildTS(m *resModel, docPos func(string) int) ([]byte, []string, error) {
 	b := &tsBuilder{m: m, ctx: ctx, docPos: docPos}
 	root := tsObj{{"key", jsonLit(m.Res.Key)}}
 	if m.LabelTpl != "" {
-		root = append(root, tsKV{"labelTemplate", jsonLit(m.LabelTpl)})
+		if hidden := hiddenPlaceholders(m.LabelTpl, ctx.fields); len(hidden) > 0 {
+			b.omit("labelTemplate tidak dipancarkan (merujuk field yang tidak ikut ke klien: %s)", strings.Join(hidden, ", "))
+		} else {
+			root = append(root, tsKV{"labelTemplate", jsonLit(m.LabelTpl)})
+		}
 	}
 	root = append(root, tsKV{"defaultGroup", jsonLit(m.DefaultGroup)})
 	fields := tsArr{}
@@ -668,6 +728,26 @@ func buildTS(m *resModel, docPos func(string) int) ([]byte, []string, error) {
 	}
 	sb.WriteString(prefix + body + ";\n")
 	return []byte(sb.String()), b.omitted, nil
+}
+
+// hiddenPlaceholders mengembalikan nama placeholder {field} templat label yang bukan field yang dipancarkan ke klien.
+func hiddenPlaceholders(tpl string, visible map[string]*fld) []string {
+	var out []string
+	for i := 0; i < len(tpl); i++ {
+		if tpl[i] != '{' {
+			continue
+		}
+		end := strings.IndexByte(tpl[i+1:], '}')
+		if end < 0 {
+			break
+		}
+		name := tpl[i+1 : i+1+end]
+		if _, ok := visible[name]; !ok {
+			out = append(out, name)
+		}
+		i += end + 1
+	}
+	return out
 }
 
 func isScalar(v any) bool {

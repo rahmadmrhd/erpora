@@ -227,7 +227,7 @@ func scalarValue(n *yaml.Node) (any, error) {
 	case "!!bool":
 		var v bool
 		if err := n.Decode(&v); err != nil {
-			return nil, fmt.Errorf("nilai boolean tidak valid: %q", n.Value)
+			return nil, errors.New("nilai boolean tidak valid")
 		}
 		return v, nil
 	case "!!int":
@@ -239,11 +239,11 @@ func scalarValue(n *yaml.Node) (any, error) {
 		if err := n.Decode(&u); err == nil {
 			return json.Number(strconv.FormatUint(u, 10)), nil
 		}
-		return nil, fmt.Errorf("bilangan bulat di luar jangkauan: %q", n.Value)
+		return nil, errors.New("bilangan bulat di luar jangkauan")
 	case "!!float":
 		var f float64
 		if err := n.Decode(&f); err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
-			return nil, fmt.Errorf("bilangan pecahan tidak valid atau tak hingga: %q", n.Value)
+			return nil, errors.New("bilangan pecahan tidak valid atau tak hingga")
 		}
 		return json.Number(strconv.FormatFloat(f, 'g', -1, 64)), nil
 	}
