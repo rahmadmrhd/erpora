@@ -35,7 +35,7 @@ func TestConditionsOnAllSitesPass(t *testing.T) {
     message: m.r.error.due
 lockWhen: {field: status, op: eq, value: done}
 `))
-	noErrors(t, rep)
+	noErrorsExceptNonDocLock(t, rep)
 }
 
 func TestConditionUnknownFieldsAndRefs(t *testing.T) {
@@ -136,7 +136,7 @@ func TestConditionCycles(t *testing.T) {
 func TestSingleConditionModelEverywhere(t *testing.T) {
 	// field, rules, lockWhen memakai bentuk yang sama; bentuk lain ditolak sejak skema (tanpa mekanisme logika lain).
 	rep := single(t, baseResource("", "lockWhen: {all: [{field: status, op: ne, value: draft}, {field: flag, op: eq, value: true}]}\n"))
-	noErrors(t, rep)
+	noErrorsExceptNonDocLock(t, rep)
 }
 
 func TestRuleScopeIsAutomaticForSensitiveFieldsAndGroups(t *testing.T) {
@@ -183,7 +183,7 @@ rules:
   plain: {type: text, nullable: true, visibleWhen: {field: shown, op: isnull, value: false}}
 lockWhen: {field: confLevel, op: eq, value: 9}
 `)))
-	noErrors(t, rep)
+	noErrorsExceptNonDocLock(t, rep)
 	info := rep.Resource("m.r")
 	if info.ConditionScope["/fields/shown/visibleWhen"] != ScopeServer || info.ConditionScope["/fields/plain/visibleWhen"] != ScopeBoth ||
 		info.ConditionScope["/lockWhen"] != ScopeServer {

@@ -1,16 +1,18 @@
-CREATE FUNCTION "m_doc_lines_doc_id_lock_fn"() RETURNS trigger LANGUAGE plpgsql AS $erpora$
+CREATE FUNCTION "m_doc_lines_doc_id_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
+DECLARE
+  parent_locked boolean;
 BEGIN
   IF TG_OP IN ('INSERT', 'UPDATE') THEN
-    PERFORM 1 FROM "m_docs" AS p WHERE p."id" = NEW."doc_id" FOR SHARE OF p;
-    PERFORM 1 FROM "m_docs" AS p WHERE p."id" = NEW."doc_id" AND p."status" IS DISTINCT FROM 'draft';
-    IF FOUND THEN
+    EXECUTE format('SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 FOR SHARE OF p', TG_TABLE_SCHEMA, 'm_docs') USING NEW."doc_id";
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 AND p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, 'm_docs') INTO parent_locked USING NEW."doc_id";
+    IF parent_locked THEN
       RAISE EXCEPTION 'dokumen induk terkunci: perubahan anak ditolak (m_doc_lines)' USING ERRCODE = '55000';
     END IF;
   END IF;
   IF TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND OLD."doc_id" IS DISTINCT FROM NEW."doc_id") THEN
-    PERFORM 1 FROM "m_docs" AS p WHERE p."id" = OLD."doc_id" FOR SHARE OF p;
-    PERFORM 1 FROM "m_docs" AS p WHERE p."id" = OLD."doc_id" AND p."status" IS DISTINCT FROM 'draft';
-    IF FOUND THEN
+    EXECUTE format('SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 FOR SHARE OF p', TG_TABLE_SCHEMA, 'm_docs') USING OLD."doc_id";
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 AND p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, 'm_docs') INTO parent_locked USING OLD."doc_id";
+    IF parent_locked THEN
       RAISE EXCEPTION 'dokumen induk terkunci: perubahan anak ditolak (m_doc_lines)' USING ERRCODE = '55000';
     END IF;
   END IF;

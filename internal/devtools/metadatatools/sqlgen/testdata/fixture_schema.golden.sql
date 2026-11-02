@@ -112,7 +112,7 @@ CREATE TABLE "fixturesales_invoices" (
     CONSTRAINT "fixturesales_invoices_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "fixturesales_invoices_number_key" UNIQUE ("number"),
     CONSTRAINT "fixturesales_invoices_version_check" CHECK ("version" >= 1),
-    CONSTRAINT "fixturesales_invoices_status_check" CHECK ("status" IN ('draft', 'deleted', 'need_approval', 'accepted', 'rejected', 'cancelled', 'done')),
+    CONSTRAINT "fixturesales_invoices_status_check" CHECK ("status" IN ('draft', 'deleted', 'pending_approval', 'accepted', 'rejected', 'cancelled', 'done')),
     CONSTRAINT "fixturesales_invoices_discount_rate_check" CHECK ("discount_rate" >= 0.00 AND "discount_rate" <= 100.00),
     CONSTRAINT "fixturesales_invoices_tax_rate_check" CHECK ("tax_rate" >= 0.00 AND "tax_rate" <= 100.00),
     CONSTRAINT "fixturesales_invoices_shipping_street_check" CHECK (length("shipping_street") <= 200),
@@ -191,19 +191,21 @@ ALTER TABLE "fixturesales_invoice_tags" ADD CONSTRAINT "fixturesales_invoice_tag
 
 ALTER TABLE "fixturesales_invoice_tags" ADD CONSTRAINT "fixturesales_invoice_tags_tag_id_fkey" FOREIGN KEY ("tag_id") REFERENCES "fixturesales_tags" ("id") ON DELETE CASCADE;
 
-CREATE FUNCTION "fixturesales_invoice_lines_invoice_id_lock_fn"() RETURNS trigger LANGUAGE plpgsql AS $erpora$
+CREATE FUNCTION "fixturesales_invoice_lines_invoice_id_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
+DECLARE
+  parent_locked boolean;
 BEGIN
   IF TG_OP IN ('INSERT', 'UPDATE') THEN
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = NEW."invoice_id" FOR SHARE OF p;
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = NEW."invoice_id" AND p."status" IS DISTINCT FROM 'draft';
-    IF FOUND THEN
+    EXECUTE format('SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 FOR SHARE OF p', TG_TABLE_SCHEMA, 'fixturesales_invoices') USING NEW."invoice_id";
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 AND p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, 'fixturesales_invoices') INTO parent_locked USING NEW."invoice_id";
+    IF parent_locked THEN
       RAISE EXCEPTION 'dokumen induk terkunci: perubahan anak ditolak (fixturesales_invoice_lines)' USING ERRCODE = '55000';
     END IF;
   END IF;
   IF TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND OLD."invoice_id" IS DISTINCT FROM NEW."invoice_id") THEN
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = OLD."invoice_id" FOR SHARE OF p;
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = OLD."invoice_id" AND p."status" IS DISTINCT FROM 'draft';
-    IF FOUND THEN
+    EXECUTE format('SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 FOR SHARE OF p', TG_TABLE_SCHEMA, 'fixturesales_invoices') USING OLD."invoice_id";
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 AND p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, 'fixturesales_invoices') INTO parent_locked USING OLD."invoice_id";
+    IF parent_locked THEN
       RAISE EXCEPTION 'dokumen induk terkunci: perubahan anak ditolak (fixturesales_invoice_lines)' USING ERRCODE = '55000';
     END IF;
   END IF;
@@ -218,19 +220,40 @@ CREATE TRIGGER "fixturesales_invoice_lines_invoice_id_lock_trg" BEFORE DELETE OR
 
 ALTER TABLE "fixturesales_invoice_lines" ENABLE ALWAYS TRIGGER "fixturesales_invoice_lines_invoice_id_lock_trg";
 
-CREATE FUNCTION "fixturesales_invoice_tags_invoice_id_lock_fn"() RETURNS trigger LANGUAGE plpgsql AS $erpora$
+CREATE FUNCTION "fixturesales_invoice_lines_invoice_id_truncate_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
+DECLARE
+  is_locked boolean;
+BEGIN
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'TRUNCATE tabel dokumen ditolak pada transaction_isolation selain read committed (fixturesales_invoice_lines): jalankan pada READ COMMITTED' USING ERRCODE = '55000';
+  END IF;
+  EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS c JOIN %I.%I AS p ON p."id" = c."invoice_id" WHERE p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_TABLE_SCHEMA, 'fixturesales_invoices') INTO is_locked;
+  IF is_locked THEN
+    RAISE EXCEPTION 'dokumen induk terkunci: TRUNCATE anak ditolak (fixturesales_invoice_lines)' USING ERRCODE = '55000';
+  END IF;
+  RETURN NULL;
+END
+$erpora$;
+
+CREATE TRIGGER "fixturesales_invoice_lines_invoice_id_truncate_lock_trg" BEFORE TRUNCATE ON "fixturesales_invoice_lines" FOR EACH STATEMENT EXECUTE FUNCTION "fixturesales_invoice_lines_invoice_id_truncate_lock_fn"();
+
+ALTER TABLE "fixturesales_invoice_lines" ENABLE ALWAYS TRIGGER "fixturesales_invoice_lines_invoice_id_truncate_lock_trg";
+
+CREATE FUNCTION "fixturesales_invoice_tags_invoice_id_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
+DECLARE
+  parent_locked boolean;
 BEGIN
   IF TG_OP IN ('INSERT', 'UPDATE') THEN
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = NEW."invoice_id" FOR SHARE OF p;
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = NEW."invoice_id" AND p."status" IS DISTINCT FROM 'draft';
-    IF FOUND THEN
+    EXECUTE format('SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 FOR SHARE OF p', TG_TABLE_SCHEMA, 'fixturesales_invoices') USING NEW."invoice_id";
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 AND p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, 'fixturesales_invoices') INTO parent_locked USING NEW."invoice_id";
+    IF parent_locked THEN
       RAISE EXCEPTION 'dokumen induk terkunci: perubahan anak ditolak (fixturesales_invoice_tags)' USING ERRCODE = '55000';
     END IF;
   END IF;
   IF TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND OLD."invoice_id" IS DISTINCT FROM NEW."invoice_id") THEN
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = OLD."invoice_id" FOR SHARE OF p;
-    PERFORM 1 FROM "fixturesales_invoices" AS p WHERE p."id" = OLD."invoice_id" AND p."status" IS DISTINCT FROM 'draft';
-    IF FOUND THEN
+    EXECUTE format('SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 FOR SHARE OF p', TG_TABLE_SCHEMA, 'fixturesales_invoices') USING OLD."invoice_id";
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p."id" = $1 AND p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, 'fixturesales_invoices') INTO parent_locked USING OLD."invoice_id";
+    IF parent_locked THEN
       RAISE EXCEPTION 'dokumen induk terkunci: perubahan anak ditolak (fixturesales_invoice_tags)' USING ERRCODE = '55000';
     END IF;
   END IF;
@@ -245,7 +268,26 @@ CREATE TRIGGER "fixturesales_invoice_tags_invoice_id_lock_trg" BEFORE DELETE OR 
 
 ALTER TABLE "fixturesales_invoice_tags" ENABLE ALWAYS TRIGGER "fixturesales_invoice_tags_invoice_id_lock_trg";
 
-CREATE FUNCTION "fixturesales_invoices_lock_fn"() RETURNS trigger LANGUAGE plpgsql AS $erpora$
+CREATE FUNCTION "fixturesales_invoice_tags_invoice_id_truncate_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
+DECLARE
+  is_locked boolean;
+BEGIN
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'TRUNCATE tabel dokumen ditolak pada transaction_isolation selain read committed (fixturesales_invoice_tags): jalankan pada READ COMMITTED' USING ERRCODE = '55000';
+  END IF;
+  EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS c JOIN %I.%I AS p ON p."id" = c."invoice_id" WHERE p."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_TABLE_SCHEMA, 'fixturesales_invoices') INTO is_locked;
+  IF is_locked THEN
+    RAISE EXCEPTION 'dokumen induk terkunci: TRUNCATE anak ditolak (fixturesales_invoice_tags)' USING ERRCODE = '55000';
+  END IF;
+  RETURN NULL;
+END
+$erpora$;
+
+CREATE TRIGGER "fixturesales_invoice_tags_invoice_id_truncate_lock_trg" BEFORE TRUNCATE ON "fixturesales_invoice_tags" FOR EACH STATEMENT EXECUTE FUNCTION "fixturesales_invoice_tags_invoice_id_truncate_lock_fn"();
+
+ALTER TABLE "fixturesales_invoice_tags" ENABLE ALWAYS TRIGGER "fixturesales_invoice_tags_invoice_id_truncate_lock_trg";
+
+CREATE FUNCTION "fixturesales_invoices_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD."status" IS DISTINCT FROM 'draft' THEN
@@ -257,7 +299,7 @@ BEGIN
     RETURN NEW;
   END IF;
   -- transisi status lifecycle yang sah
-  IF (to_jsonb(NEW) - ARRAY['status', 'updated_at', 'updated_by', 'version']) = (to_jsonb(OLD) - ARRAY['status', 'updated_at', 'updated_by', 'version']) AND (OLD."status", NEW."status") IN (('draft', 'deleted'), ('draft', 'accepted'), ('draft', 'need_approval'), ('need_approval', 'accepted'), ('need_approval', 'rejected'), ('accepted', 'cancelled'), ('accepted', 'done')) THEN
+  IF (to_jsonb(NEW) - ARRAY['status', 'updated_at', 'updated_by', 'version']) = (to_jsonb(OLD) - ARRAY['status', 'updated_at', 'updated_by', 'version']) AND (OLD."status", NEW."status") IN (('draft', 'deleted'), ('draft', 'accepted'), ('draft', 'pending_approval'), ('pending_approval', 'accepted'), ('pending_approval', 'rejected'), ('accepted', 'cancelled'), ('accepted', 'done')) THEN
     RETURN NEW;
   END IF;
   -- transisi sumbu status yang sah (boleh mundur)
@@ -271,4 +313,23 @@ $erpora$;
 CREATE TRIGGER "fixturesales_invoices_lock_trg" BEFORE DELETE OR UPDATE ON "fixturesales_invoices" FOR EACH ROW EXECUTE FUNCTION "fixturesales_invoices_lock_fn"();
 
 ALTER TABLE "fixturesales_invoices" ENABLE ALWAYS TRIGGER "fixturesales_invoices_lock_trg";
+
+CREATE FUNCTION "fixturesales_invoices_truncate_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora$
+DECLARE
+  is_locked boolean;
+BEGIN
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'TRUNCATE tabel dokumen ditolak pada transaction_isolation selain read committed (fixturesales_invoices): jalankan pada READ COMMITTED' USING ERRCODE = '55000';
+  END IF;
+  EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I AS t WHERE t."status" IS DISTINCT FROM ''draft'')', TG_TABLE_SCHEMA, TG_TABLE_NAME) INTO is_locked;
+  IF is_locked THEN
+    RAISE EXCEPTION 'dokumen terkunci: TRUNCATE ditolak (fixturesales_invoices)' USING ERRCODE = '55000';
+  END IF;
+  RETURN NULL;
+END
+$erpora$;
+
+CREATE TRIGGER "fixturesales_invoices_truncate_lock_trg" BEFORE TRUNCATE ON "fixturesales_invoices" FOR EACH STATEMENT EXECUTE FUNCTION "fixturesales_invoices_truncate_lock_fn"();
+
+ALTER TABLE "fixturesales_invoices" ENABLE ALWAYS TRIGGER "fixturesales_invoices_truncate_lock_trg";
 

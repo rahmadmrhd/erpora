@@ -74,7 +74,7 @@ func newMetadataMigrate() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := migrate.Generate(rep, plan.model, migrate.Options{})
+			res, err := migrate.Generate(rep, plan.model, migrate.Options{Unreleased: plan.unreleased})
 			if err != nil {
 				return err
 			}

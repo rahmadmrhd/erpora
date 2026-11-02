@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-var lifecycleValues = []string{"draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"}
+var lifecycleValues = []string{"draft", "deleted", "pending_approval", "accepted", "rejected", "cancelled", "done"}
 
 var lifecyclePairs = []Transition{
-	{"draft", "deleted"}, {"draft", "accepted"}, {"draft", "need_approval"},
-	{"need_approval", "accepted"}, {"need_approval", "rejected"},
+	{"draft", "deleted"}, {"draft", "accepted"}, {"draft", "pending_approval"},
+	{"pending_approval", "accepted"}, {"pending_approval", "rejected"},
 	{"accepted", "cancelled"}, {"accepted", "done"},
 }
 
@@ -60,7 +60,7 @@ func TestLifecycleOnDocumentResources(t *testing.T) {
 		}
 	}
 	for _, p := range []Transition{{"draft", "done"}, {"accepted", "draft"}, {"deleted", "draft"}, {"rejected", "draft"}, {"cancelled", "accepted"},
-		{"done", "cancelled"}, {"draft", "draft"}, {"draft", "submitted"}, {"need_approval", "draft"}} {
+		{"done", "cancelled"}, {"draft", "draft"}, {"draft", "submitted"}, {"pending_approval", "draft"}} {
 		if l.Allows(p.From, p.To) {
 			t.Errorf("%s -> %s tidak boleh sah", p.From, p.To)
 		}

@@ -12,6 +12,14 @@ import (
 // ke 409 invalid_state.
 const lockSQLState = "55000"
 
+// TriggerSearchPath adalah search_path tetap fungsi pemicu bangkitan (keputusan pemilik produk, 2 Nov 2026):
+// pg_catalog lebih dulu dan pg_temp terakhir, sehingga fungsi dan operator tak terkualifikasi pada badan
+// (format, current_setting, to_jsonb, translate, strpos, operator jsonb, dsb.) selalu dari pg_catalog dan tidak dapat
+// dibelokkan oleh skema yang disisipkan penyerang lewat search_path sesi. Seluruh badan hanya memakai objek
+// pg_catalog; tabel induk dan anak dirujuk lewat %I.%I dengan TG_TABLE_SCHEMA. Pengaturan ini ikut proconfig dan
+// dibandingkan mesin selisih (pemicu lama tanpa SET terdeteksi trigger_changed lalu diganti CREATE OR REPLACE).
+const TriggerSearchPath = "pg_catalog, pg_temp"
+
 // TriggerStatements menghasilkan CREATE FUNCTION, CREATE TRIGGER, dan ENABLE ALWAYS TRIGGER untuk satu pemicu
 // bangkitan: pemicu penguncian dokumen (tr.Lock) atau pemicu anak (tr.Child). Badan fungsi berasal dari
 // templat tetap di bawah; satu-satunya bagian yang berasal dari model adalah identifier (selalu dikutip),
@@ -19,8 +27,14 @@ const lockSQLState = "55000"
 // teks berkas yang disalin. ENABLE ALWAYS membuat pemicu tetap aktif walau session_replication_role =
 // replica (Requirement 13.9).
 func TriggerStatements(t *dbmodel.Table, tr *dbmodel.Trigger, o Options) ([]Statement, error) {
-	if (tr.Lock == nil) == (tr.Child == nil) {
-		return nil, fmt.Errorf("pemicu %s: tepat satu dari Lock dan Child harus diisi", tr.Name)
+	set := 0
+	for _, ok := range []bool{tr.Lock != nil, tr.Child != nil, tr.Truncate != nil} {
+		if ok {
+			set++
+		}
+	}
+	if set != 1 {
+		return nil, fmt.Errorf("pemicu %s: tepat satu dari Lock, Child, dan Truncate harus diisi", tr.Name)
 	}
 	if len(tr.Events) == 0 {
 		return nil, fmt.Errorf("pemicu %s: tanpa peristiwa", tr.Name)
@@ -29,6 +43,9 @@ func TriggerStatements(t *dbmodel.Table, tr *dbmodel.Trigger, o Options) ([]Stat
 	if tr.Child != nil {
 		allowed["INSERT"] = true
 	}
+	if tr.Truncate != nil {
+		allowed = map[string]bool{"TRUNCATE": true}
+	}
 	for _, ev := range tr.Events {
 		if !allowed[ev] {
 			return nil, fmt.Errorf("pemicu %s: peristiwa %q tidak didukung templat", tr.Name, ev)
@@ -36,9 +53,12 @@ func TriggerStatements(t *dbmodel.Table, tr *dbmodel.Trigger, o Options) ([]Stat
 	}
 	var body string
 	var err error
-	if tr.Lock != nil {
+	switch {
+	case tr.Lock != nil:
 		body, err = lockFunctionBody(t, tr)
-	} else {
+	case tr.Truncate != nil:
+		body, err = truncateFunctionBody(t, tr)
+	default:
 		body, err = childFunctionBody(t, tr)
 	}
 	if err != nil {
@@ -60,9 +80,13 @@ func TriggerStatements(t *dbmodel.Table, tr *dbmodel.Trigger, o Options) ([]Stat
 	if err != nil {
 		return nil, err
 	}
+	granularity := "FOR EACH ROW"
+	if tr.Truncate != nil {
+		granularity = "FOR EACH STATEMENT" // TRUNCATE tidak memicu pemicu baris
+	}
 	return []Statement{
-		{Kind: KindCreateFunction, Table: t.Name, Object: tr.Function, SQL: "CREATE FUNCTION " + fn + "() RETURNS trigger LANGUAGE plpgsql AS " + DollarQuote(body)},
-		{Kind: KindCreateTrigger, Table: t.Name, Object: tr.Name, SQL: "CREATE TRIGGER " + trg + " BEFORE " + strings.Join(tr.Events, " OR ") + " ON " + table + " FOR EACH ROW EXECUTE FUNCTION " + fn + "()"},
+		{Kind: KindCreateFunction, Table: t.Name, Object: tr.Function, SQL: "CREATE FUNCTION " + fn + "() RETURNS trigger LANGUAGE plpgsql SET search_path = " + TriggerSearchPath + " AS " + DollarQuote(body)},
+		{Kind: KindCreateTrigger, Table: t.Name, Object: tr.Name, SQL: "CREATE TRIGGER " + trg + " BEFORE " + strings.Join(tr.Events, " OR ") + " ON " + table + " " + granularity + " EXECUTE FUNCTION " + fn + "()"},
 		{Kind: KindEnableTrigger, Table: t.Name, Object: tr.Name, SQL: enable},
 	}, nil
 }
@@ -251,10 +275,23 @@ func lockFunctionBody(t *dbmodel.Table, tr *dbmodel.Trigger) (string, error) {
 	return sb.String(), nil
 }
 
+// qualifiedQuery menyusun literal templat untuk format(): predikat dari model disisipkan dengan % digandakan,
+// sedangkan penampung %I.%I diisi saat runtime dengan TG_TABLE_SCHEMA dan nama tabel. Dengan begitu tabel selalu
+// dirujuk lengkap dengan skema pemicu: tabel bayangan di pg_temp atau skema lain pada search_path tidak dapat
+// membelokkan pemeriksaan, dan badan fungsi tetap identik di skema mana pun (mesin selisih membandingkan badan).
+func qualifiedQuery(format string) (string, error) {
+	return Literal(format)
+}
+
+// escFormat menggandakan % pada teks yang dari model agar format() tidak menafsirkannya sebagai penampung.
+func escFormat(s string) string { return strings.ReplaceAll(s, "%", "%%") }
+
 // childFunctionBody: INSERT, UPDATE, dan DELETE baris anak ditolak bila baris induk terkunci menurut kondisi
 // kunci induk. Induk dibaca dengan FOR SHARE agar transisi induk ke terkunci yang bersamaan menunggu transaksi
 // anak selesai (dan sebaliknya), sehingga tidak ada baris anak yang lolos setelah induk terkunci. Pada UPDATE
-// yang memindahkan anak ke induk lain, kedua induk diperiksa.
+// yang memindahkan anak ke induk lain, kedua induk diperiksa. Tabel induk dirujuk lewat EXECUTE format() dengan
+// skema tabel anak (TG_TABLE_SCHEMA; induk dan anak satu modul sehingga satu skema), bukan nama tanpa kualifikasi
+// yang dapat dibelokkan tabel bayangan pg_temp atau search_path lain.
 func childFunctionBody(t *dbmodel.Table, tr *dbmodel.Trigger) (string, error) {
 	c := tr.Child
 	if c.Parent == nil || c.Parent.Lock == nil {
@@ -267,10 +304,11 @@ func childFunctionBody(t *dbmodel.Table, tr *dbmodel.Trigger) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("pemicu %s: kondisi kunci induk: %w", tr.Name, err)
 	}
-	// Tabel induk tidak dikualifikasi skema: badan fungsi yang sama harus dihasilkan di skema mana pun (mesin
-	// selisih membandingkan badan fungsi); pada runtime nama diselesaikan lewat search_path sesi.
-	parent, err := QuoteIdent(c.Parent.Name)
+	parentName, err := Literal(c.Parent.Name)
 	if err != nil {
+		return "", err
+	}
+	if _, err := QuoteIdent(c.Parent.Name); err != nil {
 		return "", err
 	}
 	pk, err := QuoteIdent(c.Parent.PrimaryKey[0])
@@ -286,18 +324,117 @@ func childFunctionBody(t *dbmodel.Table, tr *dbmodel.Trigger) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Kunci dulu baris induk tanpa predikat kunci (menunggu transaksi induk yang belum selesai; pada READ
+	// COMMITTED hanya baris yang cocok pada snapshot yang ditunggu), lalu periksa keadaan terbaru dengan
+	// pernyataan baru.
+	lockQ, err := qualifiedQuery("SELECT 1 FROM %I.%I AS p WHERE p." + escFormat(pk) + " = $1 FOR SHARE OF p")
+	if err != nil {
+		return "", err
+	}
+	checkQ, err := qualifiedQuery("SELECT EXISTS (SELECT 1 FROM %I.%I AS p WHERE p." + escFormat(pk) + " = $1 AND " + escFormat(locked) + ")")
+	if err != nil {
+		return "", err
+	}
 	check := func(ref string) string {
-		// Kunci dulu baris induk tanpa predikat kunci (menunggu transaksi induk yang belum selesai; pada READ
-		// COMMITTED hanya baris yang cocok pada snapshot yang ditunggu), lalu periksa keadaan terbaru dengan
-		// pernyataan baru.
-		return "    PERFORM 1 FROM " + parent + " AS p WHERE p." + pk + " = " + ref + " FOR SHARE OF p;\n" +
-			"    PERFORM 1 FROM " + parent + " AS p WHERE p." + pk + " = " + ref + " AND " + locked + ";\n" +
-			"    IF FOUND THEN\n      " + raise + "\n    END IF;\n"
+		return "    EXECUTE format(" + lockQ + ", TG_TABLE_SCHEMA, " + parentName + ") USING " + ref + ";\n" +
+			"    EXECUTE format(" + checkQ + ", TG_TABLE_SCHEMA, " + parentName + ") INTO parent_locked USING " + ref + ";\n" +
+			"    IF parent_locked THEN\n      " + raise + "\n    END IF;\n"
 	}
 	var sb strings.Builder
-	sb.WriteString("\nBEGIN\n")
+	sb.WriteString("\nDECLARE\n  parent_locked boolean;\nBEGIN\n")
 	sb.WriteString("  IF TG_OP IN ('INSERT', 'UPDATE') THEN\n" + check(newFK) + "  END IF;\n")
 	sb.WriteString("  IF TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND " + oldFK + " IS DISTINCT FROM " + newFK + ") THEN\n" + check(oldFK) + "  END IF;\n")
 	sb.WriteString("  IF TG_OP = 'DELETE' THEN\n    RETURN OLD;\n  END IF;\n  RETURN NEW;\nEND\n")
+	return sb.String(), nil
+}
+
+// isolationGuard menolak TRUNCATE pada transaction_isolation selain READ COMMITTED. Pemeriksaan penjaga TRUNCATE
+// membaca baris lewat EXECUTE; pada REPEATABLE READ atau SERIALIZABLE snapshot transaksi dapat lebih tua daripada
+// penguncian baris oleh transaksi lain yang baru commit, sehingga baris terkunci tidak terlihat dan TRUNCATE lolos.
+// Menolak lebih awal (gagal tertutup) menutup balapan itu: TRUNCATE tabel dokumen hanya sah pada READ COMMITTED,
+// tempat tiap pernyataan EXECUTE memakai snapshot baru.
+func isolationGuard(t *dbmodel.Table) (string, error) {
+	raise, err := raiseStmt("TRUNCATE tabel dokumen ditolak pada transaction_isolation selain read committed (" + t.Name + "): jalankan pada READ COMMITTED")
+	if err != nil {
+		return "", err
+	}
+	return "  IF current_setting('transaction_isolation') <> 'read committed' THEN\n    " + raise + "\n  END IF;\n", nil
+}
+
+// truncateFunctionBody: TRUNCATE tidak memicu pemicu baris, sehingga pemicu statement-level BEFORE TRUNCATE
+// menolak pengosongan tabel dokumen bila ada baris yang terkunci menurut predikat kunci yang sama dengan pemicu
+// baris (kondisi lockWhen yang sama, kualifier t), dan pengosongan tabel anak (embedded, pivot, hasOne) bila ada
+// baris anak yang induknya terkunci (predikat kunci induk yang sama dengan pemicu anak, kualifier p). TRUNCATE
+// tabel yang kosong atau yang semua barisnya belum terkunci (draft) diizinkan. Tabel dirujuk lewat EXECUTE
+// format() dengan TG_TABLE_SCHEMA dan TG_TABLE_NAME (tabel bayangan pg_temp atau search_path lain tidak
+// berpengaruh) sehingga badan tetap identik di skema mana pun. Hanya READ COMMITTED yang diizinkan (isolationGuard).
+func truncateFunctionBody(t *dbmodel.Table, tr *dbmodel.Trigger) (string, error) {
+	g := tr.Truncate
+	if (g.Condition == nil) == (g.Child == nil) {
+		return "", fmt.Errorf("pemicu %s: tepat satu dari Condition dan Child pada Truncate harus diisi", tr.Name)
+	}
+	if _, err := QuoteIdent(t.Name); err != nil {
+		return "", err
+	}
+	var q, args, what string
+	if g.Condition != nil {
+		locked, err := Condition(g.Condition, EnvForTable(t), CondOptions{Qualifier: "t", Restricted: true})
+		if err != nil {
+			return "", fmt.Errorf("pemicu %s: lockWhen: %w", tr.Name, err)
+		}
+		q, err = qualifiedQuery("SELECT EXISTS (SELECT 1 FROM %I.%I AS t WHERE " + escFormat(locked) + ")")
+		if err != nil {
+			return "", err
+		}
+		args = "TG_TABLE_SCHEMA, TG_TABLE_NAME"
+		what = "dokumen terkunci: TRUNCATE ditolak ("
+	} else {
+		c := g.Child
+		if c.Parent == nil || c.Parent.Lock == nil {
+			return "", fmt.Errorf("pemicu %s: tabel induk tanpa kondisi kunci", tr.Name)
+		}
+		if len(c.Parent.PrimaryKey) != 1 {
+			return "", fmt.Errorf("pemicu %s: induk %s harus berkunci utama satu kolom", tr.Name, c.Parent.Name)
+		}
+		locked, err := Condition(c.Parent.Lock, EnvForTable(c.Parent), CondOptions{Qualifier: "p", Restricted: true})
+		if err != nil {
+			return "", fmt.Errorf("pemicu %s: kondisi kunci induk: %w", tr.Name, err)
+		}
+		if _, err := QuoteIdent(c.Parent.Name); err != nil {
+			return "", err
+		}
+		pk, err := QuoteIdent(c.Parent.PrimaryKey[0])
+		if err != nil {
+			return "", err
+		}
+		fk, err := colRef(t, "c", c.FKColumn)
+		if err != nil {
+			return "", fmt.Errorf("pemicu %s: %w", tr.Name, err)
+		}
+		parentName, err := Literal(c.Parent.Name)
+		if err != nil {
+			return "", err
+		}
+		q, err = qualifiedQuery("SELECT EXISTS (SELECT 1 FROM %I.%I AS c JOIN %I.%I AS p ON p." + escFormat(pk) + " = " + escFormat(fk) + " WHERE " + escFormat(locked) + ")")
+		if err != nil {
+			return "", err
+		}
+		args = "TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_TABLE_SCHEMA, " + parentName
+		what = "dokumen induk terkunci: TRUNCATE anak ditolak ("
+	}
+	raise, err := raiseStmt(what + t.Name + ")")
+	if err != nil {
+		return "", err
+	}
+	iso, err := isolationGuard(t)
+	if err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	sb.WriteString("\nDECLARE\n  is_locked boolean;\nBEGIN\n")
+	sb.WriteString(iso)
+	sb.WriteString("  EXECUTE format(" + q + ", " + args + ") INTO is_locked;\n")
+	sb.WriteString("  IF is_locked THEN\n    " + raise + "\n  END IF;\n")
+	sb.WriteString("  RETURN NULL;\nEND\n")
 	return sb.String(), nil
 }

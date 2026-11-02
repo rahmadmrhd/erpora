@@ -150,7 +150,7 @@ func TestSetCannotLoosenToLowerRankedNonDefaultGroup(t *testing.T) {
 	mk := func(set string) *Report {
 		return run(t, manifestMod(t, "m", []ManifestResource{{Key: "m.r", Actions: []string{"read"}, FieldGroups: groups}},
 			f("m/costing.abstract.yaml", abstract("m.costing", "fields:\n  unitCost: {type: decimal, precision: 18, scale: 2, fieldGroup: finance, classification: confidential}\n  note: {type: text, nullable: true}\n")),
-			f("m/r.resource.yaml", resource("m.r", "include:\n  - source: m.costing\n    set:\n      "+set+"\n"))))
+			f("m/r.resource.yaml", resource("m.r", "include:\n  - source: m.costing\n    reason: uji pelonggaran\n    set:\n      "+set+"\n"))))
 	}
 	p := wantErr(t, mk("unitCost: {fieldGroup: ops}"), CodeFieldGroupLoosened, "/fields/unitCost")
 	if !strings.Contains(p.Message, "finance") || !strings.Contains(p.Message, "ops") {
@@ -178,7 +178,7 @@ func TestPivotFieldsAreValidated(t *testing.T) {
 		{"decimal tanpa precision dan scale", "      weight: {type: decimal}\n", CodeFieldAttrRequired, "/relations/tags/pivotFields/weight"},
 		{"atribut tidak berlaku untuk tipe", "      qty: {type: integer, maxLength: 3}\n", CodeFieldAttrNotForType, "/relations/tags/pivotFields/qty"},
 		{"minLength melebihi maxLength", "      code: {type: string, minLength: 9, maxLength: 3}\n", CodeFieldRange, "/relations/tags/pivotFields/code"},
-		{"kata tercadang SQL", "      order: {type: text}\n", CodeNameReservedSQL, "/relations/tags/pivotFields/order"},
+		{"kolom sistem SQL", "      xmin: {type: text}\n", CodeNameReservedSQL, "/relations/tags/pivotFields/xmin"},
 		{"pola di luar subset", "      sku: {type: string, maxLength: 10, pattern: \"^(a+)+$\"}\n", CodeFieldPatternInvalid, "/relations/tags/pivotFields/sku"},
 		{"default null pada non-nullable", "      remark: {type: string, maxLength: 10, default: null}\n", CodeFieldDefaultInvalid, "/relations/tags/pivotFields/remark"},
 		{"tipe domain tidak didukung pada kolom pivot", "      mail: {type: sdk:email}\n", CodePivotFieldType, "/relations/tags/pivotFields/mail"},
@@ -277,5 +277,53 @@ func TestLoadWorkspaceReadsGoRequires(t *testing.T) {
 				t.Errorf("tanpa go.mod harus nil: %v", m.GoRequires)
 			}
 		}
+	}
+}
+
+// ---- M-2: nama pemicu dan fungsi bangkitan dihitung terhadap batas 63 byte di metadata:check ----
+
+func TestDocumentTriggerNamesAreBoundedByCheck(t *testing.T) {
+	doc := func(letters int) *Report {
+		name := strings.Repeat("d", letters) // tabel m_<name>s
+		return single(t, f("m/"+name+".resource.yaml", resource("m."+name, "include:\n  - source: sdk:document\nfields:\n  note: {type: text, nullable: true}\n")))
+	}
+	// Tabel 45 byte: <tabel>_truncate_lock_trg tepat 63 byte (batas).
+	noErrors(t, doc(42))
+	// Tabel 46 byte: penjaga TRUNCATE melewati 63 byte; sebelumnya baru gagal di metadata:diff dan metadata:migrate.
+	rep := doc(43)
+	var found bool
+	for _, p := range rep.Problems {
+		if p.Severity == SeverityError && p.Code == "db_name" && strings.Contains(p.Message, "truncate_lock") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("nama pemicu TRUNCATE melebihi 63 byte harus ditolak check: %s", dump(rep.Problems))
+	}
+	// Resource non-dokumen tidak punya pemicu bangkitan: tabel 40 byte sah.
+	noErrors(t, single(t, f("m/x.resource.yaml", resource("m."+strings.Repeat("e", 37), "fields:\n  note: {type: text, nullable: true}\n"))))
+}
+
+func TestChildTriggerNamesAreBoundedByCheck(t *testing.T) {
+	mk := func(letters int) *Report {
+		child := strings.Repeat("c", letters)
+		return run(t, mod(t, "m", nil,
+			f("m/parent.resource.yaml", resource("m.parent", "include:\n  - source: sdk:document\nfields:\n  note: {type: text, nullable: true}\nrelations:\n  lines: {type: hasMany, of: m."+child+", embedded: true}\n")),
+			f("m/child.resource.yaml", resource("m."+child, "fields:\n  qty: {type: integer, default: 1}\nrelations:\n  parent: {type: belongsTo, to: m.parent, required: true, onDelete: cascade}\n"))))
+	}
+	// <tabel>_parent_id_truncate_lock_trg = tabel + 28 byte; tabel m_<c>s = letters + 3.
+	for _, p := range mk(32).Problems {
+		if p.Severity == SeverityError && p.Code == "db_name" {
+			t.Errorf("tepat 63 byte harus lolos: %v", p)
+		}
+	}
+	var found bool
+	for _, p := range mk(33).Problems {
+		if p.Severity == SeverityError && p.Code == "db_name" && strings.Contains(p.Message, "truncate_lock") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("nama pemicu TRUNCATE anak melebihi 63 byte harus ditolak check")
 	}
 }

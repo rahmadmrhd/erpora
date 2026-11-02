@@ -194,3 +194,29 @@ func (c *checker) resolvePendingMigrateFrom() {
 		}
 	}
 }
+
+// checkLockWhenPlacement menegakkan bahwa lockWhen hanya sah pada resource berjenis dokumen konkret: resource
+// yang menyertakan sdk:document (keputusan pemilik produk, 2 Nov 2026; Requirement 13.1). Resource non-dokumen
+// tidak punya status lifecycle yang dapat dikunci, dan metadata abstrak tidak menghasilkan tabel sehingga tidak
+// ada pemicu yang dapat menegakkannya. Metadata bawaan SDK dikecualikan (sdk:document membawa kondisi bawaan).
+func (x *rctx) checkLockWhenPlacement() {
+	if x.r.Module == resolve.SDKSlug {
+		return
+	}
+	if x.isAbs {
+		if x.doc != nil && x.doc.Value["lockWhen"] != nil {
+			x.atDoc(SeverityError, "/lockWhen", CodeLockWhenNotDocument,
+				"lockWhen tidak sah pada metadata abstrak %s: hanya resource dokumen konkret (menyertakan sdk:document) yang boleh punya lockWhen; kondisi kunci bawaan datang dari sdk:document dan resource dokumen boleh memperketatnya", x.r.Key)
+		}
+		return
+	}
+	if x.r.LockWhen == nil || x.isDoc {
+		return
+	}
+	origin := x.r.Source
+	if n := len(x.r.LockWhenOrigins); n > 0 {
+		origin = x.r.LockWhenOrigins[n-1]
+	}
+	x.atOrigin(SeverityError, origin, "/lockWhen", CodeLockWhenNotDocument,
+		"lockWhen hanya sah pada resource dokumen konkret (menyertakan sdk:document); resource %s bukan dokumen (Requirement 13.1)", x.r.Key)
+}

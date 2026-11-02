@@ -33,9 +33,11 @@ const (
 	CodeFieldDeprecatedTarget   = "field_deprecated_target"
 
 	// unmanagedColumns dan generate.crud (Requirement 2.9; konsep menunggu konfirmasi pemilik produk).
-	CodeUnmanagedColumnManaged   = "unmanaged_column_managed"
-	CodeUnmanagedColumnDuplicate = "unmanaged_column_duplicate"
-	CodeCrudWithUnmanaged        = "crud_with_unmanaged_columns"
+	CodeUnmanagedColumnManaged        = "unmanaged_column_managed"
+	CodeUnmanagedColumnDuplicate      = "unmanaged_column_duplicate"
+	CodeCrudWithUnmanaged             = "crud_with_unmanaged_columns"
+	CodeUnmanagedColumnClassification = "unmanaged_column_classification"
+	CodeUnmanagedColumnReason         = "unmanaged_column_reason_missing"
 
 	// Kondisi (Requirement 4).
 	CodeConditionInvalid      = "condition_invalid"
@@ -102,6 +104,8 @@ const (
 	CodeSnapshotLooser            = "snapshot_looser_classification"
 	CodeSnapshotGroupDowngrade    = "snapshot_group_downgrade"
 	CodeLockWhenNotSQL            = "lockwhen_not_sql"
+	CodeLockWhenNotDocument       = "lockwhen_not_document"
+	CodeIncludeSetMissingReason   = "include_set_missing_reason"
 
 	// Sumbu status (K24, Requirement 13.14 sampai 13.18).
 	CodeStatusAxisNotDocument         = "status_axis_not_document"

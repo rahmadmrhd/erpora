@@ -48,7 +48,7 @@ const (
 const (
 	InvoiceStatusDraft                      = "draft"
 	InvoiceStatusDeleted                    = "deleted"
-	InvoiceStatusNeedApproval               = "need_approval"
+	InvoiceStatusPendingApproval            = "pending_approval"
 	InvoiceStatusAccepted                   = "accepted"
 	InvoiceStatusRejected                   = "rejected"
 	InvoiceStatusCancelled                  = "cancelled"
@@ -119,7 +119,7 @@ var InvoiceSpec = &ResourceSpec{
 			ReadOnly:       true,
 			HasDefault:     true,
 			Default:        "draft",
-			Enum:           []string{"draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"},
+			Enum:           []string{"draft", "deleted", "pending_approval", "accepted", "rejected", "cancelled", "done"},
 			Classification: "internal",
 			Group:          "general",
 		},
@@ -329,13 +329,13 @@ var InvoiceSpec = &ResourceSpec{
 	Lifecycle: &StatusSpec{
 		Field:   "status",
 		Initial: "draft",
-		Values:  []string{"draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"},
+		Values:  []string{"draft", "deleted", "pending_approval", "accepted", "rejected", "cancelled", "done"},
 		Transitions: []Transition{
 			{"draft", "deleted"},
 			{"draft", "accepted"},
-			{"draft", "need_approval"},
-			{"need_approval", "accepted"},
-			{"need_approval", "rejected"},
+			{"draft", "pending_approval"},
+			{"pending_approval", "accepted"},
+			{"pending_approval", "rejected"},
 			{"accepted", "cancelled"},
 			{"accepted", "done"},
 		},

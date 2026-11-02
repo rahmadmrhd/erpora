@@ -154,11 +154,28 @@ type ForeignKey struct {
 type Trigger struct {
 	Name     string
 	Function string
-	// Events adalah INSERT, UPDATE, DELETE (huruf besar, terurut).
+	// Events adalah INSERT, UPDATE, DELETE, TRUNCATE (huruf besar, terurut).
 	Events []string
 	// Lock adalah parameter pemicu penguncian dokumen (BEFORE UPDATE OR DELETE pada tabel dokumen); Child adalah
-	// parameter pemicu anak (BEFORE INSERT OR UPDATE OR DELETE pada tabel anak). Tepat satu terisi.
-	Lock  *LockSpec
+	// parameter pemicu anak (BEFORE INSERT OR UPDATE OR DELETE pada tabel anak); Truncate adalah pemicu
+	// statement-level BEFORE TRUNCATE pada tabel dokumen atau anak. Tepat satu terisi.
+	Lock     *LockSpec
+	Child    *ChildLock
+	Truncate *TruncateGuard
+}
+
+// TruncateGuard adalah parameter pemicu statement-level BEFORE TRUNCATE pada tabel dokumen dan tabel anaknya:
+// TRUNCATE tidak memicu pemicu baris sehingga tanpa pemicu ini ia melewati proteksi dokumen terkunci (keputusan
+// pemilik produk, 2 Nov 2026; Requirement 13.2). Pada tabel dokumen TRUNCATE ditolak bila ada baris yang terkunci
+// menurut Condition (predikat kunci pemicu baris); pada tabel anak ditolak bila ada baris anak yang induknya
+// terkunci. Keduanya juga menolak TRUNCATE pada transaction_isolation selain READ COMMITTED (snapshot lama dapat
+// tidak melihat baris yang baru terkunci).
+type TruncateGuard struct {
+	// Condition adalah lockWhen resource (kolom milik sendiri; eq, ne, in, isnull); diisi pada tabel dokumen.
+	Condition *metadata.Condition
+	// Child diisi pada tabel anak, pivot, atau seberang hasOne: TRUNCATE ditolak bila ada baris yang FK-nya menunjuk
+	// induk terkunci menurut kondisi kunci induk (predikat yang sama dengan pemicu anak baris). Tepat satu dari
+	// Condition dan Child terisi.
 	Child *ChildLock
 }
 

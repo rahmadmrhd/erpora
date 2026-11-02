@@ -144,7 +144,7 @@ func TestSchemaViolations(t *testing.T) {
 		{"tipe tak sah", head + "fields:\n  a: {type: float}\n", "/fields/a/type", 5, ""},
 		{"tipe hilang", head + "fields:\n  a: {maxLength: 3}\n", "/fields/a", 5, "type"},
 		{"nama field bukan camelCase", head + "fields:\n  Customer_Name: {type: text}\n", "/fields/Customer_Name", 5, ""},
-		{"nama field kapital berurutan", head + "fields:\n  taxID: {type: text}\n", "/fields/taxID", 5, ""},
+		{"nama field kapital berurutan", head + "fields:\n  taxID: {type: text}\n", "/fields/taxID", 5, "taxId, bukan taxID"},
 		{"klasifikasi tak sah", head + "fields:\n  a: {type: text, classification: secret}\n", "/fields/a/classification", 5, ""},
 		{"operator tak sah", head + "lockWhen: {field: status, op: like, value: x}\n", "/lockWhen/op", 4, ""},
 		{"daun tanpa value atau ref", head + "lockWhen: {field: status, op: eq}\n", "/lockWhen", 4, ""},
@@ -157,7 +157,8 @@ func TestSchemaViolations(t *testing.T) {
 		{"enum nilai bukan snake_case", head + "fields:\n  a: {type: enum, values: [Open]}\n", "/fields/a/values/0", 5, ""},
 		{"deprecated tanpa since", head + "fields:\n  a: {type: text, deprecated: {replacedBy: b}}\n", "/fields/a/deprecated", 5, "since"},
 		{"clientVisible false tanpa alasan", head + "fields:\n  a: {type: text, clientVisible: false}\n", "/fields/a", 5, "clientVisibleReason"},
-		{"unmanagedColumns tanpa alasan", head + "unmanagedColumns:\n  - name: secretCol\n", "/unmanagedColumns/0", 5, "reason"},
+		{"unmanagedColumns tanpa alasan", head + "unmanagedColumns:\n  - {name: secretCol, classification: highly_confidential}\n", "/unmanagedColumns/0", 5, "reason"},
+		{"unmanagedColumns tanpa classification", head + "unmanagedColumns:\n  - {name: secretCol, reason: tangan}\n", "/unmanagedColumns/0", 5, "classification"},
 		{"abstract tidak boleh generate", "schemaVersion: \"1\"\nkind: abstract\nkey: a.b\ngenerate: {crud: true}\n", "/generate", 4, "tidak dikenal"},
 		{"label bukan kunci i18n", head + "fields:\n  a: {type: text, label: \"Nama Pelanggan\"}\n", "/fields/a/label", 5, ""},
 		{"labelTemplate memuat kata", head + "labelTemplate: \"No. {number}\"\n", "/labelTemplate", 4, ""},
@@ -665,7 +666,7 @@ lockWhen: {any: [{field: state, op: in, value: [open, paid]}, {field: locked, op
 indexes:
   - {fields: [number, state], unique: true}
 unmanagedColumns:
-  - {name: idNumberEnc, reason: dikelola kode tulis tangan}
+  - {name: idNumberEnc, classification: highly_confidential, reason: dikelola kode tulis tangan}
 generate: {crud: true}
 `
 

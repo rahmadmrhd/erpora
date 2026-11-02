@@ -77,9 +77,9 @@ func TestStatusAxisNamedStatusOnNonDocumentRejected(t *testing.T) {
 }
 
 func TestStatusAxisNameRules(t *testing.T) {
-	t.Run("kata tercadang dan bolak-balik mengikuti aturan penamaan", func(t *testing.T) {
-		rep := single(t, axesResource("  order: {values: [a], initial: a, transitions: []}\n"))
-		wantErr(t, rep, CodeNameReservedSQL, "/fields/order")
+	t.Run("bentrokan nama dan bolak-balik mengikuti aturan penamaan", func(t *testing.T) {
+		rep := single(t, axesResource("  xmin: {values: [a], initial: a, transitions: []}\n"))
+		wantErr(t, rep, CodeNameReservedSQL, "/fields/xmin")
 	})
 	t.Run("sumbu bentrok dengan field milik resource", func(t *testing.T) {
 		rep := single(t, f("m/so.resource.yaml", resource("m.so", docHead+"  deliveryStatus: {type: text}\nstatusAxes:\n  deliveryStatus: {values: [a], initial: a, transitions: []}\n")))

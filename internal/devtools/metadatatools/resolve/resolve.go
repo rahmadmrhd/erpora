@@ -529,6 +529,10 @@ func (b *builder) include(i int, item map[string]any) {
 		}
 	}
 	if set, ok := item["set"].(map[string]any); ok {
+		reason, _ := item["reason"].(string)
+		b.res.IncludeSets = append(b.res.IncludeSets, IncludeSet{
+			Source: srcRef, Fields: b.orderedKeys(set, base+"/set"), Reason: strings.TrimSpace(reason), Origin: b.origin(base, OpSet),
+		})
 		for _, name := range b.orderedKeys(set, base+"/set") {
 			ptr := base + "/set/" + esc(name)
 			idx := findField(contrib, name)

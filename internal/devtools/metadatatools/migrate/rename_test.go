@@ -130,7 +130,8 @@ fields:
 		fnd(diff.KindTriggerChanged, "m_docs", "m_docs_lock_trg"))
 	up, down := section(t, r.SQL)
 	contains(t, up, `CREATE OR REPLACE FUNCTION "m_docs_lock_fn"()`,
-		`CREATE OR REPLACE TRIGGER "m_docs_lock_trg"`, `ENABLE ALWAYS TRIGGER "m_docs_lock_trg"`, `SET "phone_e164" = "phone"`)
+		`CREATE OR REPLACE TRIGGER "m_docs_lock_trg"`, `ENABLE ALWAYS TRIGGER "m_docs_lock_trg"`, `SET "phone_e164" = "phone"`,
+		"LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS")
 	if strings.Index(up, "CREATE OR REPLACE FUNCTION") > strings.Index(up, `SET "phone_e164"`) {
 		t.Errorf("pemicu harus diganti sebelum salinan:\n%s", up)
 	}

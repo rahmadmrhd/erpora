@@ -193,7 +193,7 @@ func TestChildLockTrigger_Golden(t *testing.T) {
 			t.Errorf("pernyataan %s terpecah menjadi %d", st.Object, n)
 		}
 	}
-	for _, want := range []string{"FOR SHARE OF p;", `p."status" IS DISTINCT FROM 'draft'`, `OLD."doc_id"`, `NEW."doc_id"`} {
+	for _, want := range []string{"FOR SHARE OF p'", `p."status" IS DISTINCT FROM ''draft''`, "TG_TABLE_SCHEMA", `OLD."doc_id"`, `NEW."doc_id"`} {
 		if !strings.Contains(stmts[0].SQL, want) {
 			t.Errorf("fungsi tidak memuat %q:\n%s", want, stmts[0].SQL)
 		}
@@ -234,5 +234,136 @@ func TestChildLockTrigger_DangerousParentCondition(t *testing.T) {
 	}
 	if !strings.Contains(stmts[0].SQL, "$erpora1$") {
 		t.Errorf("penanda dolar harus menghindari tabrakan:\n%s", stmts[0].SQL)
+	}
+}
+
+func TestTruncateTrigger_Golden(t *testing.T) {
+	tb, _ := lockTable(t, leaf("status", "ne", "draft"), nil)
+	tr := &dbmodel.Trigger{Name: "m_docs_truncate_lock_trg", Function: "m_docs_truncate_lock_fn", Events: []string{"TRUNCATE"},
+		Truncate: &dbmodel.TruncateGuard{Condition: parseCond(t, leaf("status", "ne", "draft"))}}
+	stmts, err := TriggerStatements(tb, tr, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stmts) != 3 || stmts[0].Kind != KindCreateFunction || stmts[1].Kind != KindCreateTrigger || stmts[2].Kind != KindEnableTrigger {
+		t.Fatalf("stmts = %+v", stmts)
+	}
+	if !strings.Contains(stmts[1].SQL, "BEFORE TRUNCATE ON") || !strings.Contains(stmts[1].SQL, "FOR EACH STATEMENT") {
+		t.Errorf("pemicu harus statement-level BEFORE TRUNCATE: %s", stmts[1].SQL)
+	}
+	if !strings.Contains(stmts[2].SQL, "ENABLE ALWAYS TRIGGER") {
+		t.Errorf("harus ENABLE ALWAYS: %s", stmts[2].SQL)
+	}
+	for _, st := range stmts {
+		if n := len(splitTopLevel(t, st.SQL)); n != 1 {
+			t.Errorf("pernyataan %s terpecah menjadi %d", st.Object, n)
+		}
+	}
+	golden(t, "truncate_trigger.golden.sql", joinStatements(stmts))
+}
+
+func TestTruncateTrigger_Validation(t *testing.T) {
+	tb, lock := lockTable(t, leaf("status", "ne", "draft"), nil)
+	both := &dbmodel.Trigger{Name: "x", Function: "y", Events: []string{"TRUNCATE"}, Lock: lock.Lock, Truncate: &dbmodel.TruncateGuard{Condition: lock.Lock.Condition}}
+	if _, err := TriggerStatements(tb, both, Options{}); err == nil {
+		t.Error("Lock dan Truncate bersamaan harus ditolak")
+	}
+	noCond := &dbmodel.Trigger{Name: "x", Function: "y", Events: []string{"TRUNCATE"}, Truncate: &dbmodel.TruncateGuard{}}
+	if _, err := TriggerStatements(tb, noCond, Options{}); err == nil {
+		t.Error("Truncate tanpa kondisi harus ditolak")
+	}
+	badEvent := &dbmodel.Trigger{Name: "x", Function: "y", Events: []string{"UPDATE"}, Truncate: &dbmodel.TruncateGuard{Condition: lock.Lock.Condition}}
+	if _, err := TriggerStatements(tb, badEvent, Options{}); err == nil {
+		t.Error("Truncate dengan peristiwa selain TRUNCATE harus ditolak")
+	}
+}
+
+// Tabel induk dan tabel dokumen dirujuk lewat EXECUTE format() dengan skema pemicu (TG_TABLE_SCHEMA), tidak pernah
+// sebagai nama tanpa kualifikasi yang dapat dibelokkan tabel bayangan pg_temp atau search_path lain; tanda % pada
+// nilai kondisi digandakan agar format() tidak menafsirkannya sebagai penampung.
+func TestQualifiedTableReferencesAndPercentEscaping(t *testing.T) {
+	child, tr, parent := childFixture(t)
+	parent.Lock = parseCond(t, leaf("status", "ne", "100%s"))
+	stmts, err := TriggerStatements(child, tr, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := stmts[0].SQL
+	if strings.Contains(body, "FROM \"m_docs\"") || strings.Contains(body, "PERFORM") {
+		t.Errorf("induk tidak boleh dirujuk tanpa kualifikasi skema:\n%s", body)
+	}
+	if !strings.Contains(body, "100%%s") {
+		t.Errorf("tanda persen pada nilai kondisi harus digandakan:\n%s", body)
+	}
+
+	tb, _ := lockTable(t, leaf("status", "ne", "50%"), nil)
+	trg := &dbmodel.Trigger{Name: "m_docs_truncate_lock_trg", Function: "m_docs_truncate_lock_fn", Events: []string{"TRUNCATE"},
+		Truncate: &dbmodel.TruncateGuard{Condition: parseCond(t, leaf("status", "ne", "50%"))}}
+	ts, err := TriggerStatements(tb, trg, Options{Schema: "s1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts2, err := TriggerStatements(tb, trg, Options{Schema: "s2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ts[0].SQL, "%I.%I") || !strings.Contains(ts[0].SQL, "TG_TABLE_SCHEMA, TG_TABLE_NAME") || !strings.Contains(ts[0].SQL, "50%%") {
+		t.Errorf("penjaga TRUNCATE:\n%s", ts[0].SQL)
+	}
+	// Badan sama di skema mana pun (selisih membandingkan badan); hanya nama fungsi yang dikualifikasi.
+	strip := func(s string) string { return s[strings.Index(s, "AS "):] }
+	if strip(ts[0].SQL) != strip(ts2[0].SQL) {
+		t.Error("badan fungsi harus identik di skema mana pun")
+	}
+}
+
+// Penjaga TRUNCATE tabel anak: ditolak bila ada baris anak yang induknya terkunci (predikat kunci induk yang sama
+// dengan pemicu anak baris); pemeriksaan skema dan isolation level sama dengan penjaga tabel dokumen.
+func TestTruncateTrigger_ChildGolden(t *testing.T) {
+	child, _, parent := childFixture(t)
+	tr := &dbmodel.Trigger{Name: "m_doc_lines_doc_id_truncate_lock_trg", Function: "m_doc_lines_doc_id_truncate_lock_fn", Events: []string{"TRUNCATE"},
+		Truncate: &dbmodel.TruncateGuard{Child: &dbmodel.ChildLock{Parent: parent, FKColumn: "doc_id"}}}
+	stmts, err := TriggerStatements(child, tr, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stmts) != 3 || !strings.Contains(stmts[1].SQL, "BEFORE TRUNCATE ON") || !strings.Contains(stmts[1].SQL, "FOR EACH STATEMENT") ||
+		!strings.Contains(stmts[2].SQL, "ENABLE ALWAYS TRIGGER") {
+		t.Fatalf("stmts = %+v", stmts)
+	}
+	for _, want := range []string{"JOIN %I.%I AS p", `p."id" = c."doc_id"`, `p."status" IS DISTINCT FROM ''draft''`, "TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_TABLE_SCHEMA, 'm_docs'", "transaction_isolation"} {
+		if !strings.Contains(stmts[0].SQL, want) {
+			t.Errorf("fungsi tidak memuat %q:\n%s", want, stmts[0].SQL)
+		}
+	}
+	for _, st := range stmts {
+		if n := len(splitTopLevel(t, st.SQL)); n != 1 {
+			t.Errorf("pernyataan %s terpecah menjadi %d", st.Object, n)
+		}
+	}
+	golden(t, "truncate_trigger_child.golden.sql", joinStatements(stmts))
+}
+
+func TestTruncateTrigger_IsolationGuardAndValidation(t *testing.T) {
+	tb, _ := lockTable(t, leaf("status", "ne", "draft"), nil)
+	tr := &dbmodel.Trigger{Name: "x", Function: "y", Events: []string{"TRUNCATE"}, Truncate: &dbmodel.TruncateGuard{Condition: parseCond(t, leaf("status", "ne", "draft"))}}
+	stmts, err := TriggerStatements(tb, tr, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stmts[0].SQL, "current_setting('transaction_isolation') <> 'read committed'") {
+		t.Errorf("penjaga isolation level tidak ada:\n%s", stmts[0].SQL)
+	}
+	child, _, parent := childFixture(t)
+	for name, g := range map[string]*dbmodel.TruncateGuard{
+		"kosong":            {},
+		"keduanya":          {Condition: parent.Lock, Child: &dbmodel.ChildLock{Parent: parent, FKColumn: "doc_id"}},
+		"FK tak ada":        {Child: &dbmodel.ChildLock{Parent: parent, FKColumn: "nope"}},
+		"induk tanpa kunci": {Child: &dbmodel.ChildLock{Parent: &dbmodel.Table{Name: "p", PrimaryKey: []string{"id"}}, FKColumn: "doc_id"}},
+	} {
+		bad := &dbmodel.Trigger{Name: "x", Function: "y", Events: []string{"TRUNCATE"}, Truncate: g}
+		if _, err := TriggerStatements(child, bad, Options{}); err == nil {
+			t.Errorf("%s: harus galat", name)
+		}
 	}
 }

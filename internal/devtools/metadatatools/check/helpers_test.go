@@ -153,3 +153,18 @@ func dump(ps []Problem) string {
 func oneField(attrs string) file {
 	return f("m/r.resource.yaml", resource("m.r", "fields:\n  x: {"+attrs+"}\n"))
 }
+
+// noErrorsExceptNonDocLock seperti noErrors tetapi mengabaikan lockwhen_not_document: dipakai tes kondisi yang
+// sengaja memakai lockWhen pada resource non-dokumen sekadar untuk menguji model kondisinya.
+func noErrorsExceptNonDocLock(t *testing.T, rep *Report) {
+	t.Helper()
+	var errs []Problem
+	for _, p := range rep.Problems {
+		if p.Severity == SeverityError && p.Code != CodeLockWhenNotDocument {
+			errs = append(errs, p)
+		}
+	}
+	if len(errs) != 0 {
+		t.Fatalf("seharusnya tanpa galat: %s", dump(errs))
+	}
+}

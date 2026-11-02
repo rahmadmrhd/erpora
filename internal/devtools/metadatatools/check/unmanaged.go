@@ -2,16 +2,16 @@ package check
 
 import (
 	"fmt"
+	"strings"
 
 	"erpora/internal/devtools/metadatatools/naming"
 )
 
-// checkUnmanaged memeriksa unmanagedColumns (Requirement 2.9) dan larangan bersama generate.crud.
-//
-// Catatan: konsep unmanagedColumns sudah ada di spek (K17), tetapi penegakan penuh Requirement 2.9 menunggu
-// konfirmasi pemilik produk (K-a, tasks.md Overview). Pemeriksa tidak dapat membuktikan bahwa sebuah kolom di luar metadata berklasifikasi
-// highly_confidential; yang dapat ditegakkan secara statis hanya: nama sah, tidak ganda, tidak bentrok dengan
-// kolom yang dikelola metadata, dan tidak bersama generate.crud. Seluruh logika ini ada di berkas ini.
+// checkUnmanaged memeriksa unmanagedColumns (Requirement 2.9; keputusan pemilik produk 2 Nov 2026): tiap butir
+// berbentuk {name, classification, reason}; classification wajib highly_confidential dan reason wajib tidak
+// kosong setelah trim. Pemeriksa tidak dapat membuktikan klasifikasi kolom di luar metadata; yang ditegakkan
+// adalah pernyataan pengembang itu, ditambah: nama sah, tidak ganda, tidak bentrok dengan kolom yang dikelola
+// metadata, dan tidak bersama generate.crud.
 func (x *rctx) checkUnmanaged() {
 	if len(x.r.UnmanagedColumns) == 0 {
 		return
@@ -34,6 +34,14 @@ func (x *rctx) checkUnmanaged() {
 	for i, uc := range x.r.UnmanagedColumns {
 		ptr := fmt.Sprintf("/unmanagedColumns/%d", i)
 		name, _ := uc["name"].(string)
+		if class, _ := uc["classification"].(string); class != "highly_confidential" {
+			x.atDoc(SeverityError, ptr+"/classification", CodeUnmanagedColumnClassification,
+				"kolom unmanaged %q berklasifikasi %q: unmanagedColumns hanya untuk kolom highly_confidential (Requirement 2.9, K17); kolom dengan klasifikasi lain dideklarasikan sebagai field metadata", name, class)
+		}
+		if reason, _ := uc["reason"].(string); strings.TrimSpace(reason) == "" {
+			x.atDoc(SeverityError, ptr+"/reason", CodeUnmanagedColumnReason,
+				"kolom unmanaged %q wajib beralasan tertulis (reason tidak boleh kosong)", name)
+		}
 		for _, v := range naming.Validate(name) {
 			x.atDoc(SeverityError, ptr, nameCode(v.Code), "kolom unmanaged: %s", v.Error())
 		}

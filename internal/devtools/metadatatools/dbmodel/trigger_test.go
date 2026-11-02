@@ -34,7 +34,7 @@ func TestDerive_DocumentLockTrigger(t *testing.T) {
 	for _, p := range ls.Transitions {
 		pairs = append(pairs, p[0]+">"+p[1])
 	}
-	want := "draft>deleted,draft>accepted,draft>need_approval,need_approval>accepted,need_approval>rejected,accepted>cancelled,accepted>done"
+	want := "draft>deleted,draft>accepted,draft>pending_approval,pending_approval>accepted,pending_approval>rejected,accepted>cancelled,accepted>done"
 	if strings.Join(pairs, ",") != want {
 		t.Errorf("transisi = %s", strings.Join(pairs, ","))
 	}
@@ -129,5 +129,54 @@ fields:
 	tr := triggerByName(tb, "m_docs_lock_trg")
 	if tb.Column("phone") != nil || tr == nil || len(tr.Lock.MigratePairs) != 1 || tr.Lock.MigratePairs[0] != [2]string{"phone_e164", "phone"} {
 		t.Fatalf("pemicu = %+v", tr)
+	}
+}
+
+// Resource dokumen juga mendapat penjaga statement-level BEFORE TRUNCATE dengan predikat kunci yang sama
+// dengan pemicu baris (TRUNCATE tidak memicu pemicu baris).
+func TestDerive_DocumentTruncateGuard(t *testing.T) {
+	s, ps := Derive(fixtureResources(t))
+	if len(ps) != 0 {
+		t.Fatal(ps)
+	}
+	inv := table(t, s, "fixturesales_invoices")
+	tr := triggerByName(inv, "fixturesales_invoices_truncate_lock_trg")
+	if tr == nil || tr.Function != "fixturesales_invoices_truncate_lock_fn" || strings.Join(tr.Events, ",") != "TRUNCATE" || tr.Truncate == nil || tr.Lock != nil || tr.Child != nil {
+		t.Fatalf("pemicu = %+v", tr)
+	}
+	if tr.Truncate.Condition == nil || tr.Truncate.Condition != inv.Lock {
+		t.Error("kondisi TRUNCATE harus kondisi kunci yang sama dengan pemicu baris")
+	}
+	for _, name := range []string{"fixturecore_customers", "fixturesales_products", "fixturesales_tags"} {
+		for _, tg := range table(t, s, name).Triggers {
+			if tg.Truncate != nil {
+				t.Errorf("%s (non-dokumen) tidak boleh punya penjaga TRUNCATE", name)
+			}
+		}
+	}
+}
+
+// Tabel anak dokumen (baris embedded dan pivot belongsToMany) mendapat penjaga TRUNCATE statement-level dengan
+// kondisi kunci induk yang sama dengan pemicu anak baris.
+func TestDerive_ChildTruncateGuards(t *testing.T) {
+	s, ps := Derive(fixtureResources(t))
+	if len(ps) != 0 {
+		t.Fatal(ps)
+	}
+	inv := table(t, s, "fixturesales_invoices")
+	for _, c := range []struct{ table, trg, fk string }{
+		{"fixturesales_invoice_lines", "fixturesales_invoice_lines_invoice_id_truncate_lock_trg", "invoice_id"},
+		{"fixturesales_invoice_tags", "fixturesales_invoice_tags_invoice_id_truncate_lock_trg", "invoice_id"},
+	} {
+		tr := triggerByName(table(t, s, c.table), c.trg)
+		if tr == nil || strings.Join(tr.Events, ",") != "TRUNCATE" || tr.Truncate == nil || tr.Truncate.Child == nil || tr.Truncate.Condition != nil || tr.Lock != nil || tr.Child != nil {
+			t.Fatalf("%s: pemicu = %+v", c.table, tr)
+		}
+		if tr.Truncate.Child.Parent != inv || tr.Truncate.Child.FKColumn != c.fk {
+			t.Errorf("%s: ChildLock = %+v", c.table, tr.Truncate.Child)
+		}
+		if tr.Function != strings.TrimSuffix(c.trg, "_trg")+"_fn" {
+			t.Errorf("%s: fungsi = %s", c.table, tr.Function)
+		}
 	}
 }

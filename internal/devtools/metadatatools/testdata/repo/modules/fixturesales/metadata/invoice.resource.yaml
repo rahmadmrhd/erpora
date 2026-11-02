@@ -6,11 +6,13 @@ include:
   - source: sdk:document
   - source: fixturesales.pricing
     omit: [withholdingRate]
+    reason: Pajak hanya wajib bila faktur kena pajak
     set:
       taxRate:
         requiredWhen: { field: taxable, op: eq, value: true }
   - source: fixturecore.address
     prefix: shipping
+    reason: Kode pos hanya wajib bila dikirim ke pelanggan
     set:
       postalCode:
         requiredWhen: { field: shipToCustomer, op: eq, value: true }

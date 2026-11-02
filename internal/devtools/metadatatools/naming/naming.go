@@ -88,7 +88,7 @@ func shapeError(s string) *Error {
 	}
 	if looseRe.MatchString(s) {
 		return errf(CodeConsecutiveCapitals, s,
-			"huruf kapital berurutan tidak diizinkan; tulis akronim sebagai kata biasa (taxId, bukan taxID)")
+			"huruf kapital berurutan tidak diizinkan; tulis akronim sebagai kata biasa (%s, bukan %s)", SuggestCamel(s), s)
 	}
 	return errf(CodeNotCamelCase, s,
 		"harus camelCase ketat (huruf kecil di awal; hanya huruf ASCII dan angka; tanpa garis bawah, tanda hubung, atau spasi)")

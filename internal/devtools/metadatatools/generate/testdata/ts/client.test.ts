@@ -48,7 +48,7 @@ describe("keluaran pembangkit TS", () => {
       fieldGroup: "pricing",
     });
     const status = invoice.fields.find((f) => f.name === "status");
-    expect(status?.values).toEqual(["draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"]);
+    expect(status?.values).toEqual(["draft", "deleted", "pending_approval", "accepted", "rejected", "cancelled", "done"]);
     expect(status?.readOnly).toBe(true);
     expect(invoice.lockWhen).toEqual({ field: "status", op: "ne", value: "draft" });
     expect(invoice.relations.map((r) => r.name)).toEqual(["customer", "lines", "tags", "notes"]);

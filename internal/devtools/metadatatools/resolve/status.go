@@ -12,9 +12,9 @@ import (
 var lifecycleTransitions = []Transition{
 	{"draft", "deleted"},
 	{"draft", "accepted"},
-	{"draft", "need_approval"},
-	{"need_approval", "accepted"},
-	{"need_approval", "rejected"},
+	{"draft", "pending_approval"},
+	{"pending_approval", "accepted"},
+	{"pending_approval", "rejected"},
 	{"accepted", "cancelled"},
 	{"accepted", "done"},
 }

@@ -98,6 +98,10 @@ func (d *deriver) documentLock(r *resolve.Resolved, t *Table, funcs *naming.Name
 		return
 	}
 	t.Triggers = append(t.Triggers, &Trigger{Name: trg, Function: fn, Events: []string{"DELETE", "UPDATE"}, Lock: spec})
+	// TRUNCATE tidak memicu pemicu baris: tambahkan penjaga statement-level dengan predikat kunci yang sama.
+	if tgt, fnt, ok := d.triggerNames(t, "truncateLock", funcs); ok {
+		t.Triggers = append(t.Triggers, &Trigger{Name: tgt, Function: fnt, Events: []string{"TRUNCATE"}, Truncate: &TruncateGuard{Condition: t.Lock}})
+	}
 }
 
 // inverseFK mencari kolom FK pada resource anak yang menunjuk resource induk lewat tepat satu belongsTo.
@@ -127,6 +131,10 @@ func (d *deriver) childLocks(r *resolve.Resolved, parent *Table, funcs *naming.N
 			return
 		}
 		child.Triggers = append(child.Triggers, &Trigger{Name: trg, Function: fn, Events: []string{"DELETE", "INSERT", "UPDATE"}, Child: &ChildLock{Parent: parent, FKColumn: fk}})
+		// TRUNCATE tidak memicu pemicu baris: penjaga statement-level menolaknya bila ada baris anak yang induknya terkunci.
+		if tgt, fnt, ok := d.triggerNames(child, camelOf(fk)+"TruncateLock", funcs); ok {
+			child.Triggers = append(child.Triggers, &Trigger{Name: tgt, Function: fnt, Events: []string{"TRUNCATE"}, Truncate: &TruncateGuard{Child: &ChildLock{Parent: parent, FKColumn: fk}}})
+		}
 	}
 	for _, rel := range r.Relations {
 		switch strOf(rel.Attrs["type"]) {

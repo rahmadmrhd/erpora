@@ -76,6 +76,8 @@ type metadataDiffPlan struct {
 	sources  []diff.Source
 	model    *dbmodel.Schema
 	prefixes []string
+	// unreleased berisi slug modul tanpa tag rilis (check.Report.Unreleased).
+	unreleased map[string]bool
 }
 
 // planMetadataDiff memuat metadata semua modul, memeriksanya (metadata:check harus bersih), menurunkan model,
@@ -161,7 +163,7 @@ func planMetadataDiff(root, only string, warn io.Writer) (*metadataDiffPlan, err
 		}
 	}
 
-	plan := &metadataDiffPlan{}
+	plan := &metadataDiffPlan{unreleased: rep.Unreleased}
 	model := &dbmodel.Schema{}
 	for _, i := range order {
 		m := ws.Modules[i]

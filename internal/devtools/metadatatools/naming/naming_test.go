@@ -289,47 +289,45 @@ func TestIdentifierPatternMatchesValidator(t *testing.T) {
 	}
 }
 
-func TestReservedWords(t *testing.T) {
+// TestKeywordsAreValidNames: kata kunci SQL, Go, dan TypeScript sah sebagai nama field (keputusan pemilik produk,
+// 2 Nov 2026); hanya bentrokan nyata per target yang ditolak.
+func TestKeywordsAreValidNames(t *testing.T) {
+	for _, name := range []string{"type", "order", "user", "group", "limit", "default", "left", "class", "let",
+		"select", "func", "range", "enum", "delete", "currentDate", "customerName", "userName", "groupName"} {
+		if got := ReservedTargets(name); len(got) != 0 {
+			t.Errorf("ReservedTargets(%q) = %v; kata kunci harus lolos", name, got)
+		}
+		if vs := Validate(name); len(vs) != 0 {
+			t.Errorf("Validate(%q) = %v", name, vs)
+		}
+		if err := CheckReserved(name); err != nil {
+			t.Errorf("CheckReserved(%q) = %v", name, err)
+		}
+	}
+}
+
+// TestRealConflictsPerTarget: bentrokan nyata tetap ditolak per target.
+func TestRealConflictsPerTarget(t *testing.T) {
 	tests := []struct {
 		in   string
 		want []Target
+		code Code
 	}{
-		{"customerName", nil},
-		{"select", []Target{TargetSQL, TargetGo}},
-		{"user", []Target{TargetSQL}},
-		{"order", []Target{TargetSQL}},
-		{"group", []Target{TargetSQL}},
-		{"limit", []Target{TargetSQL}},
-		{"default", []Target{TargetSQL, TargetGo, TargetTS}},
-		{"type", []Target{TargetGo}},
-		{"func", []Target{TargetGo}},
-		{"range", []Target{TargetGo}},
-		{"class", []Target{TargetTS}},
-		{"let", []Target{TargetTS}},
-		{"enum", []Target{TargetTS}},
-		{"delete", []Target{TargetTS}},
-		{"currentDate", []Target{TargetSQL}},
-		{"left", []Target{TargetSQL}},
-		{"userName", nil},
-		{"groupName", nil},
+		{"xmin", []Target{TargetSQL}, CodeReservedSQL},
+		{"ctid", []Target{TargetSQL}, CodeReservedSQL},
+		{"tableoid", []Target{TargetSQL}, CodeReservedSQL},
 	}
 	for _, tc := range tests {
 		got := ReservedTargets(tc.in)
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("ReservedTargets(%q) = %v, want %v", tc.in, got, tc.want)
 		}
-	}
-	if err := CheckReserved("user"); !hasCode(err, CodeReservedSQL) {
-		t.Errorf("CheckReserved(user) = %v", err)
-	}
-	if err := CheckReserved("type"); !hasCode(err, CodeReservedGo) {
-		t.Errorf("CheckReserved(type) = %v", err)
-	}
-	if err := CheckReserved("class"); !hasCode(err, CodeReservedTS) {
-		t.Errorf("CheckReserved(class) = %v", err)
-	}
-	if err := CheckReserved("customerName"); err != nil {
-		t.Errorf("CheckReserved(customerName) = %v", err)
+		if err := CheckReserved(tc.in); !hasCode(err, tc.code) {
+			t.Errorf("CheckReserved(%q) = %v; ingin kode %q", tc.in, err, tc.code)
+		}
+		if vs := Validate(tc.in); len(vs) == 0 || vs[0].Code != tc.code {
+			t.Errorf("Validate(%q) = %v", tc.in, vs)
+		}
 	}
 }
 
@@ -349,22 +347,19 @@ func TestRoundTripDetection(t *testing.T) {
 }
 
 func TestValidateAggregatesAllViolations(t *testing.T) {
-	vs := Validate("default")
-	codes := map[Code]bool{}
-	for _, v := range vs {
-		codes[v.Code] = true
-	}
-	for _, c := range []Code{CodeReservedSQL, CodeReservedGo, CodeReservedTS} {
-		if !codes[c] {
-			t.Errorf("Validate(default) tidak memuat %q: %v", c, vs)
-		}
-	}
 	if vs := Validate("customerName"); len(vs) != 0 {
 		t.Errorf("Validate(customerName) = %v", vs)
 	}
-	vs = Validate("taxID")
+	vs := Validate("taxID")
 	if len(vs) == 0 || vs[0].Code != CodeConsecutiveCapitals {
-		t.Errorf("Validate(taxID) = %v", vs)
+		t.Fatalf("Validate(taxID) = %v", vs)
+	}
+	// Req 1.4: akronim ditulis taxId; pesan galat menyarankannya.
+	if !strings.Contains(vs[0].Error(), "taxId") {
+		t.Errorf("pesan harus menyarankan taxId: %q", vs[0].Error())
+	}
+	if err := ValidateIdentifier("taxId"); err != nil {
+		t.Errorf("taxId harus sah: %v", err)
 	}
 }
 
@@ -449,4 +444,66 @@ func hasCode(err error, code Code) bool {
 		return false
 	}
 	return ne.Code == code
+}
+
+// TestGoDTOMembersAreNotNameLevelReserved: bentrok anggota DTO bergantung pada kemampuan tulis field, jadi tidak
+// ditolak pada tingkat nama (hanya CheckGoPackage, untuk field tulis).
+func TestGoDTOMembersAreNotNameLevelReserved(t *testing.T) {
+	for _, name := range []string{"present", "validate", "fillRenamePairs"} {
+		if got := ReservedTargets(name); len(got) != 0 {
+			t.Errorf("ReservedTargets(%q) = %v; ingin kosong", name, got)
+		}
+	}
+}
+
+func TestCheckGoPackage(t *testing.T) {
+	res := func(key, name string, fields ...GoField) GoResource {
+		return GoResource{Key: key, Name: name, Fields: fields}
+	}
+	f := func(name string, enum ...string) GoField { return GoField{Name: name, Enum: enum, Writable: true} }
+	ro := func(name string) GoField { return GoField{Name: name} }
+	codes := func(cs []GoConflict) string {
+		var out []string
+		for _, c := range cs {
+			if c.Err.Code != CodeReservedGo {
+				t.Errorf("kode = %q, ingin %q", c.Err.Code, CodeReservedGo)
+			}
+			out = append(out, c.Resource+"/"+c.Field)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := CheckGoPackage([]GoResource{res("m.invoice", "invoice", f("total"), f("status", "draft", "done"))}); len(got) != 0 {
+		t.Errorf("resource sah: %v", got)
+	}
+	// (a) field tulis bernama validate/present/fillRenamePairs
+	if got := codes(CheckGoPackage([]GoResource{res("m.a", "a", f("validate"), f("present"), f("fillRenamePairs"))})); got != "m.a/validate,m.a/present,m.a/fillRenamePairs" {
+		t.Errorf("anggota DTO: %q", got)
+	}
+	// field baca-saja tidak ada di DTO sehingga bebas memakai nama itu
+	if got := CheckGoPackage([]GoResource{res("m.a", "a", ro("validate"), ro("present"), ro("fillRenamePairs"))}); len(got) != 0 {
+		t.Errorf("field readOnly tidak boleh dilaporkan: %v", got)
+	}
+	// (b) resource field, rule, status, resource bentrok dengan tipe runtime (<P>Spec)
+	for _, name := range []string{"field", "rule", "status", "resource"} {
+		got := CheckGoPackage([]GoResource{res("m."+name, name)})
+		if len(got) == 0 || !strings.Contains(got[0].Err.Detail, "runtime") {
+			t.Errorf("resource %s harus bentrok dengan runtime: %v", name, got)
+		}
+	}
+	// konstanta runtime
+	if got := CheckGoPackage([]GoResource{res("m.code", "code", f("required", "x"))}); len(got) != 0 {
+		t.Errorf("CodeRequired tidak dihasilkan resource code: %v", got)
+	}
+	// bentrok antar resource: invoiceStatus.Spec vs invoice.status enum "spec"
+	got := CheckGoPackage([]GoResource{res("m.invoice", "invoice", f("status", "spec")), res("m.invoiceStatus", "invoiceStatus")})
+	if len(got) == 0 || !strings.Contains(got[0].Err.Detail, "InvoiceStatusSpec") {
+		t.Errorf("bentrok antar resource: %v", got)
+	}
+	// nama sah lain tetap lolos
+	if got := CheckGoPackage([]GoResource{res("m.fieldGroup", "fieldGroup"), res("m.ruleSet", "ruleSet"), res("m.statusLog", "statusLog")}); len(got) != 0 {
+		t.Errorf("nama sah lain: %v", got)
+	}
+	if PascalEnumValue("net_15") != "Net15" || PascalEnumValue("Bad") != "" {
+		t.Error("PascalEnumValue")
+	}
 }

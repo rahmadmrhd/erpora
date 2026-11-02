@@ -99,7 +99,7 @@ export const resourceMeta: ResourceMeta = {
       sortable: true,
       groupable: false,
       aggregatable: false,
-      values: ["draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"],
+      values: ["draft", "deleted", "pending_approval", "accepted", "rejected", "cancelled", "done"],
     },
     {
       name: "amendedFromId",

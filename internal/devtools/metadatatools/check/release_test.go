@@ -294,3 +294,31 @@ func TestMigrateFromPairsRemainIdentical(t *testing.T) {
 	wantErr(t, rep, CodeMigrateFromGroup, "/fields/phoneE164")
 	wantErr(t, rep, CodeMigrateFromClassification, "/fields/phoneE164")
 }
+
+// Keputusan 2 Nov 2026 (Requirement 12.4): modul tanpa tag rilis belum punya konsumen sehingga boleh menghapus
+// field langsung tanpa deprecated, removeAfter, atau gerbang MAJOR; modul bertag tetap ketat.
+func TestUnreleasedModuleMayRemoveFieldsDirectly(t *testing.T) {
+	cur := currentModule(t, "0.1.0", keepField) // phone tidak pernah dirilis lalu dihapus
+	t.Run("tanpa tag: lolos dan ditandai Unreleased", func(t *testing.T) {
+		g := &fakeGit{tags: []string{"modules/other/v1.0.0"}, trees: map[string]map[string]string{}}
+		rep := withGit(t, g, cur)
+		noErrors(t, rep)
+		if !rep.Unreleased["m"] {
+			t.Errorf("Unreleased = %v; modul m belum bertag", rep.Unreleased)
+		}
+	})
+	t.Run("bertag: penghapusan tanpa deprecated ditolak dan tidak Unreleased", func(t *testing.T) {
+		g := released("v1.0.0", keepField+oldPhone)
+		rep := withGit(t, g, currentModule(t, "1.1.0", keepField))
+		wantErr(t, rep, CodeFieldRemovedWithoutDeprecation, "/fields/phone")
+		if rep.Unreleased["m"] {
+			t.Error("modul bertag tidak boleh Unreleased")
+		}
+	})
+	t.Run("tag tak terbaca: tidak dianggap Unreleased", func(t *testing.T) {
+		rep := withGit(t, &fakeGit{tagsErr: fmt.Errorf("git rusak")}, cur)
+		if rep.Unreleased["m"] {
+			t.Error("kegagalan membaca tag tidak boleh membuka kelonggaran")
+		}
+	})
+}

@@ -59,7 +59,7 @@ components:
           x-erp-filterable: true
         status:
           type: string
-          enum: [draft, deleted, need_approval, accepted, rejected, cancelled, done]
+          enum: [draft, deleted, pending_approval, accepted, rejected, cancelled, done]
           readOnly: true
           x-erp-classification: internal
           x-erp-field-group: general

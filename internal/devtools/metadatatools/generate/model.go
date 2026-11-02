@@ -21,8 +21,6 @@ var (
 	currencyRe    = regexp.MustCompile(`^[A-Z]{3}$`)
 	canonDecRe    = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 	canonIntRe    = regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`)
-	// goFieldNameReserved adalah anggota DTO yang tidak boleh ditimpa nama field.
-	goFieldNameReserved = map[string]bool{"Present": true}
 )
 
 // maxSafeInt adalah batas bilangan bulat aman (2^53-1), selaras evaluator.
@@ -473,7 +471,7 @@ func buildModel(res *resolve.Resolved, info *check.ResourceInfo) (*resModel, err
 		if gerr != nil {
 			return nil, inputErr("resource %s: %v", res.Key, gerr)
 		}
-		if goFieldNameReserved[gn] {
+		if f.Writable() && naming.GoDTOMembers[gn] {
 			return nil, inputErr("resource %s: nama field %q bertabrakan dengan anggota DTO", res.Key, f.Name)
 		}
 		if other, dup := goNames[gn]; dup {
@@ -572,21 +570,8 @@ func (m *resModel) writable() []*fld {
 	return out
 }
 
-// pascalValue mengubah nilai enum snake_case menjadi PascalCase ("net_15" menjadi "Net15"); "" bila nilai tidak
-// memenuhi pola enum (tidak ada konstanta dibuat untuk nilai seperti itu).
-func pascalValue(v string) string {
-	if !enumValueRe.MatchString(v) {
-		return ""
-	}
-	var sb strings.Builder
-	for _, w := range strings.Split(v, "_") {
-		if w == "" {
-			continue
-		}
-		sb.WriteString(strings.ToUpper(w[:1]) + w[1:])
-	}
-	return sb.String()
-}
+// pascalValue memakai naming.PascalEnumValue (satu sumber dengan metadata:check).
+func pascalValue(v string) string { return naming.PascalEnumValue(v) }
 
 // intText memformat bilangan bulat untuk keluaran; digunakan untuk batas yang sudah divalidasi.
 func intText(s string) (string, bool) {

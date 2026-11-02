@@ -108,13 +108,30 @@ lockWhen: `+lock+"\n")))
 	wantErr(t, doc("{field: qty, op: contains, value: \"1\"}"), CodeLockWhenNotSQL, "/lockWhen")
 	wantErr(t, doc("{field: calc, op: eq, value: 3}"), CodeLockWhenNotSQL, "/lockWhen")
 	wantErr(t, doc("{field: qty, op: lt, ref: total}"), CodeLockWhenNotSQL, "/lockWhen")
-	t.Run("resource non-dokumen tidak dibatasi ke SQL", func(t *testing.T) {
+	t.Run("resource non-dokumen ditolak (lockWhen hanya pada dokumen konkret)", func(t *testing.T) {
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  total: {type: decimal, precision: 18, scale: 2}\nlockWhen: {field: total, op: gt, value: \"10\"}\n")))
+		wantErr(t, rep, CodeLockWhenNotDocument, "/lockWhen")
+		noCode(t, rep, CodeLockWhenNotSQL)
+	})
+}
+
+func TestLockWhenOnlyOnConcreteDocuments(t *testing.T) {
+	t.Run("abstrak dengan lockWhen ditolak", func(t *testing.T) {
+		rep := single(t, f("m/blk.abstract.yaml", abstract("m.blk", "fields:\n  paid: {type: boolean, default: false}\nlockWhen: {field: paid, op: eq, value: true}\n")))
+		wantErr(t, rep, CodeLockWhenNotDocument, "/lockWhen")
+	})
+	t.Run("abstrak tanpa lockWhen yang menyertakan sdk:document lolos", func(t *testing.T) {
+		rep := single(t, f("m/blk.abstract.yaml", abstract("m.blk", "include:\n  - source: sdk:document\nfields:\n  paid: {type: boolean, default: false}\n")))
 		noErrors(t, rep)
+	})
+	t.Run("resource dokumen konkret boleh memperketat", func(t *testing.T) {
+		rep := single(t, f("m/d.resource.yaml", resource("m.d", "include:\n  - source: sdk:document\nfields:\n  paid: {type: boolean, default: false}\nlockWhen: {field: paid, op: eq, value: true}\n")))
+		noErrors(t, rep)
+		noCode(t, rep, CodeLockWhenNotDocument)
 	})
 }
 
 func TestGenerateCrudNotWithUnmanagedColumns(t *testing.T) {
-	rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  a: {type: text}\nunmanagedColumns:\n  - {name: secretCol, reason: tangan}\ngenerate: {crud: true}\n")))
+	rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  a: {type: text}\nunmanagedColumns:\n  - {name: secretCol, classification: highly_confidential, reason: tangan}\ngenerate: {crud: true}\n")))
 	wantErr(t, rep, CodeCrudWithUnmanaged, "/generate")
 }

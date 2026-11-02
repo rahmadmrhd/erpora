@@ -52,6 +52,10 @@ const DefaultBatch = 1000
 type Options struct {
 	// Batch adalah ukuran batch templat backfill (0 = DefaultBatch).
 	Batch int
+	// Unreleased berisi slug modul yang belum punya tag rilis (check.Report.Unreleased). Modul itu belum punya konsumen
+	// sehingga penghapusan kolom tidak tunduk pada deprecated, removeAfter, dan gerbang MAJOR (keputusan pemilik
+	// produk, 2 Nov 2026; Requirement 12.4); kerangka penghapusan tetap membawa penjaga data dan Down tidak dapat dibalik.
+	Unreleased map[string]bool
 }
 
 // Todo adalah satu butir yang perlu keputusan.
@@ -739,6 +743,9 @@ func (g *generator) render() {
 		body := "BEGIN RAISE EXCEPTION " + mustLiteral("migrasi tidak dapat dibalik: "+strings.ReplaceAll(strings.Join(rs, "; "), "%", "%%")) + "; END"
 		writeStmts(&sb, []stmt{{sql: "DO " + sqlgen.DollarQuote(body), block: true}}, g.res.NoTransaction)
 	} else {
+		if hasDestructiveDown(down) {
+			sb.WriteString(DownDevOnlyComment + "\n")
+		}
 		writeStmts(&sb, down, g.res.NoTransaction)
 	}
 	if len(g.res.Todos) > 0 {
@@ -769,6 +776,29 @@ func writeStmts(sb *strings.Builder, stmts []stmt, noTx bool) {
 		}
 		sb.WriteString(s.sql + ";\n")
 	}
+}
+
+// DownDevOnlyComment adalah komentar baku pada baris pertama Down yang berisi DROP sebagai pembalik operasi expand
+// (keputusan pemilik produk, 2 Nov 2026; K18, K32): Down hanya untuk development, produksi maju-saja. Down untuk operasi
+// contract (penghapusan di Up) tidak memakai komentar ini: ia ditandai TIDAK DAPAT DIBALIK (Requirement 12.8).
+const DownDevOnlyComment = "-- HANYA DEVELOPMENT: Down menghapus data; produksi maju-saja (expand → migrate → contract)"
+
+var (
+	sqlQuoted        = regexp.MustCompile(`'(?:[^']|'')*'`)
+	sqlDropStatement = regexp.MustCompile(`(?i)(^|[^a-z0-9_])DROP[[:space:]]+(TABLE|COLUMN|INDEX)([^a-z0-9_]|$)`)
+)
+
+// hasDestructiveDown menyatakan Down memuat DROP TABLE, COLUMN, atau INDEX aktif (pembalik operasi expand yang menghilangkan
+// data atau struktur yang dibuat Up). DROP CONSTRAINT, TRIGGER, dan FUNCTION murni tidak menghilangkan data sehingga tidak
+// diberi penanda "menghapus data".
+// (literal bertanda kutip diabaikan agar nilai enum bernama DROP tidak menjadi penyebab).
+func hasDestructiveDown(down []stmt) bool {
+	for _, s := range down {
+		if sqlDropStatement.MatchString(sqlQuoted.ReplaceAllString(s.sql, "''")) {
+			return true
+		}
+	}
+	return false
 }
 
 const reasonTriggerReplace = "badan pemicu lama tidak dapat dipulihkan otomatis"
@@ -818,8 +848,9 @@ func (g *generator) foldedIntoColumnRemoval(f diff.Finding) bool {
 }
 
 const (
-	reasonDrop   = "penghapusan kolom tidak dapat dibalik: data kolom hilang"
-	backupNotice = "BACKUP WAJIB sebelum migrasi MAJOR yang menghapus kolom (docs/module-sdk/lifecycle.md): penghapusan tidak dapat dibalik"
+	reasonDrop       = "penghapusan kolom tidak dapat dibalik: data kolom hilang"
+	backupNotice     = "BACKUP WAJIB sebelum migrasi MAJOR yang menghapus kolom (docs/module-sdk/lifecycle.md): penghapusan tidak dapat dibalik"
+	unreleasedNotice = "Modul belum punya tag rilis: penghapusan tidak tunduk pada deprecated, removeAfter, dan rilis MAJOR; penjaga data tetap berlaku dan penghapusan tidak dapat dibalik (data kolom hilang)"
 )
 
 // columnRemoval membangkitkan kerangka penghapusan kolom (Requirement 12.4, 12.8; K18, D-35): penjaga aktif yang
@@ -842,11 +873,16 @@ func (g *generator) columnRemoval(f diff.Finding, t *dbmodel.Table) error {
 		}
 	}
 	reason := "kolom di database tidak ada di metadata: hapus hanya pada rilis MAJOR setelah deprecated dan removeAfter, atau deklarasikan di metadata"
+	notice := backupNotice
+	if g.o.Unreleased[t.Module] {
+		reason = "kolom di database tidak ada di metadata: modul belum punya tag rilis (belum ada konsumen) sehingga boleh dihapus langsung tanpa deprecated, removeAfter, atau rilis MAJOR; tinjau lalu aktifkan DROP COLUMN, atau deklarasikan di metadata"
+		notice = unreleasedNotice
+	}
 	s, err := g.skeletonStep(f, reason, sug, "", false)
 	if err != nil {
 		return err
 	}
-	s.comment = append(s.comment, backupNotice)
+	s.comment = append(s.comment, notice)
 	s.irreversible = reasonDrop
 	if repl == nil {
 		s.comment = append(s.comment, "tanpa kolom pengganti (tidak ada field dengan migrateFrom ke kolom ini): pastikan data kolom tidak diperlukan")

@@ -209,6 +209,10 @@
           "patternProperties": { "^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$": { "$ref": "#/$defs/fieldPatch" } },
           "additionalProperties": false
         },
+        "reason": {
+          "allOf": [{ "$ref": "#/$defs/freeText" }, { "minLength": 1 }],
+          "description": "Alasan tertulis pelonggaran atas properti turunan; wajib bila set dipakai (diperiksa metadata:check, kode include_set_missing_reason)."
+        },
         "omit": { "type": "array", "maxItems": 200, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
         "add": { "$ref": "#/$defs/fieldMap" }
       },
@@ -307,9 +311,10 @@
     },
     "unmanagedColumn": {
       "type": "object",
-      "required": ["name", "reason"],
+      "required": ["name", "classification", "reason"],
       "properties": {
         "name": { "$ref": "#/$defs/identifier" },
+        "classification": { "type": "string", "maxLength": 32, "description": "Wajib highly_confidential (Requirement 2.9): unmanagedColumns hanya untuk kolom berklasifikasi itu; nilai lain ditolak metadata:check." },
         "reason": { "allOf": [{ "$ref": "#/$defs/freeText" }, { "minLength": 1 }] }
       },
       "additionalProperties": false

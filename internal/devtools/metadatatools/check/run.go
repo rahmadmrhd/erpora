@@ -35,7 +35,7 @@ type checker struct {
 
 // Run menjalankan semua pemeriksaan semantik pada Input dan mengembalikan laporan. Run tidak menulis apa pun.
 func Run(in Input) *Report {
-	rep := &Report{Resources: map[string]*ResourceInfo{}, ModuleDirs: map[string]string{}}
+	rep := &Report{Resources: map[string]*ResourceInfo{}, ModuleDirs: map[string]string{}, Unreleased: map[string]bool{}}
 	c := &checker{rep: rep, mods: map[string]*modCtx{}, eff: map[string]*effInfo{}, tables: naming.NewNamespace("skema database"), baselines: map[string]*resolve.Result{}}
 	cat := resolve.NewCatalog()
 	c.cat = cat
@@ -68,6 +68,8 @@ func Run(in Input) *Report {
 		}
 		c.checkResolved(r, mc)
 	}
+	c.checkGeneratedGoNames()
+	c.checkDerivedNames()
 	c.checkMigrationTodos(in.Modules)
 	c.checkReleaseBaselines(in)
 	c.resolvePendingMigrateFrom()
@@ -315,6 +317,8 @@ func (c *checker) checkResolved(r *resolve.Resolved, mc *modCtx) {
 	x.checkCrossModuleRequires()
 	x.checkAccessors()
 	x.checkFieldConditions()
+	x.checkLockWhenPlacement()
+	x.checkIncludeSetReasons()
 	if !x.isAbs {
 		x.checkRules()
 		x.checkLockWhen()

@@ -29,6 +29,7 @@ import (
 	"erpora/internal/devtools/gen"
 	"erpora/internal/devtools/metadatatools/check"
 	"erpora/internal/devtools/metadatatools/load"
+	"erpora/internal/devtools/metadatatools/naming"
 	"erpora/internal/devtools/metadatatools/resolve"
 	"erpora/internal/devtools/templates/resource"
 )
@@ -426,6 +427,23 @@ func buildModule(root string, cat docSource, mod *module, files map[string][]byt
 	}
 	if err := put(httpDir+"/meta_runtime.gen.go", hr); err != nil {
 		return nil, err
+	}
+	// Identifier Go bangkitan: aturan yang sama dengan metadata:check (naming.CheckGoPackage), ditegakkan juga di sini
+	// agar pembangkit tidak pernah menulis kode yang pasti gagal kompilasi (anggota DTO dan identifier tingkat paket).
+	var goRes []naming.GoResource
+	for _, m := range mod.resources {
+		gr := naming.GoResource{Key: m.Res.Key, Name: m.Name}
+		for _, f := range m.Fields {
+			gr.Fields = append(gr.Fields, naming.GoField{Name: f.Name, Enum: f.Enum, Writable: f.Writable()})
+		}
+		goRes = append(goRes, gr)
+	}
+	if cs := naming.CheckGoPackage(goRes); len(cs) > 0 {
+		msgs := make([]string, len(cs))
+		for i, c := range cs {
+			msgs[i] = c.Resource + ": " + c.Err.Error()
+		}
+		return nil, inputErr("identifier Go bangkitan bentrok: %s", strings.Join(msgs, "; "))
 	}
 	var omitted []string
 	var schemas []namedSchema

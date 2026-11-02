@@ -450,7 +450,7 @@ func TestDerive_UnmanagedColumns(t *testing.T) {
 fields:
   x: {type: integer, label: m.a.x}
 unmanagedColumns:
-  - {name: secretToken, reason: dikelola kode tulis tangan}
+  - {name: secretToken, classification: highly_confidential, reason: dikelola kode tulis tangan}
 `)))
 	tb := table(t, s, "m_as")
 	if len(tb.Unmanaged) != 1 || tb.Unmanaged[0] != "secret_token" {

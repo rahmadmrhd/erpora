@@ -190,6 +190,10 @@ type Report struct {
 	Resources map[string]*ResourceInfo
 	// ModuleDirs memetakan slug modul yang lolos pemeriksaan identitas ke direktorinya (modules/<dir>).
 	ModuleDirs map[string]string
+	// Unreleased berisi slug modul yang dipastikan belum punya tag rilis (modules/<dir>/vX.Y.Z); hanya terisi bila
+	// Input.Git tersedia dan tag terbaca. Modul itu belum punya konsumen sehingga penghapusan field tidak tunduk pada
+	// deprecated, removeAfter, dan gerbang MAJOR (keputusan pemilik produk, 2 Nov 2026; Requirement 12.4).
+	Unreleased map[string]bool
 }
 
 // Resource mengembalikan info turunan resource menurut kunci, nil bila tidak ada.

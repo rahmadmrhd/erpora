@@ -1,4 +1,4 @@
-CREATE FUNCTION "s"."m_docs_lock_fn"() RETURNS trigger LANGUAGE plpgsql AS $erpora2$
+CREATE FUNCTION "s"."m_docs_lock_fn"() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $erpora2$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD."status" IS DISTINCT FROM 'x$erpora$ ; DROP TABLE m_docs; -- $erpora1$' THEN

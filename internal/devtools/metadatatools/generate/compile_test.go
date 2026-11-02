@@ -1,9 +1,11 @@
 package generate
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -144,7 +146,7 @@ func TestGeneratedBodyLimitAndDepth(t *testing.T) {
 func TestGeneratedStatusTables(t *testing.T) {
 	s := domain.InvoiceSpec
 	if s.Lifecycle == nil || !s.Lifecycle.Allows(domain.InvoiceStatusDraft, domain.InvoiceStatusAccepted) ||
-		!s.Lifecycle.Allows(domain.InvoiceStatusDraft, domain.InvoiceStatusNeedApproval) ||
+		!s.Lifecycle.Allows(domain.InvoiceStatusDraft, domain.InvoiceStatusPendingApproval) ||
 		s.Lifecycle.Allows(domain.InvoiceStatusDraft, "submitted") || s.Lifecycle.Allows(domain.InvoiceStatusAccepted, domain.InvoiceStatusDraft) ||
 		s.Lifecycle.Allows(domain.InvoiceStatusRejected, domain.InvoiceStatusDraft) {
 		t.Errorf("tabel transisi lifecycle salah: %+v", s.Lifecycle)
@@ -238,4 +240,163 @@ func TestGeneratedCodeCompilesAndBehaves(t *testing.T) {
 			t.Errorf("pelanggaran %s di %s: %s", v.Rule, v.Package, v.Detail)
 		}
 	}
+}
+
+const keywordResource = `schemaVersion: "1"
+kind: resource
+key: fixturesales.keyword
+include:
+  - source: sdk:document
+fields:
+  type: {type: string, maxLength: 20, default: t, label: fixturesales.keyword.type}
+  order: {type: integer, minimum: 0, default: 0, label: fixturesales.keyword.order}
+  user: {type: string, maxLength: 40, nullable: true, label: fixturesales.keyword.user}
+  group: {type: enum, values: [a, b], default: a, label: fixturesales.keyword.group}
+  limit: {type: decimal, precision: 18, scale: 2, default: "0.00", label: fixturesales.keyword.limit}
+  default: {type: boolean, default: false, label: fixturesales.keyword.default}
+  left: {type: string, maxLength: 10, nullable: true, label: fixturesales.keyword.left}
+  class: {type: string, maxLength: 10, default: x, label: fixturesales.keyword.class}
+  let: {type: date, nullable: true, label: fixturesales.keyword.let}
+  func: {type: string, maxLength: 10, nullable: true, label: fixturesales.keyword.func}
+  select: {type: string, maxLength: 10, nullable: true, label: fixturesales.keyword.select}
+`
+
+const keywordBehaviorTest = `package httpapi
+
+import (
+	"context"
+	"testing"
+)
+
+func TestKeywordFieldsDecodeAndValidate(t *testing.T) {
+	w, r := post(` + "`" + `{"type":"a","order":3,"user":"u","group":"b","limit":"1.50","default":true,"left":"l","class":"c","let":"2026-01-01","func":"f","select":"s"}` + "`" + `)
+	d, err := DecodeKeywordCreate(w, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Type == nil || *d.Type != "a" || d.Order == nil || *d.Order != 3 || d.Default == nil || !*d.Default || d.Class == nil || d.Func == nil || d.Select == nil || d.Let == nil {
+		t.Fatalf("dto = %+v", d)
+	}
+	if err := d.Validate(context.Background()); err != nil {
+		t.Fatalf("seharusnya sah: %v", err)
+	}
+}
+`
+
+// findTSC mencari biner tsc workspace: node_modules/.bin di root (hoisted) lalu di packages/platform-web.
+func findTSC(repoRoot string) string {
+	name := "tsc"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	for _, dir := range []string{
+		filepath.Join(repoRoot, "node_modules", ".bin"),
+		filepath.Join(repoRoot, "packages", "platform-web", "node_modules", ".bin"),
+	} {
+		p := filepath.Join(dir, name)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+// TestKeywordNamedFieldsGenerateCompilableCode membuktikan bahwa field bernama kata kunci SQL, Go, dan TypeScript
+// (type, order, user, group, limit, default, left, class, let, func, select) menghasilkan kode Go yang kompilasi,
+// lolos vet, dan berperilaku benar, serta TypeScript yang lolos typecheck (keputusan pemilik produk, 2 Nov 2026).
+func TestKeywordNamedFieldsGenerateCompilableCode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("kompilasi modul fixture (lambat)")
+	}
+	root := testrepo.Copy(t, true)
+	writeFile(t, root, "modules/fixturesales/metadata/keyword.resource.yaml", keywordResource)
+	writeFile(t, root, "modules/fixturesales/web/package.json", `{"name":"@erpora/module-fixturesales"}`)
+	cat := fixtureCatalog(t, root)
+	if _, err := Generate(root, cat, Options{Checker: okChecker{}}); err != nil {
+		t.Fatal(err)
+	}
+	modDir := filepath.Join(root, "modules", "fixturesales")
+	writeFile(t, root, "modules/fixturesales/internal/presentation/http/behavior_test.go", behaviorTest)
+	writeFile(t, root, "modules/fixturesales/internal/presentation/http/keyword_behavior_test.go", keywordBehaviorTest)
+	goTool(t, modDir, "build", "./...")
+	goTool(t, modDir, "vet", "./...")
+	goTool(t, modDir, "test", "./...")
+
+	// TypeScript: typecheck keluaran dengan tsc milik workspace (dilewati bila belum terpasang).
+	repoRoot := testrepo.RepoRoot(t)
+	tsc := findTSC(repoRoot)
+	if tsc == "" {
+		if os.Getenv("ERP_REQUIRE_BUN") == "1" {
+			t.Fatal("ERP_REQUIRE_BUN=1 tetapi tsc tidak terpasang (jalankan bun install --frozen-lockfile): typecheck TypeScript tidak boleh dilewati")
+		}
+		t.Skip("tsc tidak terpasang: typecheck TypeScript dilewati")
+	}
+	paths, _ := json.Marshal(map[string][]string{
+		"@erpora/platform-web/metadata": {filepath.ToSlash(filepath.Join(repoRoot, "packages", "platform-web", "src", "metadata", "index.ts"))},
+	})
+	writeFile(t, root, "tsconfig.json", `{"compilerOptions":{"target":"ES2023","lib":["ES2023","DOM"],"module":"ESNext","moduleResolution":"bundler","strict":true,`+
+		`"noUncheckedIndexedAccess":true,"noEmit":true,"skipLibCheck":true,"isolatedModules":true,"types":[],"paths":`+string(paths)+`},`+
+		`"include":["modules/fixturesales/web/src/metadata/keyword.meta.gen.ts"]}`)
+	ts := readFile(t, root, "modules/fixturesales/web/src/metadata/keyword.meta.gen.ts")
+	if !strings.Contains(ts, `"class"`) || !strings.Contains(ts, `"default"`) {
+		t.Fatalf("TS bangkitan tidak memuat field kata kunci:\n%s", ts)
+	}
+	cmd := exec.Command(tsc, "-p", root) //nolint:gosec // biner tsc workspace; argumen dari tes
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("typecheck TS gagal: %v\n%s", err, out)
+	}
+}
+
+func simpleResource(name, fields string) string {
+	return "schemaVersion: \"1\"\nkind: resource\nkey: fixturesales." + name + "\ninclude:\n  - source: sdk:audit\nfields:\n" + fields
+}
+
+// Identifier Go bangkitan yang pasti bentrok ditolak sebelum kode ditulis: (a) field tulis bernama validate
+// (anggota DTO), (b) resource field, rule, status, resource (<Pascal>Spec sama dengan tipe runtime). Nama sah lain
+// yang mirip tetap menghasilkan kode yang kompilasi (keputusan pemilik produk, 2 Nov 2026).
+func TestGoIdentifierConflictsRejectedAndSimilarNamesCompile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("kompilasi modul fixture (lambat)")
+	}
+	for name, src := range map[string]string{
+		"validate": simpleResource("thing", "  validate: {type: string, maxLength: 5, label: fixturesales.thing.validate}\n"),
+		"present":  simpleResource("thing", "  present: {type: string, maxLength: 5, label: fixturesales.thing.present}\n"),
+		"field":    simpleResource("field", "  title: {type: string, maxLength: 5, label: fixturesales.field.title}\n"),
+		"rule":     simpleResource("rule", "  title: {type: string, maxLength: 5, label: fixturesales.rule.title}\n"),
+		"status":   simpleResource("status", "  title: {type: string, maxLength: 5, label: fixturesales.status.title}\n"),
+		"resource": simpleResource("resource", "  title: {type: string, maxLength: 5, label: fixturesales.resource.title}\n"),
+	} {
+		t.Run("ditolak "+name, func(t *testing.T) {
+			root := testrepo.Copy(t, false)
+			file := "thing"
+			if name != "validate" && name != "present" {
+				file = name
+			}
+			writeFile(t, root, "modules/fixturesales/metadata/"+file+".resource.yaml", src)
+			cat := fixtureCatalog(t, root)
+			_, err := Generate(root, cat, Options{Checker: okChecker{}})
+			if err == nil || !strings.Contains(err.Error(), "bentrok") && !strings.Contains(err.Error(), "bertabrakan dengan anggota DTO") {
+				t.Fatalf("seharusnya ditolak, err = %v", err)
+			}
+		})
+	}
+
+	root := testrepo.Copy(t, true)
+	for name, src := range map[string]string{
+		"fieldGroup": simpleResource("fieldGroup", "  validated: {type: string, maxLength: 5, nullable: true, label: fixturesales.fieldGroup.validated}\n  presenter: {type: string, maxLength: 5, nullable: true, label: fixturesales.fieldGroup.presenter}\n"),
+		"ruleSet":    simpleResource("ruleSet", "  fill: {type: string, maxLength: 5, nullable: true, label: fixturesales.ruleSet.fill}\n  spec: {type: string, maxLength: 5, nullable: true, label: fixturesales.ruleSet.spec}\n"),
+		"statusLog":  simpleResource("statusLog", "  validate2: {type: string, maxLength: 5, nullable: true, label: fixturesales.statusLog.validate2}\n"),
+		// field readOnly tidak ada di DTO: nama seperti anggota DTO lolos dan terkompilasi
+		"readOnlyDto": simpleResource("readOnlyDto", "  validate: {type: string, maxLength: 5, nullable: true, readOnly: true, label: fixturesales.readOnlyDto.validate}\n  present: {type: string, maxLength: 5, nullable: true, readOnly: true, label: fixturesales.readOnlyDto.present}\n  fillRenamePairs: {type: string, maxLength: 5, nullable: true, readOnly: true, label: fixturesales.readOnlyDto.fillRenamePairs}\n"),
+	} {
+		writeFile(t, root, "modules/fixturesales/metadata/"+name+".resource.yaml", src)
+	}
+	cat := fixtureCatalog(t, root)
+	if _, err := Generate(root, cat, Options{Checker: okChecker{}}); err != nil {
+		t.Fatal(err)
+	}
+	modDir := filepath.Join(root, "modules", "fixturesales")
+	goTool(t, modDir, "build", "./...")
+	goTool(t, modDir, "vet", "./...")
 }

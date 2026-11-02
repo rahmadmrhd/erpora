@@ -209,6 +209,11 @@ type Resolved struct {
 
 	Uses []Use
 
+	// IncludeSets mencatat tiap entri include milik dokumen ini yang memakai set (pelonggaran atas properti
+	// turunan) beserta reason tertulisnya (keputusan pemilik produk, 2 Nov 2026; Requirement 3.6, 14.5): dasar
+	// pemeriksaan include_set_missing_reason (check) dan sumber daftar pelonggaran yang dicetak metadata:check (commands). Tidak diwarisi lewat include.
+	IncludeSets []IncludeSet
+
 	// Lifecycle adalah siklus hidup status baku (K23) pada dokumen (menyertakan sdk:document); nil bila bukan
 	// dokumen. StatusAxes adalah sumbu status tambahan (K24) dari dokumen itu sendiri, berurutan menurut
 	// deklarasi; tidak diwarisi lewat include.
@@ -350,3 +355,15 @@ const (
 )
 
 func (o Origin) String() string { return fmt.Sprintf("%s:%d (%s %s)", o.File, o.Line, o.Doc, o.Op) }
+
+// IncludeSet adalah satu entri include yang memakai set. Reason kosong berarti kunci reason tidak ada atau hanya
+// berisi spasi (metadata:check menolaknya).
+type IncludeSet struct {
+	// Source adalah rujukan source pada entri include (mis. fixturesales.pricing).
+	Source string
+	// Fields adalah nama field sumber yang ditimpa, berurutan menurut deklarasi.
+	Fields []string
+	// Reason adalah alasan tertulis (sudah di-trim).
+	Reason string
+	Origin Origin
+}

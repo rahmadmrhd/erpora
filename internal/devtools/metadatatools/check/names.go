@@ -4,7 +4,9 @@ import (
 	"errors"
 	"sort"
 
+	"erpora/internal/devtools/metadatatools/dbmodel"
 	"erpora/internal/devtools/metadatatools/naming"
+	"erpora/internal/devtools/metadatatools/resolve"
 )
 
 func nameCode(c naming.Code) string { return "name_" + string(c) }
@@ -123,4 +125,91 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// checkDerivedNames menurunkan model database (dbmodel.Derive) dan melaporkan temuan penamaannya sebagai galat
+// metadata:check: nama tabel, kolom, constraint, serta nama pemicu dan fungsi bangkitan (pemicu penguncian,
+// penjaga TRUNCATE, pemicu anak, dan pivot; mis. <tabel>_truncate_lock_trg) yang melampaui 63 byte atau
+// bertabrakan (Requirement 1.7, 1.8), agar tidak baru gagal di metadata:diff dan metadata:migrate. Hanya
+// dijalankan bila pemeriksaan lain bersih karena model dari resource yang gagal diselesaikan tidak berarti.
+func (c *checker) checkDerivedNames() {
+	for _, p := range c.probs {
+		if p.Severity == SeverityError {
+			return
+		}
+	}
+	_, ps := dbmodel.Derive(c.res.Resources)
+	for _, p := range ps {
+		if p.Code == dbmodel.CodeName || p.Code == dbmodel.CodeCollision {
+			c.add(fromLoad(p, "", ""))
+		}
+	}
+}
+
+// checkGeneratedGoNames memeriksa identifier Go bangkitan seluruh resource tiap modul dengan aturan yang sama
+// dengan metadata:generate (naming.CheckGoPackage): field tulis bernama validate, present, atau fillRenamePairs
+// (anggota struct DTO), resource yang menghasilkan <Pascal>Spec yang sama dengan tipe runtime (field, rule, status,
+// resource), dan bentrok identifier tingkat paket antar resource. Dilaporkan dengan kode name_reserved_go.
+func (c *checker) checkGeneratedGoNames() {
+	byModule := map[string][]*resolve.Resolved{}
+	for _, r := range c.res.Resources {
+		if r.Module == resolve.SDKSlug || r.Kind != "resource" {
+			continue
+		}
+		byModule[r.Module] = append(byModule[r.Module], r)
+	}
+	for _, mod := range sortedKeys(byModule) {
+		var in []naming.GoResource
+		byKey := map[string]*resolve.Resolved{}
+		for _, r := range byModule[mod] {
+			_, name, err := naming.SplitResourceKey(r.Key)
+			if err != nil {
+				continue
+			}
+			byKey[r.Key] = r
+			gr := naming.GoResource{Key: r.Key, Name: name}
+			for _, f := range r.Fields {
+				gf := naming.GoField{Name: f.Name, Writable: fieldWritable(f)}
+				if vals, ok := f.Attrs["values"].([]any); ok {
+					for _, v := range vals {
+						if s, ok := v.(string); ok {
+							gf.Enum = append(gf.Enum, s)
+						}
+					}
+				}
+				gr.Fields = append(gr.Fields, gf)
+			}
+			for _, rel := range r.Relations {
+				typ, _ := rel.Attrs["type"].(string)
+				for _, col := range relationColumns(rel.Name, typ) {
+					gr.Fields = append(gr.Fields, naming.GoField{Name: col, Writable: true})
+				}
+			}
+			in = append(in, gr)
+		}
+		for _, cf := range naming.CheckGoPackage(in) {
+			r := byKey[cf.Resource]
+			ptr := "/key"
+			if cf.Field != "" {
+				ptr = "/fields/" + cf.Field
+			}
+			file, line, col := r.Source.File, 1, 1
+			if doc := c.cat.Doc(r.Key); doc != nil {
+				p := doc.Pos(ptr)
+				file, line, col = doc.File, p.Line, p.Column
+			}
+			c.add(Problem{Severity: SeverityError, File: file, Line: line, Column: col, Pointer: ptr, Code: nameCode(cf.Err.Code),
+				Message: cf.Err.Error(), Module: r.Module, Resource: r.Key})
+		}
+	}
+}
+
+// fieldWritable melaporkan apakah field menjadi masukan tulis pada DTO bangkitan: bukan readOnly dan bukan terhitung
+// (accessor). Aturan sama dengan generate (fld.Writable); hanya field tulis yang dapat bentrok dengan anggota DTO.
+func fieldWritable(f *resolve.Field) bool {
+	if ro, _ := f.Attrs["readOnly"].(bool); ro {
+		return false
+	}
+	_, computed := f.Attrs["accessor"].(map[string]any)
+	return !computed
 }

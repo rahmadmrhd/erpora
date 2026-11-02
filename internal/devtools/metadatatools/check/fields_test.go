@@ -132,7 +132,7 @@ func TestUnmanagedColumns(t *testing.T) {
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
   a: {type: text}
 unmanagedColumns:
-  - {name: idNumberEnc, reason: dikelola kode tulis tangan}
+  - {name: idNumberEnc, classification: highly_confidential, reason: dikelola kode tulis tangan}
 `)))
 		noErrors(t, rep)
 	})
@@ -140,7 +140,7 @@ unmanagedColumns:
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
   a: {type: text}
 unmanagedColumns:
-  - {name: a, reason: salah}
+  - {name: a, classification: highly_confidential, reason: salah}
 `)))
 		wantErr(t, rep, CodeUnmanagedColumnManaged, "/unmanagedColumns/0")
 	})
@@ -148,16 +148,33 @@ unmanagedColumns:
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
   a: {type: text}
 unmanagedColumns:
-  - {name: order, reason: kata tercadang}
+  - {name: xmin, classification: highly_confidential, reason: kolom sistem}
 `)))
 		wantErr(t, rep, CodeNameReservedSQL, "/unmanagedColumns/0")
+	})
+	t.Run("kata kunci SQL sah sebagai nama kolom unmanaged", func(t *testing.T) {
+		noErrors(t, single(t, f("m/r.resource.yaml", resource("m.r", `fields:
+  a: {type: text}
+unmanagedColumns:
+  - {name: order, classification: highly_confidential, reason: kolom tulis tangan}
+`))))
+	})
+	t.Run("classification selain highly_confidential ditolak", func(t *testing.T) {
+		for _, class := range []string{"confidential", "internal", "public", "secret"} {
+			rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  a: {type: text}\nunmanagedColumns:\n  - {name: secretCol, classification: "+class+", reason: tangan}\n")))
+			wantErr(t, rep, CodeUnmanagedColumnClassification, "/unmanagedColumns/0/classification")
+		}
+	})
+	t.Run("reason kosong setelah trim ditolak", func(t *testing.T) {
+		rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  a: {type: text}\nunmanagedColumns:\n  - {name: secretCol, classification: highly_confidential, reason: \"   \"}\n")))
+		wantErr(t, rep, CodeUnmanagedColumnReason, "/unmanagedColumns/0/reason")
 	})
 	t.Run("ganda", func(t *testing.T) {
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
   a: {type: text}
 unmanagedColumns:
-  - {name: secretCol, reason: satu}
-  - {name: secretCol, reason: dua}
+  - {name: secretCol, classification: highly_confidential, reason: satu}
+  - {name: secretCol, classification: highly_confidential, reason: dua}
 `)))
 		wantErr(t, rep, CodeUnmanagedColumnDuplicate, "/unmanagedColumns/1")
 	})
@@ -165,7 +182,7 @@ unmanagedColumns:
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
   a: {type: text}
 unmanagedColumns:
-  - {name: secretCol, reason: tangan}
+  - {name: secretCol, classification: highly_confidential, reason: tangan}
 generate: {crud: true}
 `)))
 		wantErr(t, rep, CodeCrudWithUnmanaged, "/generate")
@@ -185,15 +202,26 @@ func TestDeprecatedAndDescription(t *testing.T) {
 }
 
 func TestFieldNamingRules(t *testing.T) {
-	t.Run("kata tercadang SQL, Go, dan TypeScript", func(t *testing.T) {
-		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
+	t.Run("kata kunci SQL, Go, dan TypeScript lolos (2 Nov 2026)", func(t *testing.T) {
+		noErrors(t, single(t, f("m/r.resource.yaml", resource("m.r", `fields:
   order: {type: text}
   type: {type: text}
   class: {type: text}
+  user: {type: text}
+  group: {type: text}
+  limit: {type: text}
+  default: {type: text}
+  left: {type: text}
+  let: {type: text}
+`))))
+	})
+	t.Run("bentrokan nyata per target ditolak", func(t *testing.T) {
+		rep := single(t, f("m/r.resource.yaml", resource("m.r", `fields:
+  xmin: {type: text}
+  present: {type: text}
 `)))
-		wantErr(t, rep, CodeNameReservedSQL, "/fields/order")
-		wantErr(t, rep, CodeNameReservedGo, "/fields/type")
-		wantErr(t, rep, CodeNameReservedTS, "/fields/class")
+		wantErr(t, rep, CodeNameReservedSQL, "/fields/xmin")
+		wantErr(t, rep, CodeNameReservedGo, "/fields/present")
 	})
 	t.Run("tidak bolak-balik", func(t *testing.T) {
 		rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  iD: {type: text}\n")))
@@ -238,3 +266,74 @@ func TestAbstractFieldsAreCheckedToo(t *testing.T) {
 	rep := single(t, f("m/blk.abstract.yaml", abstract("m.blk", "export: true\nfields:\n  a: {type: integer, maxLength: 3}\n")))
 	wantErr(t, rep, CodeFieldAttrNotForType, "/fields/a")
 }
+
+// Seluruh metadata:check meloloskan dokumen yang memakai kata kunci SQL, Go, dan TypeScript sebagai nama field,
+// termasuk pada kolom turunan, indeks, dan lockWhen (keputusan pemilik produk, 2 Nov 2026).
+func TestKeywordNamedFieldsPassFullCheck(t *testing.T) {
+	rep := single(t, f("m/thing.resource.yaml", resource("m.thing", `include:
+  - source: sdk:document
+fields:
+  type: {type: string, maxLength: 20, default: t, index: true}
+  order: {type: integer, minimum: 0, default: 0, sortable: true, index: true}
+  user: {type: string, maxLength: 40, nullable: true, unique: true}
+  group: {type: enum, values: [a, b], default: a}
+  limit: {type: decimal, precision: 18, scale: 2, default: "0.00"}
+  default: {type: boolean, default: false}
+  left: {type: string, maxLength: 10, nullable: true}
+  class: {type: string, maxLength: 10, default: x}
+  let: {type: date, nullable: true}
+  tag: {type: string, nullable: true, accessor: {kind: stored, expr: {concat: [{field: type}, {lit: "-"}, {field: class}]}}}
+lockWhen: {field: class, op: eq, value: sealed}
+indexes:
+  - {fields: [type, order]}
+relations:
+  parentThing:
+    type: belongsTo
+    to: m.thing
+`)))
+	noErrors(t, rep)
+}
+
+// Identifier Go bangkitan yang pasti bentrok ditolak check dengan kode name_reserved_go (aturan sama dengan
+// metadata:generate): anggota DTO (validate, present, fillRenamePairs), <Pascal>Spec terhadap tipe runtime
+// (resource field, rule, status, resource), dan bentrok antar resource; nama sah lain tetap lolos.
+func TestGeneratedGoIdentifierConflicts(t *testing.T) {
+	t.Run("field validate, present, fillRenamePairs", func(t *testing.T) {
+		rep := single(t, f("m/r.resource.yaml", resource("m.r", "fields:\n  validate: {type: text, nullable: true}\n  present: {type: text, nullable: true}\n  fillRenamePairs: {type: text, nullable: true}\n")))
+		for _, n := range []string{"validate", "present", "fillRenamePairs"} {
+			wantErr(t, rep, CodeNameReservedGo, "/fields/"+n)
+		}
+	})
+	t.Run("field readOnly bernama validate, present, fillRenamePairs lolos", func(t *testing.T) {
+		rep := single(t, f("m/r.resource.yaml", resource("m.r", readOnlyDTOFields)))
+		noErrors(t, rep)
+	})
+	for _, name := range []string{"field", "rule", "status", "resource"} {
+		t.Run("resource "+name, func(t *testing.T) {
+			rep := single(t, f("m/"+name+".resource.yaml", resource("m."+name, "fields:\n  title: {type: text, nullable: true}\n")))
+			p := wantErr(t, rep, CodeNameReservedGo, "/key")
+			if !strings.Contains(p.Message, strings.ToUpper(name[:1])+name[1:]+"Spec") {
+				t.Errorf("pesan harus menyebut identifier bentrok: %q", p.Message)
+			}
+		})
+	}
+	t.Run("bentrok antar resource", func(t *testing.T) {
+		rep := run(t, mod(t, "m", nil,
+			f("m/invoice.resource.yaml", resource("m.invoice", "fields:\n  status: {type: enum, values: [spec, ok], default: ok}\n")),
+			f("m/invoiceStatus.resource.yaml", resource("m.invoiceStatus", "fields:\n  title: {type: text, nullable: true}\n"))))
+		wantErr(t, rep, CodeNameReservedGo, "/key")
+	})
+	t.Run("nama sah lain lolos", func(t *testing.T) {
+		rep := run(t, mod(t, "m", nil,
+			f("m/fieldGroup.resource.yaml", resource("m.fieldGroup", "fields:\n  validated: {type: text, nullable: true}\n")),
+			f("m/ruleSet.resource.yaml", resource("m.ruleSet", "fields:\n  presenter: {type: text, nullable: true}\n")),
+			f("m/statusLog.resource.yaml", resource("m.statusLog", "fields:\n  fill: {type: text, nullable: true}\n"))))
+		noErrors(t, rep)
+	})
+}
+
+// readOnlyDTOFields: field baca-saja tidak ada di DTO sehingga boleh bernama seperti anggota DTO.
+var readOnlyDTOFields = "fields:\n" +
+	"  validate: {type: text, nullable: true, readOnly: true}\n" +
+	"  present: {type: text, nullable: true, readOnly: true}\n" +
+	"  fillRenamePairs: {type: text, nullable: true, readOnly: true}\n"

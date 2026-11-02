@@ -91,7 +91,7 @@ func (x *rctx) checkRemoveAfterStatic(f *resolve.Field) {
 }
 
 // checkReleaseBaselines membandingkan metadata saat ini dengan metadata pada tag rilis terakhir tiap modul
-// (modules/<dir>/vX.Y.Z; modul tanpa tag dikecualikan): field yang ada pada rilis lalu hilang hanya sah bila rilis
+// (modules/<dir>/vX.Y.Z; modul tanpa tag belum punya konsumen sehingga tidak dibandingkan): field yang ada pada rilis lalu hilang hanya sah bila rilis
 // itu sudah menandainya deprecated dengan removeAfter dan versi manifest yang sedang disiapkan adalah rilis MAJOR
 // (lebih besar dari MAJOR rilis terakhir) yang memenuhi removeAfter (Requirement 12.1, 12.4, design D-15, D-35).
 // Kegagalan membaca baseline hanya berupa peringatan; contracts:breaking dan mesin selisih tetap pengaman kedua.
@@ -113,7 +113,10 @@ func (c *checker) checkReleaseBaselines(in Input) {
 		}
 		tag := contracttools.LatestReleaseTag(tags, prefix)
 		if tag == "" {
-			continue // modul tanpa tag rilis dikecualikan
+			// Modul tanpa tag rilis belum punya konsumen: field/kolom boleh dihapus langsung tanpa deprecated, removeAfter,
+			// atau gerbang MAJOR (keputusan pemilik produk, 2 Nov 2026; Requirement 12.4 hanya berlaku sejak ada tag rilis).
+			c.rep.Unreleased[m.Manifest.Slug] = true
+			continue
 		}
 		c.compareWithRelease(in, m, tag)
 	}

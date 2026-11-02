@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,8 +94,8 @@ func TestDocumentLock_ImmutabilityAndLifecycle(t *testing.T) {
 
 	bump := `, version = version + 1, updated_at = now()`
 	valid := [][2]string{
-		{"draft", "accepted"}, {"draft", "need_approval"},
-		{"need_approval", "accepted"}, {"need_approval", "rejected"},
+		{"draft", "accepted"}, {"draft", "pending_approval"},
+		{"pending_approval", "accepted"}, {"pending_approval", "rejected"},
 		{"accepted", "cancelled"}, {"accepted", "done"},
 	}
 	for _, p := range valid {
@@ -102,9 +103,9 @@ func TestDocumentLock_ImmutabilityAndLifecycle(t *testing.T) {
 		e.ok(p[0]+" -> "+p[1], `UPDATE fixturesales_invoices SET status = $2`+bump+` WHERE id = $1`, id, p[1])
 	}
 	invalid := [][2]string{
-		{"accepted", "draft"}, {"accepted", "need_approval"}, {"accepted", "rejected"}, {"accepted", "deleted"},
+		{"accepted", "draft"}, {"accepted", "pending_approval"}, {"accepted", "rejected"}, {"accepted", "deleted"},
 		{"cancelled", "accepted"}, {"cancelled", "draft"}, {"rejected", "accepted"}, {"rejected", "draft"},
-		{"done", "cancelled"}, {"done", "accepted"}, {"need_approval", "cancelled"}, {"need_approval", "done"},
+		{"done", "cancelled"}, {"done", "accepted"}, {"pending_approval", "cancelled"}, {"pending_approval", "done"},
 		{"deleted", "draft"}, {"deleted", "accepted"},
 	}
 	for _, p := range invalid {
@@ -216,15 +217,50 @@ func TestDocumentLock_ReplicaRoleDoesNotBypass(t *testing.T) {
 		sql  string
 		args []any
 	}{
-		"UPDATE dokumen terkunci": {`UPDATE fixturesales_invoices SET customer_name = 'bypass' WHERE id = $1`, []any{inv}},
-		"DELETE dokumen terkunci": {`DELETE FROM fixturesales_invoices WHERE id = $1`, []any{inv}},
-		"UPDATE anak terkunci":    {`UPDATE fixturesales_invoice_lines SET description = 'bypass' WHERE id = $1`, []any{line}},
-		"DELETE anak terkunci":    {`DELETE FROM fixturesales_invoice_lines WHERE id = $1`, []any{line}},
+		"UPDATE dokumen terkunci":   {`UPDATE fixturesales_invoices SET customer_name = 'bypass' WHERE id = $1`, []any{inv}},
+		"DELETE dokumen terkunci":   {`DELETE FROM fixturesales_invoices WHERE id = $1`, []any{inv}},
+		"UPDATE anak terkunci":      {`UPDATE fixturesales_invoice_lines SET description = 'bypass' WHERE id = $1`, []any{line}},
+		"DELETE anak terkunci":      {`DELETE FROM fixturesales_invoice_lines WHERE id = $1`, []any{line}},
+		"TRUNCATE dokumen terkunci": {`TRUNCATE fixturesales_invoices CASCADE`, nil},
 	} {
 		_, err := conn.ExecContext(ctx, q.sql, q.args...)
 		if sqlState(err) != "55000" {
 			t.Errorf("%s: pemicu harus tetap aktif pada session_replication_role=replica, err = %v", name, err)
 		}
+	}
+}
+
+// TRUNCATE tidak memicu pemicu baris; pemicu statement-level BEFORE TRUNCATE menolaknya bila ada baris terkunci
+// dan mengizinkannya bila tabel kosong atau semua baris masih draft (keputusan pemilik produk, 2 Nov 2026).
+func TestDocumentLock_Truncate(t *testing.T) {
+	e := newDocEnv(t)
+	count := func() int {
+		t.Helper()
+		var n int
+		if err := e.db.QueryRow(`SELECT count(*) FROM fixturesales_invoices`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	e.ok("TRUNCATE tabel kosong", `TRUNCATE fixturesales_invoices CASCADE`)
+	e.invoice("draft")
+	e.invoice("draft")
+	e.ok("TRUNCATE semua draft", `TRUNCATE fixturesales_invoices CASCADE`)
+	if n := count(); n != 0 {
+		t.Fatalf("setelah TRUNCATE sah, baris = %d", n)
+	}
+
+	e.invoice("draft")
+	for _, status := range []string{"accepted", "deleted", "pending_approval", "rejected", "cancelled", "done"} {
+		e.invoice(status)
+		e.locked("TRUNCATE dengan baris "+status, `TRUNCATE fixturesales_invoices CASCADE`)
+		e.locked("TRUNCATE (tanpa CASCADE) dengan baris "+status, `TRUNCATE fixturesales_invoices, fixturesales_invoice_lines, fixturesales_invoice_tags`)
+		exec(t, e.db, `ALTER TABLE fixturesales_invoices DISABLE TRIGGER fixturesales_invoices_lock_trg`)
+		exec(t, e.db, `DELETE FROM fixturesales_invoices WHERE status = $1`, status)
+		exec(t, e.db, `ALTER TABLE fixturesales_invoices ENABLE ALWAYS TRIGGER fixturesales_invoices_lock_trg`)
+	}
+	if n := count(); n != 1 {
+		t.Fatalf("TRUNCATE yang ditolak tidak boleh menghapus data: baris = %d, ingin 1", n)
 	}
 }
 
@@ -323,4 +359,299 @@ func TestDocumentLock_ChildInsertRacesWithSubmit(t *testing.T) {
 	if err := e.db.QueryRow(`SELECT count(*) FROM fixturesales_invoice_lines WHERE invoice_id = $1`, inv2).Scan(&n); err != nil || n != 1 {
 		t.Errorf("baris anak = %d, %v", n, err)
 	}
+}
+
+// Pemeriksaan pemicu merujuk tabel lewat skema pemicu sendiri (TG_TABLE_SCHEMA), bukan search_path: tabel bayangan
+// di pg_temp (yang dicari lebih dulu oleh PostgreSQL) dan skema kedua dengan search_path berbeda tidak dapat
+// membelokkan penjaga TRUNCATE maupun pemicu anak.
+func TestDocumentLock_TempShadowAndSearchPathDoNotBypass(t *testing.T) {
+	e := newDocEnv(t)
+	prod := e.product()
+	inv := e.invoice("accepted")
+	child := e.invoice("draft")
+	line := e.line(child, prod)
+	exec(t, e.db, `UPDATE fixturesales_invoices SET status = 'accepted' WHERE id = $1`, child)
+
+	ctx := context.Background()
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	connExec := func(q string, args ...any) error { _, err := conn.ExecContext(ctx, q, args...); return err }
+	var schema string
+	if err := conn.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	// Tabel bayangan di pg_temp: kosong, tanpa baris terkunci.
+	if err := connExec(`CREATE TEMP TABLE fixturesales_invoices (id uuid, status text)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := connExec(`TRUNCATE ` + schema + `.fixturesales_invoices CASCADE`); sqlState(err) != "55000" {
+		t.Errorf("TRUNCATE dengan bayangan pg_temp harus tetap ditolak, err = %v", err)
+	}
+	if err := connExec(`UPDATE `+schema+`.fixturesales_invoice_lines SET description = 'bypass' WHERE id = $1`, line); sqlState(err) != "55000" {
+		t.Errorf("UPDATE anak dengan induk bayangan pg_temp harus tetap ditolak, err = %v", err)
+	}
+	if err := connExec(`DELETE FROM ` + schema + `.fixturesales_invoices WHERE id = '` + inv + `'`); sqlState(err) != "55000" {
+		t.Errorf("DELETE dokumen terkunci, err = %v", err)
+	}
+	if err := connExec(`DROP TABLE pg_temp.fixturesales_invoices`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Skema kedua: baris terkunci hanya ada di skema "other"; sesi memakai search_path = skema pertama (tanpa
+	// baris terkunci). Penjaga harus memeriksa tabel yang di-TRUNCATE, bukan tabel pada search_path.
+	exec(t, e.db, `CREATE SCHEMA other`)
+	stmts, err := CreateSchema(fixtureSchema(t), Options{Schema: "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range stmts {
+		exec(t, e.db, s.SQL)
+	}
+	exec(t, e.db, `INSERT INTO other.fixturesales_invoices (id, number, issued_on, due_on, customer_name, total, customer_id, status)
+VALUES ($1::uuid, 'INV-OTHER', '2026-01-01', '2026-02-01', 'Acme', 100, $2, 'draft')`, uid(5000), uid(900))
+	exec(t, e.db, `UPDATE other.fixturesales_invoices SET status = 'accepted' WHERE id = $1`, uid(5000))
+	if err := connExec(`SET search_path = ` + schema); err != nil {
+		t.Fatal(err)
+	}
+	if err := connExec(`TRUNCATE other.fixturesales_invoices CASCADE`); sqlState(err) != "55000" {
+		t.Errorf("TRUNCATE skema lain dengan baris terkunci harus ditolak walau search_path menunjuk skema tanpa baris terkunci, err = %v", err)
+	}
+	var n int
+	if err := e.db.QueryRow(`SELECT count(*) FROM other.fixturesales_invoices`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("data skema lain tidak boleh hilang: n=%d err=%v", n, err)
+	}
+	// Sebaliknya: skema lain hanya berisi draft, skema aktif punya baris terkunci; TRUNCATE skema lain diizinkan.
+	exec(t, e.db, `ALTER TABLE other.fixturesales_invoices DISABLE TRIGGER fixturesales_invoices_lock_trg`)
+	exec(t, e.db, `DELETE FROM other.fixturesales_invoices`)
+	exec(t, e.db, `ALTER TABLE other.fixturesales_invoices ENABLE ALWAYS TRIGGER fixturesales_invoices_lock_trg`)
+	if err := connExec(`TRUNCATE other.fixturesales_invoices CASCADE`); err != nil {
+		t.Errorf("TRUNCATE skema lain yang kosong harus lolos walau skema aktif punya baris terkunci: %v", err)
+	}
+}
+
+// TRUNCATE tabel anak (baris embedded dan pivot): ditolak bila ada baris anak yang induknya terkunci, diizinkan
+// bila tabel kosong atau semua induknya draft; TRUNCATE ... CASCADE dari induk ikut ditolak (keputusan 2 Nov 2026).
+func TestDocumentLock_ChildTruncate(t *testing.T) {
+	e := newDocEnv(t)
+	prod := e.product()
+	tag := e.id()
+	exec(t, e.db, `INSERT INTO fixturesales_tags (id, name) VALUES ($1::uuid, 'tag-' || $1::text)`, tag)
+	count := func(table string) int {
+		t.Helper()
+		var n int
+		if err := e.db.QueryRow(`SELECT count(*) FROM ` + table).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	e.ok("TRUNCATE anak kosong", `TRUNCATE fixturesales_invoice_lines`)
+	e.ok("TRUNCATE pivot kosong", `TRUNCATE fixturesales_invoice_tags`)
+
+	draft := e.invoice("draft")
+	e.line(draft, prod)
+	exec(t, e.db, `INSERT INTO fixturesales_invoice_tags (invoice_id, tag_id) VALUES ($1, $2)`, draft, tag)
+	e.ok("TRUNCATE baris dengan semua induk draft", `TRUNCATE fixturesales_invoice_lines`)
+	e.ok("TRUNCATE pivot dengan semua induk draft", `TRUNCATE fixturesales_invoice_tags`)
+
+	// Induk terkunci (accepted) di antara induk draft.
+	e.line(draft, prod)
+	exec(t, e.db, `INSERT INTO fixturesales_invoice_tags (invoice_id, tag_id) VALUES ($1, $2)`, draft, tag)
+	locked := e.invoice("draft")
+	e.line(locked, prod)
+	exec(t, e.db, `INSERT INTO fixturesales_invoice_tags (invoice_id, tag_id) VALUES ($1, $2)`, locked, tag)
+	exec(t, e.db, `UPDATE fixturesales_invoices SET status = 'accepted', version = version + 1 WHERE id = $1`, locked)
+	e.locked("TRUNCATE baris dengan induk terkunci", `TRUNCATE fixturesales_invoice_lines`)
+	e.locked("TRUNCATE pivot dengan induk terkunci", `TRUNCATE fixturesales_invoice_tags`)
+	e.locked("TRUNCATE baris + pivot bersamaan", `TRUNCATE fixturesales_invoice_lines, fixturesales_invoice_tags`)
+	e.locked("TRUNCATE CASCADE dari induk", `TRUNCATE fixturesales_invoices CASCADE`)
+	if count("fixturesales_invoice_lines") != 2 || count("fixturesales_invoice_tags") != 2 || count("fixturesales_invoices") != 2 {
+		t.Fatalf("TRUNCATE yang ditolak tidak boleh menghapus data: lines=%d tags=%d invoices=%d",
+			count("fixturesales_invoice_lines"), count("fixturesales_invoice_tags"), count("fixturesales_invoices"))
+	}
+}
+
+// TRUNCATE tabel dokumen dan anaknya hanya sah pada READ COMMITTED: pada REPEATABLE READ dan SERIALIZABLE,
+// snapshot lama dapat tidak melihat baris yang baru terkunci (balapan), sehingga ditolak walau tabel kosong.
+func TestDocumentLock_TruncateRequiresReadCommitted(t *testing.T) {
+	e := newDocEnv(t)
+	prod := e.product()
+	truncates := []string{`TRUNCATE fixturesales_invoices CASCADE`, `TRUNCATE fixturesales_invoice_lines`, `TRUNCATE fixturesales_invoice_tags`}
+	tryTx := func(level sql.IsolationLevel, q string, beforeTruncate func()) error {
+		t.Helper()
+		tx, err := e.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: level})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err := tx.Exec(`SELECT count(*) FROM fixturesales_invoices`); err != nil { // snapshot diambil di sini
+			t.Fatal(err)
+		}
+		if beforeTruncate != nil {
+			beforeTruncate()
+		}
+		_, err = tx.Exec(q)
+		return err
+	}
+	for _, q := range truncates {
+		for name, level := range map[string]sql.IsolationLevel{"REPEATABLE READ": sql.LevelRepeatableRead, "SERIALIZABLE": sql.LevelSerializable} {
+			if err := tryTx(level, q, nil); sqlState(err) != "55000" || !strings.Contains(err.Error(), "read committed") {
+				t.Errorf("%s pada %s (tabel kosong) harus ditolak dengan pesan isolation level, err = %v", q, name, err)
+			}
+		}
+		if err := tryTx(sql.LevelReadCommitted, q, nil); err != nil {
+			t.Errorf("%s pada READ COMMITTED (tabel kosong) harus lolos: %v", q, err)
+		}
+	}
+
+	// Balapan: snapshot REPEATABLE READ diambil, lalu transaksi lain meng-commit dokumen terkunci beserta anaknya.
+	// Tanpa penjaga isolation level, TRUNCATE melihat tabel kosong dan lolos; kini ditolak.
+	racer := func() {
+		inv := e.invoice("draft")
+		e.line(inv, prod)
+		exec(t, e.db, `UPDATE fixturesales_invoices SET status = 'accepted', version = version + 1 WHERE id = `+"'"+inv+"'")
+	}
+	for _, q := range truncates {
+		err := tryTx(sql.LevelRepeatableRead, q, racer)
+		if sqlState(err) != "55000" {
+			t.Errorf("%s: snapshot lama pada REPEATABLE READ harus ditolak, err = %v", q, err)
+		}
+		// Bersihkan agar iterasi berikutnya dimulai dari tabel kosong yang sama.
+		exec(t, e.db, `ALTER TABLE fixturesales_invoices DISABLE TRIGGER fixturesales_invoices_lock_trg`)
+		exec(t, e.db, `ALTER TABLE fixturesales_invoice_lines DISABLE TRIGGER fixturesales_invoice_lines_invoice_id_lock_trg`)
+		exec(t, e.db, `DELETE FROM fixturesales_invoice_lines`)
+		exec(t, e.db, `DELETE FROM fixturesales_invoices`)
+		exec(t, e.db, `ALTER TABLE fixturesales_invoices ENABLE ALWAYS TRIGGER fixturesales_invoices_lock_trg`)
+		exec(t, e.db, `ALTER TABLE fixturesales_invoice_lines ENABLE ALWAYS TRIGGER fixturesales_invoice_lines_invoice_id_lock_trg`)
+	}
+	// Dokumen terkunci yang sudah terlihat tetap ditolak pada READ COMMITTED (perilaku normal).
+	racer()
+	if err := tryTx(sql.LevelReadCommitted, `TRUNCATE fixturesales_invoices CASCADE`, nil); sqlState(err) != "55000" {
+		t.Errorf("READ COMMITTED dengan baris terkunci harus ditolak, err = %v", err)
+	}
+}
+
+// Fungsi pemicu bangkitan memakai SET search_path = pg_catalog, pg_temp (keputusan pemilik produk, 2 Nov 2026):
+// skema "evil" berisi format() dan current_setting() tiruan, dan search_path sesi menaruhnya paling depan. Tanpa
+// SET pada fungsi (kontrol negatif: RESET search_path), tiruan itu membuat TRUNCATE dokumen, TRUNCATE anak, INSERT
+// anak ke induk terkunci, dan penjaga isolation level lolos; dengan SET semuanya tetap ditolak. UPDATE dan DELETE baris
+// terkunci ditolak di kedua keadaan (tidak bergantung pada fungsi tiruan).
+func TestDocumentLock_EvilSearchPathSchemaDoesNotBypass(t *testing.T) {
+	e := newDocEnv(t)
+	prod := e.product()
+	lockedInv := e.invoice("accepted")
+	parent := e.invoice("draft")
+	e.line(parent, prod)
+	exec(t, e.db, `UPDATE fixturesales_invoices SET status = 'accepted' WHERE id = $1`, parent) // baris anak di bawah induk terkunci
+
+	exec(t, e.db, `CREATE SCHEMA evil`)
+	for _, sig := range []string{"name, name", "name, text", "name, name, name, text", "name, name, name, name", "name", "text", "text, text"} {
+		exec(t, e.db, `CREATE FUNCTION evil.format(text, `+sig+`) RETURNS text LANGUAGE sql AS $$ SELECT 'SELECT false'::text $$`)
+	}
+	exec(t, e.db, `CREATE FUNCTION evil.current_setting(text) RETURNS text LANGUAGE sql AS $$ SELECT 'read committed'::text $$`)
+
+	ctx := context.Background()
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	var schema string
+	if err := conn.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	// Satu pernyataan per transaksi yang selalu di-rollback (data uji tetap utuh), search_path jahat lokal transaksi.
+	try := func(level sql.IsolationLevel, q string, args ...any) error {
+		t.Helper()
+		tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: level})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err := tx.ExecContext(ctx, `SET LOCAL search_path = evil, pg_catalog, public`); err != nil {
+			t.Fatal(err)
+		}
+		_, err = tx.ExecContext(ctx, q, args...)
+		return err
+	}
+	insertChild := strings.Replace(insertLine, "fixturesales_invoice_lines", schema+".fixturesales_invoice_lines", 1)
+	type probe struct {
+		name         string
+		level        sql.IsolationLevel
+		q            string
+		args         []any
+		bypassNoSet  bool // lolos bila fungsi tanpa SET search_path (membuktikan probe efektif)
+		wantRejected bool
+	}
+	probes := []probe{
+		{"TRUNCATE dokumen CASCADE", sql.LevelReadCommitted, `TRUNCATE ` + schema + `.fixturesales_invoices CASCADE`, nil, true, true},
+		{"TRUNCATE anak", sql.LevelReadCommitted, `TRUNCATE ` + schema + `.fixturesales_invoice_lines`, nil, true, true},
+		{"TRUNCATE pivot", sql.LevelReadCommitted, `TRUNCATE ` + schema + `.fixturesales_invoice_tags`, nil, true, false},
+		{"TRUNCATE dokumen REPEATABLE READ", sql.LevelRepeatableRead, `TRUNCATE ` + schema + `.fixturesales_invoices CASCADE`, nil, true, true},
+		{"TRUNCATE anak SERIALIZABLE", sql.LevelSerializable, `TRUNCATE ` + schema + `.fixturesales_invoice_lines`, nil, true, true},
+		{"INSERT anak ke induk terkunci", sql.LevelReadCommitted, insertChild, []any{e.id(), lockedInv, prod}, true, true},
+		{"UPDATE baris terkunci", sql.LevelReadCommitted, `UPDATE ` + schema + `.fixturesales_invoices SET customer_name = 'bypass' WHERE id = '` + lockedInv + `'`, nil, false, true},
+		{"DELETE baris terkunci", sql.LevelReadCommitted, `DELETE FROM ` + schema + `.fixturesales_invoices WHERE id = '` + lockedInv + `'`, nil, false, true},
+		{"DELETE anak di bawah induk terkunci", sql.LevelReadCommitted, `DELETE FROM ` + schema + `.fixturesales_invoice_lines`, nil, true, true},
+	}
+	assertAll := func(withSet bool) {
+		t.Helper()
+		for _, p := range probes {
+			err := try(p.level, p.q, p.args...)
+			switch {
+			case !p.wantRejected: // tabel kosong: TRUNCATE lolos pada READ COMMITTED
+				if err != nil {
+					t.Errorf("%s: harus lolos: %v", p.name, err)
+				}
+			case withSet || !p.bypassNoSet:
+				if sqlState(err) != "55000" {
+					t.Errorf("%s (dengan SET search_path pada fungsi): harus ditolak SQLSTATE 55000, err = %v", p.name, err)
+				}
+			default: // kontrol negatif
+				if err != nil {
+					t.Errorf("%s (kontrol tanpa SET): probe harus berhasil membypass, err = %v", p.name, err)
+				}
+			}
+		}
+	}
+	assertAll(true)
+
+	// Setiap fungsi pemicu bangkitan membawa proconfig search_path tetap.
+	rows, err := e.db.Query(`SELECT p.proname, COALESCE(array_to_string(p.proconfig, ','), '')
+FROM pg_proc p JOIN pg_trigger t ON t.tgfoid = p.oid JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = $1 AND NOT t.tgisinternal ORDER BY 1`, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fns []string
+	for rows.Next() {
+		var name, cfg string
+		if err := rows.Scan(&name, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		if cfg != "search_path=pg_catalog, pg_temp" {
+			t.Errorf("fungsi %s: proconfig = %q", name, cfg)
+		}
+		fns = append(fns, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	rows.Close()
+	if len(fns) < 6 {
+		t.Fatalf("fungsi pemicu yang diperiksa terlalu sedikit: %v", fns)
+	}
+
+	// Kontrol negatif: tanpa SET search_path probe yang sama berhasil membypass (bukti probe efektif).
+	for _, fn := range fns {
+		exec(t, e.db, `ALTER FUNCTION `+schema+`.`+fn+`() RESET search_path`)
+	}
+	assertAll(false)
+	for _, fn := range fns {
+		exec(t, e.db, `ALTER FUNCTION `+schema+`.`+fn+`() SET search_path = pg_catalog, pg_temp`)
+	}
+	assertAll(true)
 }

@@ -253,6 +253,16 @@ func TestDuplicateFieldNames(t *testing.T) {
 			t.Fatal("set tidak diterapkan")
 		}
 	})
+	t.Run("set mencatat reason di model (IncludeSets)", func(t *testing.T) {
+		r := mustResolve(t, mk("include:\n  - {source: m.a, reason: \"  Nama boleh kosong  \", set: {name: {nullable: true}}}\n  - {source: m.b, prefix: shipping}\n"), "m.r")
+		if len(r.IncludeSets) != 1 {
+			t.Fatalf("IncludeSets = %+v", r.IncludeSets)
+		}
+		is := r.IncludeSets[0]
+		if is.Source != "m.a" || is.Reason != "Nama boleh kosong" || len(is.Fields) != 1 || is.Fields[0] != "name" || is.Origin.Line == 0 {
+			t.Errorf("IncludeSet = %+v", is)
+		}
+	})
 }
 
 func TestOverridesCannotLoosen(t *testing.T) {

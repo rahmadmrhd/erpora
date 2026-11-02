@@ -409,3 +409,40 @@ func TestMakeModule_HasMetadataFlag(t *testing.T) {
 		t.Fatalf("flag --metadata harus ada dengan bawaan false: %+v", f)
 	}
 }
+
+func TestMetadataCheck_PrintsIncludeSetRelaxationsWithReason(t *testing.T) {
+	fixtureRepo(t)
+	out, err := runMetadata(t, "metadata:check")
+	if err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		`pelonggaran include set: fixturesales.invoice <- fixturesales.pricing field=[taxRate] reason="Pajak hanya wajib bila faktur kena pajak"`,
+		`pelonggaran include set: fixturesales.invoice <- fixturecore.address field=[postalCode] reason="Kode pos hanya wajib bila dikirim ke pelanggan"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("keluaran tidak memuat %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "invoice.resource.yaml:") {
+		t.Errorf("pelonggaran tanpa lokasi berkas:baris:\n%s", out)
+	}
+}
+
+func TestMetadataCheck_PrintsIncludeSetRelaxationsOfModuleAbstracts(t *testing.T) {
+	dir := fixtureRepo(t)
+	abs := filepath.Join(dir, "modules", "fixturesales", "metadata", "pricingPlus.abstract.yaml")
+	src := "schemaVersion: \"1\"\nkind: abstract\nkey: fixturesales.pricingPlus\ndescription: Abstrak turunan pricing dengan pelonggaran.\n" +
+		"include:\n  - source: fixturesales.pricing\n    reason: Pajak khusus paket plus\n    set:\n      taxRate:\n        requiredWhen: { field: taxable, op: eq, value: true }\n"
+	if err := os.WriteFile(abs, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runMetadata(t, "metadata:check") // galat lain (taxable tidak ada di abstrak) tidak menghalangi laporan
+	want := `pelonggaran include set: fixturesales.pricingPlus <- fixturesales.pricing field=[taxRate] reason="Pajak khusus paket plus"`
+	if !strings.Contains(out, want) {
+		t.Errorf("keluaran tidak memuat pelonggaran abstrak %q:\n%s", want, out)
+	}
+	if !strings.Contains(out, "pricingPlus.abstract.yaml:") {
+		t.Errorf("pelonggaran abstrak tanpa lokasi berkas:baris:\n%s", out)
+	}
+}

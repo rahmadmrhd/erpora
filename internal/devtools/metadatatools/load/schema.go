@@ -87,6 +87,9 @@ func collect(ve *jsonschema.ValidationError, add func(ptr, msg string)) {
 			msg := fmt.Sprintf("properti %q tidak dikenal", name)
 			if !naming.IdentifierRegexp().MatchString(name) && !strings.Contains(name, ".") {
 				msg += " (atau bukan nama camelCase ketat)"
+				if s := naming.SuggestCamel(name); s != name && naming.IdentifierRegexp().MatchString(s) {
+					msg += fmt.Sprintf("; huruf kapital berurutan tidak diizinkan, tulis akronim sebagai kata biasa: %s, bukan %s", s, name)
+				}
 			}
 			add(base+"/"+escapePointer(name), msg)
 		}

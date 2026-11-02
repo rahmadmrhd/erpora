@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"erpora/internal/app"
 	"erpora/internal/devtools/metadatatools/check"
 	"erpora/internal/devtools/metadatatools/generate"
+	"erpora/internal/devtools/metadatatools/resolve"
 )
 
 // Exit code perintah metadata:* (selaras perintah i18n): 0 sukses; 2 galat validasi; 3 prasyarat gagal
@@ -61,6 +63,7 @@ func newMetadataCheck() *cobra.Command {
 			resources := 0
 			if rep.Resolved != nil {
 				resources = len(rep.Resolved.Resources)
+				writeIncludeRelaxations(c.OutOrStdout(), rep.Resolved.Resources, rep.Resolved.Abstracts)
 			}
 			fmt.Fprintf(c.OutOrStdout(), "metadata:check: %d resource diperiksa, %d galat, %d peringatan\n", resources, nErr, nWarn)
 			if nErr > 0 {
@@ -157,4 +160,30 @@ func newMetadataGenerate() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "hanya bandingkan dengan disk; tidak menulis, gagal bila ada selisih")
 	return cmd
+}
+
+// writeIncludeRelaxations mencetak setiap pelonggaran include set (resource, source, field, reason) agar
+// pelonggaran atas properti turunan tampil di keluaran metadata:check (keputusan pemilik produk, 2 Nov 2026;
+// K27). Berlaku untuk resource dan abstrak modul (IncludeSets tidak diwariskan lewat include, jadi tiap
+// dokumen dicetak sendiri); urutan mengikuti kunci dokumen lalu urutan deklarasi. Entri tanpa reason tetap
+// tercetak (galat include_set_missing_reason dilaporkan terpisah oleh check).
+func writeIncludeRelaxations(w io.Writer, docs ...[]*resolve.Resolved) {
+	var all []*resolve.Resolved
+	for _, d := range docs {
+		all = append(all, d...)
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].Key < all[j].Key })
+	for _, r := range all {
+		if r.Module == resolve.SDKSlug {
+			continue // dokumen SDK dikelola platform dan tidak diperiksa modul
+		}
+		for _, is := range r.IncludeSets {
+			reason := is.Reason
+			if reason == "" {
+				reason = "(tanpa reason)"
+			}
+			fmt.Fprintf(w, "pelonggaran include set: %s <- %s field=[%s] reason=%q (%s:%d)\n",
+				r.Key, is.Source, strings.Join(is.Fields, ","), reason, is.Origin.File, is.Origin.Line)
+		}
+	}
 }

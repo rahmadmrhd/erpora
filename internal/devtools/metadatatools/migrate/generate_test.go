@@ -275,6 +275,10 @@ func TestGenerate_Triggers(t *testing.T) {
 	up, down := section(t, r.SQL)
 	contains(t, up, "-- +goose StatementBegin", `CREATE FUNCTION "m_docs_lock_fn"()`, "-- +goose StatementEnd", `CREATE TRIGGER "m_docs_lock_trg" BEFORE DELETE OR UPDATE ON "m_docs"`)
 	contains(t, down, `DROP TRIGGER "m_docs_lock_trg" ON "m_docs"`, `DROP FUNCTION "m_docs_lock_fn"()`)
+	r = runGen(t, model, fnd(diff.KindTriggerMissing, "m_docs", "m_docs_truncate_lock_trg"))
+	up, down = section(t, r.SQL)
+	contains(t, up, `CREATE FUNCTION "m_docs_truncate_lock_fn"()`, `CREATE TRIGGER "m_docs_truncate_lock_trg" BEFORE TRUNCATE ON "m_docs" FOR EACH STATEMENT`, `ENABLE ALWAYS TRIGGER "m_docs_truncate_lock_trg"`)
+	contains(t, down, `DROP TRIGGER "m_docs_truncate_lock_trg" ON "m_docs"`, `DROP FUNCTION "m_docs_truncate_lock_fn"()`)
 	r = runGen(t, model, fnd(diff.KindTriggerDisabled, "m_docs", "m_docs_lock_trg"))
 	up, down = section(t, r.SQL)
 	contains(t, up, `ALTER TABLE "m_docs" ENABLE ALWAYS TRIGGER "m_docs_lock_trg"`)
@@ -349,4 +353,106 @@ func TestGenerate_UniqueOnExistingColumnIsSkeleton(t *testing.T) {
 		t.Fatalf("unique pada kolom ada harus kerangka: %+v", r)
 	}
 	contains(t, mustUp(t, r.SQL), `-- ALTER TABLE "m_things" ADD CONSTRAINT "m_things_code_key" UNIQUE ("code")`)
+}
+
+// Down yang berisi DROP sebagai pembalik operasi expand diberi komentar baku di baris pertama (keputusan pemilik
+// produk, 2 Nov 2026); Down operasi contract tetap ditandai TIDAK DAPAT DIBALIK tanpa DROP aktif.
+func TestGenerate_DownDevOnlyComment(t *testing.T) {
+	firstDownLine := func(sql string) string {
+		_, down := section(t, sql)
+		return strings.SplitN(down, "\n", 2)[0]
+	}
+	const want = "-- HANYA DEVELOPMENT: Down menghapus data; produksi maju-saja (expand → migrate → contract)"
+	if DownDevOnlyComment != want {
+		t.Fatalf("komentar baku = %q", DownDevOnlyComment)
+	}
+
+	t.Run("kolom baru (DROP COLUMN pada Down)", func(t *testing.T) {
+		r := runGen(t, thingModel(t), fnd(diff.KindColumnMissing, "m_things", "note"))
+		_, down := section(t, r.SQL)
+		contains(t, down, `DROP COLUMN "note"`)
+		if got := firstDownLine(r.SQL); got != want {
+			t.Errorf("baris pertama Down = %q", got)
+		}
+	})
+	t.Run("tabel baru (DROP TABLE pada Down)", func(t *testing.T) {
+		r := runGen(t, thingModel(t), fnd(diff.KindTableMissing, "m_things", ""))
+		if got := firstDownLine(r.SQL); got != want {
+			t.Errorf("baris pertama Down = %q", got)
+		}
+	})
+	t.Run("indeks baru (DROP INDEX pada Down)", func(t *testing.T) {
+		model := modelOf(t, f("m/a.resource.yaml", resourceDoc("m.a", "fields:\n  n: {type: integer, index: true, label: m.a.n}\n")))
+		r := runGen(t, model, fnd(diff.KindIndexMissing, "m_as", "m_as_n_idx"))
+		_, down := section(t, r.SQL)
+		contains(t, down, "DROP INDEX")
+		if got := firstDownLine(r.SQL); got != want {
+			t.Errorf("baris pertama Down = %q", got)
+		}
+	})
+	t.Run("pemicu baru (DROP TRIGGER/FUNCTION murni) tidak diberi penanda menghapus data", func(t *testing.T) {
+		r := runGen(t, lockedModel(t), fnd(diff.KindTriggerMissing, "m_docs", "m_docs_lock_trg"))
+		_, down := section(t, r.SQL)
+		contains(t, down, `DROP TRIGGER`, `DROP FUNCTION`)
+		if strings.Contains(down, "HANYA DEVELOPMENT") {
+			t.Errorf("DROP TRIGGER/FUNCTION tidak menghilangkan data, tidak perlu penanda:\n%s", down)
+		}
+	})
+	t.Run("constraint baru (DROP CONSTRAINT murni) tidak diberi penanda", func(t *testing.T) {
+		if hasDestructiveDown([]stmt{{sql: `ALTER TABLE "t" DROP CONSTRAINT "c"`}}) {
+			t.Error("DROP CONSTRAINT murni tidak boleh memicu penanda")
+		}
+	})
+	t.Run("Down tanpa DROP tidak diberi komentar", func(t *testing.T) {
+		r := runGen(t, thingModel(t), diff.Finding{Kind: diff.KindColumnDefault, Table: "m_things", Object: "kind", Expected: "'a'::text", Actual: ""})
+		_, down := section(t, r.SQL)
+		// DROP DEFAULT adalah pembalik yang tidak menghapus data.
+		if strings.Contains(down, "HANYA DEVELOPMENT") {
+			t.Errorf("Down tanpa penghapusan data tidak boleh diberi komentar:\n%s", down)
+		}
+	})
+	t.Run("operasi contract tetap tidak dapat dibalik", func(t *testing.T) {
+		r := runGen(t, thingModel(t), diff.Finding{Kind: diff.KindColumnExtra, Table: "m_things", Object: "legacy", Actual: "text"})
+		_, down := section(t, r.SQL)
+		contains(t, down, "TIDAK DAPAT DIBALIK", "RAISE EXCEPTION")
+		if strings.Contains(r.SQL, "HANYA DEVELOPMENT") || !r.Irreversible {
+			t.Errorf("Down contract tidak boleh diberi komentar dev-only dan tetap tidak dapat dibalik:\n%s", r.SQL)
+		}
+	})
+	t.Run("nilai literal berisi kata DROP tidak memicu komentar", func(t *testing.T) {
+		if hasDestructiveDown([]stmt{{sql: `ALTER TABLE "t" ALTER COLUMN "c" SET DEFAULT 'drop table x'`}}) {
+			t.Error("literal terkutip harus diabaikan")
+		}
+		if !hasDestructiveDown([]stmt{{sql: `drop   table "t"`}}) {
+			t.Error("DROP TABLE harus terdeteksi tanpa peduli huruf besar dan spasi")
+		}
+	})
+}
+
+// Penghapusan kolom pada modul tanpa tag rilis (belum ada konsumen): pesan tidak menuntut deprecated/removeAfter/
+// MAJOR, penjaga data dan Down tidak-dapat-dibalik tetap; modul bertag tetap ketat (keputusan 2 Nov 2026).
+func TestGenerate_ColumnRemovalUnreleasedVsReleased(t *testing.T) {
+	finding := diff.Finding{Kind: diff.KindColumnExtra, Table: "m_things", Object: "legacy", Actual: "text"}
+	gen := func(unreleased bool) *Result {
+		t.Helper()
+		r, err := Generate(report(finding), thingModel(t), Options{Unreleased: map[string]bool{"m": unreleased}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	for _, unreleased := range []bool{true, false} {
+		r := gen(unreleased)
+		_, down := section(t, r.SQL)
+		contains(t, down, "TIDAK DAPAT DIBALIK", "RAISE EXCEPTION")
+		if !r.Irreversible || len(r.Todos) != 1 {
+			t.Errorf("unreleased=%v: hasil = %+v", unreleased, r)
+		}
+	}
+	rel, unrel := gen(false), gen(true)
+	contains(t, rel.SQL, "hapus hanya pada rilis MAJOR setelah deprecated dan removeAfter", "BACKUP WAJIB")
+	contains(t, unrel.SQL, "belum punya tag rilis", "boleh dihapus langsung")
+	if strings.Contains(unrel.SQL, "hapus hanya pada rilis MAJOR") {
+		t.Errorf("modul tanpa tag tidak boleh dituntut MAJOR/removeAfter:\n%s", unrel.SQL)
+	}
 }

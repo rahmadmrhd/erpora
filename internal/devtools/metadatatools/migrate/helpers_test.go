@@ -116,8 +116,8 @@ func lockedModel(t testing.TB) *dbmodel.Schema {
 	t.Helper()
 	m := modelOf(t, f("m/doc.resource.yaml", resourceDoc("m.doc", "include:\n  - source: sdk:document\nfields:\n  n: {type: integer, label: m.doc.n}\n")))
 	tb := m.Table("m_docs")
-	if tb == nil || tb.Lock == nil || len(tb.Triggers) != 1 {
-		t.Fatal("m_docs harus punya lockWhen dan satu pemicu penguncian bangkitan")
+	if tb == nil || tb.Lock == nil || len(tb.Triggers) != 2 {
+		t.Fatal("m_docs harus punya lockWhen serta pemicu penguncian dan penjaga TRUNCATE bangkitan")
 	}
 	return m
 }
