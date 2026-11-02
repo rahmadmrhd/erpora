@@ -21,227 +21,227 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
     - Dependensi baru wajib dipin, lolos `go mod verify`/`bun audit`, dan dicatat lisensi serta alasannya; pustaka yang menambah dependensi besar ditanyakan dulu ke pemilik produk.
     - _Requirements: 1.2, 1.8, 4.4, 7.1_
 
-- [ ] 2. Skema, pemuat aman, dan penamaan (Kelas beban: Sonnet)
-  - [ ] 2.1 Tulis test skema dan pemuat (merah dulu)
+- [x] 2. Skema, pemuat aman, dan penamaan (Kelas beban: Sonnet)
+  - [x] 2.1 Tulis test skema dan pemuat (merah dulu)
     - Tabel uji pelanggaran skema (`kind`, `schemaVersion`, kunci tak dikenal, tipe tak sah) dan batas ukuran: > 200 field, > 32 node atau kedalaman > 4 pada kondisi, > 16 relasi, > 100 nilai `in`/enum, `pattern` > 200 karakter. YAML berbahaya: alias bomb, kedalaman berlebih, berkas > 256 KB, tag kustom. Berkas tak boleh memuat fragmen SQL, URL, atau kode (nilai hanya data). `metadata:check` melaporkan semua pelanggaran dengan berkas dan baris tanpa menulis apa pun.
     - **Validates: Requirements 1.1, 1.2, 1.3, 1.5, 1.6, 19.1**
-  - [ ] 2.2 Implementasi skema `resource.schema.json` dan pemuat
+  - [x] 2.2 Implementasi skema `resource.schema.json` dan pemuat
     - `contracts/resource.schema.json` (dibenamkan lewat `contracts/embed.go` seperti `module.schema.json`, dengan `schemaVersion`); pemuat di `internal/devtools/metadatatools/load` (build tag `devtools`) memakai pustaka dari 1.2, menolak tag kustom, membatasi alias, kedalaman, dan ukuran sebelum parse, dan memetakan galat ke berkas dan baris.
     - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 19.1_
-  - [ ] 2.3 Tulis test penamaan (merah dulu)
+  - [x] 2.3 Tulis test penamaan (merah dulu)
     - Tes properti dan tabel: konversi camelCase ke snake_case, PascalCase (inisialisme `ID`, `URL`, `UUID`), kebab-case jamak, dan kembali identik (bolak-balik); angka melekat pada kata sebelumnya (`address2Line` menjadi `address2_line`); tolak huruf kapital berurutan (`taxID`), kata kunci SQL tercadang, kata tercadang Go dan TypeScript, tabrakan setelah konversi, nama hasil gabungan (tabel `<slug>_<nama>`, pivot, indeks, FK, pemicu, kolom berawalan blok) > 63 byte, dan ketunggalan per skema.
     - **Validates: Requirements 1.4, 1.7, 1.8**
-  - [ ] 2.4 Implementasi paket penamaan
+  - [x] 2.4 Implementasi paket penamaan
     - `metadatatools/naming`: fungsi murni untuk validasi dan konversi per target (tabel konversi `design.md` Komponen 13); aturan jamak untuk nama tabel ditulis eksplisit dan diuji. Kasus yang tidak tertangani aturan **jangan** ditambal dengan opsi baru tanpa konfirmasi.
     - _Requirements: 1.4, 1.7, 1.8, 10.6_
 
-- [ ] 3. `sdk/metadata`: kondisi, ekspresi, desimal, dan paritas Go dan TS (Kelas beban: Sonnet)
-  - [ ] 3.1 Tulis korpus vektor dan test evaluator (merah dulu)
+- [x] 3. `sdk/metadata`: kondisi, ekspresi, desimal, dan paritas Go dan TS (Kelas beban: Sonnet)
+  - [x] 3.1 Tulis korpus vektor dan test evaluator (merah dulu)
     - `contracts/metadata-vectors/*.json`: kondisi (semua operator `eq`..`isnull`, `all`/`any`/`not`, `ref`), tipe desimal (perbandingan tanpa float), `null`, perbandingan teks, nilai tepi, tipe tak cocok mengembalikan `false` dengan alasan; ekspresi (gabung teks, `coalesce`, aritmetika desimal dengan skala dan mode pembulatan eksplisit, `if`); templat label; vektor pola regex subset. Test Go dan TS membaca korpus yang sama.
     - **Validates: Requirements 2.2, 2.5, 4.1, 4.4, 5.2, 5.7**
-  - [ ] 3.2 Implementasi `sdk/metadata` (Go)
+  - [x] 3.2 Implementasi `sdk/metadata` (Go)
     - AST kondisi bertipe, evaluator total fungsi (tanpa panik, biaya linear, alasan terukur), aritmetika desimal, galat bertipe, batas kedalaman, jumlah node, dan panjang saat runtime. Paket daun: tidak mengimpor platform (D-2; periksa `archcheck`). Pelari korpus Go.
     - _Requirements: 2.2, 4.1, 4.5, 5.7, 19.1_
-  - [ ] 3.3 Validator subset `pattern`
+  - [x] 3.3 Validator subset `pattern`
     - `sdk/metadata`: terima hanya subset RE2 yang berperilaku sama di Go dan JavaScript (tanpa lookaround dan backreference), tolak kuantor bersarang dan alternatif ambigu di bawah kuantor (tinggi bintang ≤ 1), batasi panjang ≤ 200; runtime server memakai `regexp` RE2.
     - _Requirements: 2.5, 19.2_
-  - [ ] 3.4 Write property tests evaluator Go (tidak panik dan linear)
+  - [x] 3.4 Write property tests evaluator Go (tidak panik dan linear)
     - **Property: evaluator tidak melempar panik atau galat untuk input apa pun dan berbiaya linear terhadap jumlah node**
     - Input acak (tipe campur, `null`, desimal besar, pohon di batas) menghasilkan `false` atau hasil sah dalam batas waktu; pohon melampaui batas ditolak, bukan dieksekusi.
     - **Validates: Requirements 4.5, 19.1**
-  - [ ] 3.5 Implementasi evaluator dan desimal TypeScript beserta pelari korpus
+  - [x] 3.5 Implementasi evaluator dan desimal TypeScript beserta pelari korpus
     - `packages/platform-web/src/metadata/` (hanya evaluator kondisi, ekspresi, desimal berskala tanpa `Number`, pelari korpus; sisanya di grup 16). Hasil harus identik dengan Go untuk seluruh korpus 3.1; entry awal tetap ≤ 200 KB gzip (modul dimuat malas).
     - _Requirements: 2.2, 4.4, 5.7, 18.7_
-  - [ ] 3.6 Write property tests paritas dua sisi
+  - [x] 3.6 Write property tests paritas dua sisi
     - **Property: untuk masukan acak berseed, evaluator Go dan TS menghasilkan hasil identik**
     - Mekanisme sesuai 1.2 (mis. Go menulis korpus acak berseed yang dibaca dua sisi); mencakup desimal, `null`, perbandingan teks, dan ekspresi.
     - **Validates: Requirements 4.4, 22.2**
 
-- [ ] 4. Resolver: penyertaan, timpaan, abstrak, tipe domain, blok (Kelas beban: Sonnet; 4.3 Haiku untuk berkas YAML bawaan setelah spesifikasi tipe jelas)
-  - [ ] 4.1 Tulis test resolver (merah dulu)
+- [x] 4. Resolver: penyertaan, timpaan, abstrak, tipe domain, blok (Kelas beban: Sonnet; 4.3 Haiku untuk berkas YAML bawaan setelah spesifikasi tipe jelas)
+  - [x] 4.1 Tulis test resolver (merah dulu)
     - Tabel dan tes properti: `include` modul sendiri, `sdk:` bawaan, dan modul dependensi hanya bila `export: true` dan terdaftar di manifest; `include.source` diperlakukan sebagai kunci registry, **bukan** jalur berkas (percobaan `../` ditolak); timpaan `set`/`omit`/`add`; tolak siklus penyertaan, nama field ganda tanpa timpaan eksplisit, timpaan terhadap field yang tidak ada, timpaan yang melanggar skema; timpaan tidak boleh menurunkan `classification`, melonggarkan `fieldGroup`, atau mencabut `readOnly`, dan **tanpa pengecualian** untuk field bawaan, `owner_field`, `scope_fields`, `amendedFromId`, dan field `sdk:document` (tidak dapat di-`omit`/`set`); `lockWhen` hanya boleh diperketat (OR); `prefix` blok menghasilkan identifier camelCase deterministik (`billingStreet`); klasifikasi tipe domain menular; abstrak tidak menghasilkan tabel, kontrak, atau kode; jejak asal per atribut.
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.10, 3.11, 13.1**
-  - [ ] 4.2 Implementasi resolver
+  - [x] 4.2 Implementasi resolver
     - `metadatatools/resolve`: hasil metadata datar dengan jejak asal (untuk pesan galat dan tinjauan); resolusi penuh saat `metadata:generate`/`check`; tidak ada jalur eksekusi runtime tambahan untuk tipe domain atau blok (D-4, D-5: tambal deklaratif tanpa parameter atau logika).
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.10, 3.11, 3.14, 13.1_
-  - [ ] 4.3 Metadata bawaan SDK
+  - [x] 4.3 Metadata bawaan SDK
     - Berkas bawaan yang dibenamkan: abstrak `audit` dan `document` (field bawaan `id`, `version`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`, `status`, `amendedFromId`, semuanya `readOnly`; `createdBy` dan `updatedBy` nullable; `createdAt` dan `updatedAt` dengan `DEFAULT now()` implisit, K22; `status` dengan lifecycle baku `draft`, `deleted`, `need_approval`, `accepted`, `rejected`, `cancelled`, `done` beserta tabel transisinya, K23; `lockWhen` bawaan `status` bukan `draft`) serta tipe domain `email`, `phone`, `percentage`, `money` (tipe dasar, batasan, klasifikasi, format, kunci widget, operator, kunci label).
     - _Requirements: 2.6, 3.8, 3.9, 13.1, 13.4_
-  - [ ] 4.4 Pelaporan dampak tipe domain dan blok bersama
+  - [x] 4.4 Pelaporan dampak tipe domain dan blok bersama
     - `metadata:check` menghitung indeks balik pemakai dan melaporkan dampak per resource (termasuk lintas modul untuk ekspor); perubahan bersama diperlakukan sebagai perubahan atas setiap pemakai; ekspor lintas modul tunduk SemVer modul pemilik (perubahan merusak butuh MAJOR). Test: ubah tipe `email` mengubah laporan semua pemakai.
     - _Requirements: 3.12_
-  - [ ] 4.5 Resolver: `sdk:audit` otomatis dan `statusAxes` (K22, K24)
+  - [x] 4.5 Resolver: `sdk:audit` otomatis dan `statusAxes` (K22, K24)
     - Test lalu implementasi di `metadatatools/resolve` dan skema `resource.schema.json`: setiap resource (tabel biasa maupun dokumen) otomatis menyertakan `sdk:audit` tanpa `include` eksplisit, dan `include: sdk:audit` eksplisit tetap sah tanpa nama ganda; `createdBy` dan `updatedBy` nullable, `createdAt` dan `updatedAt` membawa penanda `DEFAULT now()` implisit untuk model skema (tanpa nilai bawaan dinamis di berkas metadata); kunci `statusAxes` (nilai, `initial`, `transitions`) diterima hanya pada resource yang menyertakan `sdk:document`, diselesaikan menjadi field enum `readOnly` bukan-nullable berurutan stabil, dengan tabel transisi sumbu pada model datar (jejak asal), dan tidak diwarisi lewat `include` seperti atribut tingkat resource lain.
     - _Requirements: 2.6, 13.14, 13.15, 13.17_
 
-- [ ] 5. Validasi semantik `metadata:check` (Kelas beban: Sonnet)
-  - [ ] 5.1 Tulis test validasi field (merah dulu)
+- [x] 5. Validasi semantik `metadata:check` (Kelas beban: Sonnet)
+  - [x] 5.1 Tulis test validasi field (merah dulu)
     - Tipe dan batasan (`string`, `text`, `integer`, `decimal(p,s)`, `boolean`, `date`, `datetime`, `enum`, `uuid`, tipe domain), `default` dan nilai literal dikanonisasi, nilai `enum` `^[a-z][a-z0-9_]{0,62}$`, `aggregatable` hanya `integer`/`decimal`, FK tanpa indeks memberi peringatan, indeks hanya yang dideklarasikan; field `highly_confidential` **ditolak** dengan pesan merujuk pengembangan berikutnya, termasuk dari tipe domain, blok, accessor, dan properti bernama sensitif; `unmanagedColumns` hanya untuk kolom `highly_confidential`, tidak muncul di DTO, kontrak, metadata klien, atau selisih, dan resource pemakainya tanpa `generate.crud`; field bawaan selalu `readOnly`; `deprecated` dan `description` sah.
     - **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.7, 2.8, 2.9, 2.11**
-  - [ ] 5.2 Implementasi validasi field, tipe, dan klasifikasi
+  - [x] 5.2 Implementasi validasi field, tipe, dan klasifikasi
     - Pemeriksa di `metadatatools/check` memakai model datar dari 4.2 dan paket penamaan 2.4; pesan memuat berkas dan baris. Putusan keberadaan `unmanagedColumns` menunggu konfirmasi pemilik produk (lihat Overview).
     - _Requirements: 2.1, 2.3, 2.4, 2.7, 2.8, 2.9, 2.11_
-  - [ ] 5.3 Tulis test kondisi, accessor, dan templat label (merah dulu)
+  - [x] 5.3 Tulis test kondisi, accessor, dan templat label (merah dulu)
     - Rujukan `ref` ke field tak ada dan **siklus** antarkondisi ditolak; `visibleWhen`/`requiredWhen`/`readonlyWhen`/`lockWhen`/`rules`/filter relasi memakai satu model kondisi tanpa mekanisme logika lain; aturan yang merujuk `confidential` ke atas atau grup non-`default` otomatis `scope: server`; accessor `expr`/`stored`/`func` (readOnly, tidak diikat dari input; tata bahasa tertutup, aritmetika desimal dengan skala dan pembulatan eksplisit; hanya `stored` boleh `sortable`/`filterable`/`groupable`; `func` menyatakan grup dan klasifikasi eksplisit; accessor mewarisi klasifikasi tertinggi dan grup paling ketat); `labelTemplate` memakai `{field}` milik resource, teks tetap hanya tanda baca dan spasi, field di grup `default` berklasifikasi ≤ `internal` tanpa pengecualian; aturan yang merujuk field di luar grup `default` memicu peringatan.
     - **Validates: Requirements 4.2, 4.3, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.8, 9.8**
-  - [ ] 5.4 Implementasi validasi kondisi, accessor, dan label
+  - [x] 5.4 Implementasi validasi kondisi, accessor, dan label
     - Pemeriksa statis untuk 5.3 (penerjemahan ekspresi `stored` ke SQL baru di 10.3; di sini hanya validasi tata bahasa dan daftar putih fungsi immutable). Evaluator yang sama dengan grup 3 dipakai untuk templat label dan `expr`.
     - _Requirements: 4.2, 4.3, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 9.8_
-  - [ ] 5.5 Tulis test relasi dan integrasi manifest (merah dulu)
+  - [x] 5.5 Tulis test relasi dan integrasi manifest (merah dulu)
     - Relasi `belongsTo`/`hasOne`/`hasMany`/`belongsToMany`/`morph*` dengan `onDelete` dan `required`; lintas modul hanya ID dan hanya ke dependensi manifest + `require` go.mod, ditolak bila resource tidak ada atau tanpa kontrak relasi; `morphTo` memakai daftar putih tipe (kunci resource); `embedded` hanya pada `hasMany`; `filter` relasi: siklus `ref` dan field seberang non-`filterable` ditolak; `resource.key` cocok dengan manifest (sebelum PRD-001: prefiks capability `<key>.<aksi>`); keanggotaan `fieldGroup` divalidasi terhadap definisi manifest atau metadata sendiri (grup `default` implisit), `module:check` gagal bila manifest memuat `fields` yang menyimpang (P-1); permission operasi `<resource>.<aksi>` terdaftar; `owner_field`/`scope_fields` merujuk field ada dan bertipe sesuai.
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5**
-  - [ ] 5.6 Implementasi validasi relasi dan manifest
+  - [x] 5.6 Implementasi validasi relasi dan manifest
     - `metadatatools/check` plus perluasan `internal/devtools/modcheck` (`module:check`) untuk kesamaan `fields`; klasifikasi properti bangkitan tetap ditegakkan linter kontrak yang ada (`erp-sensitive-needs-classification`, `erp-no-highly-confidential-in-response`). T1 **tidak** mewajibkan `resources`/`field_groups` di manifest (D-24).
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5_
-  - [ ] 5.7 Validasi statis deprecated, salinan, penguncian, dan `generate`
+  - [x] 5.7 Validasi statis deprecated, salinan, penguncian, dan `generate`
     - Test lalu implementasi: pasangan `migrateFrom` memiliki `fieldGroup` dan `classification` identik; bentuk deklarasi `snapshot`/`snapshotSource` valid, field tujuan menyatakan `fieldGroup` dan `classification` eksplisit dan tidak lebih longgar dari sumber, salinan dari grup non-`default` ke `default` ditolak tanpa alasan tertulis; kolom salinan hanya `filterable`/`sortable` bila dinyatakan eksplisit; `lockWhen` untuk resource dokumen harus dapat diterjemahkan ke SQL (kolom milik sendiri, `eq`/`ne`/`in`/`isnull`) bila tidak, `metadata:check` gagal; `generate.crud` tidak boleh bersama `unmanagedColumns`.
     - **Validates: Requirements 12.6, 13.12, 14.1, 14.5, 14.6**
-  - [ ] 5.8 Validasi statis `statusAxes` (K24)
+  - [x] 5.8 Validasi statis `statusAxes` (K24)
     - Test lalu implementasi di `metadatatools/check`: nama sumbu camelCase sah, tidak bertabrakan dengan field lain atau sumbu lain setelah konversi nama dan bukan `status`; `values` snake_case (`^[a-z][a-z0-9_]{0,62}$`) dan unik; `initial` termasuk `values`; setiap `from` dan `to` termasuk `values`, tanpa pasangan ganda; sumbu tidak mendefinisikan ulang atau memperluas lifecycle `status` dan hanya pada resource ber-`sdk:document`; transisi mundur atau siklik sah; sumbu tidak dapat dilepas dari `readOnly`.
     - **Validates: Requirements 13.14, 13.15, 13.18**
 
-- [ ] 6. Pembangkit T1: OpenAPI, Go, TypeScript (Kelas beban: Sonnet; templat TS 6.4 Sonnet)
-  - [ ] 6.1 Tulis test golden dan drift (merah dulu)
+- [x] 6. Pembangkit T1: OpenAPI, Go, TypeScript (Kelas beban: Sonnet; templat TS 6.4 Sonnet)
+  - [x] 6.1 Tulis test golden dan drift (merah dulu)
     - Golden per jenis keluaran untuk modul fixture: skema OpenAPI (`Invoice`, `InvoiceCreate`, `InvoiceUpdate`), DTO dan decoder Go, konstanta dan aturan domain, metadata TS; keluaran deterministik (urutan stabil, tanpa cap waktu) dan berkepala `Code generated by erpora metadata:generate. DO NOT EDIT.`; `--check` gagal bila ada selisih atau berkas dimodifikasi tangan; modul tanpa `web/` tanpa keluaran TS; modul tanpa metadata tidak terpengaruh; golden masukan berbahaya (kutip, `$$`, `*/`, backtick, baris baru, nilai `enum` jahat) membuktikan keluaran Go dan TS tidak menjalankan teks masukan.
     - **Validates: Requirements 8.1, 8.2, 8.5, 8.6, 19.9, 19.10**
-  - [ ] 6.2 Templat Go: domain, DTO, decoder, dan validator
+  - [x] 6.2 Templat Go: domain, DTO, decoder, dan validator
     - `internal/devtools/templates/resource/`: `modules/<dir>/internal/domain/<nama>_meta.gen.go` (konstanta, aturan; tanpa I/O) dan `internal/presentation/http/<nama>_dto.gen.go`. Decoder `DisallowUnknownFields` menolak field tak dikenal dan `readOnly` (`422 validation_failed` rinci per field), validator menegakkan tipe, wajib, `nullable`, panjang, rentang, pola, enum, dan `rules` (`422 validation_failed` struktur; `422 business_rule_violated` aturan bisnis), batas `MaxBodyBytes` dan kedalaman JSON, galat tanpa nilai field `confidential` ke atas, AST kondisi tertanam sebagai data bertipe (D-2), batasan tidak pernah lebih ketat di klien daripada server atau kontrak.
     - _Requirements: 4.7, 8.1, 8.4, 9.1, 9.2, 9.5, 9.6, 9.7, 13.17_
-  - [ ] 6.3 Templat OpenAPI dan penyuntikan terstruktur
+  - [x] 6.3 Templat OpenAPI dan penyuntikan terstruktur
     - Tulis `components.schemas` ke `modules/<dir>/openapi.yaml` lewat suntingan node YAML, dengan `x-erp-generated: true`, `x-erp-field-group`, `x-erp-classification`, `x-erp-filterable`, `x-erp-sortable`, `x-erp-decimal`, `x-erp-extensible-enum`, `deprecated`; `decimal` sebagai `string` dengan pola; `contracts:lint` dan `contracts:generate --check` tetap lulus; skema bertanda tidak boleh diubah di luar generator.
     - _Requirements: 8.1, 8.3_
-  - [ ] 6.4 Templat metadata TypeScript
+  - [x] 6.4 Templat metadata TypeScript
     - `modules/<dir>/web/src/metadata/<nama>.meta.gen.ts`: struktur field (nama, tipe, batasan, grup, kunci label), kunci widget dan format dari tipe domain, aturan `scope: both` saja; aturan dan ambang `scope: server` dan field `clientVisible: false` (dengan alasan tertulis) tidak disertakan; literal hanya lewat `JSON.stringify`, regex lewat `new RegExp` dari string JSON; chunk dimuat malas.
     - _Requirements: 3.13, 4.6, 8.1, 18.3, 18.8, 19.9_
-  - [ ] 6.5 Pagar keamanan pembangkit
+  - [x] 6.5 Pagar keamanan pembangkit
     - Tolak jalur keluaran di luar direktori modul, tidak mengikuti symlink, tulis hanya ke direktori yang diizinkan; `metadata:generate` gagal tanpa menulis apa pun bila `check` gagal atau penanda `Code generated` di berkas keluaran hilang; galat tidak membocorkan isi berkas di luar modul; identifier selalu di-quote, nilai terparameter; tidak ada penyusunan SQL dari input klien; `archcheck` tanpa pengecualian baru untuk kode bangkitan; metadata modul non-`builtin` diperlakukan tidak tepercaya (tidak dibangkitkan otomatis di produksi).
     - _Requirements: 8.4, 8.6, 19.3, 19.4, 19.5, 19.7, 19.9_
 
-- [ ] 7. Perintah dan gerbang CI T1 (Kelas beban: Sonnet; 7.2 Haiku)
-  - [ ] 7.1 Perintah `metadata:check` dan `metadata:generate [--check]`
+- [x] 7. Perintah dan gerbang CI T1 (Kelas beban: Sonnet; 7.2 Haiku)
+  - [x] 7.1 Perintah `metadata:check` dan `metadata:generate [--check]`
     - Daftarkan di `internal/devtools/commands` (build tag `devtools`; `task erpora -- <command>`). Test: binary rilis **tidak** memiliki perintah `metadata:*` (matriks IDOR baris 13); `metadata:generate` tidak pernah berjalan terhadap database.
     - **Validates: Requirements 20.1, 8.6**
     - _Requirements: 8.2, 20.1_
-  - [ ] 7.2 Taskfile dan gerbang
+  - [x] 7.2 Taskfile dan gerbang
     - `metadata:check` dan `metadata:generate --check` masuk `task lint arch check:gowork-off test` dan `task web:check`; tanpa `rm`/`cp`/`sed`; berjalan di Windows (uji pada mesin ini).
     - _Requirements: 20.2, 20.3_
 
-- [ ] 8. Modul fixture dan migrasi `example` ke metadata (Kelas beban: Sonnet)
-  - [ ] 8.1 Modul fixture di `testdata`
+- [x] 8. Modul fixture dan migrasi `example` ke metadata (Kelas beban: Sonnet)
+  - [x] 8.1 Modul fixture di `testdata`
     - Satu atau dua modul fixture (lokasi dari 1.2; **tidak** didaftarkan ke aplikasi; lintas modul butuh dua modul dengan dependensi manifest) memuat: dokumen (`sdk:document`), relasi satu modul dan lintas modul, `decimal`, `enum`, baris `embedded`, `morph`, tipe domain, dan blok (beserta `prefix`), serta (K24) satu resource dokumen bersumbu status (`statusAxes`: penagihan dan pengiriman dengan transisi mundur, mis. retur pengiriman). Dipakai exit gate T1 sampai T4. Metadata saja pada T1; migrasi dan kode data di tahap berikutnya.
     - _Requirements: 20.5, 13.19_
-  - [ ] 8.2 Migrasi `example` ke metadata
+  - [x] 8.2 Migrasi `example` ke metadata
     - Pindahkan `example` ke metadata dengan `sdk:audit` utuh (K19, 1 Nov 2026: tanpa `omit`); tambahkan `createdBy` dan `updatedBy` secara **aditif** ke kontrak dan implementasi `example` (migrasi expand kolom nullable bila perlu, domain, repository, handler) tanpa perubahan breaking: `task contracts:check` (termasuk `contracts:breaking`) dan tes modul tetap lulus. Bila berkas bangkitan bertabrakan nama dengan kode tulis tangan `example` dan penyelesaiannya mengubah perilaku atau menyimpang dari spek, **tanyakan dulu**. `exampleaddon` tidak punya tabel dan tidak dimigrasikan.
     - _Requirements: 8.3, 20.5_
 
-- [ ] 9. Checkpoint T1 — exit gate dan review (Kelas beban: 9.1 Sonnet; 9.2 agent independen model lebih tinggi)
-  - [ ] 9.1 Gerbang T1
+- [x] 9. Checkpoint T1 — exit gate dan review (Kelas beban: 9.1 Sonnet; 9.2 agent independen model lebih tinggi)
+  - [x] 9.1 Gerbang T1
     - Jalankan `task lint arch check:gowork-off test`, `task contracts:check`, `task web:check`; `metadata:check` dan `metadata:generate --check` hijau untuk `example` dan fixture; paritas Go dan TS lulus korpus; catat jumlah tes dan ukuran JS awal terhadap baseline 1.1. Ensure all tests pass, ask the user if questions arise.
     - _Requirements: 22.1, 22.2_
-  - [ ] 9.2 Review akhir putaran T1
+  - [x] 9.2 Review akhir putaran T1
     - Reviewer independen (agent baru, tanpa context implementer; diberi diff dan spek tanpa kesimpulan implementer): (a) kesesuaian dengan spec/PRD dan kebenaran/regresi; (b) `security-audit` terfokus pada perubahan putaran (YAML berbahaya, injeksi literal pada keluaran Go/TS, path traversal pembangkit, mass assignment pada DTO, kebocoran lewat metadata klien). Temuan sesuai spek dikerjakan implementer yang sama lewat `SendMessage`; yang di luar spek menunggu konfirmasi pemilik produk dan dicatat pada spec terkait (bukan hanya di samping). Setelah perbaikan, satu review atas diff perbaikan saja.
     - _Requirements: 22.3, 22.4_
 
-- [ ] 10. Mesin selisih database (T2) (Kelas beban: Sonnet)
-  - [ ] 10.1 Spike alat selisih (**berhenti untuk konfirmasi bila memilih alat pihak ketiga**)
+- [x] 10. Mesin selisih database (T2) (Kelas beban: Sonnet)
+  - [x] 10.1 Spike alat selisih (**berhenti untuk konfirmasi bila memilih alat pihak ketiga**)
     - Evaluasi Atlas atau alat serupa terhadap implementasi sendiri untuk subset yang dimodelkan: lisensi, dukungan format goose, ketergantungan, dan kecocokan dengan role non-superuser. Catat hasil di "Catatan hasil" dan `design.md` D-6. Dependensi baru atau alat eksternal hanya setelah disetujui pemilik produk.
     - _Requirements: 10.1_
-  - [ ] 10.2 Tulis test model skema, penerjemah SQL, dan escape literal (merah dulu)
+  - [x] 10.2 Tulis test model skema, penerjemah SQL, dan escape literal (merah dulu)
     - Pemetaan tipe tertulis dan teruji (`string(maxLength)` ke `varchar`/`text` + CHECK `length`, `decimal(p,s)` ke `numeric(p,s)`, `datetime` ke `timestamptz`, `date`, `uuid`, `enum` ke `text` + CHECK nilai, `boolean`, `stored` ke `GENERATED ALWAYS AS (...) STORED` dari daftar putih fungsi immutable); tabel bernama `<slug>_<nama>` jamak snake_case tanpa `tenant_id`; `id` `uuid` kunci utama; satu fungsi escape literal SQL yang diuji; golden masukan berbahaya SQL (kutip, `$$`, nilai `enum` jahat); badan pemicu dari templat tetap tanpa menyisipkan teks berkas.
     - **Validates: Requirements 5.3, 10.4, 10.5, 10.6, 19.7, 19.8, 19.10**
-  - [ ] 10.3 Implementasi model skema turunan dan penerjemah beranotasi
+  - [x] 10.3 Implementasi model skema turunan dan penerjemah beranotasi
     - `metadatatools/dbmodel` dan `metadatatools/sqlgen`: identifier selalu di-quote; ekspresi `stored`, CHECK, dan kondisi `lockWhen` diterjemahkan dari tata bahasa tertutup, tidak menyalin teks berkas; satu fungsi escape literal dipakai semua pembangkit SQL.
     - _Requirements: 5.3, 10.4, 10.5, 10.6, 19.7, 19.8_
-  - [ ] 10.4 Tulis test integrasi mesin selisih (merah dulu)
+  - [x] 10.4 Tulis test integrasi mesin selisih (merah dulu)
     - Integrasi (`pgtest`, `ERP_TEST_DATABASE_URL`): selisih kosong untuk modul referensi; selisih pada tabel, kolom, tipe, nullability, default, CHECK, unique, indeks, FK relasi satu modul, kolom turunan, pemicu; indeks atau unique yang tidak dideklarasikan dihitung selisih; kolom `unmanagedColumns` dikecualikan; migrasi dijalankan oleh role non-superuser (mis. `COPY … PROGRAM` gagal). Jangan jalankan wadah uji di laptop: pakai VPS lewat tunnel SSH; bila server kewalahan, `-p 2`.
     - **Validates: Requirements 10.1, 10.2, 10.7, 10.8, 13.6**
-  - [ ] 10.5 Implementasi `metadata:diff`
+  - [x] 10.5 Implementasi `metadata:diff`
     - Jalankan semua migrasi goose modul dan dependensinya pada database sementara berole non-superuser, baca katalog, bandingkan dengan model turunan; mesin yang sama dipakai pemeriksa dan pembangkit; hanya berjalan di lingkungan pengembang dan CI, tidak pernah di binary rilis atau terhadap database produksi.
     - _Requirements: 10.1, 10.2, 10.7, 10.8_
 
-- [ ] 11. Pembangkit migrasi (T2) (Kelas beban: Sonnet)
-  - [ ] 11.1 Tulis test pembangkit migrasi (merah dulu)
+- [x] 11. Pembangkit migrasi (T2) (Kelas beban: Sonnet)
+  - [x] 11.1 Tulis test pembangkit migrasi (merah dulu)
     - Perubahan **aman** (tabel baru, kolom nullable atau berdefault, indeks baru, pelonggaran batasan, nilai enum `extensible`) dihasilkan otomatis; perubahan **perlu keputusan** (rename, ubah tipe, perkecil panjang atau rentang, `NOT NULL` pada kolom ada, unique pada data ada, hapus apa pun) hanya menghasilkan kerangka bertanda `TODO` yang menggagalkan `metadata:check`; tabel `large: true` memakai backfill per batch `NO TRANSACTION`; `Down` hanya bila aman, yang tidak dapat dibalik ditandai eksplisit; berkas `NNNN_<nama>.sql` bernomor berikutnya dan tidak pernah diterapkan; hasil lolos `module:check`; `make:migration` tetap tersedia.
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7**
-  - [ ] 11.2 Implementasi `metadata:migrate <modul> <nama>`
+  - [x] 11.2 Implementasi `metadata:migrate <modul> <nama>`
     - Mesin selisih 10.5 sebagai masukan; penomoran dan format mengikuti konvensi `make:migration`; semua SQL lewat 10.3.
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7_
 
-- [ ] 12. Aturan deprecated, rename, dan penghapusan (T2) (Kelas beban: Sonnet)
-  - [ ] 12.1 Tulis test aturan deprecated dan rename (merah dulu)
+- [x] 12. Aturan deprecated, rename, dan penghapusan (T2) (Kelas beban: Sonnet)
+  - [x] 12.1 Tulis test aturan deprecated dan rename (merah dulu)
     - Menghapus field tanpa tanda `deprecated` pada rilis sebelumnya ditolak (pembanding: metadata pada tag rilis terakhir modul, seperti `contracts:breaking`; modul tanpa tag dikecualikan); `migrateFrom` menghasilkan kolom baru plus salinan data (batch bila `large`) tanpa menghapus kolom lama; DTO menerima dan mengirim kedua bentuk dan kontrak menandai bentuk lama `deprecated: true`; kedua bentuk dengan nilai berbeda `422 validation_failed`; `removeAfter` harus versi MAJOR berikutnya atau sesudahnya, dan `metadata:migrate` menolak kerangka penghapusan sebelum `removeAfter` dinyatakan; migrasi penghapusan memuat penjaga (gagal bila ada baris dengan kolom lama terisi dan kolom pengganti kosong) dan `Down` ditandai tidak dapat dibalik; integrasi: lompatan beberapa versi menjalankan semua migrasi berurutan dengan hasil sama seperti upgrade bertahap, pada fixture. Dua pengaman K18 menunggu konfirmasi pemilik produk (lihat Overview).
     - **Validates: Requirements 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8**
-  - [ ] 12.2 Implementasi pemeriksa deprecated dan `removeAfter`
+  - [x] 12.2 Implementasi pemeriksa deprecated dan `removeAfter`
     - `metadata:check`: pembanding tag rilis memakai helper git `contracttools`; validasi `deprecated: {since, replacedBy?}` dan `removeAfter`; `contracts:breaking` dan mesin selisih tetap pengaman lapis kedua.
     - _Requirements: 12.1, 12.4, 12.5_
-  - [ ] 12.3 Pembangkitan migrasi rename dan penghapusan
+  - [x] 12.3 Pembangkitan migrasi rename dan penghapusan
     - `metadata:migrate`: salinan data `migrateFrom` (batch bila `large`), kerangka penghapusan berpenjaga dan `Down` tidak dapat dibalik; catat di dokumen upgrade bahwa backup wajib sebelum migrasi MAJOR yang menghapus kolom.
     - _Requirements: 12.2, 12.4, 12.7, 12.8_
-  - [ ] 12.4 DTO dan kontrak dua bentuk
+  - [x] 12.4 DTO dan kontrak dua bentuk
     - Pembangkit 6.2 dan 6.3 menerima serta mengirim bentuk lama dan baru selama masa transisi, server mengisi keduanya saat menulis, menandai bentuk lama `deprecated: true`, dan menolak nilai berbeda; field kanonik (baru) menjadi dasar `CheckWrite` dan `MaskFields` kelak (D-33).
     - _Requirements: 12.3, 12.6_
 
-- [ ] 13. Pemicu immutabilitas dokumen (T2) (Kelas beban: Sonnet)
-  - [ ] 13.1 Tulis test integrasi pemicu (merah dulu)
+- [x] 13. Pemicu immutabilitas dokumen (T2) (Kelas beban: Sonnet)
+  - [x] 13.1 Tulis test integrasi pemicu (merah dulu)
     - `UPDATE`/`DELETE` langsung pada dokumen terkunci ditolak database; pengecualian (a) hanya `status`/`version`/`updated_at`/`updated_by` berubah dengan pasangan status ada di tabel transisi, (b) hanya kolom tujuan `migrateFrom` diisi dari `NULL` menjadi salinan persis kolom asal; `DELETE` baris terkunci selalu ditolak; evaluasi pada `OLD`; pemicu anak menolak `INSERT`/`UPDATE`/`DELETE` untuk `embedded`, pivot, dan `hasOne` bila induk terkunci; tidak ada mekanisme pengecualian bagi jalur aplikasi (penanda sesi, `session_replication_role`, nonaktifkan pemicu); migrasi tulis tangan yang melampaui butir 8 menonaktifkan dan mengaktifkan kembali pemicu eksplisit, dan `metadata:diff` memastikan pemicu aktif di akhir; penghapusan pemicu tak sengaja terdeteksi mesin selisih.
     - Tambahan K23 dan K24: tabel transisi lifecycle bawaan (tujuh pasangan sah lolos, pasangan lain termasuk `submitted` ditolak); pemicu mengizinkan perubahan kolom sumbu status dengan pasangan sah (termasuk mundur) pada dokumen terkunci dan menolak pasangan tak sah, perubahan sumbu bersama kolom data lain, dan `DELETE`; kolom sumbu NOT NULL dengan default `initial` dan CHECK nilai.
     - **Validates: Requirements 13.2, 13.5, 13.6, 13.8, 13.9, 13.10, 13.11, 13.16, 13.19**
-  - [ ] 13.2 Implementasi pembangkit pemicu
+  - [x] 13.2 Implementasi pembangkit pemicu
     - Templat SQL tetap untuk pemicu dokumen dan pemicu anak, tabel transisi lifecycle (K23) dan transisi sumbu (K24) dibangkitkan dari metadata, `lockWhen` diterjemahkan lewat 10.3; mesin selisih mengenali pemicu dan statusnya (aktif) serta kolom sumbu (NOT NULL, default `initial`, CHECK). Pengecualian lain tidak disediakan.
     - _Requirements: 13.2, 13.4, 13.5, 13.6, 13.8, 13.9, 13.10, 13.11, 13.14, 13.16_
 
-- [ ] 14. Migrasi nyata, CI, dan selisih kosong (T2) (Kelas beban: Sonnet; 14.2 Haiku)
-  - [ ] 14.1 Migrasi modul referensi dan fixture
+- [x] 14. Migrasi nyata, CI, dan selisih kosong (T2) (Kelas beban: Sonnet; 14.2 Haiku)
+  - [x] 14.1 Migrasi modul referensi dan fixture
     - Deklarasikan indeks dan unique yang sudah ada di migrasi tulis tangan `example` agar selisih kosong; hasilkan migrasi fixture dengan `metadata:migrate` (dokumen, pivot, `embedded`, pemicu); `metadata:diff` kosong untuk `example` dan fixture; `exampleaddon` tidak diperiksa (tanpa tabel).
     - _Requirements: 10.3, 20.5_
-  - [ ] 14.2 Job CI selisih
+  - [x] 14.2 Job CI selisih
     - Tambah `metadata:diff` ke job integrasi CI (tes selisih kosong gagal bila metadata dan migrasi menyimpang) dan entri Taskfile lintas platform.
     - _Requirements: 10.3, 20.2, 20.3_
 
-- [ ] 15. Checkpoint T2 — exit gate dan review (Kelas beban: 15.1 Sonnet; 15.2 agent independen model lebih tinggi)
-  - [ ] 15.1 Gerbang T2
+- [x] 15. Checkpoint T2 — exit gate dan review (Kelas beban: 15.1 Sonnet; 15.2 agent independen model lebih tinggi)
+  - [x] 15.1 Gerbang T2
     - `task lint arch check:gowork-off test`, `task test:integration` (VPS lewat tunnel; `-p 2` bila perlu), `task contracts:check`; selisih kosong untuk `example` dan fixture; skenario aman dan perlu-keputusan teruji; catat hasil. Ensure all tests pass, ask the user if questions arise.
     - _Requirements: 22.1, 22.3_
-  - [ ] 15.2 Review akhir putaran T2
+  - [x] 15.2 Review akhir putaran T2
     - Reviewer independen: kesesuaian (selisih, migrasi, deprecated, pemicu) dan `security-audit` terfokus (injeksi SQL pada pembangkit, escape literal, role non-superuser, pemicu dan celah pengecualian, migrasi destruktif otomatis). Alur perbaikan seperti 9.2.
     - _Requirements: 22.3, 22.4_
 
-- [ ] 16. Paket metadata frontend (T3) (Kelas beban: Sonnet; 16.4 Haiku)
-  - [ ] 16.1 Tulis test paket frontend (merah dulu)
+- [x] 16. Paket metadata frontend (T3) (Kelas beban: Sonnet; 16.4 Haiku)
+  - [x] 16.1 Tulis test paket frontend (merah dulu)
     - `bun test`: `validateRecord` (tipe, wajib, `nullable`, panjang, rentang, pola, enum, `rules`), registri tipe field (operator sah per tipe selaras api-guidelines §5.1, kontrak editor form dan editor filter), format desimal hanya lewat utilitas desimal dan `Intl` dengan string (tanpa `Number`), pemuat malas per resource, field `clientVisible: false` dan aturan `scope: server` tidak ada di metadata, field tidak ada di respons diperlakukan "tidak tersedia" bukan "kosong", teks UI lewat i18n.
     - **Validates: Requirements 18.1, 18.3, 18.5, 18.7, 18.8**
-  - [ ] 16.2 Implementasi paket
+  - [x] 16.2 Implementasi paket
     - Lengkapi `packages/platform-web/src/metadata/`: tipe (`ResourceMeta`, `FieldMeta`, `Condition`, `RelationMeta`), `validateRecord`, registri tipe field, pemuat malas; `@erpora/ui` tetap daun (F4; `task web:check` bagian `deps`); komponen perender generik bukan bagian spec ini (M3c dan M3d).
     - _Requirements: 18.1, 18.2, 18.3, 18.5, 18.7_
-  - [ ] 16.3 Anggaran bundle dan chunk
+  - [x] 16.3 Anggaran bundle dan chunk
     - Chunk metadata terpisah per resource; evaluator dan validator hemat bundle; entry awal ≤ 200 KB gzip (`web:check`, anggaran saat ini sangat mepet); laporkan ukuran terhadap baseline 1.1 dan **tanyakan** bila mendekati batas.
     - _Requirements: 18.4_
-  - [ ] 16.4 Dokumentasikan kontrak konsumsi M3c dan M3d
+  - [x] 16.4 Dokumentasikan kontrak konsumsi M3c dan M3d
     - `docs/module-sdk/metadata.md`: apa yang disediakan paket, titik perluasan (registri tipe field, widget kustom modul tanpa mengubah `@erpora/ui`), aturan evaluasi, perlakuan `clientVisible` dan `scope: server`.
     - _Requirements: 3.13, 18.6_
 
-- [ ] 17. Checkpoint T3 — exit gate dan review (Kelas beban: 17.1 Sonnet; 17.2 agent independen model lebih tinggi)
-  - [ ] 17.1 Gerbang T3
+- [x] 17. Checkpoint T3 — exit gate dan review (Kelas beban: 17.1 Sonnet; 17.2 agent independen model lebih tinggi)
+  - [x] 17.1 Gerbang T3
     - `task web:check`, `bun test` dari root, `ERP_REQUIRE_BUN=1`; paritas Go dan TS hijau; anggaran bundle terjaga; kontrak konsumsi terdokumentasi. Ensure all tests pass, ask the user if questions arise.
     - _Requirements: 22.1, 22.2_
-  - [ ] 17.2 Review akhir putaran T3
+  - [x] 17.2 Review akhir putaran T3
     - Reviewer independen: kesesuaian dan `security-audit` terfokus (isi chunk publik, regex di klien/ReDoS, desimal, XSS pada label). Alur perbaikan seperti 9.2.
     - _Requirements: 22.3, 22.4_
 
-- [ ] 18. Dokumentasi dan pencatatan keputusan (Kelas beban: Haiku; 18.3 Sonnet)
-  - [ ] 18.1 ADR baru
+- [x] 18. Dokumentasi dan pencatatan keputusan (Kelas beban: Haiku; 18.3 Sonnet)
+  - [x] 18.1 ADR baru
     - `docs/adr/` (nomor berikutnya): "metadata sebagai sumber kebenaran yang membangkitkan kontrak dan migrasi"; memperbarui ADR-0003 dan ADR-0010 tanpa membatalkan larangan `AutoMigrate`; catat koreksi `tenant_id` (ADR-0004) agar tidak menjadi temuan; catat bahwa sistem enkripsi dan field `highly_confidential` adalah pengembangan berikutnya (K17) dan sinkronisasi master ke master di luar cakupan.
     - _Requirements: 2.10, 14.7, 21.2, 21.4_
-  - [ ] 18.2 Panduan modul
+  - [x] 18.2 Panduan modul
     - Perbarui `docs/module-sdk/metadata.md`, `generators.md`, `contracts.md`, `frontend.md`; `docs/security/security-guidelines.md` §7 (status penegakan); catat pemetaan checklist `transaction-data-standards.md` §15 dan perkara yang tetap per resource (penomoran, ledger, maker-checker, periode akuntansi, rekonsiliasi).
     - _Requirements: 13.7, 21.3_
-  - [ ] 18.3 Kerangka metadata pada `make:module`
+  - [x] 18.3 Kerangka metadata pada `make:module`
     - `make:module` dapat menghasilkan modul dengan kerangka metadata bila diminta (templat generator); `modcheck` tetap lulus.
     - _Requirements: 20.4_
-  - [ ] 18.4 `CLAUDE.md`, `AGENTS.md`, dan PRD
+  - [x] 18.4 `CLAUDE.md`, `AGENTS.md`, dan PRD
     - Bila ada aturan baru, ubah `CLAUDE.md` dan `AGENTS.md` **identik** (`TestAgentsMDMatchesClaudeMD`); verifikasi PRD-000 Q41 dan tabel §11 sesuai kondisi akhir dan perbarui status spec.
     - _Requirements: 21.1, 21.3_
-  - [ ] 18.5 `task test:generator`
+  - [x] 18.5 `task test:generator`
     - Jalankan `task test:generator` (±12 menit; Docker dan Bun, jalankan di VPS, bukan di laptop) karena templat dan generator berubah; catat hasil.
     - _Requirements: 20.4, 22.5_
 
@@ -249,6 +249,7 @@ Keputusan K1 sampai K18, P-1 sampai P-8, dan D-1 sampai D-35 sudah disetujui pem
   - [ ] 19.1 Verifikasi prasyarat PRD-001
     - Pastikan `sdk/authz` memuat `Require`, `Filter`, `Check`, `Fields`, `CheckWrite`, `MaskFields` dan manifest memuat `resources`/`field_groups` (PRD-001 FR-110 sampai FR-115, FR-119). **Bila belum, berhenti dan laporkan; jangan kerjakan 19.2 dan seterusnya** (D-12). Kode data tanpa authz nyata menanam celah IDOR di banyak resource.
     - _Requirements: 16.7_
+    - Hasil verifikasi 2 Nov 2026: `sdk/authz` hanya memuat `AsSystem` dan `MaskFields`; `Require/Filter/Check/Fields/CheckWrite` dan manifest `resources`/`field_groups` (PRD-001 FR-110 sampai FR-115, FR-119) belum ada, sehingga T4 (grup 19 sampai 25) tidak dikerjakan (D-12, Req 16.7).
   - [ ] 19.2 Perluas analyzer dan `archcheck`
     - Kode bangkitan tidak dapat melewati helper otorisasi: `db.First(&x, id)` tanpa filter otorisasi gagal di `archcheck`/analyzer `go vet` kustom; `authz.AsSystem` hanya di `internal/application` dengan alasan eksplisit di metadata, teraudit, dan ditandai `// erp:system-call-allowed` pada kontrak yang menerimanya. Test: kode contoh yang melanggar gagal.
     - _Requirements: 15.1, 15.8, 15.11_
@@ -405,6 +406,27 @@ Paket `internal/devtools/metadatatools/migrate` dan perintah `metadata:migrate <
 - **I2 pemicu efektif:** mesin selisih membandingkan `pg_get_triggerdef` (WHEN, UPDATE OF, skema fungsi), `prosecdef`, `proconfig`, bahasa fungsi, dan menandai pemicu tulis tangan BEFORE ROW yang berjalan sesudah pemicu bangkitan dan dapat mengubah NEW sebagai selisih `trigger_after_lock` (bukan catatan).
 - **M2** pemicu diganti dengan `CREATE OR REPLACE` tanpa `DROP`, `ADD COLUMN IF NOT EXISTS` pada berkas NO TRANSACTION. **M3** `div` kolom `stored` memakai pembagian eksak atas bilangan bulat (`div`/`mod`) dengan semua mode pembulatan (paritas acak termasuk kasus pembulatan ganda). **M4** introspeksi hanya tabel (`relkind r,p`) dan tahan nil. **M5** nama dari katalog database divalidasi (`^[a-z][a-z0-9_]{0,62}$`) sebelum masuk SQL aktif. **M6** `--timeout` (bawaan 10 menit) dan Ctrl-C/SIGTERM pada `metadata:diff` dan `metadata:migrate`; pembersihan role dan database sementara tetap berjalan (sesi role diputus lebih dulu). **M7** langkah CI terpisah `task test:metadata-cli` dengan env hanya pada langkah itu. **M8** kerangka rename ke kolom NOT NULL tanpa default dan kerangka penghapusan memuat langkah salin (komentar; per batch pada tabel large); `migrateFrom` yang ditambahkan pada kolom yang SUDAH ada tidak mengubah apa pun di database sehingga tidak ada selisih untuk dibangkitkan; salinannya diatur lewat kerangka penghapusan atau migrasi tulis tangan. **M9** `lockWhen` yang merujuk accessor `stored` (kolom turunan) atau memakai `ref` ditolak `metadata:check` (`lockwhen_not_sql`). **M10** `LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE` sebelum penjaga penghapusan (dilewati pada berkas NO TRANSACTION). **M11** pembanding memuat kolasi, identity, definisi indeks lengkap (opclass, DESC, NULLS, INCLUDE, NULLS NOT DISTINCT, predikat), dan indeks tidak valid (`index_invalid`). **M12** dokumen diselaraskan.
 - **Menunggu konfirmasi pemilik produk (tidak dikerjakan):** `TRUNCATE` melewati pemicu dokumen dan anak (usul: pemicu `BEFORE TRUNCATE FOR EACH STATEMENT`); `Down` aman yang berisi `DROP TABLE` atau `DROP COLUMN` menghapus data yang ditulis setelah `Up` (Requirement 11.7; tafsiran: `Down` hanya untuk pengembangan).
+
+### Ringkasan pelaksanaan T1 sampai T3 dan gerbang (2 Nov 2026)
+
+- Gerbang T1, T2, dan T3 hijau. T2: 1245 tes integrasi lewat tunnel SSH ke VPS. T3: `task web:check` exit 0, 4390 tes frontend, JS awal 198,5 KB dari 200 KB gzip. `task test:generator` hijau (669 detik). `metadata:check` dan `metadata:generate --check` hijau; `metadata:diff` kosong untuk `example` dan fixture.
+- Tiga review akhir putaran independen (evaluator dan frontend, T1, T2) dilakukan; seluruh temuan yang sesuai spek sudah diperbaiki. Temuan di luar spek dicatat di daftar konfirmasi di bawah.
+- Verifikasi browser: aplikasi penuh dengan modul `example` di basis data sementara di VPS lewat tunnel. Dashboard Desk dan halaman Notes tampil 23 catatan; API mengembalikan bentuk bangkitan dengan `createdBy` dan `updatedBy` bernilai null; tanpa galat konsol. Basis data sementara sudah dihapus.
+- Keputusan pemilik produk K19 sampai K24 (jawaban konfirmasi 1 dan 2 Nov 2026): `example` aditif, `math/big`, linter desimal nullable, `sdk:audit` otomatis, lifecycle status baku, dan `statusAxes`. Penamaan `cancelled` dan `deleted` (K23) masih menunggu konfirmasi, lihat daftar di bawah.
+
+### Menunggu konfirmasi pemilik produk (ditemukan selama pelaksanaan)
+
+1. Pola identifier Requirement 1.4: regex tertulis menerima `taxID` padahal prosa melarang huruf kapital berurutan; implementasi sementara memakai pola yang lebih ketat `^[a-z][a-z0-9]*([A-Z][a-z0-9]+)*[A-Z]?$`; usul: selaraskan teks Requirement 1.4.
+2. Kata tercadang: cek Go dan TypeScript memakai bentuk camelCase mentah sehingga `type`, `order`, `user`, `group`, `limit`, `default`, `left`, `class`, `let` ditolak sebagai nama field; usul: cek per target pada bentuk hasil konversi sehingga `type` diizinkan (melonggarkan bersifat aditif).
+3. Alasan tertulis untuk pelonggaran (Req 3.6, 14.5): bentuk `reason` belum ada di skema, sehingga pelonggaran selalu ditolak; usul: kunci `reason` pada item include `set`.
+4. `unmanagedColumns` (Req 2.9): pemeriksa tidak dapat membuktikan kolom di luar metadata itu `highly_confidential`; usul: wajibkan `classification: highly_confidential` dan `reason` per entri.
+5. `lockWhen` sah pada resource non-dokumen dan abstrak (penguncian hanya di server); usul: tolak di luar resource dokumen (D-26).
+6. Penamaan status `cancelled` (bukan `cancel`) dan `deleted` sebagai soft-delete (K23); `ENABLE ALWAYS TRIGGER` pada pemicu bangkitan; `TRUNCATE` melewati pemicu dokumen (usul pemicu `BEFORE TRUNCATE FOR EACH STATEMENT`); `Down` migrasi aman yang berisi `DROP TABLE/COLUMN` menghapus data yang ditulis setelah Up (Req 11.7; usul: disetujui dan dicatat bahwa down hanya untuk dev).
+7. `docs/architecture/transaction-data-standards.md` §1 dan §2 masih memakai siklus lama (`submitted`, `posted`, `pending_approval`, `reject` kembali ke `draft`) yang bertentangan dengan K23; `roadmap-and-risks.md` baris 73 (draf). Perlu keputusan: apakah `posted` (dokumen ber-ledger) tetap ada.
+8. Kunci resource `example.note` pada manifest vs permission yang ada `example.notes.read` (jamak); PRD-001 kelak akan memakai `example.note.read`.
+9. Modul tanpa tag rilis tetap boleh membuat kerangka penghapusan kolom tanpa syarat `removeAfter` (konsisten D-15; Req 12.4 menyebut menolak sebelum `removeAfter`).
+10. Keputusan kecil implementer (semantik tiga-nilai evaluator, `contains` hanya melipat ASCII, batas ekspresi, ambang `overlapping_repeat` 32, format desimal klien, operator filter per tipe, kunci morph bentuk manifest, runtime bangkitan disalin per modul bukan di SDK, pesan validasi platform belum ada di katalog i18n `platform`, label i18n bangkitan belum ada).
+11. T4 (grup 19 sampai 25) menunggu PRD-001 authz.
 
 ## Notes
 

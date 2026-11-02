@@ -251,8 +251,8 @@ func TestCLI_CrashAfterMigrateThenRetry(t *testing.T) {
 	if s := mustCLI(t, dsn, 0, "modules", "status", "acme.example"); !strings.Contains(s, "status: installed") {
 		t.Fatalf("status setelah retry:\n%s", s)
 	}
-	if v := dbQuery(t, dsn, "SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 2 {
-		t.Errorf("versi goose = %d, want 2", v)
+	if v := dbQuery(t, dsn, "SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 3 {
+		t.Errorf("versi goose = %d, want 3", v)
 	}
 	if n := dbQuery(t, dsn, "SELECT count(*) FROM module_migrations"); n != migsBefore {
 		t.Errorf("module_migrations menggandakan baris: %d -> %d", migsBefore, n)
