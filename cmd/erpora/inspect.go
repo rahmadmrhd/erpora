@@ -68,6 +68,8 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				tenant = c.DefaultTenantID.String()
 			}
 			kv := map[string]string{
+				"ERP_SECRET_KEY":            config.RedactSecret(c.SecretKey),
+				"ERP_SECRET_KEY_PREVIOUS":   config.RedactSecret(c.SecretKeyPrevious),
 				"ERP_DATABASE_URL":          config.RedactDSN(c.DatabaseURL),
 				"ERP_ENV":                   string(c.Env),
 				"ERP_HTTP_ADDR":             c.HTTPAddr,

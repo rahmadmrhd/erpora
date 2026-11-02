@@ -70,3 +70,107 @@ func TestI1_FixtureViolations(t *testing.T) {
 		}
 	}
 }
+
+// IDENT: kode non-test di modul tidak boleh memasang identitas, layanan identitas, hak admin, atau pengirim email
+// di context (identity.WithPrincipal/WithService/WithAdmin, mail.WithSender); itu hak platform. Modul memakai
+// identitytest di tes (tes tidak dimuat LoadTyped).
+func TestIdent_FixtureViolations(t *testing.T) {
+	got := byRule(CheckSecurity(loadFixture(t)), "IDENT")
+	perFile := map[string]int{}
+	for _, v := range got {
+		file, _, _ := strings.Cut(v.Detail, ":")
+		perFile[file]++
+	}
+	want := map[string]int{
+		"ctxinject_bad.go":            5, // pemasang konteks
+		"ctxinject_testimport_bad.go": 2, // impor identitytest dan testing
+		"ctxinject_tagged_bad.go":     1, // berkas ber-tag devtools (M-5)
+		"ctxinject_read_bad.go":       3, // AdminFrom/ServiceFrom di modul non-core
+		"linkname_bad.go":             2, // impor unsafe + //go:linkname (I-1a)
+		"unsafe_bad.go":               1, // impor unsafe
+		"ctxinject_windows.go":        1, // varian GOOS=windows (M-4)
+		"ctxinject_linux.go":          1, // varian GOOS=linux (M-4)
+	}
+	total := 0
+	for f, n := range want {
+		total += n
+		if perFile[f] != n {
+			t.Errorf("IDENT di %s = %d, want %d", f, perFile[f], n)
+		}
+	}
+	if len(got) != total { // ctxinject_ok.go bersih
+		t.Fatalf("IDENT = %d, want %d: per file %v: %+v", len(got), total, perFile, got)
+	}
+	for _, v := range got {
+		if !strings.Contains(v.Detail, "milik platform") && !strings.Contains(v.Detail, "hanya untuk berkas _test.go") &&
+			!strings.Contains(v.Detail, "hanya modul core") && !strings.Contains(v.Detail, "unsafe") && !strings.Contains(v.Detail, "linkname") {
+			t.Errorf("pesan IDENT tidak menjelaskan sebab: %+v", v)
+		}
+	}
+}
+
+// M-5: tiap pelanggaran dilaporkan sekali walau paket dimuat untuk beberapa kombinasi build tag.
+func TestCheckSecurity_NoDuplicateViolations(t *testing.T) {
+	seen := map[string]bool{}
+	for _, v := range CheckSecurity(loadFixture(t)) {
+		k := v.Rule + "|" + v.Package + "|" + v.Detail
+		if seen[k] {
+			t.Errorf("pelanggaran ganda: %s", k)
+		}
+		seen[k] = true
+	}
+}
+
+func loadCoreRepo(t *testing.T, dir string) []TypedPackage {
+	t.Helper()
+	pkgs, err := LoadTyped("testdata/corerepo/modules/"+dir, "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pkgs
+}
+
+// IDENT: modul core (path erpora/modules/core DAN direktori modules/core) boleh membaca identity.AdminFrom dan
+// identity.ServiceFrom (Q16, 3 Nov 2026), tetapi pemasang konteks tetap dilarang di dalamnya.
+func TestIdent_CoreModuleMayReadServiceAndAdmin(t *testing.T) {
+	got := byRule(CheckSecurity(loadCoreRepo(t, "core")), "IDENT")
+	if len(got) != 1 || !strings.Contains(got[0].Detail, "identity.WithPrincipal") {
+		t.Fatalf("IDENT di modul core = %+v, want tepat 1 (WithPrincipal) dan tanpa AdminFrom/ServiceFrom", got)
+	}
+}
+
+// M-3: go.mod berpath erpora/modules/core di direktori lain (modules/acme) tidak mendapat hak core.
+func TestIdent_CorePathInOtherDirectoryGetsNoCoreRights(t *testing.T) {
+	got := byRule(CheckSecurity(loadCoreRepo(t, "acme")), "IDENT")
+	if len(got) != 3 {
+		t.Fatalf("IDENT di modules/acme berpath core = %d, want 3 (AdminFrom, ServiceFrom, WithPrincipal): %+v", len(got), got)
+	}
+}
+
+// M-4: varian OS menambah satu OS lain selain host (dengan CGO_ENABLED=0); host sendiri sudah dicakup konfigurasi bawaan.
+func TestBuildTypedVariants_SkipsHostOS(t *testing.T) {
+	has := func(vs []typedVariant, goos string) bool {
+		for _, v := range vs {
+			for _, e := range v.env {
+				if e == "GOOS="+goos {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	lin, win := buildTypedVariants("linux"), buildTypedVariants("windows")
+	if has(lin, "linux") || !has(lin, "windows") || has(win, "windows") || !has(win, "linux") {
+		t.Fatalf("varian OS salah: linux=%+v windows=%+v", lin, win)
+	}
+	for _, vs := range [][]typedVariant{lin, win} {
+		if !has(vs, "linux") && !has(vs, "windows") {
+			continue
+		}
+		for _, v := range vs {
+			if len(v.env) > 0 && v.env[len(v.env)-1] != "CGO_ENABLED=0" {
+				t.Errorf("varian OS harus CGO_ENABLED=0: %+v", v)
+			}
+		}
+	}
+}

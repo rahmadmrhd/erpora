@@ -23,6 +23,10 @@ func newServeCmd(opts *rootOpts) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// serve menyegel/membuka rahasia diam: kunci wajib di semua mode (NFR-104); command lain tidak butuh kunci.
+			if err := cfg.RequireSecretKey(); err != nil {
+				return err
+			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			// Begitu sinyal pertama diterima (shutdown anggun dimulai), kembalikan penanganan sinyal ke default:

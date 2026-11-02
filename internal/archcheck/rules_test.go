@@ -88,8 +88,9 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 		example + "/internal/infrastructure/persistence",
 		root + "/internal/platform/database",
 		root + "/internal/platform/modules/store",
-		root + "/internal/platform/i18n/store",  // PRD-000 Q35 D-1
-		root + "/internal/platform/desks/store", // revisi M3a, design.md section 6 (timpaan Desk, hanya baca)
+		root + "/internal/platform/i18n/store",     // PRD-000 Q35 D-1
+		root + "/internal/platform/desks/store",    // revisi M3a, design.md section 6 (timpaan Desk, hanya baca)
+		root + "/internal/platform/identity/store", // PRD-000 Q42, ADR-0013 (identitas lokal, control DB)
 		sdk + "/data",
 	} {
 		assertNone(t, Check(repoWith(pkg(ok, "gorm.io/gorm"))), "D3b")
@@ -99,6 +100,17 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/i18n/admin", "gorm.io/gorm"))), "D3b")
 	// paket desks lain (bukan store) tetap tidak boleh memakai GORM
 	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/desks", "gorm.io/gorm"))), "D3b")
+	// paket identity lain (password, token, session, guard, mfa, reset, root) tetap tidak boleh memakai GORM;
+	// authorization/store belum ada dan baru masuk allowlist bersama C2
+	for _, bad := range []string{
+		root + "/internal/platform/identity",
+		root + "/internal/platform/identity/password",
+		root + "/internal/platform/identity/token",
+		root + "/internal/platform/identity/session",
+		root + "/internal/platform/authorization/store",
+	} {
+		assertViolation(t, Check(repoWith(pkg(bad, "gorm.io/gorm"))), "D3b")
+	}
 }
 
 func TestD4_ApplicationImportsInfrastructure(t *testing.T) {
@@ -478,4 +490,20 @@ func TestParseWebPackage_PlatformPackagesAreNotModuleDeps(t *testing.T) {
 	assertNone(t, Check(r), "F2")
 	r.Web = map[string]WebPackage{example: wp}
 	assertViolation(t, Check(r), "F2")
+}
+
+// MODPATH (M-3): path Go module sebuah modul bisnis harus erpora/modules/<direktori>; path yang tidak cocok
+// memungkinkan modul menyamar (mis. mendapat hak modul core pada aturan IDENT).
+func TestMODPATH_ModulePathMustMatchDirectory(t *testing.T) {
+	r := repoWith()
+	r.Root = filepath.Join(string(filepath.Separator), "r")
+	mk := func(dir, path string) Repo {
+		rr := r
+		rr.Mods = append([]GoMod{}, r.Mods...)
+		rr.Mods = append(rr.Mods, GoMod{Path: path, Dir: filepath.Join(r.Root, filepath.FromSlash(dir)), GoVersion: "1.27", Toolchain: "go1.27.3", Requires: []string{sdk}})
+		return rr
+	}
+	assertNone(t, Check(mk("modules/acme", root+"/modules/acme")), "MODPATH")
+	assertViolation(t, Check(mk("modules/acme", root+"/modules/core")), "MODPATH") // penyamar
+	assertViolation(t, Check(mk("vendor/acme", root+"/modules/acme")), "MODPATH")  // di luar modules/
 }

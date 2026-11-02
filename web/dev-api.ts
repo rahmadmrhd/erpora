@@ -2,6 +2,7 @@
 // Urutan: tunnel (IPv4, lalu IPv6 bila gagal) -> database dev -> migrasi + install modul -> air (live-reload).
 // Verifikasi host key SSH tidak pernah dinonaktifkan; bila kedua alias gagal, skrip berhenti dan melaporkannya.
 import { join } from "node:path";
+import { resolveSecretEnv } from "./tools/envfile";
 
 const ROOT = join(import.meta.dir, "..");
 const ALIASES = (process.env.ERP_DEV_VPS_ALIASES ?? "rhd_vps_ipv4,rhd_vps_ipv6").split(",");
@@ -191,9 +192,20 @@ async function shutdown(code: number): Promise<never> {
   process.exit(code);
 }
 
+// serve butuh ERP_SECRET_KEY di semua mode (tanpa kunci sementara). Ambil dari environment proses atau .env (diurai seperti
+// godotenv: komentar inline, entri ganda terakhir menang); ERP_SECRET_KEY_PREVIOUS (rotasi) ikut diteruskan. air untuk VPS
+// menjalankan serve tanpa --env-file, jadi nilainya dimasukkan lewat apiEnv. Nilainya tidak pernah dicetak.
+async function ensureSecretKey(): Promise<void> {
+  const envFile = Bun.file(join(ROOT, ".env"));
+  const text = (await envFile.exists()) ? await envFile.text() : undefined;
+  Object.assign(apiEnv, resolveSecretEnv(process.env, text));
+}
+
 async function main(): Promise<void> {
   process.on("SIGINT", () => void shutdown(0));
   process.on("SIGTERM", () => void shutdown(0));
+
+  await ensureSecretKey();
 
   await connectTunnel();
   void superviseTunnel();

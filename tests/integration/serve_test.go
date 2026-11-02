@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 var (
@@ -99,7 +100,8 @@ func startServe(t *testing.T, dsn, addr string) *proc {
 func startServeBin(t *testing.T, bin, dsn, addr string) *proc {
 	t.Helper()
 	cmd := exec.Command(bin, "serve")
-	cmd.Env = baseEnv(dsn, addr)
+	// serve butuh ERP_SECRET_KEY (semua mode); kunci acak per proses uji, command lain tidak membutuhkannya.
+	cmd.Env = append(baseEnv(dsn, addr), secretkey.Env())
 	p := &proc{cmd: cmd, stderr: &bytes.Buffer{}, stdout: &bytes.Buffer{}, done: make(chan error, 1)}
 	cmd.Stderr = p.stderr
 	cmd.Stdout = p.stdout

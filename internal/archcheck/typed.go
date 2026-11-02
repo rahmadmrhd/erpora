@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,9 @@ import (
 // TypedPackage adalah satu paket dengan informasi tipe lengkap untuk aturan EGRESS dan DECODE.
 type TypedPackage struct {
 	ImportPath, Module string
+	// ModuleDir adalah direktori go.mod pemilik paket (absolut). Dipakai aturan IDENT untuk mengunci hak modul core
+	// ke direktori modules/core, bukan hanya ke path Go module (M-3).
+	ModuleDir string
 	// Slug adalah namespace i18n modul pemilik (slug di module.json; bila tidak ada, nama terakhir path
 	// Go module). Dipakai aturan I1.
 	Slug  string
@@ -27,15 +31,49 @@ type TypedPackage struct {
 	Types *types.Package
 }
 
-// LoadTyped memuat "./..." di dir dengan informasi tipe (tanpa file test). env menambah environment
-// proses (mis. GOWORK=off untuk fixture).
+// typedVariant adalah satu konfigurasi build untuk memuat paket: flag go dan environment tambahan.
+type typedVariant struct{ flags, env []string }
+
+// typedBuildVariants adalah kombinasi build yang dimuat untuk analisis aturan keamanan bertipe. Berkas modul
+// ber-`//go:build devtools` atau bersufiks/ber-tag OS (`*_windows.go`, `*_linux.go`) tidak ikut dimuat pada
+// konfigurasi bawaan, sehingga tanpa varian tambahan ia lolos semua aturan (IDENT, EGRESS, I1, DECODE). Varian OS
+// memakai CGO_ENABLED=0 agar paket ber-cgo tidak galat saat dimuat lintas OS; varian OS yang sama dengan host
+// dilewati (sudah dicakup konfigurasi bawaan). Batasan: GOARCH dan tag selain devtools tidak dicakup.
+var typedBuildVariants = buildTypedVariants(runtime.GOOS)
+
+func buildTypedVariants(hostOS string) []typedVariant {
+	vs := []typedVariant{{}, {flags: []string{"-tags=devtools"}}}
+	for _, goos := range []string{"linux", "windows"} {
+		if goos != hostOS {
+			vs = append(vs, typedVariant{env: []string{"GOOS=" + goos, "CGO_ENABLED=0"}})
+		}
+	}
+	return vs
+}
+
+// LoadTyped memuat "./..." di dir dengan informasi tipe (tanpa file test), untuk setiap kombinasi di
+// typedBuildVariants (tag devtools dan OS lain). Paket yang sama dapat muncul beberapa kali (satu per varian); CheckSecurity membuang
+// pelanggaran ganda. env menambah environment proses (mis. GOWORK=off untuk fixture).
 func LoadTyped(dir string, env ...string) ([]TypedPackage, error) {
+	var out []TypedPackage
+	for _, v := range typedBuildVariants {
+		pkgs, err := loadTypedOnce(dir, v.flags, append(append([]string{}, v.env...), env...))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pkgs...)
+	}
+	return out, nil
+}
+
+func loadTypedOnce(dir string, buildFlags, env []string) ([]TypedPackage, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes |
 			packages.NeedTypesInfo | packages.NeedModule | packages.NeedImports | packages.NeedDeps,
-		Tests: false,
-		Dir:   dir,
-		Env:   append(os.Environ(), env...),
+		Tests:      false,
+		Dir:        dir,
+		Env:        append(os.Environ(), env...),
+		BuildFlags: buildFlags,
 	}
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
@@ -50,12 +88,13 @@ func LoadTyped(dir string, env ...string) ([]TypedPackage, error) {
 		tp := TypedPackage{ImportPath: p.PkgPath, Fset: p.Fset, Files: p.Syntax, Info: p.TypesInfo, Types: p.Types}
 		if p.Module != nil {
 			tp.Module = p.Module.Path
+			tp.ModuleDir = p.Module.Dir
 			tp.Slug = moduleSlug(dir, p.Module.Path)
 		}
 		out = append(out, tp)
 	}
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("paket %s tidak dapat dikompilasi:\n%s", dir, strings.Join(errs, "\n"))
+		return nil, fmt.Errorf("paket %s tidak dapat dikompilasi (build flags %v):\n%s", dir, buildFlags, strings.Join(errs, "\n"))
 	}
 	return out, nil
 }
@@ -90,12 +129,18 @@ func LoadTypedRepo(root string) ([]TypedPackage, error) {
 	return all, nil
 }
 
-// CheckSecurity menerapkan aturan EGRESS, DECODE, dan I1 pada paket modul bisnis (Module berprefiks
+// CheckSecurity menerapkan aturan EGRESS, DECODE, I1, dan IDENT pada paket modul bisnis (Module berprefiks
 // "erpora/modules/"). Detail: "<file>:<line>: <uraian>".
 //
 // EGRESS: modul tidak boleh memakai HTTP client mentah net/http (DefaultClient, DefaultTransport, Get, Post,
 // Head, PostForm, serta Client/Transport yang diinstansiasi); satu-satunya jalur keluar adalah sdk/egress
 // (security-guidelines §3.3).
+//
+// IDENT: kode non-test modul tidak boleh memanggil atau mereferensikan identity.WithPrincipal, identity.WithService,
+// identity.WithAdmin, dan mail.WithSender (hak platform; tes modul memakai identitytest). Kode non-test juga tidak
+// boleh mengimpor erpora/sdk/identity/identitytest dan testing. Selain modul core, kode non-test juga tidak boleh
+// memanggil atau mereferensikan identity.AdminFrom dan identity.ServiceFrom. Impor unsafe dan direktif
+// //go:linkname dilarang karena dapat memintas deteksi berbasis types.Func.
 //
 // DECODE: input tidak boleh didekode langsung ke tipe dari paket internal/infrastructure, termasuk lewat
 // slice, map, atau struct pembungkus (mass assignment, security-guidelines §3.1). json.Unmarshal/Decode di
@@ -103,6 +148,7 @@ func LoadTypedRepo(root string) ([]TypedPackage, error) {
 // di paket infrastructure selalu melanggar.
 func CheckSecurity(pkgs []TypedPackage) []Violation {
 	var out []Violation
+	seen := map[string]bool{} // paket yang sama dimuat per varian build tag: satu temuan per (aturan, paket, detail)
 	for _, p := range pkgs {
 		if !strings.HasPrefix(p.Module, modulesBase) || p.Info == nil {
 			continue
@@ -117,17 +163,50 @@ func CheckSecurity(pkgs []TypedPackage) []Violation {
 				}
 				seenEgress[key] = true
 			}
-			out = append(out, Violation{Rule: rule, Package: p.ImportPath,
-				Detail: fmt.Sprintf("%s:%d: %s", filepath.Base(pp.Filename), pp.Line, detail)})
+			v := Violation{Rule: rule, Package: p.ImportPath,
+				Detail: fmt.Sprintf("%s:%d: %s", filepath.Base(pp.Filename), pp.Line, detail)}
+			if k := v.Rule + "|" + v.Package + "|" + v.Detail; !seen[k] {
+				seen[k] = true
+				out = append(out, v)
+			}
 		}
 		inInfra := isInfraPath(p.ImportPath)
 
 		for _, f := range p.Files {
+			// IDENT: helper uji identitas dan paket testing hanya untuk berkas _test.go; LoadTyped hanya memuat
+			// berkas non-test, jadi impornya di sini selalu pelanggaran (identitytest dapat memasang Principal palsu).
+			for _, imp := range f.Imports {
+				path, err := strconv.Unquote(imp.Path.Value)
+				if err != nil {
+					continue
+				}
+				switch path {
+				case identitytestPath, "testing":
+					add("IDENT", imp.Pos(), "impor "+path+" di kode non-test modul dilarang: hanya untuk berkas _test.go (helper uji dapat memasang Principal palsu)")
+				case "unsafe":
+					add("IDENT", imp.Pos(), "impor unsafe di kode non-test modul dilarang (termasuk import _ \"unsafe\"): jalur ke //go:linkname yang memintas deteksi pemasang konteks")
+				}
+			}
+			// //go:linkname memungkinkan fungsi tanpa badan menunjuk ke simbol platform (mis. identity.WithPrincipal) tanpa
+			// muncul sebagai types.Func yang dilacak aturan ini; Go 1.23+ hanya membatasi linkname ke simbol stdlib.
+			for _, cg := range f.Comments {
+				for _, c := range cg.List {
+					if strings.HasPrefix(c.Text, "//go:linkname") {
+						add("IDENT", c.Pos(), "direktif //go:linkname di kode non-test modul dilarang: memintas deteksi pemasang konteks identitas/email")
+					}
+				}
+			}
 			ast.Inspect(f, func(n ast.Node) bool {
 				switch x := n.(type) {
 				case *ast.Ident:
 					if fn, ok := p.Info.Uses[x].(*types.Func); ok && platformOnlyI18n(fn) {
 						add("I1", x.Pos(), "i18n."+fn.Name()+" milik platform (pemasang konteks penerjemah); modul hanya boleh memakai i18n.T dan i18n.Lookup, sebab mengubah scope atau Resolver membuka namespace modul lain")
+					}
+					if fn, ok := p.Info.Uses[x].(*types.Func); ok && platformOnlyCtx(fn) {
+						add("IDENT", x.Pos(), fn.Pkg().Name()+"."+fn.Name()+" milik platform (pemasang identitas/pengirim email di konteks); modul hanya boleh membaca lewat identity.FromContext dan mail.Send/From, dan memakai identitytest di tes")
+					}
+					if fn, ok := p.Info.Uses[x].(*types.Func); ok && coreOnlyCtx(fn) && !isCoreModule(p) {
+						add("IDENT", x.Pos(), fn.Pkg().Name()+"."+fn.Name()+" hanya modul core yang boleh membaca Service/Admin dari konteks (identity.Admin dipasang pada konteks modul core dan alasan sistem cli:core:*); modul lain memakai identity.FromContext atau kontrak modul core")
 					}
 					if name, ok := rawHTTPUse(p.Info.Uses[x]); ok {
 						add("EGRESS", x.Pos(), "net/http."+name+" dilarang di modul; gunakan erpora/sdk/egress")
@@ -228,6 +307,50 @@ func rawHTTPType(t types.Type) (string, bool) {
 
 // i18nPath adalah paket penerjemah yang dipakai modul.
 const i18nPath = "erpora/sdk/i18n"
+
+// Pemasang konteks identitas dan email milik platform (aturan IDENT): modul yang dapat memanggilnya mampu
+// memalsukan Principal, mengganti layanan identitas, atau mengambil hak admin tanpa melewati Authenticate.
+const (
+	identityPath = "erpora/sdk/identity"
+	mailPath     = "erpora/sdk/mail"
+
+	identitytestPath = "erpora/sdk/identity/identitytest"
+)
+
+var platformOnlyCtxFuncs = map[string]map[string]bool{
+	identityPath: {"WithPrincipal": true, "WithService": true, "WithAdmin": true},
+	mailPath:     {"WithSender": true},
+}
+
+// coreOnlyCtxFuncs adalah pembaca konteks yang hanya boleh dipakai modul core: Service (login, sesi, MFA) dan Admin
+// (operasi administratif) tidak dipasang pada konteks modul lain (keputusan pemilik produk 3 Nov 2026, PRD-001 Q16).
+var coreOnlyCtxFuncs = map[string]map[string]bool{
+	identityPath: {"AdminFrom": true, "ServiceFrom": true},
+}
+
+// coreModulePath adalah path Go module modul core.
+const coreModulePath = modulesBase + "core"
+
+// isCoreModule: paket milik modul core sejati, yaitu path Go module erpora/modules/core DAN direktori go.mod-nya
+// <root>/modules/core. Path saja tidak cukup: go.mod berpath core di direktori lain tidak mendapat hak core.
+// (Aturan MODPATH di Check juga menolak path yang tidak cocok dengan direktorinya.)
+func isCoreModule(p TypedPackage) bool {
+	if p.Module != coreModulePath || p.ModuleDir == "" {
+		return false
+	}
+	dir := filepath.ToSlash(filepath.Clean(p.ModuleDir))
+	return strings.HasSuffix(dir, "/modules/core")
+}
+
+func coreOnlyCtx(fn *types.Func) bool {
+	return fn.Pkg() != nil && coreOnlyCtxFuncs[fn.Pkg().Path()][fn.Name()]
+}
+
+// platformOnlyCtx melaporkan apakah fn adalah pemasang konteks identitas/email milik platform (pemanggilan maupun
+// sekadar referensi/penugasan ke variabel).
+func platformOnlyCtx(fn *types.Func) bool {
+	return fn.Pkg() != nil && platformOnlyCtxFuncs[fn.Pkg().Path()][fn.Name()]
+}
 
 // platformOnlyI18nFuncs adalah fungsi sdk/i18n yang hanya boleh dipanggil platform: memasang atau membaca locale,
 // scope, dan Resolver di context. Modul yang memakainya dapat menembus P12 (Requirement 1.2) tanpa menyebut literal

@@ -50,7 +50,11 @@ type Inputs struct {
 	// ConfigErr adalah pesan galat pemuatan konfigurasi selain DSN yang belum diatur (mis. ERP_ENV tidak valid, env-file rusak);
 	// bila terisi, koneksi tidak diperiksa dan pesan ini yang ditampilkan.
 	ConfigErr string
-	Ping      func(ctx context.Context, dsn string) error
+	// SecretKeyChecked true bila konfigurasi termuat cukup jauh untuk menilai ERP_SECRET_KEY; SecretKeyErr (bila terisi)
+	// adalah galat validasinya (tanpa nilai kunci). Temuan ini terpisah dari postgres: DSN tetap diperiksa.
+	SecretKeyChecked bool
+	SecretKeyErr     string
+	Ping             func(ctx context.Context, dsn string) error
 }
 
 // ExecProbe adalah Probe sungguhan (os/exec + os.Stat).
@@ -77,9 +81,9 @@ var (
 	bunPinPattern = regexp.MustCompile(`"packageManager"\s*:\s*"bun@([^"]+)"`)
 )
 
-// Run menjalankan semua pemeriksaan dengan urutan tetap: go, bun, task, docker, postgres, .env.
+// Run menjalankan semua pemeriksaan dengan urutan tetap: go, bun, task, docker, postgres, ERP_SECRET_KEY, .env.
 func Run(ctx context.Context, in Inputs, p Probe) []Result {
-	return []Result{checkGo(ctx, in, p), checkBun(ctx, in, p), checkTask(ctx, p), checkDocker(ctx, p), checkPostgres(ctx, in), checkEnvFile(in, p)}
+	return []Result{checkGo(ctx, in, p), checkBun(ctx, in, p), checkTask(ctx, p), checkDocker(ctx, p), checkPostgres(ctx, in), checkSecretKey(in), checkEnvFile(in, p)}
 }
 
 // Failed melaporkan apakah ada hasil fail.
@@ -195,6 +199,17 @@ func checkPostgres(ctx context.Context, in Inputs) Result {
 		return Result{Name: "postgres", Status: StatusFail, Detail: "host=" + host + ": " + msg}
 	}
 	return Result{Name: "postgres", Status: StatusOK, Detail: "terjangkau (host=" + host + ")"}
+}
+
+func checkSecretKey(in Inputs) Result {
+	const name = "ERP_SECRET_KEY"
+	switch {
+	case in.SecretKeyErr != "":
+		return Result{Name: name, Status: StatusFail, Detail: "belum valid (startup akan gagal): " + in.SecretKeyErr}
+	case !in.SecretKeyChecked:
+		return Result{Name: name, Status: StatusWarn, Detail: "tidak diperiksa (konfigurasi belum termuat)"}
+	}
+	return Result{Name: name, Status: StatusOK, Detail: "valid (32 byte base64; nilai tidak ditampilkan)"}
 }
 
 func checkEnvFile(in Inputs, p Probe) Result {

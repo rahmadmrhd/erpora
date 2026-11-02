@@ -21,6 +21,14 @@ Salin `.env.example` menjadi `.env`:
 - PowerShell: `Copy-Item .env.example .env`
 - Git Bash, macOS, Linux: `cp .env.example .env`
 
+Buat `ERP_SECRET_KEY` sekali (wajib untuk `serve` di semua mode) dan tempel ke `.env`:
+
+```sh
+task erpora -- secret:generate   # hanya mencetak 32 byte acak base64; tidak menyimpan apa pun
+```
+
+`.env` itu juga dibaca konfigurasi pratinjau `verify-api` di `.claude/launch.json` (`serve --env-file .env`); berkas `.env` tidak terlacak git, jadi kunci tidak pernah ditanam di repo.
+
 Lalu jalankan:
 
 ```sh

@@ -90,7 +90,9 @@ type Invocation struct {
 	Args  []string
 	Flags map[string]string
 	Out   io.Writer
-	Env   Env
+	// In adalah masukan standar command (mis. prompt kata sandi); nil bila tidak tersedia.
+	In  io.Reader
+	Env Env
 }
 
 // Command adalah perintah CLI yang disumbang modul. Run wajib diisi; registry

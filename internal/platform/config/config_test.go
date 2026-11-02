@@ -9,12 +9,13 @@ import (
 	"time"
 )
 
-// clearEnv mengosongkan variabel ERP_* agar test deterministik.
+// clearEnv mengosongkan variabel ERP_* agar test deterministik. ERP_SECRET_KEY sengaja kosong: Load tidak
+// memerlukannya (hanya serve lewat RequireSecretKey).
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"ERP_DATABASE_URL", "ERP_ENV", "ERP_HTTP_ADDR", "ERP_LOG_FORMAT",
-		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_MODULES_ADMIN_API", "ERP_DB_NPLUSONE_THRESHOLD", "ERP_DB_STATEMENT_TIMEOUT_MS",
+		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_MODULES_ADMIN_API", "ERP_DB_NPLUSONE_THRESHOLD", "ERP_DB_STATEMENT_TIMEOUT_MS", "ERP_SECRET_KEY", "ERP_SECRET_KEY_PREVIOUS",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)

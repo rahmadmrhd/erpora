@@ -1,6 +1,9 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 )
@@ -9,6 +12,33 @@ const (
 	redacted   = "****"
 	invalidDSN = "<invalid dsn>"
 )
+
+// Secret adalah byte rahasia (mis. ERP_SECRET_KEY) yang menyamarkan dirinya di setiap jalur pencetakan:
+// fmt (%v %+v %#v %s %x %d), JSON, dan slog. Tipenya assignable ke []byte, jadi dapat diteruskan langsung ke
+// crypto.NewSealer; hanya pencetakan yang disamarkan, bukan isi slice-nya (ambil byte lewat []byte(s)).
+type Secret []byte
+
+// RedactSecret mengembalikan "****" bila rahasia terisi dan "" bila kosong (tidak diset). Tidak pernah memuat nilai.
+func RedactSecret(s []byte) string {
+	if len(s) == 0 {
+		return ""
+	}
+	return redacted
+}
+
+// String dan GoString menyamarkan nilai pada pencetakan teks.
+func (s Secret) String() string   { return RedactSecret(s) }
+func (s Secret) GoString() string { return "config.Secret(" + RedactSecret(s) + ")" }
+
+// Format menyamarkan untuk semua verba (%v, %s, %x, %d, %q, ...).
+func (s Secret) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte(RedactSecret(s))) }
+
+// MarshalJSON dan MarshalText menyamarkan nilai pada serialisasi.
+func (s Secret) MarshalJSON() ([]byte, error) { return json.Marshal(RedactSecret(s)) }
+func (s Secret) MarshalText() ([]byte, error) { return []byte(RedactSecret(s)), nil }
+
+// LogValue menyamarkan nilai pada slog.
+func (s Secret) LogValue() slog.Value { return slog.StringValue(RedactSecret(s)) }
 
 // secretKeys adalah kunci DSN (huruf kecil) yang nilainya rahasia.
 var secretKeys = map[string]bool{"password": true, "sslpassword": true}

@@ -33,18 +33,10 @@ func newDoctor(opts Options) *cobra.Command {
 			if opts.EnvFile != nil {
 				envFile = opts.EnvFile()
 			}
-			dsn, cfgErr := "", ""
 			cfg, err := config.Load(envFile)
-			var ve config.ValidationError
-			switch {
-			case err == nil:
-				dsn = cfg.DatabaseURL
-			case errors.As(err, &ve) && ve.Var == "ERP_DATABASE_URL":
-				// DSN belum diatur: dilaporkan oleh pemeriksaan postgres sebagai warn.
-			default:
-				cfgErr = err.Error() // galat konfigurasi lain (mis. ERP_ENV tidak valid): tampilkan apa adanya
-			}
-			rs := doctor.Run(c.Context(), doctor.Inputs{Root: root, EnvFile: envFile, DSN: dsn, ConfigErr: cfgErr, Ping: pingPostgres}, doctor.ExecProbe{})
+			in := doctorInputs(cfg, err)
+			in.Root, in.EnvFile, in.Ping = root, envFile, pingPostgres
+			rs := doctor.Run(c.Context(), in, doctor.ExecProbe{})
 			tw := tabwriter.NewWriter(c.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "NAMA\tSTATUS\tDETAIL")
 			for _, r := range rs {
@@ -58,6 +50,27 @@ func newDoctor(opts Options) *cobra.Command {
 			}
 			return nil
 		},
+	}
+}
+
+// doctorInputs memetakan hasil config.Load ke masukan doctor. Galat ERP_SECRET_KEY dan ERP_SECRET_KEY_PREVIOUS adalah temuan tersendiri: DSN dari
+// Config parsial tetap dipakai agar pemeriksaan postgres tidak hilang.
+func doctorInputs(cfg config.Config, err error) doctor.Inputs {
+	var ve config.ValidationError
+	switch {
+	case err == nil:
+		in := doctor.Inputs{DSN: cfg.DatabaseURL, SecretKeyChecked: true}
+		if kerr := cfg.RequireSecretKey(); kerr != nil { // kunci kosong: serve akan gagal
+			in.SecretKeyErr = kerr.Error()
+		}
+		return in
+	case errors.As(err, &ve) && (ve.Var == "ERP_SECRET_KEY" || ve.Var == "ERP_SECRET_KEY_PREVIOUS"):
+		// Keduanya membuat serve gagal: FAIL pada temuan kunci (pesan menyebut variabel yang bermasalah), bukan ConfigErr.
+		return doctor.Inputs{DSN: cfg.DatabaseURL, SecretKeyChecked: true, SecretKeyErr: err.Error()}
+	case errors.As(err, &ve) && ve.Var == "ERP_DATABASE_URL":
+		return doctor.Inputs{} // DSN belum diatur: dilaporkan oleh pemeriksaan postgres sebagai warn
+	default:
+		return doctor.Inputs{ConfigErr: err.Error()} // galat konfigurasi lain (mis. ERP_ENV tidak valid): tampilkan apa adanya
 	}
 }
 

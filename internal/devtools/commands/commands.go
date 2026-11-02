@@ -26,5 +26,5 @@ func Register(root *cobra.Command, opts Options) {
 	registerRelease(root)
 	registerI18n(root)
 	registerMetadata(root)
-	root.AddCommand(newDoctor(opts))
+	root.AddCommand(newDoctor(opts), newSecretGenerate())
 }

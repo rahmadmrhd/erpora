@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 func freeAddr(t *testing.T) string {
@@ -129,7 +130,7 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 	// 6. Install, enable, command CLI, dan serve terhadap PostgreSQL sungguhan.
 	dsn := pgtest.Start(t)
 	addr := freeAddr(t)
-	dbEnv := append(env, "ERP_DATABASE_URL="+dsn, "ERP_HTTP_ADDR="+addr, "ERP_ENV=development", "ERP_LOG_FORMAT=text", "OTEL_EXPORTER_OTLP_ENDPOINT=")
+	dbEnv := append(env, "ERP_DATABASE_URL="+dsn, "ERP_HTTP_ADDR="+addr, "ERP_ENV=development", "ERP_LOG_FORMAT=text", "OTEL_EXPORTER_OTLP_ENDPOINT=", secretkey.Env())
 	run(t, repo, dbEnv, bin, "migrate", "up")
 	run(t, repo, dbEnv, bin, "modules", "install", "acme.inventory", "--with-deps", "--enable")
 	run(t, repo, dbEnv, bin, "modules", "install", "acme.stock-opname", "--enable")
