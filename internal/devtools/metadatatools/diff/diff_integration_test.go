@@ -81,6 +81,9 @@ func TestRun_DetectsDifferences(t *testing.T) {
 		{"pemicu dihapus", true, "fixturesales", `DROP TRIGGER fixturesales_invoices_lock_trg ON fixturesales_invoices;`, []string{KindTriggerMissing}},
 		{"pemicu dinonaktifkan", true, "fixturesales", `ALTER TABLE fixturesales_invoices DISABLE TRIGGER fixturesales_invoices_lock_trg;`, []string{KindTriggerDisabled}},
 		{"pemicu replika saja", true, "fixturesales", `ALTER TABLE fixturesales_invoices ENABLE REPLICA TRIGGER fixturesales_invoices_lock_trg;`, []string{KindTriggerDisabled}},
+		{"pemicu ENABLE biasa (dapat dilewati session_replication_role)", true, "fixturesales", `ALTER TABLE fixturesales_invoices ENABLE TRIGGER fixturesales_invoices_lock_trg;`, []string{KindTriggerDisabled}},
+		{"pemicu anak dihapus", true, "fixturesales", `DROP TRIGGER fixturesales_invoice_lines_invoice_id_lock_trg ON fixturesales_invoice_lines;`, []string{KindTriggerMissing}},
+		{"pemicu pivot dinonaktifkan", true, "fixturesales", `ALTER TABLE fixturesales_invoice_tags DISABLE TRIGGER fixturesales_invoice_tags_invoice_id_lock_trg;`, []string{KindTriggerDisabled}},
 		{"badan pemicu diganti", true, "fixturesales", "-- +goose StatementBegin\nCREATE OR REPLACE FUNCTION fixturesales_invoices_lock_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\n-- +goose StatementEnd", []string{KindTriggerChanged}},
 	}
 	for _, c := range cases {
@@ -210,28 +213,19 @@ func TestRun_ExpectedSchemaError(t *testing.T) {
 	}
 }
 
-// Migrasi tulis tangan modul referensi: example (migrasi nyata) dibandingkan dengan metadata yang
-// mendeskripsikannya. Satu-satunya selisih adalah nilai bawaan now() yang tidak dapat dinyatakan sebagai
-// literal metadata (dicatat sebagai temuan untuk task 14.1).
+// Modul referensi nyata: example (metadata di modules/example/metadata dan migrasi tulis tangan 0001-0003)
+// harus berselisih kosong (task 14.1; K22: createdAt/updatedAt DEFAULT now() dan version DEFAULT 1 implisit
+// dari sdk:audit, createdBy/updatedBy nullable).
 func TestRun_ExampleModuleHandwrittenMigrations(t *testing.T) {
 	c, ps := resolve.NewCatalogWithBuiltin()
 	if len(ps) != 0 {
 		t.Fatal(ps)
 	}
-	doc, lps := load.Parse("example/note.resource.yaml", []byte(`schemaVersion: "1"
-kind: resource
-key: example.note
-fields:
-  id: {type: uuid, readOnly: true}
-  title: {type: string, minLength: 1, maxLength: 200, label: example.note.title}
-  createdAt: {type: datetime, index: true, readOnly: true}
-  version: {type: integer, minimum: 1, default: 1, readOnly: true}
-  updatedAt: {type: datetime, readOnly: true}
-`))
-	if len(lps) != 0 {
-		t.Fatal(lps)
+	docs, lps := load.LoadFS(os.DirFS("../../../../modules"), "example/metadata")
+	if len(lps) != 0 || len(docs) == 0 {
+		t.Fatalf("dokumen=%d temuan=%v", len(docs), lps)
 	}
-	if aps := c.AddModule(resolve.Module{Slug: "example"}, doc); len(aps) != 0 {
+	if aps := c.AddModule(resolve.Module{Slug: "example"}, docs...); len(aps) != 0 {
 		t.Fatal(aps)
 	}
 	res := c.ResolveAll()
@@ -242,24 +236,10 @@ fields:
 	if len(dps) != 0 {
 		t.Fatal(dps)
 	}
-	// Hanya migrasi 0001 dan 0002 (keadaan awal modul); migrasi berikutnya milik task 8.2 dan 14.1.
-	files := map[string]string{}
-	for _, n := range []string{"0001_create_example_notes.sql", "0002_add_example_notes_version.sql"} {
-		b, err := os.ReadFile("../../../../modules/example/migrations/" + n)
-		if err != nil {
-			t.Fatal(err)
-		}
-		files[n] = string(b)
-	}
-	src := []Source{{Slug: "example", Migrations: moduleFS(files)}}
+	src := []Source{{Slug: "example", Migrations: os.DirFS("../../../../modules/example/migrations")}}
 	r := mustRun(t, pgtest.Start(t), model, src)
-	var got []string
-	for _, f := range r.Findings {
-		got = append(got, f.Kind+":"+f.Object+"="+f.Actual)
-	}
-	want := "column_default:created_at=now(),column_default:updated_at=now()"
-	if strings.Join(got, ",") != want {
-		t.Fatalf("temuan = %v\n%s\nwant %s", got, r, want)
+	if !r.Empty() {
+		t.Fatalf("example harus berselisih kosong:\n%s", r)
 	}
 }
 

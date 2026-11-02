@@ -62,7 +62,7 @@ func TestGeneratedCreate(t *testing.T) {
 }
 
 func TestGeneratedRejectsReadOnlyAndUnknown(t *testing.T) {
-	w, r := post(` + "`" + `{"number":"X","status":"submitted","bogus":1,"total":"1"}` + "`" + `)
+	w, r := post(` + "`" + `{"number":"X","status":"accepted","bogus":1,"total":"1"}` + "`" + `)
 	_, err := DecodeInvoiceCreate(w, r)
 	code, m := details(t, err)
 	if code != "validation_failed" || m["number"] != "read_only" || m["status"] != "read_only" || m["bogus"] != "unknown_field" {
@@ -141,9 +141,52 @@ func TestGeneratedBodyLimitAndDepth(t *testing.T) {
 	}
 }
 
+func TestGeneratedStatusTables(t *testing.T) {
+	s := domain.InvoiceSpec
+	if s.Lifecycle == nil || !s.Lifecycle.Allows(domain.InvoiceStatusDraft, domain.InvoiceStatusAccepted) ||
+		!s.Lifecycle.Allows(domain.InvoiceStatusDraft, domain.InvoiceStatusNeedApproval) ||
+		s.Lifecycle.Allows(domain.InvoiceStatusDraft, "submitted") || s.Lifecycle.Allows(domain.InvoiceStatusAccepted, domain.InvoiceStatusDraft) ||
+		s.Lifecycle.Allows(domain.InvoiceStatusRejected, domain.InvoiceStatusDraft) {
+		t.Errorf("tabel transisi lifecycle salah: %+v", s.Lifecycle)
+	}
+	del, ok := s.Axis(domain.InvoiceFieldDeliveryStatus)
+	if !ok || del.Initial != domain.InvoiceDeliveryStatusToDeliver {
+		t.Fatalf("sumbu pengiriman: %+v", del)
+	}
+	if !del.Allows(domain.InvoiceDeliveryStatusPartiallyDelivered, domain.InvoiceDeliveryStatusToDeliver) ||
+		!del.Allows(domain.InvoiceDeliveryStatusDelivered, domain.InvoiceDeliveryStatusToDeliver) ||
+		del.Allows(domain.InvoiceDeliveryStatusToDeliver, domain.InvoiceDeliveryStatusToDeliver) {
+		t.Error("transisi mundur sumbu pengiriman harus sah, pasangan tak tercantum tidak")
+	}
+	bill, ok := s.Axis(domain.InvoiceFieldBillingStatus)
+	if !ok || !bill.Allows(domain.InvoiceBillingStatusToBill, domain.InvoiceBillingStatusBilled) || bill.Allows(domain.InvoiceBillingStatusBilled, domain.InvoiceBillingStatusToBill) {
+		t.Errorf("sumbu penagihan: %+v", bill)
+	}
+	for _, name := range []string{domain.InvoiceFieldBillingStatus, domain.InvoiceFieldDeliveryStatus, domain.InvoiceFieldStatus} {
+		if _, ro := s.ReadOnlyNames()[name]; !ro {
+			t.Errorf("%s harus hanya-baca", name)
+		}
+	}
+}
+
+func TestGeneratedRejectsStatusAxisFromClient(t *testing.T) {
+	for _, field := range []string{"status", "billingStatus", "deliveryStatus"} {
+		w, r := post("{\"" + field + "\":\"x\",\"total\":\"1\"}")
+		_, err := DecodeInvoiceCreate(w, r)
+		if _, m := details(t, err); m[field] != "read_only" {
+			t.Errorf("%s harus read_only: %v", field, m)
+		}
+		w, r = post("{\"" + field + "\":\"x\"}")
+		_, err = DecodeInvoiceUpdate(w, r)
+		if _, m := details(t, err); m[field] != "read_only" {
+			t.Errorf("update %s harus read_only: %v", field, m)
+		}
+	}
+}
+
 func TestGeneratedLockedAndConstants(t *testing.T) {
 	if domain.InvoiceSpec.Locked(metadata.Record{"status": domain.InvoiceStatusDraft}) ||
-		!domain.InvoiceSpec.Locked(metadata.Record{"status": domain.InvoiceStatusSubmitted}) {
+		!domain.InvoiceSpec.Locked(metadata.Record{"status": domain.InvoiceStatusAccepted}) {
 		t.Error("Locked")
 	}
 	if domain.InvoiceFieldCustomerID != "customerId" || domain.InvoicePaymentTermNet15 != "net_15" {

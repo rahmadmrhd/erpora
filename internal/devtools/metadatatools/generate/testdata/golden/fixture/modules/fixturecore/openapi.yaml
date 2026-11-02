@@ -109,7 +109,7 @@ components:
     Customer:
       type: object
       description: Master pelanggan, target relasi lintas modul dan sumber salinan field.
-      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, billingStreet, billingCity, billingPostalCode, code, name, status, contactEmail, contactPhone, blockedReason]
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, billingStreet, billingCity, billingPostalCode, code, name, status, contactEmail, contactPhone, blockedReason, phone, phoneE164]
       properties:
         id:
           type: string
@@ -215,6 +215,17 @@ components:
           maxLength: 500
           x-erp-classification: internal
           x-erp-field-group: general
+        phone:
+          type: [string, "null"]
+          maxLength: 32
+          deprecated: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phoneE164:
+          type: [string, "null"]
+          maxLength: 20
+          x-erp-classification: internal
+          x-erp-field-group: general
       x-erp-generated: true
     CustomerCreate:
       type: object
@@ -277,6 +288,17 @@ components:
           maxLength: 500
           x-erp-classification: internal
           x-erp-field-group: general
+        phone:
+          type: [string, "null"]
+          maxLength: 32
+          deprecated: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phoneE164:
+          type: [string, "null"]
+          maxLength: 20
+          x-erp-classification: internal
+          x-erp-field-group: general
       x-erp-generated: true
     CustomerUpdate:
       type: object
@@ -335,6 +357,17 @@ components:
         blockedReason:
           type: [string, "null"]
           maxLength: 500
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phone:
+          type: [string, "null"]
+          maxLength: 32
+          deprecated: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phoneE164:
+          type: [string, "null"]
+          maxLength: 20
           x-erp-classification: internal
           x-erp-field-group: general
       x-erp-generated: true

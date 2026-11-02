@@ -13,7 +13,7 @@ func spec() *ResourceSpec {
 		Key: "x.invoice",
 		Fields: []FieldSpec{
 			{Name: "id", Type: metadata.TypeUUID, ReadOnly: true},
-			{Name: "status", Type: metadata.TypeEnum, ReadOnly: true, HasDefault: true, Default: "draft", Enum: []string{"draft", "submitted"}},
+			{Name: "status", Type: metadata.TypeEnum, ReadOnly: true, HasDefault: true, Default: "draft", Enum: []string{"draft", "accepted"}},
 			{Name: "number", Type: metadata.TypeString, Required: true, MinLength: 2, MaxLength: 5, Pattern: "^[A-Z0-9]+$"},
 			{Name: "total", Type: metadata.TypeDecimal, Required: true, Precision: 6, Scale: 2, Minimum: "0", Maximum: "9999.99"},
 			{Name: "qty", Type: metadata.TypeInteger, Nullable: true, Minimum: "1", Maximum: "10"},
@@ -199,7 +199,7 @@ func TestUpdate(t *testing.T) {
 	if got := codes(spec().Validate(ModeUpdate, m, p)); got["note"] != CodeRequired {
 		t.Errorf("requiredWhen pada update: %v", got)
 	}
-	current["status"] = "submitted"
+	current["status"] = "accepted"
 	m, p = merged(metadata.Record{"locked": "x"})
 	if got := codes(spec().Validate(ModeUpdate, m, p)); got["locked"] != CodeReadOnly {
 		t.Errorf("readonlyWhen: %v", got)
@@ -219,7 +219,7 @@ func TestDeprecatedPairConflict(t *testing.T) {
 
 func TestLockedAndHelpers(t *testing.T) {
 	s := spec()
-	if s.Locked(metadata.Record{"status": "draft"}) || !s.Locked(metadata.Record{"status": "submitted"}) {
+	if s.Locked(metadata.Record{"status": "draft"}) || !s.Locked(metadata.Record{"status": "accepted"}) {
 		t.Error("Locked salah")
 	}
 	if s.Locked(metadata.Record{}) {
@@ -250,5 +250,34 @@ func TestInvalidPatternFailsClosed(t *testing.T) {
 	rec := metadata.Record{"a": "x"}
 	if got := codes(s.Validate(ModeCreate, rec, present(rec))); got["a"] != CodePatternMismatch {
 		t.Errorf("got %v", got)
+	}
+}
+
+func TestStatusSpecTransitions(t *testing.T) {
+	s := &ResourceSpec{
+		Lifecycle: &StatusSpec{Field: "status", Initial: "draft", Values: []string{"draft", "accepted", "cancelled"},
+			Transitions: []Transition{{"draft", "accepted"}, {"accepted", "cancelled"}}},
+		Axes: []StatusSpec{{Field: "deliveryStatus", Initial: "to_deliver", Values: []string{"to_deliver", "delivered"},
+			Transitions: []Transition{{"to_deliver", "delivered"}, {"delivered", "to_deliver"}}}},
+	}
+	if !s.Lifecycle.Allows("draft", "accepted") || s.Lifecycle.Allows("accepted", "draft") || s.Lifecycle.Allows("draft", "submitted") {
+		t.Error("lifecycle: hanya pasangan yang tercantum yang sah (tidak mundur)")
+	}
+	ax, ok := s.Axis("deliveryStatus")
+	if !ok || !ax.Allows("delivered", "to_deliver") || ax.Allows("to_deliver", "to_deliver") {
+		t.Error("sumbu: transisi mundur harus sah bila dinyatakan")
+	}
+	if _, ok := s.Axis("nope"); ok {
+		t.Error("sumbu tak dikenal")
+	}
+}
+
+func TestRenamePairs(t *testing.T) {
+	pairs := spec().RenamePairs()
+	if len(pairs) != 1 || pairs[0] != [2]string{"phoneE164", "phone"} {
+		t.Errorf("pairs = %v", pairs)
+	}
+	if got := (&ResourceSpec{}).RenamePairs(); len(got) != 0 {
+		t.Errorf("tanpa pasangan: %v", got)
 	}
 }

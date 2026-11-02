@@ -93,21 +93,13 @@ func fixtureSources(t testing.TB, model *dbmodel.Schema, extra map[string]map[st
 	return out
 }
 
-// addLockTrigger menambah pemicu penguncian pada tabel invoice fixture (Derive belum membuatnya; task 13).
+// addLockTrigger memastikan tabel invoice fixture sudah punya pemicu penguncian bangkitan (Derive, task 13).
 func addLockTrigger(t testing.TB, model *dbmodel.Schema) *dbmodel.Table {
 	t.Helper()
 	tb := model.Table("fixturesales_invoices")
-	if tb == nil || tb.Lock == nil {
-		t.Fatal("tabel invoice fixture harus punya lockWhen")
+	if tb == nil || len(tb.Triggers) == 0 {
+		t.Fatal("tabel invoice fixture harus punya pemicu penguncian bangkitan")
 	}
-	tb.Triggers = append(tb.Triggers, &dbmodel.Trigger{
-		Name: "fixturesales_invoices_lock_trg", Function: "fixturesales_invoices_lock_fn", Events: []string{"DELETE", "UPDATE"},
-		Lock: &dbmodel.LockSpec{
-			Condition:    tb.Lock,
-			StatusColumn: "status", VersionColumn: "version", UpdatedAtColumn: "updated_at", UpdatedByColumn: "updated_by",
-			Transitions: [][2]string{{"draft", "submitted"}, {"submitted", "cancelled"}},
-		},
-	})
 	return tb
 }
 

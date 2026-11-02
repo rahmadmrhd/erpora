@@ -30,6 +30,8 @@ const (
 	CustomerFieldContactPhone      = "contactPhone"
 	CustomerFieldCreditLimit       = "creditLimit"
 	CustomerFieldBlockedReason     = "blockedReason"
+	CustomerFieldPhone             = "phone"
+	CustomerFieldPhoneE164         = "phoneE164"
 )
 
 // Nilai enum Customer.
@@ -175,6 +177,24 @@ var CustomerSpec = &ResourceSpec{
 			Classification: "internal",
 			Group:          "general",
 			RequiredWhen:   metadata.Cmp("status", metadata.OpEq, "blocked"),
+		},
+		{
+			Name:           "phone",
+			Type:           metadata.TypeString,
+			Nullable:       true,
+			MaxLength:      32,
+			Classification: "internal",
+			Group:          "general",
+			Deprecated:     true,
+		},
+		{
+			Name:           "phoneE164",
+			Type:           metadata.TypeString,
+			Nullable:       true,
+			MaxLength:      20,
+			Classification: "internal",
+			Group:          "general",
+			MigrateFrom:    "phone",
 		},
 	},
 	Rules: []RuleSpec{

@@ -11,7 +11,7 @@ components:
     Invoice:
       type: object
       description: Faktur penjualan, dokumen transaksional dengan baris embedded, relasi lintas modul, morph, dan salinan field.
-      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, status, amendedFromId, shippingStreet, shippingCity, shippingPostalCode, number, issuedOn, dueOn, paymentTerm, branchId, taxable, shipToCustomer, customerName, approvalNote, summary, lineCount, customerId]
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, status, amendedFromId, shippingStreet, shippingCity, shippingPostalCode, number, issuedOn, dueOn, paymentTerm, branchId, taxable, shipToCustomer, customerName, approvalNote, summary, lineCount, billingStatus, deliveryStatus, customerId]
       properties:
         id:
           type: string
@@ -59,7 +59,7 @@ components:
           x-erp-filterable: true
         status:
           type: string
-          enum: [draft, submitted, cancelled]
+          enum: [draft, deleted, need_approval, accepted, rejected, cancelled, done]
           readOnly: true
           x-erp-classification: internal
           x-erp-field-group: general
@@ -170,6 +170,18 @@ components:
         lineCount:
           type: integer
           format: int64
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingStatus:
+          type: string
+          enum: [to_bill, billed]
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        deliveryStatus:
+          type: string
+          enum: [to_deliver, partially_delivered, delivered]
           readOnly: true
           x-erp-classification: internal
           x-erp-field-group: general

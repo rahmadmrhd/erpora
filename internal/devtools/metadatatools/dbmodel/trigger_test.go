@@ -1,0 +1,117 @@
+package dbmodel
+
+import (
+	"strings"
+	"testing"
+)
+
+func triggerByName(tb *Table, name string) *Trigger {
+	for _, tr := range tb.Triggers {
+		if tr.Name == name {
+			return tr
+		}
+	}
+	return nil
+}
+
+// Resource dokumen mendapat pemicu penguncian yang parameternya dibangkitkan dari metadata: lockWhen,
+// tabel transisi lifecycle bawaan, transisi sumbu status, dan pasangan migrateFrom (Requirement 13.8).
+func TestDerive_DocumentLockTrigger(t *testing.T) {
+	s, ps := Derive(fixtureResources(t))
+	if len(ps) != 0 {
+		t.Fatal(ps)
+	}
+	inv := table(t, s, "fixturesales_invoices")
+	tr := triggerByName(inv, "fixturesales_invoices_lock_trg")
+	if tr == nil || tr.Function != "fixturesales_invoices_lock_fn" || strings.Join(tr.Events, ",") != "DELETE,UPDATE" || tr.Lock == nil || tr.Child != nil {
+		t.Fatalf("pemicu = %+v", tr)
+	}
+	ls := tr.Lock
+	if ls.Condition == nil || ls.StatusColumn != "status" || ls.VersionColumn != "version" || ls.UpdatedAtColumn != "updated_at" || ls.UpdatedByColumn != "updated_by" {
+		t.Errorf("lock = %+v", ls)
+	}
+	var pairs []string
+	for _, p := range ls.Transitions {
+		pairs = append(pairs, p[0]+">"+p[1])
+	}
+	want := "draft>deleted,draft>accepted,draft>need_approval,need_approval>accepted,need_approval>rejected,accepted>cancelled,accepted>done"
+	if strings.Join(pairs, ",") != want {
+		t.Errorf("transisi = %s", strings.Join(pairs, ","))
+	}
+	if len(ls.Axes) != 2 || ls.Axes[0].Column != "billing_status" || ls.Axes[1].Column != "delivery_status" {
+		t.Fatalf("sumbu = %+v", ls.Axes)
+	}
+	if len(ls.Axes[0].Transitions) != 1 || len(ls.Axes[1].Transitions) != 6 {
+		t.Errorf("transisi sumbu = %+v", ls.Axes)
+	}
+	foundBack := false
+	for _, p := range ls.Axes[1].Transitions {
+		if p == [2]string{"partially_delivered", "to_deliver"} {
+			foundBack = true
+		}
+	}
+	if !foundBack {
+		t.Error("transisi mundur sumbu harus ikut")
+	}
+	// Non-dokumen tanpa pemicu.
+	for _, name := range []string{"fixturecore_customers", "fixturecore_branches", "fixturesales_products", "fixturesales_tags"} {
+		if n := len(table(t, s, name).Triggers); n != 0 {
+			t.Errorf("%s punya %d pemicu", name, n)
+		}
+	}
+}
+
+// Anak embedded, pivot belongsToMany, dan hasOne dilindungi pemicu anak (Requirement 13.11).
+func TestDerive_ChildLockTriggers(t *testing.T) {
+	s, ps := Derive(fixtureResources(t))
+	if len(ps) != 0 {
+		t.Fatal(ps)
+	}
+	line := table(t, s, "fixturesales_invoice_lines")
+	tr := triggerByName(line, "fixturesales_invoice_lines_invoice_id_lock_trg")
+	if tr == nil || tr.Child == nil || tr.Lock != nil || tr.Child.Parent.Name != "fixturesales_invoices" || tr.Child.FKColumn != "invoice_id" ||
+		strings.Join(tr.Events, ",") != "DELETE,INSERT,UPDATE" || tr.Function != "fixturesales_invoice_lines_invoice_id_lock_fn" {
+		t.Fatalf("pemicu anak embedded = %+v", tr)
+	}
+	pivot := table(t, s, "fixturesales_invoice_tags")
+	if tr := triggerByName(pivot, "fixturesales_invoice_tags_invoice_id_lock_trg"); tr == nil || tr.Child == nil || tr.Child.FKColumn != "invoice_id" {
+		t.Errorf("pemicu pivot = %+v", tr)
+	}
+	// Anak bukan embedded (morph notes) dan relasi ke master tidak dilindungi.
+	if n := len(table(t, s, "fixturesales_notes").Triggers); n != 0 {
+		t.Errorf("notes (morphMany) tanpa pemicu anak: %d", n)
+	}
+}
+
+func TestDerive_HasOneChildLockTrigger(t *testing.T) {
+	s := deriveOne(t,
+		f("m/header.resource.yaml", resourceDoc("m.header", "relations:\n  doc: {type: belongsTo, to: m.doc, required: true, onDelete: cascade}\n")),
+		f("m/doc.resource.yaml", resourceNoAudit("m.doc", "include:\n  - source: sdk:document\nfields:\n  n: {type: integer, label: m.doc.n}\nrelations:\n  header: {type: hasOne, to: m.header}\n")),
+	)
+	hd := table(t, s, "m_headers")
+	if tr := triggerByName(hd, "m_headers_doc_id_lock_trg"); tr == nil || tr.Child == nil || tr.Child.FKColumn != "doc_id" || tr.Child.Parent.Name != "m_docs" {
+		t.Fatalf("pemicu hasOne = %+v", tr)
+	}
+}
+
+func TestDerive_MigrateFromPairsInLockSpec(t *testing.T) {
+	s := deriveOne(t, f("m/doc.resource.yaml", resourceNoAudit("m.doc", `
+include:
+  - source: sdk:document
+fields:
+  phone: {type: string, maxLength: 20, nullable: true, deprecated: {since: "1.0.0", replacedBy: phoneE164}, label: m.doc.phone}
+  phoneE164: {type: string, maxLength: 20, nullable: true, migrateFrom: phone, label: m.doc.phoneE164}
+`)))
+	tr := triggerByName(table(t, s, "m_docs"), "m_docs_lock_trg")
+	if tr == nil || len(tr.Lock.MigratePairs) != 1 || tr.Lock.MigratePairs[0] != [2]string{"phone_e164", "phone"} {
+		t.Fatalf("pemicu = %+v", tr)
+	}
+}
+
+func TestDerive_DocumentWithoutAxesHasNoAxes(t *testing.T) {
+	s := deriveOne(t, f("m/doc.resource.yaml", resourceNoAudit("m.doc", "include:\n  - source: sdk:document\nfields:\n  n: {type: integer, label: m.doc.n}\n")))
+	tr := triggerByName(table(t, s, "m_docs"), "m_docs_lock_trg")
+	if tr == nil || len(tr.Lock.Axes) != 0 || len(tr.Lock.Transitions) != 7 {
+		t.Fatalf("pemicu = %+v", tr)
+	}
+}

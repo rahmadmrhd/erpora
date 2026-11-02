@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -343,5 +344,56 @@ func TestMetadataGenerate_OutsideRepoExits3(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if _, err := runMetadata(t, "metadata:generate"); exitCodeOf(err) != exitMetadataConfig {
 		t.Fatalf("exit = %d err = %v", exitCodeOf(err), err)
+	}
+}
+
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	full := append([]string{"-c", "user.name=uji", "-c", "user.email=uji@example.invalid", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"}, args...)
+	cmd := exec.Command("git", full...) //nolint:gosec // argumen tetap pada test
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// Requirement 12.1: menghapus field yang ada pada tag rilis terakhir modul tanpa deprecated ditolak oleh metadata:check.
+func TestMetadataCheck_RemovedFieldAgainstReleaseTag(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git tidak tersedia")
+	}
+	dir := fixtureRepo(t)
+	tagFile := filepath.Join(dir, "modules", "fixturesales", "metadata", "tag.resource.yaml")
+	b, err := os.ReadFile(tagFile) //nolint:gosec // fixture salinan
+	if err != nil {
+		t.Fatal(err)
+	}
+	withLegacy := strings.Replace(string(b), "fields:\n", "fields:\n  legacyCode: {type: string, maxLength: 10, nullable: true}\n", 1)
+	if withLegacy == string(b) {
+		t.Fatal("penyuntikan field gagal")
+	}
+	if err := os.WriteFile(tagFile, []byte(withLegacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "init", "-q", "-b", "main")
+	gitIn(t, dir, "add", "-A")
+	gitIn(t, dir, "commit", "-q", "-m", "rilis")
+	gitIn(t, dir, "tag", "modules/fixturesales/v1.0.0")
+
+	// keadaan yang sama dengan rilis: bersih.
+	if out, err := runMetadata(t, "metadata:check"); err != nil {
+		t.Fatalf("sama dengan rilis harus bersih: %v\n%s", err, out)
+	}
+	// hapus field tanpa pernah deprecated pada rilis.
+	if err := os.WriteFile(tagFile, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runMetadata(t, "metadata:check")
+	if exitCodeOf(err) != exitMetadataValidation {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "error [field_removed_without_deprecation]") || !strings.Contains(out, "modules/fixturesales/v1.0.0") ||
+		!strings.Contains(out, "tag.resource.yaml:") {
+		t.Errorf("keluaran:\n%s", out)
 	}
 }

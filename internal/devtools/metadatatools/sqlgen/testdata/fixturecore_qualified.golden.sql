@@ -1,10 +1,10 @@
 CREATE TABLE "erpora_expected"."fixturecore_branches" (
     "id" uuid NOT NULL,
-    "version" bigint NOT NULL,
-    "created_at" timestamp with time zone NOT NULL,
-    "updated_at" timestamp with time zone NOT NULL,
-    "created_by" uuid NOT NULL,
-    "updated_by" uuid NOT NULL,
+    "version" bigint DEFAULT 1 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "created_by" uuid,
+    "updated_by" uuid,
     "code" text NOT NULL,
     "name" text NOT NULL,
     CONSTRAINT "fixturecore_branches_pkey" PRIMARY KEY ("id"),
@@ -16,11 +16,11 @@ CREATE TABLE "erpora_expected"."fixturecore_branches" (
 
 CREATE TABLE "erpora_expected"."fixturecore_customers" (
     "id" uuid NOT NULL,
-    "version" bigint NOT NULL,
-    "created_at" timestamp with time zone NOT NULL,
-    "updated_at" timestamp with time zone NOT NULL,
-    "created_by" uuid NOT NULL,
-    "updated_by" uuid NOT NULL,
+    "version" bigint DEFAULT 1 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "created_by" uuid,
+    "updated_by" uuid,
     "billing_street" text,
     "billing_city" text,
     "billing_postal_code" text,
@@ -31,6 +31,8 @@ CREATE TABLE "erpora_expected"."fixturecore_customers" (
     "contact_phone" text,
     "credit_limit" numeric(18,2) DEFAULT 0.00 NOT NULL,
     "blocked_reason" text,
+    "phone" text,
+    "phone_e164" text,
     CONSTRAINT "fixturecore_customers_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "fixturecore_customers_code_key" UNIQUE ("code"),
     CONSTRAINT "fixturecore_customers_version_check" CHECK ("version" >= 1),
@@ -43,7 +45,9 @@ CREATE TABLE "erpora_expected"."fixturecore_customers" (
     CONSTRAINT "fixturecore_customers_contact_email_check" CHECK (length("contact_email") <= 254),
     CONSTRAINT "fixturecore_customers_contact_phone_check" CHECK (length("contact_phone") <= 32),
     CONSTRAINT "fixturecore_customers_credit_limit_check" CHECK ("credit_limit" >= 0),
-    CONSTRAINT "fixturecore_customers_blocked_reason_check" CHECK (length("blocked_reason") <= 500)
+    CONSTRAINT "fixturecore_customers_blocked_reason_check" CHECK (length("blocked_reason") <= 500),
+    CONSTRAINT "fixturecore_customers_phone_check" CHECK (length("phone") <= 32),
+    CONSTRAINT "fixturecore_customers_phone_e164_check" CHECK (length("phone_e164") <= 20)
 );
 
 CREATE INDEX "fixturecore_customers_status_name_idx" ON "erpora_expected"."fixturecore_customers" ("status", "name");

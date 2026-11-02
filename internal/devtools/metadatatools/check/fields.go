@@ -119,6 +119,7 @@ func (x *rctx) checkField(f *resolve.Field) {
 	if f.ProtectedBy != "" && !f.Bool("readOnly") {
 		x.err(f, "readOnly", CodeFieldReadOnlyRequired, "field bawaan %s dari %s wajib readOnly (Requirement 2.6)", f.Name, f.ProtectedBy)
 	}
+	x.checkRemoveAfterStatic(f)
 	if dep, ok := f.Attrs["deprecated"].(map[string]any); ok {
 		if rb, _ := dep["replacedBy"].(string); rb != "" {
 			if x.fields[rb] == nil {

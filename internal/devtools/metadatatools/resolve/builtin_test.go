@@ -56,11 +56,17 @@ func TestBuiltinDocumentFieldsAreReadOnlyAndProtected(t *testing.T) {
 		t.Errorf("lockWhen bawaan = %v", doc.LockWhen)
 	}
 	st := doc.Field("status")
-	if vals, _ := st.Attrs["values"].([]any); len(vals) != 3 || vals[0] != "draft" {
+	if vals, _ := st.Attrs["values"].([]any); len(vals) != 7 || vals[0] != "draft" || vals[3] != "accepted" {
 		t.Errorf("status = %v", st.Attrs)
 	}
 	if !doc.Field("amendedFromId").Bool("nullable") {
 		t.Error("amendedFromId harus nullable")
+	}
+	// K19: jejak pengguna bernilai null untuk data lama, seed, dan tindakan sistem tanpa principal.
+	for _, n := range []string{"createdBy", "updatedBy"} {
+		if !doc.Field(n).Bool("nullable") {
+			t.Errorf("%s harus nullable", n)
+		}
 	}
 	audit := mustResolve(t, c, "sdk.audit")
 	if joined(audit) != "id,version,createdAt,updatedAt,createdBy,updatedBy" || audit.LockWhen != nil {
@@ -122,5 +128,24 @@ func TestBuiltinPatternIsRE2AndBounded(t *testing.T) {
 	pat, _ := c.Doc("sdk.phone").Value["base"].(map[string]any)["pattern"].(string)
 	if len(pat) == 0 || len(pat) > 200 {
 		t.Fatalf("pattern phone = %q", pat)
+	}
+}
+
+func TestBuiltinAuditTimestampsCarryImplicitDefaultNow(t *testing.T) {
+	c := builtinCatalog(t)
+	addModule(t, c, Module{Slug: "m"}, f("m/r.resource.yaml", resource("m.r", "include:\n  - source: sdk:document\nfields:\n  title: {type: text}\n")))
+	r := mustResolve(t, c, "m.r")
+	for _, name := range []string{"createdAt", "updatedAt"} {
+		if !r.Field(name).DefaultNow {
+			t.Errorf("%s harus DefaultNow", name)
+		}
+		if _, has := r.Field(name).Attrs["default"]; has {
+			t.Errorf("%s tidak boleh membawa default di atribut metadata", name)
+		}
+	}
+	for _, name := range []string{"id", "version", "createdBy", "updatedBy", "status", "title"} {
+		if r.Field(name).DefaultNow {
+			t.Errorf("%s bukan DefaultNow", name)
+		}
 	}
 }

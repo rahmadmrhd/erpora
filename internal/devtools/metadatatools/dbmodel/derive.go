@@ -77,11 +77,24 @@ func Derive(resources []*resolve.Resolved) (*Schema, []load.Problem) {
 	for _, r := range rs {
 		d.resource = r
 		if t := d.tables[r.Key]; t != nil {
-			d.deriveRelations(r, t)
+			d.deriveRelations(r, t, false)
+		}
+	}
+	// hasOne membutuhkan kolom FK dari belongsTo resource seberang: dikerjakan setelah semua belongsTo ada.
+	for _, r := range rs {
+		d.resource = r
+		if t := d.tables[r.Key]; t != nil {
+			d.deriveRelations(r, t, true)
+		}
+	}
+	for _, r := range rs {
+		d.resource = r
+		if t := d.tables[r.Key]; t != nil {
 			d.deriveIndexes(r, t)
 		}
 	}
 	d.resource = nil
+	d.deriveTriggers(rs)
 	d.schema.index()
 	sort.SliceStable(d.probs, func(i, j int) bool {
 		a, b := d.probs[i], d.probs[j]
@@ -313,6 +326,8 @@ func (d *deriver) fieldColumn(tn string, f *resolve.Field, stored bool, acc map[
 	}
 	if def, ok := d.defaultOf(f, ft); ok {
 		c.Default = def
+	} else if def := auditDefault(f, ft); def != nil {
+		c.Default = def
 	}
 	return c
 }
@@ -453,6 +468,7 @@ func (d *deriver) fieldCheck(tn string, f *resolve.Field, c *Column) *Check {
 		if ck == nil {
 			return nil
 		}
+		ck.Extensible = f.Bool("extensible")
 		for _, v := range vals {
 			s, _ := v.(string)
 			if !enumValueRe.MatchString(s) {
@@ -575,9 +591,12 @@ func fkAction(onDelete string) string {
 	return onDelete
 }
 
-func (d *deriver) deriveRelations(r *resolve.Resolved, t *Table) {
+func (d *deriver) deriveRelations(r *resolve.Resolved, t *Table, hasOnePass bool) {
 	for _, rel := range r.Relations {
 		typ, _ := rel.Attrs["type"].(string)
+		if (typ == "hasOne") != hasOnePass {
+			continue
+		}
 		switch typ {
 		case "belongsTo":
 			d.belongsTo(r, t, rel)
@@ -808,4 +827,17 @@ func (d *deriver) belongsToMany(r *resolve.Resolved, t *Table, rel *resolve.Rela
 		p.ForeignKeys = append(p.ForeignKeys, &ForeignKey{Name: fkn, Columns: []string{rightCol}, RefTable: target.Name, RefColumns: []string{"id"}, OnDelete: OnDeleteCascade})
 	}
 	d.schema.Tables = append(d.schema.Tables, p)
+}
+
+// auditDefault memberi nilai bawaan database implisit pada kolom bawaan sdk:audit (K22, 2 Nov 2026):
+// createdAt dan updatedAt DEFAULT now(), version DEFAULT 1. Field lain, juga yang bernama sama tetapi bukan
+// berasal dari sdk:audit, tidak terpengaruh. Nilai bawaan yang dinyatakan metadata lebih diutamakan.
+func auditDefault(f *resolve.Field, ft metadata.FieldType) *Default {
+	if f.DefaultNow && ft == metadata.TypeDateTime {
+		return &Default{Type: ft, Now: true}
+	}
+	if f.Name == "version" && f.Origin.Doc == resolve.KeyAudit && ft == metadata.TypeInteger {
+		return &Default{Type: ft, Value: "1"}
+	}
+	return nil
 }

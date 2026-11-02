@@ -57,7 +57,7 @@ fields:
 include:
   - source: sdk:audit
 fields:
-  status: {type: enum, values: [draft, submitted, cancelled], readOnly: true, default: draft}
+  status: {type: enum, values: [draft, deleted, need_approval, accepted, rejected, cancelled, done], readOnly: true, default: draft}
   amendedFromId: {type: uuid, nullable: true, readOnly: true}
 lockWhen: {field: status, op: ne, value: draft}
 `)),

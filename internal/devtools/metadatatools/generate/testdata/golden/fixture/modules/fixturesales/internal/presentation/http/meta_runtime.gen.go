@@ -172,3 +172,13 @@ func val[T any](p *T) any {
 	}
 	return *p
 }
+
+// clone menyalin nilai yang ditunjuk p ke pointer baru (nil tetap nil); dipakai mengisi bentuk pasangan rename
+// tanpa berbagi pointer.
+func clone[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}

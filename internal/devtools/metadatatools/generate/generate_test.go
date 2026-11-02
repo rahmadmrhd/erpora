@@ -4,8 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 
 	"erpora/internal/devtools/metadatatools/resolve"
 )
@@ -318,5 +321,65 @@ func TestWorkspaceFailsWithoutWritingWhenCheckFails(t *testing.T) {
 	}
 	if treeSum(t, root) != before {
 		t.Error("tidak boleh menulis apa pun bila check gagal")
+	}
+}
+
+// TestStatusLifecycleAndAxesOutput: tabel transisi lifecycle (K23) dan sumbu status (K24) menjadi data di
+// <nama>_meta.gen.go; sumbu hanya-baca di DTO dan kontrak; tidak ada status submitted.
+func TestStatusLifecycleAndAxesOutput(t *testing.T) {
+	root, cat := fixtureRepo(t)
+	res, _ := runGen(t, root, Options{Check: true}, cat)
+	dom := fileContent(t, res, "modules/fixturesales/internal/domain/invoice_meta.gen.go")
+	for _, want := range []string{
+		"Lifecycle: &StatusSpec{", `{"draft", "deleted"}`, `{"draft", "accepted"}`, `{"draft", "need_approval"}`,
+		`{"need_approval", "accepted"}`, `{"need_approval", "rejected"}`, `{"accepted", "cancelled"}`, `{"accepted", "done"}`,
+		"Axes: []StatusSpec{", `Field:   "deliveryStatus"`, `{"partially_delivered", "to_deliver"}`, `{"delivered", "to_deliver"}`,
+		`InvoiceDeliveryStatusToDeliver`, `InvoiceBillingStatusBilled`, `InvoiceStatusNeedApproval`,
+	} {
+		if !strings.Contains(dom, want) {
+			t.Errorf("domain tidak memuat %q", want)
+		}
+	}
+	if strings.Contains(dom, "submitted") {
+		t.Error("status submitted tidak lagi ada")
+	}
+	if len(regexp.MustCompile(`(?m)^	+\{"draft", `).FindAllString(dom, -1)) != 3 {
+		t.Error("lifecycle harus tepat tiga transisi dari draft")
+	}
+	// resource bukan dokumen tidak punya tabel status
+	if prod := fileContent(t, res, "modules/fixturesales/internal/domain/product_meta.gen.go"); strings.Contains(prod, "Lifecycle:") || strings.Contains(prod, "Axes:") {
+		t.Error("resource non-dokumen tidak boleh punya Lifecycle atau Axes")
+	}
+	dto := fileContent(t, res, "modules/fixturesales/internal/presentation/http/invoice_dto.gen.go")
+	for _, bad := range []string{"BillingStatus", "DeliveryStatus", "Status "} {
+		if strings.Contains(dto, bad) {
+			t.Errorf("DTO tidak boleh memuat %q (hanya-baca)", bad)
+		}
+	}
+	spec := fileContent(t, res, "modules/fixturesales/openapi.yaml")
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]struct {
+					ReadOnly bool     `yaml:"readOnly"`
+					Enum     []string `yaml:"enum"`
+				} `yaml:"properties"`
+			} `yaml:"schemas"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal([]byte(spec), &doc); err != nil {
+		t.Fatal(err)
+	}
+	sc := doc.Components.Schemas
+	for _, name := range []string{"billingStatus", "deliveryStatus", "status"} {
+		p, ok := sc["Invoice"].Properties[name]
+		if !ok || !p.ReadOnly || len(p.Enum) == 0 {
+			t.Errorf("Invoice.%s harus enum readOnly: %+v", name, p)
+		}
+		for _, w := range []string{"InvoiceCreate", "InvoiceUpdate"} {
+			if _, ok := sc[w].Properties[name]; ok {
+				t.Errorf("%s.%s tidak boleh ada (hanya-baca)", w, name)
+			}
+		}
 	}
 }

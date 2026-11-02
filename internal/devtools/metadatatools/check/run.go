@@ -38,25 +38,12 @@ func Run(in Input) *Report {
 		c.add(Problem{Severity: SeverityError, File: p.File, Line: p.Line, Column: p.Column, Pointer: p.Pointer, Code: CodeBuiltinInvalid, Message: "metadata bawaan SDK tidak valid: " + p.Message})
 	}
 
-	keyToSlug := map[string]string{}
-	for _, m := range in.Modules {
-		keyToSlug[m.Manifest.Key] = m.Manifest.Slug
-	}
-	for _, m := range in.Modules {
-		mc := &modCtx{in: m, slug: m.Manifest.Slug, deps: map[string]bool{}}
-		var depSlugs []string
-		for _, k := range m.Manifest.Dependencies {
-			if s, ok := keyToSlug[k]; ok {
-				mc.deps[s] = true
-				depSlugs = append(depSlugs, s)
-			}
-		}
+	addModules(cat, in, func(m Module) []*load.Document { return m.Docs }, func(m Module, mc *modCtx, ps []load.Problem) {
 		c.mods[m.Manifest.Slug] = mc
-		rm := resolve.Module{Slug: m.Manifest.Slug, Dependencies: depSlugs, DefaultGroup: moduleDefaultGroup(m.Manifest)}
-		for _, p := range cat.AddModule(rm, m.Docs...) {
+		for _, p := range ps {
 			c.add(fromLoad(p, m.Manifest.Slug, ""))
 		}
-	}
+	})
 	c.res = cat.ResolveAll()
 	rep.Resolved = c.res
 	for _, p := range c.res.Problems {
@@ -75,6 +62,8 @@ func Run(in Input) *Report {
 		}
 		c.checkResolved(r, mc)
 	}
+	c.checkMigrationTodos(in.Modules)
+	c.checkReleaseBaselines(in)
 	rep.Problems = sortProblems(c.probs)
 	return rep
 }
@@ -340,6 +329,7 @@ func (c *checker) checkResolved(r *resolve.Resolved, mc *modCtx) {
 		x.checkManifest()
 		x.checkOwnerScope()
 		x.checkSnapshots()
+		x.checkStatusAxes()
 		x.checkUnmanaged()
 	}
 	x.checkMigrateFrom()
@@ -394,3 +384,27 @@ func (x *rctx) fieldNames() []string {
 func containsStr(list []string, s string) bool { return slices.Contains(list, s) }
 
 func joinNames(ns []string) string { return strings.Join(ns, ", ") }
+
+// addModules mendaftarkan semua modul Input ke katalog; docsOf memilih dokumen yang didaftarkan per modul
+// (dokumen saat ini, atau baseline rilis untuk satu modul). onAdded (opsional) menerima konteks modul dan temuan.
+func addModules(cat *resolve.Catalog, in Input, docsOf func(Module) []*load.Document, onAdded func(Module, *modCtx, []load.Problem)) {
+	keyToSlug := map[string]string{}
+	for _, m := range in.Modules {
+		keyToSlug[m.Manifest.Key] = m.Manifest.Slug
+	}
+	for _, m := range in.Modules {
+		mc := &modCtx{in: m, slug: m.Manifest.Slug, deps: map[string]bool{}}
+		var depSlugs []string
+		for _, k := range m.Manifest.Dependencies {
+			if s, ok := keyToSlug[k]; ok {
+				mc.deps[s] = true
+				depSlugs = append(depSlugs, s)
+			}
+		}
+		rm := resolve.Module{Slug: m.Manifest.Slug, Dependencies: depSlugs, DefaultGroup: moduleDefaultGroup(m.Manifest)}
+		ps := cat.AddModule(rm, docsOf(m)...)
+		if onAdded != nil {
+			onAdded(m, mc, ps)
+		}
+	}
+}

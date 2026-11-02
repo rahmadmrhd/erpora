@@ -25,7 +25,7 @@ const (
 // matriks IDOR design baris 13). Subperintah baru (metadata:generate, metadata:diff, ...) ditambahkan ke
 // AddCommand di bawah dan memakai metadataRoot untuk mencari root repo.
 func registerMetadata(root *cobra.Command) {
-	root.AddCommand(newMetadataCheck(), newMetadataGenerate(), newMetadataDiff())
+	root.AddCommand(newMetadataCheck(), newMetadataGenerate(), newMetadataDiff(), newMetadataMigrate())
 }
 
 // metadataRoot mencari root repo untuk perintah metadata:*; kegagalan dipetakan ke exit 3.
@@ -53,6 +53,7 @@ func newMetadataCheck() *cobra.Command {
 				return err
 			}
 			ws, loadProblems := check.LoadWorkspace(root)
+			ws.Git = check.ExecGit(root) // aturan deprecate-before-remove terhadap tag rilis terakhir modul (Requirement 12.1)
 			rep := check.Run(ws)
 			problems := append(append([]check.Problem(nil), loadProblems...), rep.Problems...)
 			sortCheckProblems(problems)

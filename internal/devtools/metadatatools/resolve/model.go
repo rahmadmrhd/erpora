@@ -91,6 +91,11 @@ type Field struct {
 	Operators []string
 	// ProtectedBy berisi kunci sdk.audit atau sdk.document bila field bawaan yang tidak dapat di-omit/set.
 	ProtectedBy string
+	// DefaultNow menandai kolom yang di database memakai DEFAULT now() secara implisit (createdAt dan updatedAt dari
+	// sdk:audit; K22): bukan nilai bawaan di berkas metadata, hanya penanda untuk model skema turunan.
+	DefaultNow bool
+	// IsStatusAxis menandai field yang dibangkitkan dari statusAxes (K24); tidak diwarisi lewat include.
+	IsStatusAxis bool
 }
 
 // Type mengembalikan tipe dasar (builtin) field.
@@ -204,8 +209,55 @@ type Resolved struct {
 
 	Uses []Use
 
+	// Lifecycle adalah siklus hidup status baku (K23) pada dokumen (menyertakan sdk:document); nil bila bukan
+	// dokumen. StatusAxes adalah sumbu status tambahan (K24) dari dokumen itu sendiri, berurutan menurut
+	// deklarasi; tidak diwarisi lewat include.
+	Lifecycle  *Lifecycle
+	StatusAxes []*StatusAxis
+
 	byName map[string]*Field
 }
+
+// Transition adalah satu pasangan transisi status (dari, ke).
+type Transition struct{ From, To string }
+
+// Lifecycle adalah siklus hidup status baku dokumen: nilai (urutan deklarasi sdk:document), nilai awal, dan
+// tabel transisi bawaan (K23). Resource tidak dapat menambah nilai atau transisi.
+type Lifecycle struct {
+	Values      []string
+	Initial     string
+	Transitions []Transition
+	// Origin menunjuk asal nilai status pada metadata bawaan.
+	Origin Origin
+}
+
+// StatusAxis adalah satu sumbu status tambahan: field enum readOnly bukan-nullable bernilai awal Initial, dengan
+// pasangan transisi sendiri yang boleh mundur atau siklik (K24). Field sumbu ada di Resolved.Fields (IsStatusAxis).
+type StatusAxis struct {
+	Name        string
+	Values      []string
+	Initial     string
+	Transitions []Transition
+	Origin      Origin
+}
+
+func allows(ts []Transition, from, to string) bool {
+	for _, t := range ts {
+		if t.From == from && t.To == to {
+			return true
+		}
+	}
+	return false
+}
+
+// Allows menyatakan pasangan (from, to) sah pada tabel transisi.
+func (l *Lifecycle) Allows(from, to string) bool { return allows(l.Transitions, from, to) }
+
+// Allows menyatakan pasangan (from, to) sah pada transisi sumbu.
+func (a *StatusAxis) Allows(from, to string) bool { return allows(a.Transitions, from, to) }
+
+// IsDocument menyatakan resource atau abstrak menyertakan sdk:document (punya Lifecycle).
+func (r *Resolved) IsDocument() bool { return r.Lifecycle != nil }
 
 // Field mengembalikan field menurut nama, nil bila tidak ada.
 func (r *Resolved) Field(name string) *Field { return r.byName[name] }

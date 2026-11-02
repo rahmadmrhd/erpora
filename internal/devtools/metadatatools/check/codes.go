@@ -103,6 +103,27 @@ const (
 	CodeSnapshotGroupDowngrade    = "snapshot_group_downgrade"
 	CodeLockWhenNotSQL            = "lockwhen_not_sql"
 
+	// Sumbu status (K24, Requirement 13.14 sampai 13.18).
+	CodeStatusAxisNotDocument         = "status_axis_not_document"
+	CodeStatusAxisName                = "status_axis_name"
+	CodeStatusAxisValues              = "status_axis_values"
+	CodeStatusAxisInitial             = "status_axis_initial"
+	CodeStatusAxisTransition          = "status_axis_transition"
+	CodeStatusAxisTransitionDuplicate = "status_axis_transition_duplicate"
+	CodeStatusAxisReadOnly            = "status_axis_readonly"
+
+	// Migrasi bangkitan yang belum dilengkapi (Requirement 11.3).
+	CodeMigrationTodo = "migration_todo"
+
+	// Deprecated, removeAfter, dan penghapusan terhadap rilis (Requirement 12.1, 12.4; K18).
+	CodeRemoveAfterWithoutDeprecated   = "remove_after_without_deprecated"
+	CodeRemoveAfterNotMajor            = "remove_after_not_major"
+	CodeFieldRemovedWithoutDeprecation = "field_removed_without_deprecation"
+	CodeFieldRemovedNoRemoveAfter      = "field_removed_no_remove_after"
+	CodeFieldRemovedBeforeMajor        = "field_removed_before_major"
+	CodeReleaseBaselineUnavailable     = "release_baseline_unavailable"
+	CodeReleaseBaselineInvalid         = "release_baseline_invalid"
+
 	// Internal.
 	CodeBuiltinInvalid = "builtin_invalid"
 	CodeManifestParse  = "manifest_parse"

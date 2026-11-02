@@ -60,6 +60,18 @@ fields:
     visibleWhen: { field: status, op: eq, value: blocked }
     requiredWhen: { field: status, op: eq, value: blocked }
     label: fixturecore.customer.blockedReason
+  phone:
+    type: string
+    maxLength: 32
+    nullable: true
+    deprecated: { since: "1.1.0", replacedBy: phoneE164 }
+    label: fixturecore.customer.phone
+  phoneE164:
+    type: string
+    maxLength: 20
+    nullable: true
+    migrateFrom: phone
+    label: fixturecore.customer.phoneE164
 rules:
   - id: creditLimitNonNegative
     assert: { field: creditLimit, op: gte, value: "0" }

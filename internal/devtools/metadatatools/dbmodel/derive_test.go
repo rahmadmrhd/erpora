@@ -3,6 +3,8 @@ package dbmodel
 import (
 	"strings"
 	"testing"
+
+	"erpora/internal/devtools/metadatatools/resolve"
 )
 
 // Pemetaan tipe tertulis dan teruji (Requirement 10.4; design Komponen 7).
@@ -35,7 +37,8 @@ fields:
 		"id":         {"uuid", true},
 		"version":    {"bigint", true},
 		"created_at": {"timestamp with time zone", true},
-		"created_by": {"uuid", true},
+		"created_by": {"uuid", false},
+		"updated_by": {"uuid", false},
 		"title":      {"text", true},
 		"code":       {"text", false},
 		"free":       {"text", true},
@@ -414,11 +417,20 @@ func TestDerive_HasOneUsesInverseBelongsTo(t *testing.T) {
 	}
 }
 
+// Resolver kini selalu menyertakan id (sdk:audit otomatis, K22); Derive tetap menolak model tanpa id uuid
+// (pertahanan berlapis), diuji dengan model yang dibangun langsung.
 func TestDerive_MissingIDField(t *testing.T) {
-	ps := deriveProblems(t, mod{slug: "m", docs: []file{
+	rs := resolveMods(t, mod{slug: "m", docs: []file{
 		f("m/a.resource.yaml", resourceNoAudit("m.a", "fields:\n  x: {type: integer, label: m.a.x}\n")),
 	}})
-	if !hasCode(ps, CodeNoID) {
+	var kept []*resolve.Field
+	for _, fl := range rs[0].Fields {
+		if fl.Name != "id" {
+			kept = append(kept, fl)
+		}
+	}
+	rs[0].Fields = kept
+	if _, ps := Derive(rs); !hasCode(ps, CodeNoID) {
 		t.Fatalf("temuan = %v", ps)
 	}
 }
@@ -472,5 +484,30 @@ func TestDerive_EnumValueMustBeSafe(t *testing.T) {
 	rs[0].Field("k").Attrs["values"] = []any{"alpha", "x'); DROP TABLE y; --"}
 	if _, ps := Derive(rs); !hasCode(ps, CodeEnumValue) {
 		t.Fatalf("temuan = %v", ps)
+	}
+}
+
+// K22: kolom bawaan sdk:audit memakai nilai bawaan database implisit: createdAt dan updatedAt DEFAULT now(),
+// version DEFAULT 1; createdBy dan updatedBy nullable tanpa default. Field di luar sdk:audit tidak terpengaruh.
+func TestDerive_AuditImplicitDefaults(t *testing.T) {
+	s := deriveOne(t, f("m/thing.resource.yaml", resourceDoc("m.thing", `
+fields:
+  madeAt: {type: datetime, label: m.thing.madeAt}
+  rev:    {type: integer, label: m.thing.rev}
+`)))
+	tb := table(t, s, "m_things")
+	for _, name := range []string{"created_at", "updated_at"} {
+		d := col(t, tb, name).Default
+		if d == nil || !d.Now || d.Type != "datetime" {
+			t.Errorf("%s default = %+v, want now()", name, d)
+		}
+	}
+	if d := col(t, tb, "version").Default; d == nil || d.Now || d.Value != "1" {
+		t.Errorf("version default = %+v, want 1", d)
+	}
+	for _, name := range []string{"id", "created_by", "updated_by", "made_at", "rev"} {
+		if d := col(t, tb, name).Default; d != nil {
+			t.Errorf("%s tidak boleh punya default: %+v", name, d)
+		}
 	}
 }

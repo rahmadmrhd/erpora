@@ -143,3 +143,15 @@ func TestVal(t *testing.T) {
 		t.Error("val")
 	}
 }
+
+func TestClone(t *testing.T) {
+	if clone[string](nil) != nil {
+		t.Error("nil tetap nil")
+	}
+	s := "x"
+	c := clone(&s)
+	*c = "y"
+	if s != "x" {
+		t.Error("salinan harus independen")
+	}
+}

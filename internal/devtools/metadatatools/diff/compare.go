@@ -109,16 +109,17 @@ func compareColumns(r *Report, table string, act, exp *Table, unmanaged []string
 type multiset map[string]*entry
 
 type entry struct {
-	n      int
-	object string
+	n       int
+	object  string
+	columns []string
 }
 
-func (m multiset) add(def, object string) {
+func (m multiset) add(def, object string, columns []string) {
 	if e := m[def]; e != nil {
 		e.n++
 		return
 	}
-	m[def] = &entry{n: 1, object: object}
+	m[def] = &entry{n: 1, object: object, columns: columns}
 }
 
 func diffSets(r *Report, table, missingKind, extraKind string, act, exp multiset) {
@@ -137,17 +138,18 @@ func diffSets(r *Report, table, missingKind, extraKind string, act, exp multiset
 	for _, k := range keys {
 		var en, an int
 		var eo, ao string
+		var ec, ac []string
 		if e := exp[k]; e != nil {
-			en, eo = e.n, e.object
+			en, eo, ec = e.n, e.object, e.columns
 		}
 		if a := act[k]; a != nil {
-			an, ao = a.n, a.object
+			an, ao, ac = a.n, a.object, a.columns
 		}
 		switch {
 		case an < en:
-			r.Findings = append(r.Findings, Finding{Kind: missingKind, Table: table, Object: eo, Message: "ada di metadata, tidak ada di database", Expected: k})
+			r.Findings = append(r.Findings, Finding{Kind: missingKind, Table: table, Object: eo, Message: "ada di metadata, tidak ada di database", Expected: k, Columns: ec})
 		case an > en:
-			r.Findings = append(r.Findings, Finding{Kind: extraKind, Table: table, Object: ao, Message: "ada di database, tidak dideklarasikan di metadata", Actual: k})
+			r.Findings = append(r.Findings, Finding{Kind: extraKind, Table: table, Object: ao, Message: "ada di database, tidak dideklarasikan di metadata", Actual: k, Columns: ac})
 		}
 	}
 }
@@ -159,7 +161,7 @@ func compareConstraints(r *Report, table string, act, exp *Table, unmanaged []st
 			if skipUnmanaged && touchesUnmanaged(c.Columns, c.Def, unmanaged) {
 				continue
 			}
-			out[c.Kind].add(c.Def, c.Name)
+			out[c.Kind].add(c.Def, c.Name, c.Columns)
 		}
 		return out
 	}
@@ -204,7 +206,7 @@ func compareIndexes(r *Report, table string, act, exp *Table, unmanaged []string
 			if skip && touchesUnmanaged(ix.Columns, ix.Key, unmanaged) {
 				continue
 			}
-			m.add(ix.Key, ix.Name)
+			m.add(ix.Key, ix.Name, ix.Columns)
 		}
 		return m
 	}
@@ -231,8 +233,8 @@ func compareTriggers(r *Report, table string, act, exp *Table) {
 		switch {
 		case !ok:
 			r.Findings = append(r.Findings, Finding{Kind: KindTriggerMissing, Table: table, Object: n, Message: "pemicu bangkitan tidak ada di database"})
-		case !got.Enabled:
-			r.Findings = append(r.Findings, Finding{Kind: KindTriggerDisabled, Table: table, Object: n, Message: "pemicu ada tetapi tidak aktif (migrasi tulis tangan wajib mengaktifkannya kembali, Requirement 13.10)"})
+		case !got.Enabled || (want.Always && !got.Always):
+			r.Findings = append(r.Findings, Finding{Kind: KindTriggerDisabled, Table: table, Object: n, Message: "pemicu nonaktif atau tidak ENABLE ALWAYS (dapat dilewati session_replication_role = replica); migrasi tulis tangan wajib mengaktifkannya kembali dengan ENABLE ALWAYS, Requirement 13.9 dan 13.10"})
 		case got.Type != want.Type || got.Function != want.Function || got.Body != want.Body:
 			r.Findings = append(r.Findings, Finding{Kind: KindTriggerChanged, Table: table, Object: n, Message: "jenis, fungsi, atau badan pemicu berbeda dari templat bangkitan"})
 		}

@@ -142,5 +142,21 @@ rules:
     field: discountRate
     message: fixturesales.invoice.error.discountTooHigh
     scope: server
+statusAxes:
+  billingStatus:
+    values: [to_bill, billed]
+    initial: to_bill
+    transitions:
+      - { from: to_bill, to: billed }
+  deliveryStatus:
+    values: [to_deliver, partially_delivered, delivered]
+    initial: to_deliver
+    transitions:
+      - { from: to_deliver, to: partially_delivered }
+      - { from: to_deliver, to: delivered }
+      - { from: partially_delivered, to: delivered }
+      - { from: partially_delivered, to: to_deliver }
+      - { from: delivered, to: partially_delivered }
+      - { from: delivered, to: to_deliver }
 indexes:
   - fields: [status, issuedOn]

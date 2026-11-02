@@ -9,6 +9,7 @@ package check
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -77,6 +78,8 @@ type ManifestResource struct {
 type Manifest struct {
 	Key  string
 	Slug string
+	// Version adalah versi modul yang sedang disiapkan (manifest version, SemVer).
+	Version string
 	// Dependencies adalah kunci modul pada dependencies manifest.
 	Dependencies []string
 	Capabilities []string
@@ -90,6 +93,7 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	var in struct {
 		Key          string `json:"key"`
 		Slug         string `json:"slug"`
+		Version      string `json:"version"`
 		Dependencies []struct {
 			Module string `json:"module"`
 		} `json:"dependencies"`
@@ -113,7 +117,7 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return Manifest{}, err
 	}
-	m := Manifest{Key: in.Key, Slug: in.Slug, Capabilities: in.Capabilities}
+	m := Manifest{Key: in.Key, Slug: in.Slug, Version: in.Version, Capabilities: in.Capabilities}
 	for _, d := range in.Dependencies {
 		m.Dependencies = append(m.Dependencies, d.Module)
 	}
@@ -139,12 +143,18 @@ type Module struct {
 	Dir      string
 	Manifest Manifest
 	Docs     []*load.Document
+	// MigrationsFS adalah isi direktori migrations modul (berkas .sql di akar); nil bila modul tanpa migrasi.
+	// Dipakai untuk menggagalkan pemeriksaan bila masih ada kerangka migrasi bertanda TODO(metadata:migrate).
+	MigrationsFS fs.FS
 }
 
 // Input adalah semua modul yang menjadi konteks pemeriksaan (relasi dan include lintas modul diselesaikan
 // terhadap kumpulan ini). Metadata bawaan SDK ditambahkan otomatis.
 type Input struct {
 	Modules []Module
+	// Git (opsional) membaca metadata pada tag rilis terakhir tiap modul untuk aturan deprecate-before-remove
+	// (Requirement 12.1); nil melewati perbandingan itu.
+	Git GitReader
 }
 
 // ResourceInfo memuat hasil turunan pemeriksaan untuk satu resource, dipakai pembangkit (6.x).
@@ -211,6 +221,9 @@ func LoadWorkspace(root string) (Input, []Problem) {
 			continue
 		}
 		mod := Module{Dir: rel, Manifest: m}
+		if st, err := os.Stat(filepath.Join(root, "modules", dir, "migrations")); err == nil && st.IsDir() {
+			mod.MigrationsFS = os.DirFS(filepath.Join(root, "modules", dir, "migrations"))
+		}
 		docs, lps := load.LoadFS(fsys, rel+"/metadata")
 		mod.Docs = docs
 		for _, p := range lps {

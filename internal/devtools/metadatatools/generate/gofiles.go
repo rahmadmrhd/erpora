@@ -44,6 +44,8 @@ type domainData struct {
 	FieldConsts, EnumConsts                        []namedLiteral
 	Fields, Rules                                  []string
 	LockWhen                                       string
+	Lifecycle                                      string
+	Axes                                           []string
 }
 
 type dtoField struct {
@@ -53,6 +55,12 @@ type dtoField struct {
 type dtoData struct {
 	Header, Pkg, Pascal, DomainImport string
 	Writable                          []dtoField
+	Pairs                             []dtoPair
+}
+
+// dtoPair adalah pasangan rename untuk FillRenamePairs: nama field Go dan literal nama JSON.
+type dtoPair struct {
+	NewGo, OldGo, NewLit, OldLit string
 }
 
 var goTypeOf = map[string]string{
@@ -121,6 +129,12 @@ func renderDomain(m *resModel, pkg string) ([]byte, error) {
 		}
 		d.LockWhen = s
 	}
+	if m.Lifecycle != nil {
+		d.Lifecycle = statusSpec(m.Lifecycle)
+	}
+	for _, ax := range m.Axes {
+		d.Axes = append(d.Axes, statusSpec(ax))
+	}
 	d.UsesJSON = e.usesJSON
 	raw, err := renderTemplate(resource.DomainMetaTemplate, d)
 	if err != nil {
@@ -142,6 +156,9 @@ func renderDTO(m *resModel, pkg, domainImport string) ([]byte, error) {
 			return nil, err
 		}
 		d.Writable = append(d.Writable, dtoField{GoName: f.GoName, GoType: gt, Tag: tag, NameLiteral: goString(f.Name)})
+	}
+	for _, p := range m.Pairs {
+		d.Pairs = append(d.Pairs, dtoPair{NewGo: p.New.GoName, OldGo: p.Old.GoName, NewLit: goString(p.New.Name), OldLit: goString(p.Old.Name)})
 	}
 	raw, err := renderTemplate(resource.HTTPDTOTemplate, d)
 	if err != nil {

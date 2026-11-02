@@ -117,3 +117,53 @@ func (d <% .Pascal %>Update) Validate(ctx context.Context, current metadata.Reco
 	}
 	return violationsError(ctx, domain.<% .Pascal %>Spec.Validate(domain.ModeUpdate, merged, present))
 }
+<%- if .Pairs %>
+
+// FillRenamePairs mengisi kedua bentuk pasangan rename selama masa transisi (Requirement 12.2, 12.3): bila klien
+// hanya mengirim salah satu bentuk (bentuk baru atau lama, termasuk null eksplisit), bentuk lainnya diisi dengan
+// salinan nilainya dan dicatat di Present. Panggil sesudah Validate (yang menolak kedua bentuk bernilai berbeda).
+// Otorisasi field (CheckWrite dan MaskFields) dihitung atas field kanonik, yaitu bentuk baru.
+func (d *<% .Pascal %>Create) FillRenamePairs() {
+	src := d.presence()
+	present := make(map[string]bool, len(src))
+	for k, v := range src {
+		present[k] = v
+	}
+<%- range .Pairs %>
+	switch {
+	case present[<% .NewLit %>] && !present[<% .OldLit %>]:
+		d.<% .OldGo %> = clone(d.<% .NewGo %>)
+		present[<% .OldLit %>] = true
+	case present[<% .OldLit %>] && !present[<% .NewLit %>]:
+		d.<% .NewGo %> = clone(d.<% .OldGo %>)
+		present[<% .NewLit %>] = true
+	}
+<%- end %>
+	d.Present = present
+}
+<%- end %>
+<%- if .Pairs %>
+
+// FillRenamePairs mengisi kedua bentuk pasangan rename selama masa transisi (Requirement 12.2, 12.3): bila klien
+// hanya mengirim salah satu bentuk (bentuk baru atau lama, termasuk null eksplisit), bentuk lainnya diisi dengan
+// salinan nilainya dan dicatat di Present. Panggil sesudah Validate (yang menolak kedua bentuk bernilai berbeda).
+// Otorisasi field (CheckWrite dan MaskFields) dihitung atas field kanonik, yaitu bentuk baru.
+func (d *<% .Pascal %>Update) FillRenamePairs() {
+	src := d.presence()
+	present := make(map[string]bool, len(src))
+	for k, v := range src {
+		present[k] = v
+	}
+<%- range .Pairs %>
+	switch {
+	case present[<% .NewLit %>] && !present[<% .OldLit %>]:
+		d.<% .OldGo %> = clone(d.<% .NewGo %>)
+		present[<% .OldLit %>] = true
+	case present[<% .OldLit %>] && !present[<% .NewLit %>]:
+		d.<% .NewGo %> = clone(d.<% .OldGo %>)
+		present[<% .NewLit %>] = true
+	}
+<%- end %>
+	d.Present = present
+}
+<%- end %>

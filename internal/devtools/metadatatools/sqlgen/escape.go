@@ -99,6 +99,12 @@ func isDigitsN(s string, minN, maxN int) bool {
 
 // DefaultLiteral mengubah nilai bawaan kolom menjadi literal SQL menurut tipe metadatanya.
 func DefaultLiteral(d *dbmodel.Default) (string, error) {
+	if d.Now {
+		if d.Type != metadata.TypeDateTime || d.Value != "" {
+			return "", errors.New("sqlgen: now() hanya untuk datetime tanpa nilai")
+		}
+		return "now()", nil
+	}
 	switch d.Type {
 	case metadata.TypeBoolean:
 		if d.Value == "true" || d.Value == "false" {

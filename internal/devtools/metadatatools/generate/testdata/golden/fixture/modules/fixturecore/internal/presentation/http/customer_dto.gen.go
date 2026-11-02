@@ -24,6 +24,8 @@ type CustomerCreate struct {
 	ContactPhone      *string         `json:"contactPhone"`
 	CreditLimit       *string         `json:"creditLimit"`
 	BlockedReason     *string         `json:"blockedReason"`
+	Phone             *string         `json:"phone"`
+	PhoneE164         *string         `json:"phoneE164"`
 	Present           map[string]bool `json:"-"`
 }
 
@@ -39,6 +41,8 @@ type CustomerUpdate struct {
 	ContactPhone      *string         `json:"contactPhone"`
 	CreditLimit       *string         `json:"creditLimit"`
 	BlockedReason     *string         `json:"blockedReason"`
+	Phone             *string         `json:"phone"`
+	PhoneE164         *string         `json:"phoneE164"`
 	Present           map[string]bool `json:"-"`
 }
 
@@ -98,6 +102,12 @@ func (d CustomerCreate) presence() map[string]bool {
 	if d.BlockedReason != nil {
 		p["blockedReason"] = true
 	}
+	if d.Phone != nil {
+		p["phone"] = true
+	}
+	if d.PhoneE164 != nil {
+		p["phoneE164"] = true
+	}
 	return p
 }
 
@@ -132,6 +142,12 @@ func (d CustomerCreate) record(present map[string]bool) metadata.Record {
 	}
 	if present["blockedReason"] {
 		rec["blockedReason"] = val(d.BlockedReason)
+	}
+	if present["phone"] {
+		rec["phone"] = val(d.Phone)
+	}
+	if present["phoneE164"] {
+		rec["phoneE164"] = val(d.PhoneE164)
 	}
 	return rec
 }
@@ -179,6 +195,12 @@ func (d CustomerUpdate) presence() map[string]bool {
 	if d.BlockedReason != nil {
 		p["blockedReason"] = true
 	}
+	if d.Phone != nil {
+		p["phone"] = true
+	}
+	if d.PhoneE164 != nil {
+		p["phoneE164"] = true
+	}
 	return p
 }
 
@@ -214,6 +236,12 @@ func (d CustomerUpdate) record(present map[string]bool) metadata.Record {
 	if present["blockedReason"] {
 		rec["blockedReason"] = val(d.BlockedReason)
 	}
+	if present["phone"] {
+		rec["phone"] = val(d.Phone)
+	}
+	if present["phoneE164"] {
+		rec["phoneE164"] = val(d.PhoneE164)
+	}
 	return rec
 }
 
@@ -230,4 +258,46 @@ func (d CustomerUpdate) Validate(ctx context.Context, current metadata.Record) e
 		merged[k] = v
 	}
 	return violationsError(ctx, domain.CustomerSpec.Validate(domain.ModeUpdate, merged, present))
+}
+
+// FillRenamePairs mengisi kedua bentuk pasangan rename selama masa transisi (Requirement 12.2, 12.3): bila klien
+// hanya mengirim salah satu bentuk (bentuk baru atau lama, termasuk null eksplisit), bentuk lainnya diisi dengan
+// salinan nilainya dan dicatat di Present. Panggil sesudah Validate (yang menolak kedua bentuk bernilai berbeda).
+// Otorisasi field (CheckWrite dan MaskFields) dihitung atas field kanonik, yaitu bentuk baru.
+func (d *CustomerCreate) FillRenamePairs() {
+	src := d.presence()
+	present := make(map[string]bool, len(src))
+	for k, v := range src {
+		present[k] = v
+	}
+	switch {
+	case present["phoneE164"] && !present["phone"]:
+		d.Phone = clone(d.PhoneE164)
+		present["phone"] = true
+	case present["phone"] && !present["phoneE164"]:
+		d.PhoneE164 = clone(d.Phone)
+		present["phoneE164"] = true
+	}
+	d.Present = present
+}
+
+// FillRenamePairs mengisi kedua bentuk pasangan rename selama masa transisi (Requirement 12.2, 12.3): bila klien
+// hanya mengirim salah satu bentuk (bentuk baru atau lama, termasuk null eksplisit), bentuk lainnya diisi dengan
+// salinan nilainya dan dicatat di Present. Panggil sesudah Validate (yang menolak kedua bentuk bernilai berbeda).
+// Otorisasi field (CheckWrite dan MaskFields) dihitung atas field kanonik, yaitu bentuk baru.
+func (d *CustomerUpdate) FillRenamePairs() {
+	src := d.presence()
+	present := make(map[string]bool, len(src))
+	for k, v := range src {
+		present[k] = v
+	}
+	switch {
+	case present["phoneE164"] && !present["phone"]:
+		d.Phone = clone(d.PhoneE164)
+		present["phone"] = true
+	case present["phone"] && !present["phoneE164"]:
+		d.PhoneE164 = clone(d.Phone)
+		present["phoneE164"] = true
+	}
+	d.Present = present
 }

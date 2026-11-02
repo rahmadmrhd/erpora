@@ -98,14 +98,19 @@ type relModel struct {
 
 // resModel adalah resource yang siap dibangkitkan.
 type resModel struct {
-	Res          *resolve.Resolved
-	Name         string // bagian nama pada kunci (camelCase)
-	Pascal       string
-	Snake        string
-	Fields       []*fld
-	Rules        []ruleModel
-	LockWhen     *metadata.Condition
-	LockServer   bool // lockWhen hanya server menurut check
+	Res        *resolve.Resolved
+	Name       string // bagian nama pada kunci (camelCase)
+	Pascal     string
+	Snake      string
+	Fields     []*fld
+	Rules      []ruleModel
+	LockWhen   *metadata.Condition
+	LockServer bool // lockWhen hanya server menurut check
+	// Lifecycle dan Axes: lifecycle baku status dokumen (K23) dan sumbu status tambahan (K24); nil/kosong bila bukan dokumen.
+	Lifecycle *statusModel
+	Axes      []*statusModel
+	// Pairs adalah pasangan rename (baru, lama) dari migrateFrom yang kedua bentuknya dapat ditulis klien (Requirement 12.3).
+	Pairs        []renamePair
 	LabelTpl     string
 	DefaultGroup string
 	byName       map[string]*fld
@@ -505,6 +510,42 @@ func buildModel(res *resolve.Resolved, info *check.ResourceInfo) (*resModel, err
 		m.LockWhen = c
 		m.LockServer = info != nil && info.ConditionScope["/lockWhen"] == "server"
 	}
+	if res.Lifecycle != nil {
+		lc, err := newStatusModel("status", res.Lifecycle.Initial, res.Lifecycle.Values, res.Lifecycle.Transitions)
+		if err != nil {
+			return nil, fmt.Errorf("resource %s: lifecycle: %w", res.Key, err)
+		}
+		m.Lifecycle = lc
+	}
+	for _, ax := range res.StatusAxes {
+		if errs := naming.ValidateIdentifier(ax.Name); errs != nil {
+			return nil, inputErr("resource %s: nama sumbu %q tidak sah", res.Key, ax.Name)
+		}
+		f := m.byName[ax.Name]
+		if f == nil || f.Type != "enum" || !f.ReadOnly || f.Nullable {
+			return nil, inputErr("resource %s: sumbu %s harus menjadi field enum readOnly bukan-nullable", res.Key, ax.Name)
+		}
+		sm, err := newStatusModel(ax.Name, ax.Initial, ax.Values, ax.Transitions)
+		if err != nil {
+			return nil, fmt.Errorf("resource %s: sumbu %s: %w", res.Key, ax.Name, err)
+		}
+		m.Axes = append(m.Axes, sm)
+	}
+	for _, f := range m.Fields {
+		if f.MigrateFrom == "" {
+			continue
+		}
+		old := m.byName[f.MigrateFrom]
+		if old == nil || old == f {
+			return nil, inputErr("resource %s: migrateFrom %q pada field %s bukan field lain yang ada", res.Key, f.MigrateFrom, f.Name)
+		}
+		if old.Type != f.Type || old.Class != f.Class || old.Group != f.Group {
+			return nil, inputErr("resource %s: pasangan %s dan %s harus bertipe, berklasifikasi, dan berkelompok sama (Requirement 12.6)", res.Key, f.Name, old.Name)
+		}
+		if f.Writable() && old.Writable() {
+			m.Pairs = append(m.Pairs, renamePair{New: f, Old: old})
+		}
+	}
 	m.LabelTpl = res.LabelTemplate
 	if m.LabelTpl != "" {
 		if _, err := metadata.ParseLabelTemplate(m.LabelTpl); err != nil {
@@ -577,4 +618,42 @@ func manifestGroup(g string) string {
 		}
 	}
 	return g
+}
+
+// renamePair adalah pasangan field rename: bentuk baru (kanonik, migrateFrom) dan bentuk lama.
+type renamePair struct{ New, Old *fld }
+
+// statusModel adalah satu tabel status (lifecycle atau sumbu) yang divalidasi ulang.
+type statusModel struct {
+	Field       string
+	Initial     string
+	Values      []string
+	Transitions [][2]string
+}
+
+func newStatusModel(field, initial string, values []string, ts []resolve.Transition) (*statusModel, error) {
+	known := map[string]bool{}
+	for _, v := range values {
+		if !enumValueRe.MatchString(v) {
+			return nil, inputErr("nilai status tidak sah (harus snake_case)")
+		}
+		known[v] = true
+	}
+	if len(values) == 0 || !known[initial] {
+		return nil, inputErr("nilai awal status harus termasuk nilai yang dinyatakan")
+	}
+	m := &statusModel{Field: field, Initial: initial, Values: values}
+	seen := map[[2]string]bool{}
+	for _, t := range ts {
+		pair := [2]string{t.From, t.To}
+		if !known[t.From] || !known[t.To] {
+			return nil, inputErr("transisi merujuk nilai yang tidak dinyatakan")
+		}
+		if seen[pair] {
+			return nil, inputErr("pasangan transisi ganda")
+		}
+		seen[pair] = true
+		m.Transitions = append(m.Transitions, pair)
+	}
+	return m, nil
 }

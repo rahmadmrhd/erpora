@@ -39,18 +39,29 @@ const (
 	InvoiceFieldApprovalNote       = "approvalNote"
 	InvoiceFieldSummary            = "summary"
 	InvoiceFieldLineCount          = "lineCount"
+	InvoiceFieldBillingStatus      = "billingStatus"
+	InvoiceFieldDeliveryStatus     = "deliveryStatus"
 	InvoiceFieldCustomerID         = "customerId"
 )
 
 // Nilai enum Invoice.
 const (
-	InvoiceStatusDraft      = "draft"
-	InvoiceStatusSubmitted  = "submitted"
-	InvoiceStatusCancelled  = "cancelled"
-	InvoicePaymentTermCash  = "cash"
-	InvoicePaymentTermNet15 = "net_15"
-	InvoicePaymentTermNet30 = "net_30"
-	InvoicePaymentTermNet60 = "net_60"
+	InvoiceStatusDraft                      = "draft"
+	InvoiceStatusDeleted                    = "deleted"
+	InvoiceStatusNeedApproval               = "need_approval"
+	InvoiceStatusAccepted                   = "accepted"
+	InvoiceStatusRejected                   = "rejected"
+	InvoiceStatusCancelled                  = "cancelled"
+	InvoiceStatusDone                       = "done"
+	InvoicePaymentTermCash                  = "cash"
+	InvoicePaymentTermNet15                 = "net_15"
+	InvoicePaymentTermNet30                 = "net_30"
+	InvoicePaymentTermNet60                 = "net_60"
+	InvoiceBillingStatusToBill              = "to_bill"
+	InvoiceBillingStatusBilled              = "billed"
+	InvoiceDeliveryStatusToDeliver          = "to_deliver"
+	InvoiceDeliveryStatusPartiallyDelivered = "partially_delivered"
+	InvoiceDeliveryStatusDelivered          = "delivered"
 )
 
 // InvoiceSpec adalah spesifikasi validasi resource: field, aturan lintas field, dan penguncian.
@@ -108,7 +119,7 @@ var InvoiceSpec = &ResourceSpec{
 			ReadOnly:       true,
 			HasDefault:     true,
 			Default:        "draft",
-			Enum:           []string{"draft", "submitted", "cancelled"},
+			Enum:           []string{"draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"},
 			Classification: "internal",
 			Group:          "general",
 		},
@@ -270,6 +281,26 @@ var InvoiceSpec = &ResourceSpec{
 			Group:          "general",
 		},
 		{
+			Name:           "billingStatus",
+			Type:           metadata.TypeEnum,
+			ReadOnly:       true,
+			HasDefault:     true,
+			Default:        "to_bill",
+			Enum:           []string{"to_bill", "billed"},
+			Classification: "internal",
+			Group:          "general",
+		},
+		{
+			Name:           "deliveryStatus",
+			Type:           metadata.TypeEnum,
+			ReadOnly:       true,
+			HasDefault:     true,
+			Default:        "to_deliver",
+			Enum:           []string{"to_deliver", "partially_delivered", "delivered"},
+			Classification: "internal",
+			Group:          "general",
+		},
+		{
 			Name:           "customerId",
 			Type:           metadata.TypeUUID,
 			Required:       true,
@@ -295,4 +326,41 @@ var InvoiceSpec = &ResourceSpec{
 		},
 	},
 	LockWhen: metadata.Cmp("status", metadata.OpNe, "draft"),
+	Lifecycle: &StatusSpec{
+		Field:   "status",
+		Initial: "draft",
+		Values:  []string{"draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"},
+		Transitions: []Transition{
+			{"draft", "deleted"},
+			{"draft", "accepted"},
+			{"draft", "need_approval"},
+			{"need_approval", "accepted"},
+			{"need_approval", "rejected"},
+			{"accepted", "cancelled"},
+			{"accepted", "done"},
+		},
+	},
+	Axes: []StatusSpec{
+		{
+			Field:   "billingStatus",
+			Initial: "to_bill",
+			Values:  []string{"to_bill", "billed"},
+			Transitions: []Transition{
+				{"to_bill", "billed"},
+			},
+		},
+		{
+			Field:   "deliveryStatus",
+			Initial: "to_deliver",
+			Values:  []string{"to_deliver", "partially_delivered", "delivered"},
+			Transitions: []Transition{
+				{"to_deliver", "partially_delivered"},
+				{"to_deliver", "delivered"},
+				{"partially_delivered", "delivered"},
+				{"partially_delivered", "to_deliver"},
+				{"delivered", "partially_delivered"},
+				{"delivered", "to_deliver"},
+			},
+		},
+	},
 }

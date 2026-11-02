@@ -257,6 +257,12 @@ func (b *builder) run() *Resolved {
 	b.res.Description, _ = d.Value["description"].(string)
 	b.prepare()
 
+	// K22: sdk:audit selalu disertakan otomatis ke setiap resource (bukan abstrak), lebih dulu daripada include
+	// lain sehingga field bawaan tampil pertama. Dilewati hanya bila katalog tidak memuatnya (katalog tanpa
+	// metadata bawaan; AddBuiltin selalu memuatnya pada pemakaian nyata).
+	if d.Kind == "resource" && b.r.c.docs[KeyAudit] != nil {
+		b.include(-1, map[string]any{"source": "sdk:audit"})
+	}
 	if incs, ok := d.Value["include"].([]any); ok {
 		for i, it := range incs {
 			if m, ok := it.(map[string]any); ok {
@@ -265,7 +271,9 @@ func (b *builder) run() *Resolved {
 		}
 	}
 	b.ownFields()
+	b.statusAxes()
 	b.ownDeclarations()
+	b.lifecycle()
 	b.mergeLockWhen()
 	if len(b.fields) > load.MaxFields {
 		b.fail("", CodeLimit, fmt.Sprintf("hasil gabungan memuat %d field, melebihi batas %d (Requirement 1.3)", len(b.fields), load.MaxFields))
@@ -284,6 +292,13 @@ func (b *builder) run() *Resolved {
 		b.res.Uses = append(b.res.Uses, b.uses[k])
 	}
 	return b.res
+}
+
+// sameAuditField menyatakan kedua field adalah field bawaan sdk:audit yang sama (definisi di berkas dan baris
+// yang sama): penyertaan ganda yang tidak mengubah apa pun dan karenanya bukan duplicate_field (K22).
+func sameAuditField(a, b *Field) bool {
+	return a.ProtectedBy == KeyAudit && b.ProtectedBy == KeyAudit &&
+		a.Origin.File == b.Origin.File && a.Origin.Line == b.Origin.Line && a.Origin.Column == b.Origin.Column
 }
 
 func (b *builder) addUse(u Use) {
@@ -305,6 +320,9 @@ func (b *builder) newField(name string, attrs map[string]any, ptr, op string) *F
 	}
 	if op == OpDeclared && (b.doc().Key == KeyAudit || b.doc().Key == KeyDocument) {
 		f.ProtectedBy = b.doc().Key
+	}
+	if op == OpDeclared && b.doc().Key == KeyAudit && (name == "createdAt" || name == "updatedAt") {
+		f.DefaultNow = true // K22: DEFAULT now() implisit pada model skema
 	}
 	b.expand(f)
 	return f
@@ -476,6 +494,9 @@ func (b *builder) include(i int, item map[string]any) {
 
 	contrib := make([]*Field, 0, len(R.Fields))
 	for _, f := range R.Fields {
+		if f.IsStatusAxis {
+			continue // sumbu status tidak diwarisi lewat include (K24)
+		}
 		contrib = append(contrib, f.clone(R.Key))
 	}
 
@@ -536,6 +557,9 @@ func (b *builder) include(i int, item map[string]any) {
 		f.SourceName = f.Name
 		f.Name = rename[f.Name]
 		if prev := b.index[f.Name]; prev != nil {
+			if sameAuditField(prev, f) {
+				continue // K22: field sdk:audit yang sama (implisit, eksplisit, atau lewat include lain) hanya satu kali
+			}
 			b.fail(base, CodeDuplicateField, fmt.Sprintf(
 				"field %q dari %s bertabrakan dengan field dari %s (baris %d); pakai prefix, omit, atau set",
 				f.Name, key, prev.Origin.Doc, prev.Origin.Line))

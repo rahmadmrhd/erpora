@@ -15,7 +15,7 @@ var conditionKeys = map[string]bool{
 // nameMapKeys adalah kunci yang nilainya peta nama buatan developer (field, relasi, timpaan include): kunci
 // anaknya adalah identifier yang dibatasi 63 byte (Requirement 1.4; JSON Schema tidak dapat membatasi panjang
 // kunci pada patternProperties).
-var nameMapKeys = map[string]bool{"fields": true, "relations": true, "set": true, "add": true, "pivotFields": true}
+var nameMapKeys = map[string]bool{"fields": true, "relations": true, "set": true, "add": true, "pivotFields": true, "statusAxes": true}
 
 // maxNameBytes adalah batas panjang identifier.
 const maxNameBytes = 63

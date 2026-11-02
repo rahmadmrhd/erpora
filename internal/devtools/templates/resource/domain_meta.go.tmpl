@@ -53,4 +53,14 @@ var <% .Pascal %>Spec = &ResourceSpec{
 <%- if .LockWhen %>
 	LockWhen: <% .LockWhen %>,
 <%- end %>
+<%- if .Lifecycle %>
+	Lifecycle: &StatusSpec<% .Lifecycle %>,
+<%- end %>
+<%- if .Axes %>
+	Axes: []StatusSpec{
+<%- range .Axes %>
+		<% . %>,
+<%- end %>
+	},
+<%- end %>
 }

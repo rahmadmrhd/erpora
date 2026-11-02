@@ -190,6 +190,25 @@ func (e *emitter) fieldSpec(f *fld) (string, error) {
 	return b.String(), nil
 }
 
+// statusSpec menyusun literal StatusSpec (tabel nilai dan transisi) untuk lifecycle atau satu sumbu.
+func statusSpec(sm *statusModel) string {
+	var b strings.Builder
+	b.WriteString("{\n")
+	b.WriteString("Field: " + goString(sm.Field) + ",\n")
+	b.WriteString("Initial: " + goString(sm.Initial) + ",\n")
+	vals := make([]string, len(sm.Values))
+	for i, v := range sm.Values {
+		vals[i] = goString(v)
+	}
+	b.WriteString("Values: []string{" + strings.Join(vals, ", ") + "},\n")
+	b.WriteString("Transitions: []Transition{\n")
+	for _, t := range sm.Transitions {
+		b.WriteString("{" + goString(t[0]) + ", " + goString(t[1]) + "},\n")
+	}
+	b.WriteString("},\n}")
+	return b.String()
+}
+
 func (e *emitter) ruleSpec(r ruleModel) (string, error) {
 	c, err := e.cond(r.Assert)
 	if err != nil {

@@ -155,6 +155,14 @@ func TestCompare_Triggers(t *testing.T) {
 	if r := Compare(cat(mk(func(x *Trigger) { x.Enabled = false })), cat(exp), nil, CompareOptions{}); kinds(r) != "trigger_disabled" {
 		t.Errorf("pemicu nonaktif: %q", kinds(r))
 	}
+	// Pemicu bangkitan wajib ENABLE ALWAYS: ENABLE biasa dapat dilewati session_replication_role.
+	expAlways := baseTable()
+	expAlways.Triggers = []Trigger{{Name: trg.Name, Enabled: true, Always: true, Type: trg.Type, Function: trg.Function, Body: trg.Body}}
+	act := baseTable()
+	act.Triggers = []Trigger{trg} // Always false
+	if r := Compare(cat(act), cat(expAlways), nil, CompareOptions{}); kinds(r) != "trigger_disabled" {
+		t.Errorf("pemicu tanpa ENABLE ALWAYS: %q", kinds(r))
+	}
 	if r := Compare(cat(mk(func(x *Trigger) { x.Body = "BEGIN RETURN NEW; END" })), cat(exp), nil, CompareOptions{}); kinds(r) != "trigger_changed" {
 		t.Errorf("badan berubah: %q", kinds(r))
 	}

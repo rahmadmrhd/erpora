@@ -31,7 +31,9 @@ fields:
 	if id.Origin.Doc != "sdk.audit" || id.Origin.File != "sdk/audit.abstract.yaml" || id.Origin.Line != 6 {
 		t.Errorf("jejak asal id = %+v", id.Origin)
 	}
-	if !reflect.DeepEqual(id.Origin.Chain, []string{"sdk.document", "sdk.audit"}) {
+	// K22: sdk:audit disertakan otomatis lebih dulu; field yang sama lewat sdk:document tidak ganda dan jejak asal
+	// mengikuti kemunculan pertama (implisit).
+	if !reflect.DeepEqual(id.Origin.Chain, []string{"sdk.audit"}) {
 		t.Errorf("rantai include id = %v", id.Origin.Chain)
 	}
 	if n := r.Field("number"); n.Origin.Doc != "sales.invoice" || len(n.Origin.Chain) != 0 || n.Origin.Op != "declared" {
@@ -54,7 +56,7 @@ func TestIncludeAccessRules(t *testing.T) {
 	}
 	t.Run("dependensi dan export: lolos", func(t *testing.T) {
 		r := mustResolve(t, mk([]string{"crm"}, true), "sales.invoice")
-		if joined(r) != "street" {
+		if joined(r) != auditNames+",street" {
 			t.Fatalf("field = %s", joined(r))
 		}
 	})
@@ -119,7 +121,7 @@ generate: {crud: true}
 			f("sales/child.resource.yaml", resource("sales.child", "include:\n  - source: sales.base\nfields:\n  extra: {type: text}\n")))
 	})
 	r := mustResolve(t, c, "sales.child")
-	if joined(r) != "code,extra" || len(r.Relations) != 0 || len(r.Indexes) != 0 || r.Generate != nil {
+	if joined(r) != auditNames+",code,extra" || len(r.Relations) != 0 || len(r.Indexes) != 0 || r.Generate != nil {
 		t.Fatalf("hasil = %s relasi=%d indeks=%d generate=%v", joined(r), len(r.Relations), len(r.Indexes), r.Generate)
 	}
 }
@@ -142,7 +144,7 @@ func TestOverridesSetOmitAdd(t *testing.T) {
 `)))
 	})
 	r := mustResolve(t, c, "sales.order")
-	if joined(r) != "street,city,zone" {
+	if joined(r) != auditNames+",street,city,zone" {
 		t.Fatalf("field = %s", joined(r))
 	}
 	s := r.Field("street")
@@ -241,7 +243,7 @@ func TestDuplicateFieldNames(t *testing.T) {
 	})
 	t.Run("prefix menghindari tabrakan", func(t *testing.T) {
 		r := mustResolve(t, mk("include:\n  - {source: m.a, prefix: billing}\n  - {source: m.b, prefix: shipping}\n"), "m.r")
-		if joined(r) != "billingName,shippingName" {
+		if joined(r) != auditNames+",billingName,shippingName" {
 			t.Fatalf("field = %s", joined(r))
 		}
 	})
@@ -427,7 +429,7 @@ fields:
 `)))
 	})
 	r := mustResolve(t, c, "m.order")
-	if got := joined(r); got != "billingStreet,billingCity,billingZip,billingPostal,shippingStreet,shippingCity,shippingZip,shippingPostal,useShipping" {
+	if got := joined(r); got != auditNames+",billingStreet,billingCity,billingZip,billingPostal,shippingStreet,shippingCity,shippingZip,shippingPostal,useShipping" {
 		t.Fatalf("field = %s", got)
 	}
 	b := r.Field("billingStreet")

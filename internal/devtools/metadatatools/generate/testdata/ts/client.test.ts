@@ -48,7 +48,7 @@ describe("keluaran pembangkit TS", () => {
       fieldGroup: "pricing",
     });
     const status = invoice.fields.find((f) => f.name === "status");
-    expect(status?.values).toEqual(["draft", "submitted", "cancelled"]);
+    expect(status?.values).toEqual(["draft", "deleted", "need_approval", "accepted", "rejected", "cancelled", "done"]);
     expect(status?.readOnly).toBe(true);
     expect(invoice.lockWhen).toEqual({ field: "status", op: "ne", value: "draft" });
     expect(invoice.relations.map((r) => r.name)).toEqual(["customer", "lines", "tags", "notes"]);
@@ -61,6 +61,37 @@ describe("keluaran pembangkit TS", () => {
       widget: "email",
       format: "email",
     });
+  });
+
+  test("sumbu status dan lifecycle hanya field enum readOnly (tabel transisi tidak dikirim ke klien)", () => {
+    const axis = (name: string) => invoice.fields.find((f) => f.name === name);
+    expect(axis("billingStatus")).toMatchObject({
+      type: "enum",
+      readOnly: true,
+      nullable: false,
+      default: "to_bill",
+      values: ["to_bill", "billed"],
+    });
+    expect(axis("deliveryStatus")).toMatchObject({
+      type: "enum",
+      readOnly: true,
+      default: "to_deliver",
+      values: ["to_deliver", "partially_delivered", "delivered"],
+    });
+    const json = JSON.stringify(invoice);
+    expect(json).not.toContain("submitted");
+    expect(json).not.toContain("transitions");
+  });
+
+  test("pasangan rename: kedua bentuk ada, bentuk lama bertanda deprecated (masa transisi)", () => {
+    const phone = customer.fields.find((f) => f.name === "phone");
+    const phoneE164 = customer.fields.find((f) => f.name === "phoneE164");
+    expect(phone?.deprecated).toEqual({ since: "1.1.0", replacedBy: "phoneE164" });
+    expect(phoneE164).toBeDefined();
+    expect(phoneE164?.deprecated).toBeUndefined();
+    expect(phone?.classification).toBe(phoneE164?.classification);
+    expect(phone?.fieldGroup).toBe(phoneE164?.fieldGroup);
+    expect(phoneE164?.maxLength).toBe(20);
   });
 
   test("tipe field membentuk peta untuk evaluator dan validator berjalan atasnya", () => {

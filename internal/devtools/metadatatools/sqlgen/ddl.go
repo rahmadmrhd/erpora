@@ -16,6 +16,7 @@ const (
 	KindAddColumn      = "add_column"
 	KindCreateFunction = "create_function"
 	KindCreateTrigger  = "create_trigger"
+	KindEnableTrigger  = "enable_trigger"
 )
 
 // Options mengatur keluaran. Schema, bila tidak kosong, mengualifikasi nama tabel dan fungsi (dipakai mesin

@@ -77,6 +77,9 @@ func (t SQLType) String() string {
 type Default struct {
 	Type  metadata.FieldType
 	Value string
+	// Now menyatakan DEFAULT now() (hanya datetime; Value kosong). Hanya dipakai kolom bawaan sdk:audit
+	// (K22, pemilik produk 2 Nov 2026); metadata tidak punya kunci default dinamis.
+	Now bool
 }
 
 // Column adalah satu kolom model.
@@ -118,6 +121,8 @@ type Check struct {
 	Kind     CheckKind
 	Min, Max string
 	Values   []string
+	// Extensible menandai enum yang boleh bertambah nilai secara aditif (field extensible: true).
+	Extensible bool
 }
 
 // Unique adalah constraint UNIQUE (satu atau beberapa kolom).
@@ -151,7 +156,20 @@ type Trigger struct {
 	Function string
 	// Events adalah INSERT, UPDATE, DELETE (huruf besar, terurut).
 	Events []string
-	Lock   *LockSpec
+	// Lock adalah parameter pemicu penguncian dokumen (BEFORE UPDATE OR DELETE pada tabel dokumen); Child adalah
+	// parameter pemicu anak (BEFORE INSERT OR UPDATE OR DELETE pada tabel anak). Tepat satu terisi.
+	Lock  *LockSpec
+	Child *ChildLock
+}
+
+// ChildLock adalah parameter pemicu anak dokumen: INSERT, UPDATE, dan DELETE baris anak ditolak bila baris induk
+// terkunci menurut kondisi kunci induk (Requirement 13.11). Anak adalah baris embedded, pivot belongsToMany,
+// atau tabel seberang hasOne.
+type ChildLock struct {
+	// Parent adalah tabel dokumen induk (Parent.Lock adalah kondisi kunci, atas kolom Parent sendiri).
+	Parent *Table
+	// FKColumn adalah kolom pada tabel anak yang menunjuk id induk.
+	FKColumn string
 }
 
 // LockSpec adalah parameter templat pemicu penguncian dokumen (Requirement 13.8, design D-19).
@@ -163,8 +181,17 @@ type LockSpec struct {
 	StatusColumn, VersionColumn, UpdatedAtColumn, UpdatedByColumn string
 	// Transitions adalah pasangan (status lama, status baru) yang sah.
 	Transitions [][2]string
+	// Axes adalah sumbu status tambahan (statusAxes, K24): kolomnya boleh berubah pada baris terkunci hanya dengan
+	// pasangan transisi sumbu yang sah (Requirement 13.8 a2).
+	Axes []LockAxis
 	// MigratePairs adalah pasangan kolom (tujuan, asal) migrateFrom yang boleh diisi dari NULL.
 	MigratePairs [][2]string
+}
+
+// LockAxis adalah satu sumbu status beserta pasangan (nilai lama, nilai baru) yang sah.
+type LockAxis struct {
+	Column      string
+	Transitions [][2]string
 }
 
 // Table adalah satu tabel model (resource atau pivot).
@@ -254,7 +281,11 @@ func (s *Schema) Summary() string {
 				sb.WriteString(" not null")
 			}
 			if c.Default != nil {
-				fmt.Fprintf(&sb, " default %s", strconv.Quote(c.Default.Value))
+				if c.Default.Now {
+					sb.WriteString(" default now()")
+				} else {
+					fmt.Fprintf(&sb, " default %s", strconv.Quote(c.Default.Value))
+				}
 			}
 			if c.Generated != nil {
 				sb.WriteString(" generated")

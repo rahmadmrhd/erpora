@@ -115,6 +115,29 @@ type Violation struct {
 	Business   bool
 }
 
+// Transition adalah satu pasangan transisi status (dari, ke).
+type Transition struct{ From, To string }
+
+// StatusSpec adalah tabel status satu field: lifecycle baku `status` dokumen (K23) atau satu sumbu status
+// tambahan (K24, boleh mundur atau siklik). Hanya pasangan yang tercantum yang sah; penerapan transisi (aksi atau
+// kait server, `409 invalid_state` di luar pasangan) milik kode pemanggil, bukan input klien.
+type StatusSpec struct {
+	Field       string
+	Initial     string
+	Values      []string
+	Transitions []Transition
+}
+
+// Allows menyatakan apakah transisi dari ke sah.
+func (s *StatusSpec) Allows(from, to string) bool {
+	for _, t := range s.Transitions {
+		if t.From == from && t.To == to {
+			return true
+		}
+	}
+	return false
+}
+
 // ResourceSpec adalah spesifikasi resource: field, aturan, dan kondisi penguncian. Nilainya hanya dibaca
 // setelah dibangun; jangan disalin setelah dipakai.
 type ResourceSpec struct {
@@ -122,6 +145,9 @@ type ResourceSpec struct {
 	Fields   []FieldSpec
 	Rules    []RuleSpec
 	LockWhen *metadata.Condition
+	// Lifecycle dan Axes hanya terisi pada resource dokumen: lifecycle baku `status` dan sumbu status tambahan.
+	Lifecycle *StatusSpec
+	Axes      []StatusSpec
 
 	once  sync.Once
 	types metadata.Types
@@ -476,4 +502,27 @@ func checkRange(f *FieldSpec, d metadata.Decimal) string {
 		}
 	}
 	return ""
+}
+
+// Axis mengembalikan sumbu status tambahan menurut nama field.
+func (s *ResourceSpec) Axis(field string) (*StatusSpec, bool) {
+	for i := range s.Axes {
+		if s.Axes[i].Field == field {
+			return &s.Axes[i], true
+		}
+	}
+	return nil, false
+}
+
+// RenamePairs mengembalikan pasangan rename (nama baru, nama lama) dari field `migrateFrom`. Selama masa transisi
+// (Requirement 12.3) kedua bentuk diterima dan diisi; otorisasi field (CheckWrite dan MaskFields) dihitung atas
+// field kanonik, yaitu nama baru, dan keduanya berklasifikasi dan berkelompok sama (Requirement 12.6).
+func (s *ResourceSpec) RenamePairs() [][2]string {
+	var out [][2]string
+	for i := range s.Fields {
+		if f := &s.Fields[i]; f.MigrateFrom != "" {
+			out = append(out, [2]string{f.Name, f.MigrateFrom})
+		}
+	}
+	return out
 }

@@ -240,6 +240,16 @@ tasks:
     cmds:
       - go run -tags devtools ./cmd/erpora metadata:generate --check
 
+  metadata:diff:
+    desc: Bandingkan skema database hasil migrasi dengan metadata di database sementara (butuh ERP_TEST_DATABASE_URL; task metadata:diff -- <modul> membatasi modul)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:diff {{.CLI_ARGS}}
+
+  metadata:migrate:
+    desc: Tulis migrasi goose dari selisih metadata dan database, tidak diterapkan (butuh ERP_TEST_DATABASE_URL; task metadata:migrate -- <modul> <nama>)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:migrate {{.CLI_ARGS}}
+
   i18n:generate:
     desc: Bangkitkan tipe kunci terketik keys.gen.ts dari katalog (task i18n:generate -- --check hanya memeriksa drift)
     cmds:

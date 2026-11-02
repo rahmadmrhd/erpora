@@ -164,7 +164,7 @@ ORDER BY c.relname, t.tgname`, schema)
 			_ = rows.Close()
 			return nil, err
 		}
-		cat.Tables[table].Triggers = append(cat.Tables[table].Triggers, Trigger{Name: name, Enabled: enabled == "O", Type: typ, Function: fn, Body: body})
+		cat.Tables[table].Triggers = append(cat.Tables[table].Triggers, Trigger{Name: name, Enabled: enabled == "O" || enabled == "A", Always: enabled == "A", Type: typ, Function: fn, Body: body})
 	}
 	if err := closeRows(rows); err != nil {
 		return nil, err

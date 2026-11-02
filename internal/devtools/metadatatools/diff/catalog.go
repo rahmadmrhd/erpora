@@ -54,7 +54,9 @@ type Index struct {
 type Trigger struct {
 	Name string
 	// Enabled bernilai true bila pemicu aktif untuk sesi biasa (tgenabled O).
-	Enabled  bool
+	Enabled bool
+	// Always bernilai true bila pemicu ENABLE ALWAYS (tgenabled A): tetap aktif walau session_replication_role = replica.
+	Always   bool
 	Type     int
 	Function string
 	// Body adalah teks fungsi pemicu (prosrc).
@@ -130,6 +132,9 @@ type Finding struct {
 	Message  string
 	Expected string
 	Actual   string
+	// Columns adalah kolom yang disentuh constraint atau indeks (bila ada); dipakai pembangkit migrasi untuk
+	// memasangkan constraint lama dan baru pada kolom yang sama.
+	Columns []string
 }
 
 func (f Finding) String() string {

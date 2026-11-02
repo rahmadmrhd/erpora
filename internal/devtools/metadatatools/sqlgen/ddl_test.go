@@ -136,3 +136,13 @@ func TestAddColumnAndIndexStatements(t *testing.T) {
 		t.Errorf("AddForeignKey = %q, %v", sql, err)
 	}
 }
+
+func TestDefaultLiteral_Now(t *testing.T) {
+	got, err := DefaultLiteral(&dbmodel.Default{Type: metadata.TypeDateTime, Now: true})
+	if err != nil || got != "now()" {
+		t.Errorf("DefaultLiteral(now) = %q, %v", got, err)
+	}
+	if _, err := DefaultLiteral(&dbmodel.Default{Type: metadata.TypeString, Now: true}); err == nil {
+		t.Error("now() hanya untuk datetime")
+	}
+}
