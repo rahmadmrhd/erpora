@@ -1,6 +1,6 @@
 # Primitif keamanan untuk modul
 
-Panduan memakai primitif keamanan SDK (M2c, PRD-000 FR-24.2). Primitif ini wajib dipakai oleh modul: HTTP client mentah dan decode ke tipe `internal/infrastructure` ditolak oleh arch test (aturan `EGRESS` dan `DECODE`). Rujukan: `docs/security/security-guidelines.md` §2, §3.1, §3.2, §3.3, §3.4, §3.8, §6, dan `docs/architecture/api-guidelines.md` §4, §8.
+Panduan memakai primitif keamanan SDK (M2c, PRD-000 FR-24.2). Primitif ini wajib dipakai oleh modul: HTTP client mentah dan decode ke tipe `internal/infrastructure` ditolak oleh arch test (aturan `EGRESS` dan `DECODE`), begitu pula pemasangan identitas atau pengirim email di context oleh modul (aturan `IDENT`, bagian 7). Rujukan: `docs/security/security-guidelines.md` §2, §3.1, §3.2, §3.3, §3.4, §3.8, §6, dan `docs/architecture/api-guidelines.md` §4, §8.
 
 ## 1. Respons dan error (`erpora/sdk/httpx`)
 
@@ -121,3 +121,13 @@ if err != nil {
 ## 6. Timeout database
 
 Pool `erpora serve` memasang `statement_timeout` (default 30 detik, env `ERP_DB_STATEMENT_TIMEOUT_MS`, rentang 1000–600000) pada setiap koneksi. Statement yang melewatinya dibatalkan dengan SQLSTATE `57014`. CLI (`migrate`, `modules`, command modul) tidak dibatasi. Query yang memang panjang adalah pekerjaan job, bukan request HTTP.
+
+## 7. Identitas dan email (`erpora/sdk/identity`, `erpora/sdk/mail`)
+
+Modul **membaca** identitas dan **mengirim** email; platform yang **memasangnya** di context.
+
+- Boleh di semua modul: `identity.FromContext(ctx)` (Principal pemanggil), `mail.Send(ctx, msg)`, `mail.From(ctx)`. **Hanya modul `core`** yang boleh membaca `identity.ServiceFrom(ctx)` (layanan identitas) dan `identity.AdminFrom(ctx)` (operasi administratif); keduanya hanya dipasang pada context modul `core` dan alasan sistem `cli:core:*` (keputusan pemilik produk 3 Nov 2026). Modul lain yang butuh data identitas memakai kontrak modul `core`. Principal bukan sumber otorisasi tunggal: otorisasi tetap lewat `authz` (PRD-001 FR-119), dan parameter kontrak antarmodul tidak membawa `userId`/`tenantId`.
+- **Dilarang di kode non-test modul** (aturan arch test `IDENT`, PRD-000 Q42 butir 5; `CheckSecurity`): `identity.WithPrincipal`, `identity.WithService`, `identity.WithAdmin`, dan `mail.WithSender`, baik dipanggil maupun sekadar direferensikan; selain `modules/core`, juga `identity.AdminFrom` dan `identity.ServiceFrom`; dan mengimpor `erpora/sdk/identity/identitytest` serta `testing` dari berkas non-test. Juga dilarang di kode non-test modul: mengimpor `unsafe` (termasuk `import _ "unsafe"`) dan direktif `//go:linkname`, karena keduanya dapat memintas deteksi pemanggilan (mis. `//go:linkname forge erpora/sdk/identity.WithPrincipal`). Hak core dikunci ke path Go module `erpora/modules/core` **dan** direktori `modules/core` (aturan `MODPATH`: path go.mod harus `erpora/modules/<direktori>`). Pemindaian memeriksa paket dengan dan tanpa tag `devtools` dan untuk OS lain (windows/linux). Hak memasang itu milik platform (`Authenticate`, composition root); modul yang memilikinya dapat memalsukan identitas atau mengambil hak admin.
+- **Batas jaminan:** aturan ini **mempersulit dan mendeteksi**, bukan menjamin. Kotak tertutup di `sdk/identity` menutup jalur refleksi atas context. Risiko residual: refleksi pada tipe lain dan dependensi pihak ketiga yang memanggil API tanpa dipindai arch test; modul pihak ketiga dianggap kode yang di-review sebelum dipasang.
+- Di tes modul, pasang Principal lewat `identitytest` (`sdk/identity/identitytest`); berkas `_test.go` tidak diperiksa aturan `IDENT`.
+- Mekanisme autentikasi (token, sesi, MFA, rate limit): ADR-0013.

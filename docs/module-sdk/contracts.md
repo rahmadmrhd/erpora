@@ -29,13 +29,14 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 | `x-erp-extensible-enum` | enum | Nilai baru boleh ditambah tanpa breaking (api-guidelines §14.1) |
 | `x-erp-generated` | skema (`components.schemas`) | Skema dibangkitkan `metadata:generate` dari berkas metadata; tidak boleh diedit tangan (§9) |
 | `x-erp-decimal` | properti desimal | `{precision, scale, minimum?, maximum?}` dari metadata; kontrak hanya informasi, server menegakkan presisi, skala, dan rentang |
+| `x-erp-credential-response` | properti respons 2xx (K-C1.4; allowlist 3 Nov 2026, PRD-001 Q16) | Penanda `true` agar properti kredensial boleh tampil di respons 2xx. Sah hanya bila (modul, operationId, properti) terdaftar di allowlist linter: `accessToken` pada login/refresh `secret`/`otpauthUri` pada enroll MFA, dan `codes` (recovery code, tampil sekali sesuai FR-107) pada confirm MFA dan regenerate recovery codes, modul `core`/`platform`. Penanda tingkat operasi saja tidak cukup; ERROR di luar allowlist, pada requestBody, parameter, atau respons non-2xx. Properti `refresh*` di body **selalu ERROR** (refresh token hanya cookie). Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store`). Dicetak INFO `erp-credential-response-exception` (PRD-000 Q42 butir 4; security-guidelines §2) |
 | `x-erp-allow-highly-confidential` | properti respons 2xx | Pengecualian eksplisit agar properti `highly_confidential` boleh tampil di respons; hanya untuk nama data HR (`nik`, `npwp`, `bankAccount*`, `salary`), ERROR pada nama kredensial/nama lain dan di luar properti respons 2xx (Q32 butir 14). Nilai: alasan string tidak kosong; wajib bersama `x-erp-classification: highly_confidential`. Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store` berlaku). Dicetak linter sebagai INFO `erp-highly-confidential-exception` untuk ditinjau reviewer (Q32) |
 
 ## 3. Linter: rule → pasal
 
 `erpora contracts:lint [module]` menjalankan Spectral (terpin di `web/package.json`, dijalankan Bun; tanpa `bun x`/`npx`) dengan ruleset
 `contracts/spectral.yaml` + fungsi kustom `contracts/spectral-functions/`. Seluruh rule `erp-*` berseverity `error` dan pesannya menyebut pasalnya.
-Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`info`: dicetak sebagai `INFO …`, exit code tetap 0). Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, `oas3-api-servers`, `operation-tags`, `openapi-tags`, dan
+Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` dan `erp-credential-response-exception` (`info`: dicetak sebagai `INFO …`, exit code tetap 0). Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, `oas3-api-servers`, `operation-tags`, `openapi-tags`, dan
 `oas3-unused-component` dimatikan (yang terakhir karena komponen diekspor ke dokumen lain lewat `erp:`).
 
 | Rule | Menegakkan | Pasal |
@@ -58,10 +59,12 @@ Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`i
 | `erp-examples` | Respons 2xx dan `requestBody` JSON punya contoh | §13 |
 | `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tanpa parameter non-header dan tanpa `requestBody` tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); publik dengan masukan tetap wajib minimal satu 4xx | §13 |
 | `erp-classification-valid` | `x-erp-classification` salah satu dari empat kelas | security-guidelines §2 |
-| `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential` | FR-24.2; security-guidelines §2, §3.4 |
+| `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential`, kecuali pengecualian `x-erp-allow-highly-confidential` (data HR) atau `x-erp-credential-response: true` pada properti (kredensial, allowlist modul/operationId/properti) | FR-24.2; security-guidelines §2, §3.4 |
 | `erp-no-sensitive-in-url` | Data sensitif (mis. `token`, `password`) tidak lewat path atau query | FR-24.2 |
 | `erp-sensitive-needs-classification` | Properti/parameter bernama sensitif (dicocokkan **per token camelCase**: `newPassword`, `clientSecret`, `resetToken`, `bankAccountNumber`, …) wajib `x-erp-classification: highly_confidential`: `password`, `secret`, `token`, `apiKey`, `privateKey`, `nik`, `npwp`, `bankAccount`, `salary` (Q32) | FR-24.2; security-guidelines §2 |
-| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama; hanya pada properti respons 2xx bernama data HR (bukan kredensial) | FR-24.2; security-guidelines §2 |
+| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama; hanya pada properti respons 2xx bernama data HR (bukan kredensial; kredensial hanya lewat `x-erp-credential-response`) | FR-24.2; security-guidelines §2 |
+| `erp-credential-response-valid` | `x-erp-credential-response: true` hanya pada properti respons 2xx yang (modul, operationId, properti)-nya terdaftar di allowlist linter untuk modul `core`/`platform`, dan menyertai `x-erp-classification: highly_confidential`; ERROR di luar itu, bila dipasang pada tingkat operasi saja, dan **selalu ERROR** untuk properti `refresh*` di body respons | PRD-000 Q42 butir 4; security-guidelines §2 |
+| `erp-credential-response-exception` (**INFO**) | Mencetak setiap operasi berpenanda `x-erp-credential-response` untuk ditinjau reviewer; tidak menggagalkan lint | PRD-000 Q42 butir 4; security-guidelines §2 |
 | `erp-highly-confidential-exception` (**INFO**) | Mencetak setiap pengecualian beserta alasannya untuk ditinjau reviewer; tidak menggagalkan lint (satu-satunya rule berseverity info) | FR-24.2; security-guidelines §2 |
 
 ## 4. Klasifikasi respons dan `module.Classify`

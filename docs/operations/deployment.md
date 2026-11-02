@@ -72,7 +72,8 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 | --- | --- | --- | --- |
 | `ERP_DATABASE_URL` | ✅ | — | `postgres://erp:PASSWORD@localhost:5432/erp?sslmode=disable` (gunakan `sslmode=require`/`verify-full` untuk DB remote) |
 | `ERP_DB_SLOW_QUERY_MS` | | `200` | Ambang (milidetik, bilangan bulat ≥ 0) untuk mencatat query database yang melebihi batas sebagai `slow query` (level WARN). `0` menonaktifkan pencatatan query lambat |
-| `ERP_SECRET_KEY` | ✅ (sejak PRD-001) | — | 🔶 Belum tersedia (menunggu PRD-001). 32 byte acak (base64) untuk mengenkripsi kunci JWT, secret settings, dan secret MFA. **Simpan cadangannya terpisah dari backup database**: tanpa kunci ini, data terenkripsi di backup tidak dapat dibaca. Buat dengan `openssl rand -base64 32` |
+| `ERP_SECRET_KEY` | ✅ untuk `serve` dan command penyegel (`core:*`), semua mode | — | 32 byte acak (base64 standar dengan padding) untuk menyegel (AES-256-GCM) kunci JWT, secret settings, dan secret MFA. Kosong menggagalkan `serve` (exit 2) di semua mode termasuk development (tanpa kunci sementara otomatis); `migrate`, `inspect`, `doctor`, `modules`, dan command lain tidak membutuhkannya, tetapi nilai yang terisi selalu divalidasi (format atau panjang salah = gagal) dan tidak pernah dicetak. **Simpan cadangannya terpisah dari backup database**: tanpa kunci ini, data terenkripsi di backup tidak dapat dibaca. Buat SEKALI per lingkungan: di mesin developer `task erpora -- secret:generate` (hanya mencetak, tidak menyimpan); di server (binary release tanpa developer tools) `openssl rand -base64 32` |
+| `ERP_SECRET_KEY_PREVIOUS` | | — | Opsional, untuk rotasi kunci: kunci lama yang hanya dipakai membuka data tersegel sebelumnya (id kunci pada header segel memilih kunci). Pasang kunci lama di sini dan kunci baru di `ERP_SECRET_KEY`; lepas setelah semua data disegel ulang (`core:reseal`, menyusul). Tidak boleh sama dengan `ERP_SECRET_KEY`. Prosedur lengkap dan peringatannya di [§3.2](#32-rotasi-erp_secret_key) |
 | `ERP_ENV` | | `production` | `development` mengaktifkan API mutasi modul, deteksi N+1, & log teks |
 | `ERP_HTTP_ADDR` | | `127.0.0.1:8080` | Alamat listen. Jangan pakai `0.0.0.0` kecuali ada firewall/proxy |
 | `ERP_LOG_FORMAT` | | `json` | `json` atau `text` |
@@ -95,6 +96,24 @@ Simpan konfigurasi di file env dengan izin terbatas, lalu muat dengan `erpora se
 - Dengan binary release, penanda tidak memengaruhi perilaku apa pun; sebab itu **set `ERP_ENV=production` sebelum `migrate up` pertama** agar database production berpenanda `production`.
 
 ---
+
+### 3.2. Rotasi `ERP_SECRET_KEY`
+
+> **Status:** command `core:reseal` (menyegel ulang semua data tersegel dengan kunci baru) **belum ada**; dijadwalkan kelak, bukan bagian C1. Akibatnya **rotasi lengkap belum dapat diselesaikan saat ini**: langkah 1 sampai 3 di bawah aman dijalankan (data lama tetap terbaca lewat `ERP_SECRET_KEY_PREVIOUS`), tetapi langkah 4 dan 5 menunggu command tersebut. Selama itu, pertahankan `ERP_SECRET_KEY_PREVIOUS`.
+
+Data tersegel (kunci privat JWT, secret MFA, secret settings) membawa **id kunci** pada headernya; id itu diturunkan dari material kunci (byte pertama SHA-256), sehingga kunci yang dipindah dari `ERP_SECRET_KEY` ke `ERP_SECRET_KEY_PREVIOUS` tetap dikenali. Kunci di `ERP_SECRET_KEY_PREVIOUS` **hanya dipakai membuka**; segel baru selalu memakai `ERP_SECRET_KEY`.
+
+1. **Cadangkan** backup database terbaru **dan** nilai kunci lama (terpisah satu sama lain, mis. di password manager tim). Jangan menimpa kunci lama sebelum langkah 5 selesai dan terverifikasi.
+2. **Buat kunci baru** (32 byte acak, base64): `openssl rand -base64 32`, atau PowerShell 7+ `[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))`, atau di mesin developer `task erpora -- secret:generate`. Jangan memakai `Get-Random` (bukan CSPRNG).
+3. **Pasang di file env, lalu restart `serve`:** salin nilai `ERP_SECRET_KEY` yang lama persis ke `ERP_SECRET_KEY_PREVIOUS`, dan isi `ERP_SECRET_KEY` dengan kunci baru. Setelah restart, data lama tetap terbuka dan data yang baru ditulis tersegel dengan kunci baru. `erpora inspect config` menampilkan kedua variabel sebagai `****` (nilainya tidak pernah dicetak); `erpora doctor` (build pengembang) melaporkan kunci yang tidak valid sebagai FAIL.
+4. **Segel ulang semua data dengan kunci baru** memakai `core:reseal`. ⚠️ *Command ini belum ada (lihat status di atas); langkah ini tidak dapat dijalankan sekarang.*
+5. **Lepas `ERP_SECRET_KEY_PREVIOUS`** dari file env dan restart, hanya setelah `core:reseal` selesai tanpa galat. ⚠️ **Melepasnya sebelum reseal membuat semua data yang masih tersegel dengan kunci lama tidak terbaca** (kunci privat JWT lama, secret MFA, secret settings); pemulihannya hanya dengan memasang kembali kunci lama di `ERP_SECRET_KEY_PREVIOUS`, sehingga kunci lama harus tetap tersimpan sampai langkah ini terverifikasi.
+
+**Penanganan galat saat startup (nilai kunci tidak pernah dicetak):**
+
+- `ERP_SECRET_KEY_PREVIOUS: id kunci pada header segel bertabrakan dengan ERP_SECRET_KEY`: dua kunci berbeda kebetulan berid sama (peluang 1/256), sehingga header segel tidak dapat membedakannya. **Buat kunci baru lain** (ulangi langkah 2; `secret:generate` atau `openssl` menghasilkan nilai berbeda tiap kali), isi ke `ERP_SECRET_KEY`, dan simpan kunci lama tetap di `ERP_SECRET_KEY_PREVIOUS`.
+- `ERP_SECRET_KEY_PREVIOUS: tidak boleh sama dengan ERP_SECRET_KEY`: kunci lama dan baru identik; kosongkan `ERP_SECRET_KEY_PREVIOUS` bila tidak sedang rotasi.
+- Format atau panjang salah (bukan base64 standar dengan padding, atau bukan 32 byte): koreksi nilainya; startup (`serve`) dan `erpora doctor` melaporkannya.
 
 ## 4. Instalasi di Linux (systemd)
 
@@ -121,6 +140,8 @@ sudo cp erpora /opt/erpora/bin/erpora && sudo chmod 755 /opt/erpora/bin/erpora
 ERP_DATABASE_URL=postgres://erp:GANTI_DENGAN_PASSWORD_KUAT@localhost:5432/erp?sslmode=disable
 ERP_ENV=production
 ERP_HTTP_ADDR=127.0.0.1:8080
+# Buat sekali: openssl rand -base64 32 (cadangkan terpisah dari backup database)
+ERP_SECRET_KEY=GANTI_DENGAN_HASIL_OPENSSL
 ```
 
 ### 4.3. Migrasi & aktivasi modul (sekali, saat instalasi)
@@ -203,7 +224,10 @@ Caddy mengurus sertifikat TLS (Let's Encrypt) secara otomatis. Nginx juga bisa d
 ## 5. Instalasi di Windows
 
 1. Pasang PostgreSQL untuk Windows (installer resmi), lalu buat role & database seperti §4.1 melalui `psql`.
-2. Letakkan `erpora.exe` di `C:\erpora\bin\` dan file env di `C:\erpora\erpora.env` (batasi izin akses ke Administrators dan akun service).
+2. Letakkan `erpora.exe` di `C:\erpora\bin\` dan file env di `C:\erpora\erpora.env` (batasi izin akses ke Administrators dan akun service). Isi `ERP_SECRET_KEY` di file env itu (wajib untuk `serve`); buat sekali di PowerShell:
+   ```powershell
+   $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
+   ```
 3. Migrasi & modul (PowerShell sebagai Administrator):
    ```powershell
    C:\erpora\bin\erpora.exe migrate up --env-file C:\erpora\erpora.env
@@ -220,6 +244,8 @@ Caddy mengurus sertifikat TLS (Let's Encrypt) secara otomatis. Nginx juga bisa d
 ---
 
 ## 6. Instalasi dengan Docker
+
+Berkas `erpora.env` untuk container wajib memuat `ERP_SECRET_KEY` (buat dengan `openssl rand -base64 32`); tanpanya `serve` berhenti dengan exit 2.
 
 ```bash
 docker run -d --name erpora \

@@ -105,7 +105,8 @@ Aturan penanda untuk command tulis lain pada binary dev (`serve`, `migrate up`, 
 ## 7. `module:check` dan `doctor`
 
 - `module:check [name]`: per modul (atau satu modul: direktori, slug, atau key) memeriksa manifest (`SCHEMA`: JSON Schema + SemVer + constraint), `require` go.mod ↔ `dependencies` manifest dan impor (`D8`), versi go/toolchain seragam (`GOVERSION`), dan awalan capability = slug (`CAPABILITY_PREFIX`). Mencetak `<module> <rule> <detail>`; exit 1 bila ada temuan, `OK` bila bersih.
-- `doctor`: tabel `NAMA STATUS DETAIL` untuk go (≥ toolchain di go.mod), bun (= `packageManager`), task (≥ 3.54.0), docker (hanya untuk `task db:up` dan test integrasi: `warn`), PostgreSQL (`ERP_DATABASE_URL`; password tidak pernah dicetak), dan `.env`. Exit 1 hanya bila ada `fail`.
+- `doctor`: tabel `NAMA STATUS DETAIL` untuk go (≥ toolchain di go.mod), bun (= `packageManager`), task (≥ 3.54.0), docker (hanya untuk `task db:up` dan test integrasi: `warn`), PostgreSQL (`ERP_DATABASE_URL`; password tidak pernah dicetak), `ERP_SECRET_KEY` (temuan tersendiri: `fail` bila kosong atau format salah karena `serve` akan gagal; nilai tidak pernah dicetak), dan `.env`. Exit 1 hanya bila ada `fail`.
+- `secret:generate`: mencetak satu baris nilai `ERP_SECRET_KEY` baru (32 byte acak `crypto/rand`, base64 standar, setara `openssl rand -base64 32`); tidak menyimpan apa pun dan tidak membaca konfigurasi. Jalankan sekali per lingkungan.
 
 ## 8. Bukti dan CI
 

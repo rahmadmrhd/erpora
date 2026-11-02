@@ -23,21 +23,34 @@
 - Tidak ada dependensi JWT, TOTP, SMTP, rate limiter, AES-GCM; `ERP_SECRET_KEY` hanya di dokumen.
 - Frontend: tanpa login, guard, atau penyimpanan token; `/api/bootstrap` publik; `usePermission` optimistis; aktor audit `api:dev` di `modules/admin/api.go:35` dan `i18n/admin/overrides.go:34`.
 
-## Keputusan yang butuh persetujuan pemilik produk (sebelum kode C1)
+## Keputusan pemilik produk (sebelum kode C1)
 
-Tiap butir berisi rekomendasi; keputusan dicatat di tabel keputusan PRD-001 (Q-number) atau ADR-0013 sesuai `CLAUDE.md`.
+**Disetujui seluruhnya sesuai rekomendasi oleh pemilik produk pada 2 Nov 2026** (K-C1.1 sampai K-C1.9). Tiap butir berisi keputusan; pencatatan formal dilakukan di tabel keputusan PRD-001 (Q-number) dan ADR-0013 pada task C1.0.
 
 | # | Keputusan | Rekomendasi |
 | --- | --- | --- |
 | K-C1.1 | **ADR-0013** (autentikasi/otorisasi/audit) masih *Proposed* dan hanya menyalin PRD-001 Q10; perlu detail mekanisme dan status Accepted sebelum kode | Tulis dan sahkan ADR-0013 sebagai langkah pertama C1 (token, rotasi, revokasi, kunci, urutan middleware, kontrak 401/403/mfa) |
 | K-C1.2 | **Dependensi baru** (menambah `go.sum`, SBOM, govulncheck) | `golang.org/x/crypto/argon2` (sudah indirect), `golang.org/x/time/rate`, `golang.org/x/term` (prompt sandi CLI); JWT EdDSA dan TOTP RFC 6238 **ditulis sendiri** di `internal/platform/identity` memakai stdlib (`crypto/ed25519`, `crypto/hmac`) dengan vektor uji RFC, bukan pustaka pihak ketiga; SMTP lewat `net/smtp` + `crypto/tls` |
 | K-C1.3 | **Role Administrator di C1**: MFA wajib berlaku untuk pemilik role Administrator (FR-107) dan `core:create-admin` harus memberi role itu, tetapi tabel role milik C2 | Bangun subset FR-113 di C1: tabel tenant `roles`, `user_roles`, dan seed role sistem `administrator`; matriks, scope, dan field access tetap C2 |
-| K-C1.4 | **Linter kontrak vs respons kredensial**: security-guidelines §2:48 mewajibkan properti bernama `password`/`secret`/`token` berklasifikasi `highly_confidential` dan dilarang di respons, tanpa pengecualian; respons login/refresh membawa `accessToken` | Perluas linter secara aditif (seperti K21) dengan penanda eksplisit `x-erp-credential-response: true` hanya untuk operasi di modul `core`/`platform` yang diizinkan allowlist; catat sebagai keputusan di security-guidelines §2 |
+| K-C1.4 | **Linter kontrak vs respons kredensial** (granularitas ditetapkan 3 Nov 2026: tingkat properti, allowlist modul/operationId/properti, lihat bagian keputusan lanjutan): security-guidelines §2:48 mewajibkan properti bernama `password`/`secret`/`token` berklasifikasi `highly_confidential` dan dilarang di respons, tanpa pengecualian; respons login/refresh membawa `accessToken` | Perluas linter secara aditif (seperti K21) dengan penanda eksplisit `x-erp-credential-response: true` hanya untuk operasi di modul `core`/`platform` yang diizinkan allowlist; catat sebagai keputusan di security-guidelines §2 |
 | K-C1.5 | **`core:create-admin` dan sandi**: `Invocation` hanya flag string tanpa stdin; sandi lewat flag bocor ke riwayat shell | Tambah `Invocation.In io.Reader` dan prompt tersembunyi (`x/term`) bila TTY, atau baca stdin; tanpa flag sandi (flag `--password` tidak disediakan) |
 | K-C1.6 | **Konfigurasi SMTP sebelum Settings (C3)** | Env sementara `ERP_MAIL_DRIVER`, `ERP_SMTP_*` (sandi lewat `ERP_SMTP_PASSWORD`, disamarkan); dipindah ke settings platform di C3 tanpa mengubah `sdk/mail` |
-| K-C1.7 | **Allowlist GORM (D3b)** menambah `internal/platform/identity/store` (dan kelak `authorization/store`) | Tambahkan di `internal/archcheck/rules.go`, `rules_test.go`, `CLAUDE.md` dan `AGENTS.md` (identik), PRD-000 §4.2, dan Q-number baru seperti Q35 |
+| K-C1.7 | **Allowlist GORM (D3b)** (selesai di C1.0) menambah `internal/platform/identity/store` (dan kelak `authorization/store`) | Tambahkan di `internal/archcheck/rules.go`, `rules_test.go`, `CLAUDE.md` dan `AGENTS.md` (identik), PRD-000 §4.2, dan Q-number baru seperti Q35 |
 | K-C1.8 | **Rute platform di luar `/api/{slug}`** (`/.well-known/jwks.json`, kelak `/oauth/token`) tak dapat didaftarkan modul | Didaftarkan platform langsung di router (`internal/app`), masuk allowlist `tests/security/public_routes.txt` dan `contracts/openapi/platform.yaml` |
 | K-C1.9 | **Penghapusan stub**: `ERP_AUTHZ_STUB` dan `ERP_MODULES_ADMIN_API` | Pertahankan sampai C2 (gerbang mutasi modules/i18n admin bergantung authz penuh); C1 hanya mengganti authN dan aktor audit |
+
+### Keputusan lanjutan (disetujui pemilik produk 3 Nov 2026, PRD-001 Q16, ADR-0013 bagian 7a)
+
+| Butir | Keputusan |
+| --- | --- |
+| Lockout | Jeda bertingkat per pasangan (akun, IP) (5 gagal; 20 gagal blokir pasangan 1 jam); `locked` akun hanya bila >= 50 gagal lintas >= 5 IP dalam 1 jam; unlock lewat reset sandi, command baru `core:unlock --email`, atau admin. Risiko residual DoS (botnet) diterima |
+| `ERP_SECRET_KEY` | Wajib hanya untuk `serve` dan `core:*`; `migrate`/`inspect`/`doctor`/`modules`/`i18n` tidak butuh (format divalidasi bila terisi); rotasi via `ERP_SECRET_KEY_PREVIOUS` (hanya membuka) dan `core:reseal` kelak; segel membawa id kunci, header ikut AAD |
+| Penanda kredensial linter (merinci K-C1.4) | Allowlist (modul, operationId, properti): `accessToken` login/refresh, `secret`/`otpauthUri` enroll MFA, `codes` confirm MFA dan regenerate recovery codes; penanda pada properti; `refresh*` di body selalu ERROR; penanda tingkat operasi saja tidak cukup |
+| Akses Service/Admin | `identity.Service`/`identity.Admin` hanya dipasang pada context modul `core` dan alasan sistem `cli:core:*`; aturan arch `IDENT` melarang modul lain memanggil `identity.AdminFrom`/`ServiceFrom` |
+| Keputusan kecil C1.1 | `KeyIDOf` (byte pertama SHA-256, tolak tabrakan 1/256), `doctor` FAIL untuk kunci kosong, Config parsial bersama galat kunci: disetujui (tidak ada yang dipilih untuk diubah; mudah dibatalkan) |
+| SHA-1 | Pengecualian khusus HOTP/TOTP (RFC 4226/6238) dari larangan security-guidelines §3.4; hanya paket TOTP, gosec G401/G505 ditekan beralasan tertulis |
+
+Diterapkan atas temuan review independen Wave 0 (sesuai spek, bukan keputusan pemilik produk): status kunci `pending` pada rotasi (JWKS memuat `pending`; AC FR-102), aturan arch `IDENT` (FR-119 butir 2), aturan MFA untuk semua pengguna berfaktor aktif (FR-107), batas laju per principal/sasaran, retensi revokasi umur token + leeway, anti-replay `step > last_used_step`. Antarmuka SDK: `identity.Admin`, `Service.Logout(ctx)` dari Principal, `LoginResult.MFAState`.
 
 ## Risiko lintas milestone
 
