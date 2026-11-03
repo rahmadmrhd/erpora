@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"erpora/internal/platform/testsupport/authtest"
 	"erpora/internal/platform/testsupport/pgtest"
 	"erpora/internal/platform/testsupport/secretkey"
 )
@@ -173,7 +174,13 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 	})
 	base := "http://" + addr
 	waitOK(t, base+"/readyz", 30*time.Second, &srvOut)
-	resp, err := http.Get(base + "/api/stock-opname/items") //nolint:gosec,noctx // alamat lokal acak milik test
+	// Route modul wajib login sejak PRD-001 C1.10: token uji diterbitkan dengan kunci penandatangan yang dibuat serve.
+	req, err := http.NewRequest(http.MethodGet, base+"/api/stock-opname/items", nil) //nolint:noctx // alamat lokal acak milik test
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+authtest.BearerFromDB(t, dsn))
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // alamat lokal acak milik test
 	if err != nil {
 		t.Fatal(err)
 	}
