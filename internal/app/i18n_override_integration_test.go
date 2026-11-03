@@ -147,7 +147,7 @@ func TestI18nOverrideAPI_ValidationListAndIfMatch(t *testing.T) {
 		Page struct{ Total int64 }
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &list)
-	if rec.Code != http.StatusOK || list.Page.Total != 1 || list.Data[0].Message != "Dua" || list.Data[0].UpdatedBy != "api:dev" {
+	if rec.Code != http.StatusOK || list.Page.Total != 1 || list.Data[0].Message != "Dua" || list.Data[0].UpdatedBy != "user:"+a.authedUser(t).ID {
 		t.Errorf("list = %d %s", rec.Code, rec.Body)
 	}
 	if rec := callJSON(h, http.MethodPut, overrideURL, `{"message":"x","tenantId":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"}`, nil); rec.Code != http.StatusUnprocessableEntity {

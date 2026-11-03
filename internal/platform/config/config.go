@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/netip"
 	"os"
 	"runtime"
 	"strconv"
@@ -65,6 +66,10 @@ type Config struct {
 	// (Hash, Verify, dan verifikasi tiruan) yang berjalan serentak dalam satu proses; permintaan berikutnya menunggu
 	// sebentar lalu dijawab 429 rate_limited. Memori terburuk = batas x ERP_ARGON2_MEMORY_KIB (default 19 MiB per hash).
 	Argon2MaxConcurrent int
+	// TrustedProxies (ERP_TRUSTED_PROXIES, daftar IP/CIDR dipisah koma, maksimum 64, default kosong) adalah proxy
+	// yang boleh dipercaya melaporkan IP klien lewat X-Forwarded-For (PRD-001 Q26). Kosong: IP klien selalu alamat
+	// peer TCP. Batas laju IP dan lockout per pasangan (akun, IP) bergantung pada nilai ini di belakang reverse proxy.
+	TrustedProxies []netip.Prefix
 	// MailDriver (ERP_MAIL_DRIVER, log|smtp, default log) memilih pengirim surat FR-108. log tidak membuka soket dan
 	// tidak menulis isi surat ke log kecuali pemasang memintanya (hanya development); smtp memakai SMTP.
 	MailDriver string
@@ -102,6 +107,7 @@ type raw struct {
 	Argon2Time      string `env:"ERP_ARGON2_TIME"`
 	Argon2Parallel  string `env:"ERP_ARGON2_PARALLELISM"`
 	Argon2MaxConc   string `env:"ERP_ARGON2_MAX_CONCURRENT"`
+	TrustedProxies  string `env:"ERP_TRUSTED_PROXIES"`
 	MailDriver      string `env:"ERP_MAIL_DRIVER"`
 	SMTPHost        string `env:"ERP_SMTP_HOST"`
 	SMTPPort        string `env:"ERP_SMTP_PORT"`
@@ -218,6 +224,9 @@ func Load(envFile string) (Config, error) {
 		return Config{}, err
 	}
 	if err := loadArgon2MaxConcurrent(&c, r.Argon2MaxConc); err != nil {
+		return Config{}, err
+	}
+	if err := loadTrustedProxies(&c, r.TrustedProxies); err != nil {
 		return Config{}, err
 	}
 	if err := loadMail(&c, mailRaw{Driver: r.MailDriver, Host: r.SMTPHost, Port: r.SMTPPort, Username: r.SMTPUsername,

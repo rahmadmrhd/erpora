@@ -10,6 +10,7 @@ import (
 
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
+	"erpora/internal/platform/crypto"
 	"erpora/internal/platform/testsupport/secretkey"
 )
 
@@ -28,7 +29,7 @@ func clearEnv(t *testing.T) {
 	for _, k := range []string{
 		"ERP_DATABASE_URL", "ERP_ENV", "ERP_HTTP_ADDR", "ERP_LOG_FORMAT",
 		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_SECRET_KEY", "ERP_SECRET_KEY_PREVIOUS",
-		"ERP_MAIL_DRIVER", "ERP_SMTP_HOST", "ERP_SMTP_PORT", "ERP_SMTP_USERNAME", "ERP_SMTP_PASSWORD", "ERP_SMTP_FROM", "ERP_SMTP_TLS_MODE",
+		"ERP_MAIL_DRIVER", "ERP_SMTP_HOST", "ERP_SMTP_PORT", "ERP_SMTP_USERNAME", "ERP_SMTP_PASSWORD", "ERP_SMTP_FROM", "ERP_SMTP_TLS_MODE", "ERP_TRUSTED_PROXIES",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -173,7 +174,15 @@ func TestInspectConfig_SecretKeyOptionalAndRedacted(t *testing.T) {
 		t.Errorf("kunci tak diset harus tampil kosong:\n%s", out)
 	}
 	secretkey.Setenv(t)
-	t.Setenv("ERP_SECRET_KEY_PREVIOUS", base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32)))
+	// Kunci lama harus ber-id (crypto.KeyIDOf) berbeda dari kunci aktif acak; selain itu config menolaknya (peluang 1/256).
+	var previous []byte
+	for b := byte(7); ; b++ {
+		if cand := bytes.Repeat([]byte{b}, 32); crypto.KeyIDOf(cand) != crypto.KeyIDOf(secretkey.Bytes()) && !bytes.Equal(cand, secretkey.Bytes()) {
+			previous = cand
+			break
+		}
+	}
+	t.Setenv("ERP_SECRET_KEY_PREVIOUS", base64.StdEncoding.EncodeToString(previous))
 	out, err = run(t, "inspect", "config")
 	if err != nil {
 		t.Fatal(err)
@@ -205,5 +214,26 @@ func TestInspectConfig_SMTPPasswordRedacted(t *testing.T) {
 	}
 	if strings.Contains(out, pw) {
 		t.Errorf("sandi SMTP bocor:\n%s", out)
+	}
+}
+
+// ERP_TRUSTED_PROXIES tampil di `inspect config` (bentuk ternormalisasi; bukan rahasia) dan kosong secara bawaan.
+func TestInspectConfig_ShowsTrustedProxies(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@127.0.0.1:1/db")
+	out, err := run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_TRUSTED_PROXIES=\n") {
+		t.Errorf("bawaan harus kosong:\n%s", out)
+	}
+	t.Setenv("ERP_TRUSTED_PROXIES", "10.0.0.0/8, 192.0.2.5")
+	out, err = run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_TRUSTED_PROXIES=10.0.0.0/8,192.0.2.5/32\n") {
+		t.Errorf("proxy tepercaya tidak tampil ternormalisasi:\n%s", out)
 	}
 }

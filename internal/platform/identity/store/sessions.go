@@ -418,3 +418,69 @@ func (s *Store) RotateRefreshToken(ctx context.Context, t tenancy.TenantID, used
 	}
 	return won, nil
 }
+
+// UpgradeSession menaikkan faktor autentikasi sesi (mis. ["pwd"] menjadi ["pwd","otp"] setelah MFA) dan MENGGANTI
+// token refresh dalam satu transaksi: pembaruan amr bersyarat atomik (compare-and-set terhadap oldAMR, sesi belum
+// tercabut), seluruh token refresh sesi yang belum terpakai dihapus, dan next disimpan sebagai akar baru pada family
+// yang SAMA (next.FamilyID diabaikan bila sesi sudah punya family; next.ParentID harus kosong). Dengan begitu token
+// pra-upgrade menjadi tak dikenal (ditolak seragam tanpa mencabut sesi, bukan reuse) sementara reuse leluhur lama
+// tetap mencabut family. false tanpa efek bila kalah: amr sudah berubah (upgrade serentak: tepat satu menang), sesi
+// tercabut, tidak ada, atau milik tenant lain. Galat membatalkan seluruh transaksi.
+func (s *Store) UpgradeSession(ctx context.Context, t tenancy.TenantID, sessionID string, oldAMR, newAMR []string, next RefreshToken) (bool, error) {
+	sid, ok := parseID(sessionID)
+	if !ok {
+		return false, nil
+	}
+	if next.SessionID != sessionID || next.ParentID != "" || len(oldAMR) < 1 || len(oldAMR) > 8 || len(newAMR) < 1 || len(newAMR) > 8 {
+		return false, ErrInvalidArgument
+	}
+	oldJSON, err1 := json.Marshal(oldAMR)
+	newJSON, err2 := json.Marshal(newAMR)
+	if err1 != nil || err2 != nil {
+		return false, ErrInvalidArgument
+	}
+	won := false
+	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		n, err := exec(tx, `UPDATE auth_sessions SET amr = ?::jsonb WHERE id = ? AND tenant_id = ? AND revoked_at IS NULL AND amr = ?::jsonb`,
+			string(newJSON), sid, tid(t), string(oldJSON))
+		if err != nil || n == 0 {
+			return err
+		}
+		fams, err := pluckIDs(tx, `SELECT family_id::text FROM refresh_tokens WHERE session_id = ? AND tenant_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, sid, tid(t))
+		if err != nil {
+			return err
+		}
+		if len(fams) == 1 {
+			next.FamilyID = fams[0]
+		}
+		if _, err := exec(tx, `DELETE FROM refresh_tokens WHERE session_id = ? AND tenant_id = ? AND used_at IS NULL`, sid, tid(t)); err != nil {
+			return err
+		}
+		if err := insertRefresh(tx, t, next); err != nil {
+			return err
+		}
+		won = true
+		return nil
+	})
+	if err != nil {
+		if err == ErrInvalidArgument {
+			return false, err
+		}
+		return false, wrap("naikkan sesi", err)
+	}
+	return won, nil
+}
+
+// CountUserSessions menghitung SEMUA sesi (aktif maupun tercabut) milik pengguna di tenant t; 0 untuk ID cacat atau
+// pengguna tanpa sesi. Dipakai untuk memastikan akun belum pernah dipakai masuk (pemulihan create-admin).
+func (s *Store) CountUserSessions(ctx context.Context, t tenancy.TenantID, userID string) (int, error) {
+	uid, ok := parseID(userID)
+	if !ok {
+		return 0, nil
+	}
+	var n int64
+	if err := s.db(ctx).Raw(`SELECT count(*) FROM auth_sessions WHERE tenant_id = ? AND user_id = ?`, tid(t), uid).Scan(&n).Error; err != nil {
+		return 0, wrap("hitung sesi", err)
+	}
+	return int(n), nil
+}

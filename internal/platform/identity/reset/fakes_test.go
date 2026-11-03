@@ -85,6 +85,23 @@ func (f *fakeStore) addUser(t testing.TB, email, status, hash string) store.User
 	return *u
 }
 
+func (f *fakeStore) setStatus(email, status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.users[store.NormalizeEmail(email)].Status = status
+}
+
+func (f *fakeStore) GetUser(_ context.Context, _ tenancy.TenantID, userID string) (store.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.call("GetUser")
+	u, ok := f.byID[userID]
+	if !ok {
+		return store.User{}, store.ErrNotFound
+	}
+	return *u, nil
+}
+
 func (f *fakeStore) call(name string) {
 	f.calls[name]++
 	if f.delay > 0 {
@@ -165,6 +182,9 @@ func (f *fakeStore) ResetPassword(_ context.Context, _ tenancy.TenantID, resetID
 	r, ok := f.resets[resetID]
 	if !ok || r.UsedAt != nil || !r.ExpiresAt.After(at) {
 		return store.ResetResult{}, false, nil
+	}
+	if o := f.byID[r.UserID]; o == nil || (o.Status != store.UserActive && o.Status != store.UserLocked) {
+		return store.ResetResult{}, false, nil // seperti store sungguhan: pemilik disabled = tautan tidak dapat dipakai
 	}
 	a := at
 	r.UsedAt = &a

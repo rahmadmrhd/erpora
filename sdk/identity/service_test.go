@@ -26,8 +26,8 @@ func (fullService) ChangePassword(context.Context, identity.ChangeInput) error {
 func (fullService) BeginMFAEnrollment(context.Context) (identity.EnrollmentInfo, error) {
 	return identity.EnrollmentInfo{}, nil
 }
-func (fullService) ConfirmMFA(context.Context, identity.ConfirmMFAInput) (identity.RecoveryCodes, error) {
-	return identity.RecoveryCodes{}, nil
+func (fullService) ConfirmMFA(context.Context, identity.ConfirmMFAInput) (identity.ConfirmMFAResult, error) {
+	return identity.ConfirmMFAResult{}, nil
 }
 func (fullService) VerifyMFA(context.Context, identity.VerifyInput) (identity.LoginResult, error) {
 	return identity.LoginResult{}, nil
@@ -49,6 +49,7 @@ func (fullAdmin) RotateSigningKeys(context.Context) (identity.KeyInfo, error) {
 func (fullAdmin) ResetMFA(context.Context, string) error         { return nil }
 func (fullAdmin) UnlockAccount(context.Context, string) error    { return nil }
 func (fullAdmin) LogoutAllDevices(context.Context, string) error { return nil }
+func (fullAdmin) SetPublicURL(context.Context, string) error     { return nil }
 
 var _ identity.Admin = fullAdmin{}
 

@@ -159,6 +159,7 @@ func (mapAdmin) RotateSigningKeys(context.Context) (identity.KeyInfo, error) {
 func (mapAdmin) ResetMFA(context.Context, string) error         { return nil }
 func (mapAdmin) UnlockAccount(context.Context, string) error    { return nil }
 func (mapAdmin) LogoutAllDevices(context.Context, string) error { return nil }
+func (mapAdmin) SetPublicURL(context.Context, string) error     { return nil }
 
 func TestAdminContextRoundTrip(t *testing.T) {
 	if _, ok := identity.AdminFrom(context.Background()); ok {

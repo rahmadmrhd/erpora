@@ -241,3 +241,32 @@ func TestLimiterConcurrentAllowIsSafeAndBounded(t *testing.T) {
 		t.Fatalf("diizinkan = %d, want tepat burst 5", allowed)
 	}
 }
+
+// NormalizeIP harus idempoten: hasilnya dipakai ulang oleh lapisan lain (Authenticator -> Lockout), dan satu
+// pasangan harus selalu memakai kunci yang sama. Hanya prefix /64 ter-mask yang diterima apa adanya.
+func TestNormalizeIPIdempotent(t *testing.T) {
+	for _, in := range []string{
+		"198.51.100.7", "::ffff:198.51.100.7", "2001:db8:1:2:aaaa:bbbb:cccc:dddd", "fe80::1%eth0",
+		"[2001:db8::1]:443", "", "bukan-ip", "198.51.100.7:8080",
+	} {
+		once := NormalizeIP(in)
+		if twice := NormalizeIP(once); twice != once {
+			t.Errorf("NormalizeIP tidak idempoten untuk %q: %q -> %q", in, once, twice)
+		}
+	}
+	for in, want := range map[string]string{
+		"2001:db8:1:2::/64":      "2001:db8:1:2::/64",
+		" 2001:db8:1:2::/64 ":    "2001:db8:1:2::/64",
+		"2001:db8:1:2::1/64":     "unknown", // bukan prefix ter-mask
+		"2001:db8:1:2::/48":      "unknown", // panjang prefix lain
+		"2001:db8:1:2::/128":     "unknown",
+		"198.51.100.0/24":        "unknown",
+		"::ffff:198.51.100.0/64": "unknown",
+		"2001:db8::/64/64":       "unknown",
+		"2001:db8::/064":         "unknown",
+	} {
+		if got := NormalizeIP(in); got != want {
+			t.Errorf("NormalizeIP(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

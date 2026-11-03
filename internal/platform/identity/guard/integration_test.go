@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -268,5 +270,97 @@ func TestIntegrationLoginTimingKnownVsUnknown(t *testing.T) {
 	t.Logf("median dikenal=%v tak dikenal=%v rasio=%.3f", mk, mu, float64(hi)/float64(lo))
 	if float64(hi)/float64(lo) > 1.25 {
 		t.Fatalf("rasio median %.3f > 1,25", float64(hi)/float64(lo))
+	}
+}
+
+// TestIntegrationConcurrentGuessesReserveAtomically: dengan database sungguhan (kunci advisory per pasangan), permintaan
+// serentak pada pasangan yang sedang di ambang jeda hanya meloloskan satu tebakan ke verifikasi (InvalidCredentials);
+// sisanya dijeda (RateLimited). Pelepasan: sandi benar tidak meninggalkan baris reservasi.
+func TestIntegrationConcurrentGuessesReserveAtomically(t *testing.T) {
+	h := newIntHarness(t)
+	u := h.addUser(t, "a@example.com")
+	const ip = "198.51.100.1"
+	for i := range 4 {
+		if err := h.st.RecordLoginAttempt(tctx(), testTenant, u.ID, ip, store.AttemptPassword, false, h.c.Now().Add(-time.Duration(10-i)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const burst = 12
+	var wg sync.WaitGroup
+	var invalid, limitedN atomic.Int32
+	start := make(chan struct{})
+	for range burst {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			out, err := h.a.Verify(tctx(), LoginInput{Email: "a@example.com", Password: "salah", IP: ip})
+			if err != nil {
+				t.Errorf("Verify: %v", err)
+				return
+			}
+			switch out.Kind {
+			case InvalidCredentials:
+				invalid.Add(1)
+			case RateLimited:
+				limitedN.Add(1)
+			default:
+				t.Errorf("%+v", out)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if invalid.Load() != 1 || limitedN.Load() != burst-1 {
+		t.Fatalf("invalid=%d limited=%d, want 1 dan %d", invalid.Load(), limitedN.Load(), burst-1)
+	}
+	// Sandi benar dari IP lain tidak meninggalkan reservasi.
+	if out := h.login("a@example.com", goodPassword, "198.51.100.2"); out.Kind != Success {
+		t.Fatalf("%+v", out)
+	}
+	if ps, _ := h.st.PairFailureState(tctx(), testTenant, u.ID, "198.51.100.2"); ps.ConsecutiveFailures != 0 {
+		t.Fatalf("reservasi tersisa setelah sukses: %+v", ps)
+	}
+}
+
+// Q30 butir 3: pekerja retensi menghapus baris login_attempts > 30 hari dan menyisakan yang lebih baru (termasuk yang
+// masih berada dalam jendela lockout 24 jam), lewat store sungguhan.
+func TestIntegrationRetentionPrunesOnlyOlderThanThirtyDays(t *testing.T) {
+	h := newIntHarness(t)
+	u := h.addUser(t, "retensi@example.com")
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	rec := func(ip string, ago time.Duration) {
+		t.Helper()
+		if err := h.st.RecordLoginAttempt(tctx(), testTenant, u.ID, ip, store.AttemptPassword, false, now.Add(-ago)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec("198.51.100.1", 31*24*time.Hour) // dipangkas
+	rec("198.51.100.2", 45*24*time.Hour) // dipangkas
+	rec("198.51.100.3", 29*24*time.Hour) // tersisa
+	rec("198.51.100.4", 2*time.Hour)     // tersisa
+	count := func() int {
+		cs, err := h.st.CrossIPFailures(tctx(), testTenant, u.ID, now.Add(-90*24*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cs.Failures
+	}
+	if got := count(); got != 4 {
+		t.Fatalf("awal = %d, want 4", got)
+	}
+	w, err := NewRetentionWorker(RetentionConfig{Store: h.st, Tenant: testTenant, Log: slog.New(slog.DiscardHandler)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := w.Tick(context.Background(), now)
+	if err != nil || n != 2 {
+		t.Fatalf("Tick = %d %v, want 2", n, err)
+	}
+	if got := count(); got != 2 {
+		t.Errorf("setelah pangkas = %d, want 2", got)
+	}
+	if n, err := w.Tick(context.Background(), now); err != nil || n != 0 {
+		t.Errorf("Tick ulang = %d %v, want 0 (idempoten)", n, err)
 	}
 }

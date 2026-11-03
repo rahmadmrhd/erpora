@@ -125,3 +125,21 @@ func TestNoAutoMigrate(t *testing.T) {
 		t.Fatal("tidak ada berkas non-test yang diperiksa")
 	}
 }
+
+// validEmail menyelaraskan jalur tulis dengan aturan ketat sdk/mail: alamat yang tak dapat dikirimi surat reset tidak
+// dapat tersimpan.
+func TestValidEmailMatchesSendableRules(t *testing.T) {
+	for _, e := range []string{"a@b.co", "budi@example.org", "first.last+tag@mail.example.com"} {
+		if !validEmail(e) {
+			t.Errorf("validEmail(%q) = false, want true", e)
+		}
+	}
+	for _, e := range []string{
+		"", "a@", "@b.co", "tanpa-at", "budi@localhost", "budi@[127.0.0.1]", "budi@127.0.0.1", "Budi <b@x.co>", "b@x.co\r\nBcc: c@x.co",
+		"budi@exämple.com", "a b@x.co", "=?utf-8?q?x?=@x.co", strings.Repeat("a", 65) + "@x.co",
+	} {
+		if validEmail(e) {
+			t.Errorf("validEmail(%q) = true, want false (tak dapat dikirimi)", e)
+		}
+	}
+}

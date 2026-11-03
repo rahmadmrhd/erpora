@@ -23,6 +23,22 @@ type Manifest struct {
 	I18n *I18n `json:"i18n,omitempty"`
 	// Features memuat bendera kemampuan server untuk UI (additive, api-guidelines §14.1); nil = tidak dinyatakan.
 	Features *Features `json:"features,omitempty"`
+	// User adalah pengguna yang sedang login (PRD-001 FR-106; additive). Selalu diisi handler untuk Principal pada
+	// request itu (tidak pernah dari parameter klien); tidak memuat data sensitif.
+	User *User `json:"user,omitempty"`
+	// PermRev adalah revisi permission pengguna (cache klien per perm_rev). Stub 0 sampai C2 (cache perm_rev).
+	PermRev int64 `json:"permRev"`
+	// Unavailable true: sumber gagal memuat data pengguna karena galat sementara (bukan "pengguna tak ada"); handler
+	// menjawab 503, bukan 401, agar klien tidak mengira sesinya berakhir. Tidak masuk JSON.
+	Unavailable bool `json:"-"`
+}
+
+// User adalah ringkasan pengguna saat ini pada bootstrap: identitas dan nama tampilan, tanpa kredensial, status
+// akun, atau data keamanan. Email dan nama adalah data pribadi pengguna itu sendiri.
+type User struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
 }
 
 // Features adalah bendera kemampuan server. ModulesAdminAPI true bila API mutasi /api/platform/modules aktif
@@ -58,23 +74,37 @@ func NewI18n(defaultLocale string, locales []I18nLocale, revisions map[string]st
 // ETag mengembalikan ETag bootstrap: `"<revision>"` bila tanpa i18n (format lama), selain itu
 // `"<revision>-<hash revisi katalog>"` sehingga perubahan katalog terjemahan (mis. override istilah)
 // membuat klien memuat ulang bootstrap dan lalu katalognya.
+//
+// Isi yang khusus pengguna (User, PermRev) ikut di-hash: dua pengguna tidak pernah berbagi ETag, sehingga If-None-Match
+// dari satu pengguna tidak dapat menghasilkan 304 untuk pengguna lain. Manifest tanpa user, permRev, dan i18n
+// tetap memakai format lama.
 func (m Manifest) ETag() string {
 	rev := strconv.FormatInt(m.Revision, 10)
-	if m.I18n == nil {
+	if m.I18n == nil && m.User == nil && m.PermRev == 0 {
 		return `"` + rev + `"`
 	}
-	keys := make([]string, 0, len(m.I18n.Revisions))
-	for k := range m.I18n.Revisions {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
 	h := sha256.New()
-	fmt.Fprintf(h, "%s;", m.I18n.DefaultLocale)
-	for _, l := range m.I18n.Locales {
-		fmt.Fprintf(h, "%s=%s;", l.Code, l.Name)
+	if m.I18n != nil {
+		keys := make([]string, 0, len(m.I18n.Revisions))
+		for k := range m.I18n.Revisions {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(h, "%s;", m.I18n.DefaultLocale)
+		for _, l := range m.I18n.Locales {
+			fmt.Fprintf(h, "%s=%s;", l.Code, l.Name)
+		}
+		for _, k := range keys {
+			fmt.Fprintf(h, "%s:%s;", k, m.I18n.Revisions[k])
+		}
 	}
-	for _, k := range keys {
-		fmt.Fprintf(h, "%s:%s;", k, m.I18n.Revisions[k])
+	if m.User != nil || m.PermRev != 0 {
+		// Panjang-awalan (%q) mencegah dua kombinasi bidang berbeda menghasilkan masukan hash yang sama.
+		u := m.User
+		if u == nil {
+			u = &User{}
+		}
+		fmt.Fprintf(h, "user:%q,%q,%q;permRev:%d;", u.ID, u.Email, u.DisplayName, m.PermRev)
 	}
 	return `"` + rev + "-" + hex.EncodeToString(h.Sum(nil)[:6]) + `"`
 }

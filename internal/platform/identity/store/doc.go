@@ -75,6 +75,10 @@
 //	RotateRefreshToken(ctx, t, usedID, at, next) (bool, error)
 //	  // atomik: tandai usedID terpakai (used_at IS NULL dan sesi belum tercabut) lalu simpan next (ParentID == usedID);
 //	  // false = kalah; galat = rollback total (token lama tidak terbakar).
+//	UpgradeSession(ctx, t, sessionID, oldAMR, newAMR, next) (bool, error)
+//	  // atomik (PRD-001 Q27): compare-and-set amr (oldAMR -> newAMR, sesi belum tercabut), hapus refresh token belum
+//	  // terpakai milik sesi, sisipkan next sebagai akar (ParentID kosong) di family yang sama; false = kalah/tercabut.
+//	CountUserSessions(ctx, t, userID) (int, error)                  // SEMUA sesi pengguna, termasuk tercabut
 //
 // MFA:
 //
@@ -101,6 +105,9 @@
 // Percobaan login dan lockout (Q16):
 //
 //	RecordLoginAttempt(ctx, t, userID, ip, kind, success, at) error // kind: AttemptPassword|AttemptMFA
+//	ReserveLoginAttempt(ctx, t, userID, ip, kind, at, since, admit) (PairState, bool, int64, error)
+//	  // atomik per pasangan (kunci advisory transaksional): baca keadaan, admit(keadaan), lalu catat SATU kegagalan bila diterima
+//	ReleaseLoginAttempt(ctx, t, userID, id) error                   // hapus reservasi yang ternyata bukan kegagalan
 //	PairFailureState(ctx, t, userID, ip) (PairState, error)         // gagal sejak sukses terakhir pasangan (akun, IP), tanpa batas waktu
 //	PairFailureStateSince(ctx, t, userID, ip, since) (PairState, error) // hanya gagal >= since (24 jam, 3 Nov 2026); since nol = tanpa batas
 //	CrossIPFailures(ctx, t, userID, since) (CrossIPState, error)    // gagal lintas IP; tidak direset sukses

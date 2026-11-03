@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -299,6 +300,42 @@ func (f *fakeStore) RotateRefreshToken(_ context.Context, t tenancy.TenantID, us
 	}
 	u := at.UTC()
 	tok.r.UsedAt = &u
+	return true, nil
+}
+
+func (f *fakeStore) UpgradeSession(_ context.Context, t tenancy.TenantID, sessionID string, oldAMR, newAMR []string, next store.RefreshToken) (bool, error) {
+	if !validUUID(sessionID) {
+		return false, nil
+	}
+	if next.SessionID != sessionID || next.ParentID != "" {
+		return false, store.ErrInvalidArgument
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.sessions[sessionID]
+	if !ok || s.t != t || s.s.RevokedAt != nil || strings.Join(s.s.AMR, ",") != strings.Join(oldAMR, ",") {
+		return false, nil
+	}
+	var fam string
+	var newest time.Time
+	for _, tok := range f.tokens {
+		if tok.r.SessionID == sessionID && tok.t == t && (fam == "" || tok.r.CreatedAt.After(newest)) {
+			fam, newest = tok.r.FamilyID, tok.r.CreatedAt
+		}
+	}
+	if fam != "" {
+		next.FamilyID = fam
+	}
+	for id, tok := range f.tokens {
+		if tok.r.SessionID == sessionID && tok.t == t && tok.r.UsedAt == nil {
+			delete(f.hashes, fmt.Sprintf("%x", tok.r.TokenHash))
+			delete(f.tokens, id)
+		}
+	}
+	if err := f.insertTokenLocked(t, next); err != nil {
+		return false, err
+	}
+	s.s.AMR = append([]string(nil), newAMR...)
 	return true, nil
 }
 

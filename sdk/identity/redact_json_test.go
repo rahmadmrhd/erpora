@@ -101,6 +101,12 @@ func TestResultTypesMarshalForResponse(t *testing.T) {
 	if !strings.Contains(string(raw), `"secret":"SEC"`) {
 		t.Errorf("EnrollmentInfo: %s", raw)
 	}
+	raw, _ = json.Marshal(identity.ConfirmMFAResult{Codes: []string{"c1"},
+		Session: identity.LoginResult{AccessToken: "acc2", ExpiresIn: 1, RefreshToken: "S3cr3t-refresh-cookie"}})
+	if !strings.Contains(string(raw), `"codes":["c1"]`) || !strings.Contains(string(raw), `"accessToken":"acc2"`) ||
+		strings.Contains(string(raw), "S3cr3t-refresh-cookie") {
+		t.Errorf("ConfirmMFAResult: %s", raw)
+	}
 	raw, _ = json.Marshal(identity.RecoveryCodes{Codes: []string{"c1"}})
 	if !strings.Contains(string(raw), `"codes":["c1"]`) {
 		t.Errorf("RecoveryCodes: %s", raw)

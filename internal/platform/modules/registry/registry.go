@@ -49,6 +49,9 @@ type RouteInfo struct {
 	Classification module.Classification
 	// RequireMFA: route menuntut amr memuat otp (module.RequireMFA; ADR-0013 §4).
 	RequireMFA bool
+	// Authenticated: route hanya mewajibkan Principal terautentikasi, tanpa permission (module.Authenticated; PRD-001 Q29).
+	// Permission kosong dan Public false.
+	Authenticated bool
 	// Deprecated dan DeprecatedParams diisi Build dari kontrak (operasi dengan method dan path persis sama; platform.core
 	// lewat dispatch ServeMux): operasi ditandai deprecated, dan parameter query deprecated (PRD-000 FR-23.3).
 	Deprecated       bool

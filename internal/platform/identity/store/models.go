@@ -42,16 +42,19 @@ const (
 
 // User adalah akun global. PasswordHash kosong untuk pengguna SSO-only. Semua waktu UTC.
 type User struct {
-	ID              string
-	Email           string // ternormalisasi: trim + huruf kecil
-	Name            string
-	Status          string
-	PasswordHash    string
-	EmailVerifiedAt *time.Time
-	LastLoginAt     *time.Time
-	LockedAt        *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID     string
+	Email  string // ternormalisasi: trim + huruf kecil
+	Name   string
+	Status string
+	// MembershipStatus adalah status keanggotaan pengguna pada tenant yang dikueri (tenant_memberships.status;
+	// MembershipActive/MembershipSuspended). Hanya diisi oleh GetUser/FindUserByEmail (kueri berscope tenant).
+	MembershipStatus string
+	PasswordHash     string
+	EmailVerifiedAt  *time.Time
+	LastLoginAt      *time.Time
+	LockedAt         *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // NewUser adalah masukan CreateUser. Status kosong berarti active; hanya active atau disabled yang diterima.

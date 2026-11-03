@@ -76,9 +76,9 @@ func dbQuery(t *testing.T, dsn, query string, args ...any) int64 {
 	return n
 }
 
-func bootstrapState(t *testing.T, base string) (revision int64, etag string, status map[string]string) {
+func bootstrapState(t *testing.T, base string, auth map[string]string) (revision int64, etag string, status map[string]string) {
 	t.Helper()
-	resp, body := getWith(t, base+"/api/bootstrap", nil)
+	resp, body := getWith(t, base+"/api/bootstrap", auth) // wajib login (C1.13)
 	var b struct {
 		Data struct {
 			Modules  []struct{ Key, Status string }
@@ -144,7 +144,7 @@ func TestCLI_ManageBothModules(t *testing.T) {
 	// Autentikasi nyata (C1.10): token uji sah dari kunci penandatangan yang disiapkan server saat start.
 	auth := map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)}
 	waitCode(t, base+"/api/example-addon/summary", 200, 5*time.Second, auth)
-	rev0, etag0, st := bootstrapState(t, base)
+	rev0, etag0, st := bootstrapState(t, base, auth)
 	if st["acme.example"] != "enabled" || st["acme.example-addon"] != "enabled" || rev0 == 0 {
 		t.Fatalf("bootstrap awal: rev=%d %v", rev0, st)
 	}
@@ -184,7 +184,7 @@ func TestCLI_ManageBothModules(t *testing.T) {
 
 	deadline := time.Now().Add(6 * time.Second)
 	for {
-		rev, etag, st := bootstrapState(t, base)
+		rev, etag, st := bootstrapState(t, base, auth)
 		if st["acme.example"] == "enabled" && rev > rev0 && etag != etag0 {
 			break
 		}

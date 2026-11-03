@@ -88,6 +88,9 @@ func TestIntegrationSuite(t *testing.T) {
 		fn   func(*testing.T, *world)
 	}{
 		{"RotateIssuesNewTokenAndMarksParentUsed", suiteRotateIssuesNewTokenAndMarksParentUsed},
+		{"UpgradeReplacesRefreshTokenWithoutRevokingSession", suiteUpgradeReplacesRefreshTokenWithoutRevokingSession},
+		{"UpgradeOwnershipAndPreconditions", suiteUpgradeOwnershipAndPreconditions},
+		{"ConcurrentUpgradeExactlyOneSucceeds", suiteConcurrentUpgradeExactlyOneSucceeds},
 		{"ReuseOfUsedTokenRevokesFamilyAndSession", suiteReuseOfUsedTokenRevokesFamilyAndSession},
 		{"ConcurrentRefreshSameTokenExactlyOneSucceeds", suiteConcurrentRefreshSameTokenExactlyOneSucceeds},
 		{"AbsoluteLifetime90DaysEnforced", suiteAbsoluteLifetime90DaysEnforced},

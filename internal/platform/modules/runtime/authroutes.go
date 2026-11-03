@@ -39,7 +39,7 @@ func isAuthEndpoint(rt registry.RouteInfo) bool {
 
 // routeOptionsFor menurunkan RouteOptions dari route terdaftar.
 func routeOptionsFor(rt registry.RouteInfo) RouteOptions {
-	o := RouteOptions{RequireMFA: rt.RequireMFA}
+	o := RouteOptions{RequireMFA: rt.RequireMFA, AuthenticatedOnly: rt.Authenticated}
 	if isCoreRoute(rt) {
 		key := rt.Method + " " + rt.Pattern
 		o.PendingVerify = mfaPendingVerify[key]

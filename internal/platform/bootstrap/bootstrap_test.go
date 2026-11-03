@@ -114,3 +114,42 @@ func TestManifest_FeaturesDoNotChangeETag(t *testing.T) {
 		t.Error("features statis per proses; tidak boleh mengubah ETag")
 	}
 }
+
+func TestManifest_UserAndPermRevSerialization(t *testing.T) {
+	m := Build("1.0.0", tenancy.TenantID(uuid.New()), nil, 3)
+	if b, _ := json.Marshal(m); strings.Contains(string(b), `"user"`) || !strings.Contains(string(b), `"permRev":0`) {
+		t.Errorf("tanpa user: user dihilangkan, permRev tetap ada: %s", b)
+	}
+	m.User = &User{ID: "u-1", Email: "a@example.test", DisplayName: "Ani"}
+	m.PermRev = 4
+	b, _ := json.Marshal(m)
+	for _, w := range []string{`"user":{"id":"u-1","email":"a@example.test","displayName":"Ani"}`, `"permRev":4`} {
+		if !strings.Contains(string(b), w) {
+			t.Errorf("json %s tidak memuat %s", b, w)
+		}
+	}
+}
+
+// ETag bervariasi per pengguna dan per revisi permission; format lama tetap untuk manifest tanpa user.
+func TestManifest_ETagVariesPerUserAndPermRev(t *testing.T) {
+	base := Build("1.0.0", tenancy.TenantID(uuid.New()), nil, 7)
+	a, b, c := base, base, base
+	a.User = &User{ID: "u-1", Email: "a@example.test", DisplayName: "Ani"}
+	b.User = &User{ID: "u-2", Email: "b@example.test", DisplayName: "Budi"}
+	c.User = &User{ID: "u-1", Email: "a@example.test", DisplayName: "Ani"}
+	if a.ETag() == b.ETag() {
+		t.Error("dua pengguna berbeda tidak boleh berbagi ETag")
+	}
+	if a.ETag() != c.ETag() || a.ETag() == base.ETag() {
+		t.Error("pengguna sama harus ETag sama (deterministik) dan berbeda dari tanpa user")
+	}
+	c.User.DisplayName = "Ani Baru"
+	if a.ETag() == c.ETag() {
+		t.Error("nama tampilan berubah, ETag harus berubah")
+	}
+	d := a
+	d.PermRev = 1
+	if a.ETag() == d.ETag() {
+		t.Error("permRev berubah, ETag harus berubah")
+	}
+}

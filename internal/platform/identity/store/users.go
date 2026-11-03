@@ -10,26 +10,28 @@ import (
 	"gorm.io/gorm"
 
 	"erpora/internal/platform/tenancy"
+	sdkmail "erpora/sdk/mail"
 )
 
 type userRow struct {
-	ID              uuid.UUID  `gorm:"column:id"`
-	Email           string     `gorm:"column:email"`
-	Name            string     `gorm:"column:name"`
-	Status          string     `gorm:"column:status"`
-	PasswordHash    *string    `gorm:"column:password_hash"`
-	EmailVerifiedAt *time.Time `gorm:"column:email_verified_at"`
-	LastLoginAt     *time.Time `gorm:"column:last_login_at"`
-	LockedAt        *time.Time `gorm:"column:locked_at"`
-	CreatedAt       time.Time  `gorm:"column:created_at"`
-	UpdatedAt       time.Time  `gorm:"column:updated_at"`
+	ID               uuid.UUID  `gorm:"column:id"`
+	Email            string     `gorm:"column:email"`
+	Name             string     `gorm:"column:name"`
+	Status           string     `gorm:"column:status"`
+	MembershipStatus string     `gorm:"column:membership_status"`
+	PasswordHash     *string    `gorm:"column:password_hash"`
+	EmailVerifiedAt  *time.Time `gorm:"column:email_verified_at"`
+	LastLoginAt      *time.Time `gorm:"column:last_login_at"`
+	LockedAt         *time.Time `gorm:"column:locked_at"`
+	CreatedAt        time.Time  `gorm:"column:created_at"`
+	UpdatedAt        time.Time  `gorm:"column:updated_at"`
 }
 
 func (userRow) TableName() string { return "users" }
 
 func (r userRow) user() User {
 	u := User{
-		ID: idString(r.ID), Email: r.Email, Name: r.Name, Status: r.Status,
+		ID: idString(r.ID), Email: r.Email, Name: r.Name, Status: r.Status, MembershipStatus: r.MembershipStatus,
 		EmailVerifiedAt: utcPtr(r.EmailVerifiedAt), LastLoginAt: utcPtr(r.LastLoginAt), LockedAt: utcPtr(r.LockedAt),
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}
@@ -48,10 +50,16 @@ type membershipRow struct {
 func (membershipRow) TableName() string { return "tenant_memberships" }
 
 // Pengguna hanya terlihat lewat keanggotaan tenant; kueri berikut selalu menggabungkan tenant_memberships.
-const userByMember = `SELECT u.* FROM users u JOIN tenant_memberships m ON m.user_id = u.id AND m.tenant_id = ? WHERE `
+const userByMember = `SELECT u.*, m.status AS membership_status FROM users u JOIN tenant_memberships m ON m.user_id = u.id AND m.tenant_id = ? WHERE `
 
+// validEmail menerima alamat yang dapat dikirimi: batas panjang CHECK database DAN aturan ketat sdk/mail (alamat polos
+// ASCII lokal@domain.tld), sehingga akun yang tidak dapat menerima surat reset sandi tidak dapat dibuat. Hanya jalur tulis;
+// data lama tidak dimigrasi (alur reset menangani alamat lama yang tak dapat dikirimi tanpa menghanguskan tautan).
 func validEmail(e string) bool {
-	return utf8.RuneCountInString(e) >= 3 && utf8.RuneCountInString(e) <= 254 && strings.Index(e, "@") > 0
+	if utf8.RuneCountInString(e) < 3 || utf8.RuneCountInString(e) > 254 || strings.Index(e, "@") <= 0 {
+		return false
+	}
+	return sdkmail.Validate(sdkmail.Message{To: []string{e}, Subject: "x", Text: "x"}) == nil
 }
 
 // CreateUser membuat akun dan keanggotaannya pada tenant t secara atomik. Email dinormalisasi; email yang sudah ada

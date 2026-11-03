@@ -18,7 +18,7 @@ rules:
   oas3-unused-component: off
 
   erp-path-module-prefix:
-    description: Path modul diawali /api/{slug}/; path platform /api/platform/ atau /api/bootstrap (api-guidelines §2, FR-23.1).
+    description: Path modul diawali /api/{slug}/; path platform /api/platform/ atau /api/bootstrap, ditambah dokumen standar /.well-known/* (api-guidelines §2, FR-23.1; PRD-001 Q25).
     severity: error
     message: "{{error}}"
     given: $
@@ -95,7 +95,7 @@ rules:
     resolved: false
     then: { function: erpDecimalNotNumber }
   erp-success-envelope:
-    description: Respons sukses JSON berbentuk {data} (api-guidelines §4.2).
+    description: Respons sukses JSON berbentuk {data} (api-guidelines §4.2); satu-satunya pengecualian adalah x-erp-raw-response pada dokumen /.well-known/* kontrak platform (PRD-001 Q25).
     severity: error
     message: "{{error}}"
     given: $

@@ -25,6 +25,21 @@ func skKey(t *testing.T) (string, []byte) {
 	return base64.StdEncoding.EncodeToString(k), k
 }
 
+// skKeyOtherID membuat kunci uji acak yang BERBEDA dan ber-id (KeyIDOf) berbeda dari other: dua kunci acak bertabrakan id
+// dengan peluang 1/256 dan Load menolaknya, sehingga tes yang butuh pasangan kunci aktif+lama tidak boleh memakai dua
+// skKey bebas (flaky).
+func skKeyOtherID(t *testing.T, other []byte) (string, []byte) {
+	t.Helper()
+	for range 10000 {
+		b64, raw := skKey(t)
+		if crypto.KeyIDOf(raw) != crypto.KeyIDOf(other) {
+			return b64, raw
+		}
+	}
+	t.Fatal("tidak menemukan kunci dengan id berbeda")
+	return "", nil
+}
+
 // skEnv menyiapkan environment minimal untuk Load dengan ERP_ENV dan ERP_SECRET_KEY tertentu.
 func skEnv(t *testing.T, envName, key string) {
 	t.Helper()
@@ -174,7 +189,7 @@ func TestConfigPreviousWithoutActiveFailsRequire(t *testing.T) {
 
 func TestConfigSecretKeyPreviousParsed(t *testing.T) {
 	active, activeRaw := skKey(t)
-	prev, prevRaw := skKey(t)
+	prev, prevRaw := skKeyOtherID(t, activeRaw)
 	skEnv(t, "production", active)
 	t.Setenv("ERP_SECRET_KEY_PREVIOUS", " "+prev+" ")
 	c, err := Load("")
@@ -254,7 +269,7 @@ func TestConfigSecretKeyFromEnvFile(t *testing.T) {
 // TestRedactHidesSecretKey: kunci tidak muncul lewat RedactSecret, fmt (kunci maupun Config utuh), JSON, maupun slog.
 func TestRedactHidesSecretKey(t *testing.T) {
 	b64, raw := skKey(t)
-	prevB64, prevRaw := skKey(t)
+	prevB64, prevRaw := skKeyOtherID(t, raw)
 	skEnv(t, "production", b64)
 	t.Setenv("ERP_SECRET_KEY_PREVIOUS", prevB64)
 	c, err := Load("")

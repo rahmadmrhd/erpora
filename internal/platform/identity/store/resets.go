@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -103,7 +104,12 @@ func (s *Store) InvalidatePasswordResets(ctx context.Context, t tenancy.TenantID
 // ResetPassword menyelesaikan reset sandi dalam satu transaksi atomik: memakai tautan (bersyarat used_at IS NULL
 // dan belum kedaluwarsa pada at), mengganti hash sandi, membuka akun locked, membatalkan tautan lain milik
 // pengguna, mencabut SEMUA sesi pengguna, dan menghapus catatan percobaan login. ok=false (tanpa efek) bila tautan
-// tidak dapat dipakai; hanya satu pemanggil serentak yang mendapat ok=true. Status disabled tidak diubah.
+// tidak dapat dipakai atau pemiliknya berstatus disabled; hanya satu pemanggil serentak yang mendapat ok=true.
+//
+// Penjaga disabled berlapis dan atomik: syarat EXISTS pada UPDATE tautan memakai snapshot (READ COMMITTED) sehingga
+// belum melihat penonaktifan yang belum commit; karena itu UPDATE users juga bersyarat status IN ('active','locked')
+// (menunggu lock baris, lalu mengevaluasi ulang status terbaru) dan bila 0 baris berubah seluruh transaksi di-rollback
+// (tautan tidak terpakai, sesi tidak dicabut) dan hasilnya ok=false.
 func (s *Store) ResetPassword(ctx context.Context, t tenancy.TenantID, resetID, newHash string, at time.Time) (ResetResult, bool, error) {
 	rid, ok := parseID(resetID)
 	if !ok {
@@ -114,18 +120,26 @@ func (s *Store) ResetPassword(ctx context.Context, t tenancy.TenantID, resetID, 
 	}
 	var res ResetResult
 	won := false
+	errOwnerInactive := errors.New("store: pemilik tautan reset tidak aktif") // sentinel rollback
 	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		// Pemilik berstatus disabled: tautan tidak dapat dipakai (PRD-001 Q30 butir 5); tanpa efek, tautan tidak terpakai.
 		ids, err := pluckIDs(tx, `UPDATE password_resets SET used_at = ? WHERE id = ? AND tenant_id = ? AND used_at IS NULL AND expires_at > ?
+			AND EXISTS (SELECT 1 FROM users WHERE users.id = password_resets.user_id AND users.status IN ('active', 'locked'))
 			RETURNING user_id::text`, at.UTC(), rid, tid(t), at.UTC())
 		if err != nil || len(ids) == 0 {
 			return err
 		}
 		uid, _ := parseID(ids[0])
-		if _, err := exec(tx, `UPDATE users SET password_hash = ?,
+		// Bersyarat status: penonaktifan konkuren yang belum commit tidak boleh ditimpa (lihat komentar fungsi).
+		n, err := exec(tx, `UPDATE users SET password_hash = ?,
 				status = CASE WHEN status = 'locked' THEN 'active' ELSE status END,
 				locked_at = CASE WHEN status = 'locked' THEN NULL ELSE locked_at END, updated_at = now()
-			WHERE id = ?`, newHash, uid); err != nil {
+			WHERE id = ? AND status IN ('active', 'locked')`, newHash, uid)
+		if err != nil {
 			return err
+		}
+		if n == 0 {
+			return errOwnerInactive // rollback: tautan kembali belum terpakai
 		}
 		if _, err := exec(tx, `UPDATE password_resets SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND used_at IS NULL`, at.UTC(), tid(t), uid); err != nil {
 			return err
@@ -141,6 +155,9 @@ func (s *Store) ResetPassword(ctx context.Context, t tenancy.TenantID, resetID, 
 		won = true
 		return nil
 	})
+	if errors.Is(err, errOwnerInactive) {
+		return ResetResult{}, false, nil
+	}
 	if err != nil {
 		return ResetResult{}, false, wrap("reset sandi", err)
 	}

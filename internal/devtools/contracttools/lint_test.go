@@ -603,3 +603,28 @@ func TestLint_JWKSEnvelopeExceptionNeedsMarker(t *testing.T) {
 		t.Errorf("JWKS tanpa x-erp-raw-response harus melanggar erp-success-envelope: %v", res)
 	}
 }
+
+// x-erp-raw-response hanya diterima pada kontrak platform untuk dokumen standar /.well-known/* (keputusan pemilik
+// produk 3 Nov 2026, PRD-001 Q25); penanda pada path platform lain tetap melanggar amplop. (Path /.well-known/ selain
+// JWKS ditolak lebih dulu oleh daftar izin apicontract.Parse, jadi tidak bisa diuji lewat Lint.)
+func TestLint_RawResponseRejectedOutsideWellKnown(t *testing.T) {
+	bun := requireBun(t)
+	root := t.TempDir()
+	copyRepoSubset(t, root, "example", "exampleaddon")
+	editFile(t, root, "contracts/openapi/platform.yaml", [2]string{"  /.well-known/jwks.json:\n", "  /api/platform/jwks:\n"})
+	repo, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.ToolsRoot = realRoot
+	res, err := Lint(context.Background(), repo, "", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res {
+		if r.Rule == "erp-success-envelope" && r.Target == "platform" {
+			return
+		}
+	}
+	t.Errorf("penanda x-erp-raw-response di luar /.well-known/ harus melanggar erp-success-envelope: %v", res)
+}

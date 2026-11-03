@@ -54,8 +54,12 @@ func (r LoginResult) MFARequired() bool {
 }
 
 // RefreshInput adalah masukan Service.Refresh. RefreshToken dibaca handler dari cookie, bukan body.
+//
+// Origin adalah nilai header Origin permintaan (kosong bila hilang); Service menolaknya dengan ErrOriginNotAllowed
+// bila bukan origin URL publik (pemeriksaan CSRF cookie refresh, ADR-0013 §1).
 type RefreshInput struct {
 	RefreshToken string `json:"-"`
+	Origin       string `json:"-"`
 	ClientIP     string `json:"-"`
 	UserAgent    string `json:"-"`
 }
@@ -95,6 +99,20 @@ type RecoveryCodes struct {
 	Codes []string `json:"codes"`
 }
 
+// ConfirmMFAResult adalah hasil Service.ConfirmMFA: recovery code (tampil sekali) dan sesi yang sudah naik ke
+// otp.
+//
+// Keputusan PRD-001 Q27 (3 Nov 2026): konfirmasi MFA menaikkan sesi ke amr [pwd, otp] dan MEROTASI refresh
+// token sesi, sehingga token pra-MFA (yang mungkin dicuri) tidak dapat menghasilkan access token otp. Session
+// memuat access token baru (amr [pwd, otp]) beserta RefreshToken/RefreshExpiresAt (json:"-") yang WAJIB ditulis
+// ulang handler ke cookie refresh; klien tidak perlu memanggil refresh lagi bila Session.AccessToken terisi.
+// Session kosong (AccessToken "") bila penaikan sesi gagal setelah faktor aktif: recovery code tetap diserahkan
+// (tampil sekali) dan klien memakai VerifyMFA untuk mendapatkan sesi otp.
+type ConfirmMFAResult struct {
+	Codes   []string    `json:"codes"`
+	Session LoginResult `json:"session"`
+}
+
 // ConfirmMFAInput adalah masukan Service.ConfirmMFA (kode TOTP pertama untuk mengaktifkan MFA).
 type ConfirmMFAInput struct {
 	Code      string `json:"code"`
@@ -127,7 +145,7 @@ type Service interface {
 	ResetPassword(ctx context.Context, in ResetInput) error
 	ChangePassword(ctx context.Context, in ChangeInput) error
 	BeginMFAEnrollment(ctx context.Context) (EnrollmentInfo, error)
-	ConfirmMFA(ctx context.Context, in ConfirmMFAInput) (RecoveryCodes, error)
+	ConfirmMFA(ctx context.Context, in ConfirmMFAInput) (ConfirmMFAResult, error)
 	VerifyMFA(ctx context.Context, in VerifyInput) (LoginResult, error)
 	RegenerateRecoveryCodes(ctx context.Context) (RecoveryCodes, error)
 }

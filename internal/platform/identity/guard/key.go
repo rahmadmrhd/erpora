@@ -25,7 +25,7 @@ func NormalizeIP(ip string) string {
 	if err != nil {
 		ap, err2 := netip.ParseAddrPort(ip)
 		if err2 != nil {
-			return UnknownIP
+			return canonicalPrefix(ip)
 		}
 		a = ap.Addr()
 	}
@@ -38,6 +38,17 @@ func NormalizeIP(ip string) string {
 		return p.Masked().String()
 	}
 	return a.String()
+}
+
+// canonicalPrefix membuat NormalizeIP idempoten: keluarannya sendiri ("2001:db8:1:2::/64") diterima apa adanya, tetapi
+// HANYA prefix IPv6 /64 yang sudah ter-mask (bit host nol, bukan IPv4-mapped); bentuk prefix lain atau cacat menjadi
+// UnknownIP. Kunci pasangan (akun, IP) wajib sama di semua jalur (sandi, sukses, MFA, pelacak email tak dikenal).
+func canonicalPrefix(s string) string {
+	p, err := netip.ParsePrefix(s)
+	if err != nil || p.Bits() != 64 || !p.Addr().Is6() || p.Addr().Is4In6() || p.Addr().Zone() != "" || p != p.Masked() {
+		return UnknownIP
+	}
+	return p.String()
 }
 
 // TargetKey membentuk kunci PrincipalLimiter untuk identitas sasaran pada endpoint publik: lingkup (mis. "login",

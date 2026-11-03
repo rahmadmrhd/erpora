@@ -71,6 +71,20 @@ type LockChecker interface {
 	Check(ctx context.Context, userID, ip string) (LockState, error)
 }
 
+// LockReserver adalah perluasan Lockout yang MEMBUAT pembatasan tebakan atomik (PRD-001 Q16/Q19): Reserve memeriksa
+// pasangan (userID, ip) dan, bila tidak dijeda/diblokir, mencatat percobaan ini sebagai kegagalan SEBELUM kode
+// diverifikasi, sehingga permintaan serentak saling melihat dan hanya sebanyak yang diizinkan jadwal jeda yang sampai
+// ke verifikasi (tanpa ini, check -> verifikasi -> catat membiarkan tebakan serentak lolos bersama-sama). Selesaikan
+// reservasi dengan Fail (kode salah; kegagalan sudah tercatat, lalu evaluasi kunci akun) atau Release (kode benar
+// atau galat bukan kegagalan; menghapus reservasi). token buram milik implementasi. Bila Reserve mengembalikan
+// keadaan restricted, tidak ada reservasi (token nil) dan kode tidak diverifikasi. Bila Lockout memenuhinya, Service
+// memakainya menggantikan LockChecker + RegisterFailure.
+type LockReserver interface {
+	Reserve(ctx context.Context, userID, ip string) (token any, st LockState, err error)
+	Fail(ctx context.Context, token any) (LockState, error)
+	Release(ctx context.Context, token any) error
+}
+
 // Sealer menyegel dan membuka secret (dipenuhi *crypto.Sealer).
 type Sealer interface {
 	Seal(plaintext, aad []byte) ([]byte, error)
@@ -127,9 +141,10 @@ type Deps struct {
 // dipercaya dari pemanggil. Tenant selalu dari tenancy.FromContext; pengguna di luar tenant diperlakukan seperti
 // tidak ada (galat seragam atau store.ErrNotFound).
 type Service struct {
-	d       Deps
-	totp    TOTP
-	checker LockChecker
+	d        Deps
+	totp     TOTP
+	checker  LockChecker
+	reserver LockReserver
 }
 
 // New membuat Service; menolak dependensi wajib yang kosong dan Issuer yang kosong atau memuat ':'.
@@ -152,6 +167,7 @@ func New(d Deps) (*Service, error) {
 	}
 	s := &Service{d: d}
 	s.checker, _ = d.Lockout.(LockChecker)
+	s.reserver, _ = d.Lockout.(LockReserver)
 	return s, nil
 }
 
@@ -247,9 +263,11 @@ func (s *Service) ConfirmEnrollment(ctx context.Context, userID, code string) ([
 		return nil, err
 	}
 	ip := clientIP(ctx)
-	if err := s.precheck(ctx, userID, ip); err != nil {
+	at, err := s.begin(ctx, userID, ip)
+	if err != nil {
 		return nil, err
 	}
+	defer at.release(ctx)
 	f, err := s.d.Store.GetMFAFactor(ctx, t, userID)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, ErrNotEnrolled
@@ -273,8 +291,9 @@ func (s *Service) ConfirmEnrollment(ctx context.Context, userID, code string) ([
 		}
 	}
 	if !ok {
-		return nil, s.failure(ctx, userID, ip)
+		return nil, at.fail(ctx, userID, ip)
 	}
+	at.release(ctx) // kode benar bukan kegagalan; keberhasilan login ditangani pemanggil
 	codes, err := s.issueRecoveryCodes(ctx, t, userID)
 	if err != nil {
 		return nil, err
@@ -293,14 +312,16 @@ func (s *Service) Verify(ctx context.Context, userID, code string) error {
 		return err
 	}
 	ip := clientIP(ctx)
-	if err := s.precheck(ctx, userID, ip); err != nil {
+	at, err := s.begin(ctx, userID, ip)
+	if err != nil {
 		return err
 	}
+	defer at.release(ctx)
 	ok, err := s.checkTOTP(ctx, t, userID, code)
 	if err != nil {
 		return err
 	}
-	return s.finish(ctx, userID, ip, ok)
+	return s.finish(ctx, at, userID, ip, ok)
 }
 
 func (s *Service) checkTOTP(ctx context.Context, t tenancy.TenantID, userID, code string) (bool, error) {
@@ -347,9 +368,11 @@ func (s *Service) UseRecoveryCode(ctx context.Context, userID, code string) erro
 		return err
 	}
 	ip := clientIP(ctx)
-	if err := s.precheck(ctx, userID, ip); err != nil {
+	at, err := s.begin(ctx, userID, ip)
+	if err != nil {
 		return err
 	}
+	defer at.release(ctx)
 	var ok bool
 	if canon, valid := normalizeRecoveryCode(code); valid {
 		ok, err = s.d.Store.UseRecoveryCode(ctx, t, userID, hashRecoveryCode(userID, canon), s.d.Now())
@@ -357,7 +380,7 @@ func (s *Service) UseRecoveryCode(ctx context.Context, userID, code string) erro
 			return fmt.Errorf("mfa: pakai recovery code: %w", err)
 		}
 	}
-	if err := s.finish(ctx, userID, ip, ok); err != nil {
+	if err := s.finish(ctx, at, userID, ip, ok); err != nil {
 		return err
 	}
 	s.record(ctx, "mfa.recovery_used", userID, userID)
@@ -460,37 +483,64 @@ func (s *Service) Required(ctx context.Context, userID string) (bool, error) {
 	return isAdmin, nil
 }
 
-// precheck menolak percobaan pada pasangan yang sedang dijeda/diblokir, bila Lockout menyediakan LockChecker.
-func (s *Service) precheck(ctx context.Context, userID, ip string) error {
-	if s.checker == nil {
-		return nil
-	}
-	st, err := s.checker.Check(ctx, userID, ip)
-	if err != nil {
-		return fmt.Errorf("mfa: periksa lockout: %w", err)
-	}
-	if st.restricted() {
-		return &LockedError{RetryAfter: st.RetryAfter, AccountLocked: st.AccountLocked}
-	}
-	return nil
+// attempt adalah satu percobaan verifikasi kode terhadap lockout. Dengan LockReserver, percobaan direservasi
+// (dicatat sebagai kegagalan) sebelum kode diperiksa; tanpa itu hanya pemeriksaan baca-saja opsional (LockChecker) dan
+// kegagalan dicatat sesudahnya (tidak membatasi tebakan serentak; hanya untuk Lockout sederhana, mis. tes).
+type attempt struct {
+	s     *Service
+	token any
+	open  bool // reservasi masih harus dilepas
 }
 
-// finish mencatat hasil percobaan ke Lockout. Kegagalan -> failure(); sukses -> RegisterSuccess (galatnya hanya
-// dilog: autentikasi sudah sah dan step sudah terpakai).
-func (s *Service) finish(ctx context.Context, userID, ip string, ok bool) error {
-	if !ok {
-		return s.failure(ctx, userID, ip)
+// begin menolak percobaan pada pasangan yang sedang dijeda/diblokir atau akun terkunci (*LockedError) tanpa
+// memeriksa kode; selain itu mereservasi percobaan. Pemanggil WAJIB defer at.release(ctx).
+func (s *Service) begin(ctx context.Context, userID, ip string) (*attempt, error) {
+	if s.reserver != nil {
+		token, st, err := s.reserver.Reserve(ctx, userID, ip)
+		if err != nil {
+			return nil, fmt.Errorf("mfa: reservasi percobaan: %w", err)
+		}
+		if st.restricted() {
+			return nil, &LockedError{RetryAfter: st.RetryAfter, AccountLocked: st.AccountLocked}
+		}
+		return &attempt{s: s, token: token, open: true}, nil
 	}
-	if err := s.d.Lockout.RegisterSuccess(ctx, userID, ip); err != nil {
-		s.d.Logger.ErrorContext(ctx, "mfa: gagal mencatat keberhasilan ke lockout", "userId", userID, "error", err)
+	if s.checker != nil {
+		st, err := s.checker.Check(ctx, userID, ip)
+		if err != nil {
+			return nil, fmt.Errorf("mfa: periksa lockout: %w", err)
+		}
+		if st.restricted() {
+			return nil, &LockedError{RetryAfter: st.RetryAfter, AccountLocked: st.AccountLocked}
+		}
 	}
-	return nil
+	return &attempt{s: s}, nil
 }
 
-// failure mencatat satu kegagalan dan mengembalikan galat seragam (atau LockedError bila kini dijeda/diblokir).
-// Galat Lockout gagal-tertutup (dikembalikan sebagai galat, bukan sukses).
-func (s *Service) failure(ctx context.Context, userID, ip string) error {
-	st, err := s.d.Lockout.RegisterFailure(ctx, userID, ip)
+// release melepas reservasi bila masih terbuka (kode benar, galat bukan kegagalan, atau ctx dibatalkan); idempoten.
+func (a *attempt) release(ctx context.Context) {
+	if a == nil || !a.open {
+		return
+	}
+	a.open = false
+	if err := a.s.reserver.Release(ctx, a.token); err != nil {
+		a.s.d.Logger.WarnContext(ctx, "mfa: gagal melepas reservasi percobaan", "error", err)
+	}
+}
+
+// fail menyelesaikan percobaan sebagai kegagalan dan mengembalikan galat seragam (atau LockedError bila kini
+// dijeda/diblokir). Galat Lockout gagal-tertutup (dikembalikan sebagai galat, bukan sukses).
+func (a *attempt) fail(ctx context.Context, userID, ip string) error {
+	var (
+		st  LockState
+		err error
+	)
+	if a.open {
+		a.open = false // kegagalan sudah tercatat oleh reservasi; jangan dilepas
+		st, err = a.s.reserver.Fail(ctx, a.token)
+	} else {
+		st, err = a.s.d.Lockout.RegisterFailure(ctx, userID, ip)
+	}
 	if err != nil {
 		return fmt.Errorf("mfa: catat kegagalan: %w", err)
 	}
@@ -498,6 +548,19 @@ func (s *Service) failure(ctx context.Context, userID, ip string) error {
 		return &LockedError{RetryAfter: st.RetryAfter, AccountLocked: st.AccountLocked}
 	}
 	return ErrInvalidCode
+}
+
+// finish menyelesaikan percobaan: kegagalan -> fail(); sukses -> reservasi dilepas lalu RegisterSuccess (galatnya hanya
+// dilog: autentikasi sudah sah dan step sudah terpakai).
+func (s *Service) finish(ctx context.Context, at *attempt, userID, ip string, ok bool) error {
+	if !ok {
+		return at.fail(ctx, userID, ip)
+	}
+	at.release(ctx)
+	if err := s.d.Lockout.RegisterSuccess(ctx, userID, ip); err != nil {
+		s.d.Logger.ErrorContext(ctx, "mfa: gagal mencatat keberhasilan ke lockout", "userId", userID, "error", err)
+	}
+	return nil
 }
 
 func (s *Service) record(ctx context.Context, action, actor, userID string) {

@@ -45,10 +45,14 @@ type countingRunner struct {
 	running atomic.Int32
 	peak    atomic.Int32
 	busy    atomic.Bool
+	panics  atomic.Bool // memaksa panic di dalam Do (mensimulasikan bug/panic di jalur verifikasi)
 }
 
 func (r *countingRunner) Do(ctx context.Context, fn func() error) error {
 	r.calls.Add(1)
+	if r.panics.Load() {
+		panic("boom: panic uji di jalur verifikasi")
+	}
 	if r.busy.Load() {
 		return &RateLimitedError{RetryAfter: time.Second, Cause: ErrHashBusy}
 	}
@@ -271,7 +275,7 @@ func failureTraces(t *testing.T) map[string][]string {
 // membedakan jalur (jalur akun tak dikenal memakai UUID acak untuk panggilan tiruan).
 func TestFailureCallTraceIdenticalAcrossPaths(t *testing.T) {
 	traces := failureTraces(t)
-	want := []string{"FindUserByEmail", "PairFailureState", "RecordLoginAttempt", "PairFailureState", "CrossIPFailures"}
+	want := []string{"FindUserByEmail", "ReserveLoginAttempt", "CrossIPFailures"}
 	for name, got := range traces {
 		if !slices.Equal(got, want) {
 			t.Errorf("%s: jejak = %v, want %v", name, got, want)
@@ -303,7 +307,7 @@ func TestPairBlockedAttemptsRejectedBeforeVerifyAndNotRecorded(t *testing.T) {
 			if h.runner.calls.Load() != calls {
 				t.Fatal("verifikasi sandi tidak boleh berjalan selama jeda")
 			}
-			if got, want := h.fs.trace(), []string{"FindUserByEmail", "PairFailureState"}; !slices.Equal(got, want) {
+			if got, want := h.fs.trace(), []string{"FindUserByEmail", "ReserveLoginAttempt"}; !slices.Equal(got, want) {
 				t.Fatalf("jejak selama jeda = %v, want %v (identik untuk akun dikenal dan tak dikenal)", got, want)
 			}
 			if known && len(h.fs.rows(u.ID)) != 5 {
@@ -603,7 +607,7 @@ func TestAuthenticatorReturnsStoreErrorsAndRequiresTenant(t *testing.T) {
 		t.Fatalf("tanpa tenant: %v", err)
 	}
 	u := h.fs.addUser("a@example.com", goodHash(t), store.UserActive)
-	h.fs.failOn["RecordLoginAttempt"] = errBoom
+	h.fs.failOn["ReserveLoginAttempt"] = errBoom
 	if _, err := h.a.Verify(tctx(), LoginInput{Email: "a@example.com", Password: "salah", IP: "198.51.100.1"}); !errors.Is(err, errBoom) {
 		t.Fatalf("gagal mencatat kegagalan harus galat (gagal tertutup): %v", err)
 	}
@@ -678,13 +682,15 @@ func TestLoginTimingUnknownEmailMatchesKnownEmailFailure(t *testing.T) {
 		hash   string
 		known  bool
 		pass   string
+		member string // status keanggotaan tenant; kosong = active
 	}
 	paths := []path{
-		{"sandi salah (dasar)", store.UserActive, goodHash(t), true, "bukan sandinya"},
-		{"email tak dikenal", "", "", false, goodPassword},
-		{"akun terkunci, sandi benar", store.UserLocked, goodHash(t), true, goodPassword},
-		{"akun dinonaktifkan, sandi benar", store.UserDisabled, goodHash(t), true, goodPassword},
-		{"hash tersimpan cacat", store.UserActive, "bukan-phc", true, goodPassword},
+		{"sandi salah (dasar)", store.UserActive, goodHash(t), true, "bukan sandinya", ""},
+		{"email tak dikenal", "", "", false, goodPassword, ""},
+		{"akun terkunci, sandi benar", store.UserLocked, goodHash(t), true, goodPassword, ""},
+		{"akun dinonaktifkan, sandi benar", store.UserDisabled, goodHash(t), true, goodPassword, ""},
+		{"hash tersimpan cacat", store.UserActive, "bukan-phc", true, goodPassword, ""},
+		{"keanggotaan nonaktif, sandi benar", store.UserActive, goodHash(t), true, goodPassword, store.MembershipSuspended},
 	}
 	samples := make([][]time.Duration, len(paths))
 	counter := 0
@@ -692,7 +698,12 @@ func TestLoginTimingUnknownEmailMatchesKnownEmailFailure(t *testing.T) {
 		counter++
 		email := fmt.Sprintf("u%d@example.com", counter)
 		if p.known {
-			h.fs.addUser(email, p.hash, p.status)
+			u := h.fs.addUser(email, p.hash, p.status)
+			if p.member != "" {
+				h.fs.mu.Lock()
+				h.fs.users[u.ID].MembershipStatus = p.member
+				h.fs.mu.Unlock()
+			}
 		}
 		start := time.Now()
 		out, err := h.a.Verify(tctx(), LoginInput{Email: email, Password: p.pass, IP: ipN(counter)})

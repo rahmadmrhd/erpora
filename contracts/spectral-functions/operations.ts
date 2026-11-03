@@ -19,10 +19,12 @@ export function operationPermission(root: unknown): Result[] {
   const out: Result[] = [];
   for (const op of operations(currentDoc(root))) {
     if (op.node["x-erp-public"] === true) continue;
+    // Terautentikasi tanpa permission (mis. GET /api/bootstrap): wajib login, tanpa permission tertentu.
+    if (op.node["x-erp-authenticated"] === true) continue;
     const perm = asStr(op.node["x-erp-permission"]);
     if (perm === undefined || !re.test(perm)) {
       out.push({
-        message: `${op.method.toUpperCase()} ${op.path} wajib x-erp-permission berbentuk ${slug}.<resource>.<action> atau x-erp-public: true (api-guidelines §1, §13)`,
+        message: `${op.method.toUpperCase()} ${op.path} wajib x-erp-permission berbentuk ${slug}.<resource>.<action>, x-erp-public: true, atau x-erp-authenticated: true (api-guidelines §1, §13)`,
         path: [...op.at],
       });
     }
@@ -163,9 +165,12 @@ export function errorCodesDocumented(root: unknown): Result[] {
       op.node.requestBody !== undefined ||
       parametersOf(docRoot, op).some((p) => asStr(p.in) !== "header");
     const isPublicOp = op.node["x-erp-public"] === true;
+    // Terautentikasi tanpa permission: tidak ada permission yang dapat ditolak (tanpa 403), tetapi jalur 401 wajib.
+    const isAuthOnlyOp = op.node["x-erp-authenticated"] === true && !isPublicOp;
     if (!(isPublicOp && !hasInput) && !codes.some((c) => c.startsWith("4")))
       need.push("minimal satu respons 4xx");
-    if (!isPublicOp && !codes.includes("403")) need.push("403"); // operasi publik tidak punya permission yang dapat ditolak
+    if (isAuthOnlyOp && !codes.includes("401")) need.push("401");
+    if (!isPublicOp && !isAuthOnlyOp && !codes.includes("403")) need.push("403"); // operasi publik dan terautentikasi-saja tidak punya permission yang dapat ditolak
     if (op.path.includes("{") && !codes.includes("404")) need.push("404");
     if (op.node.requestBody !== undefined) {
       if (!codes.includes("400")) need.push("400");

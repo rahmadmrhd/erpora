@@ -707,3 +707,35 @@ func TestCompleteMarkRevokedOnlyOnSuccess(t *testing.T) {
 		t.Error("MarkRevoked dipanggil padahal reset gagal")
 	}
 }
+
+// Q30 butir 5: tautan milik akun disabled ditolak seperti token tidak sah (ErrInvalidToken seragam), tanpa hash
+// argon2, tanpa mengubah sandi/status, dan tanpa memakai tautan; akun yang kemudian diaktifkan lagi dapat memakainya.
+func TestCompleteRejectsTokenOfDisabledAccount(t *testing.T) {
+	h := newHarness(t, hopts{})
+	h.st.addUser(t, userEmail, store.UserActive, "$old")
+	raw := requestToken(t, h, userEmail) // diterbitkan saat akun masih aktif
+	h.st.setStatus(userEmail, store.UserDisabled)
+	err := h.svc.Complete(tctx(), raw, goodPass)
+	if !errors.Is(err, reset.ErrInvalidToken) {
+		t.Fatalf("token akun disabled: err = %v, want ErrInvalidToken", err)
+	}
+	if h.gate.n.Load() != 0 || h.st.callCount("ResetPassword") != 0 {
+		t.Error("akun disabled tidak boleh menjalankan hash atau ResetPassword")
+	}
+	if u := h.st.user(userEmail); u.PasswordHash != "$old" || u.Status != store.UserDisabled {
+		t.Errorf("akun berubah: hash=%q status=%s", u.PasswordHash, u.Status)
+	}
+	// Pesan galat identik dengan token tak dikenal.
+	random := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	if err2 := h.svc.Complete(tctx(), random, goodPass); err2 == nil || err.Error() != err2.Error() {
+		t.Errorf("pesan berbeda: %v vs %v", err, err2)
+	}
+	// Tautan tidak terpakai: setelah akun diaktifkan lagi, tautan yang masih berlaku dapat dipakai.
+	h.st.setStatus(userEmail, store.UserActive)
+	if err := h.svc.Complete(tctx(), raw, goodPass); err != nil {
+		t.Errorf("setelah diaktifkan lagi: %v", err)
+	}
+}
+
+// Penjaga atomik di store: walau pra-periksa layanan terlewat (akun dinonaktifkan di antara pemeriksaan dan
+// penyimpanan), ResetPassword tidak memakai tautan dan tidak mengubah akun disabled. Diuji di integration_test.go.

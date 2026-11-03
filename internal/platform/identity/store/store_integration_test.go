@@ -597,6 +597,102 @@ func TestSessionsAndRefreshTokens(t *testing.T) {
 		}
 	})
 
+	t.Run("UpgradeSession: CAS atomik, token belum terpakai diganti, family dipertahankan", func(t *testing.T) {
+		uu := newUser(t, s, tenantA, "upgrade@example.com")
+		sess, root := newSession(t, s, tenantA, uu.ID)
+		// satu rotasi dulu: token saat ini adalah anak (belum terpakai), induk berstatus terpakai
+		child := store.RefreshToken{ID: uuid.NewString(), SessionID: sess.ID, FamilyID: root.FamilyID, ParentID: root.ID,
+			TokenHash: hash(150), CreatedAt: now(), ExpiresAt: now().Add(14 * 24 * time.Hour)}
+		if ok, err := s.RotateRefreshToken(ctx, tenantA, root.ID, now(), child); err != nil || !ok {
+			t.Fatalf("rotasi: %v %v", ok, err)
+		}
+		mk := func(b byte) store.RefreshToken {
+			return store.RefreshToken{ID: uuid.NewString(), SessionID: sess.ID, FamilyID: uuid.NewString(),
+				TokenHash: hash(b), CreatedAt: now(), ExpiresAt: now().Add(14 * 24 * time.Hour)}
+		}
+		// AMR lama tidak cocok (CAS): kalah tanpa efek
+		if ok, err := s.UpgradeSession(ctx, tenantA, sess.ID, []string{"pwd", "otp"}, []string{"pwd", "otp"}, mk(160)); err != nil || ok {
+			t.Fatalf("CAS salah = %v, %v, want false", ok, err)
+		}
+		if _, err := s.FindRefreshTokenByHash(ctx, tenantA, hash(150)); err != nil {
+			t.Fatalf("token saat ini tidak boleh hilang saat upgrade kalah: %v", err)
+		}
+		// pemanggil lain di tenant B tidak dapat menaikkan sesi tenant A
+		if ok, err := s.UpgradeSession(ctx, tenantB, sess.ID, []string{"pwd"}, []string{"pwd", "otp"}, mk(161)); err != nil || ok {
+			t.Fatalf("tenant B = %v, %v, want false", ok, err)
+		}
+		next := mk(162)
+		if ok, err := s.UpgradeSession(ctx, tenantA, sess.ID, []string{"pwd"}, []string{"pwd", "otp"}, next); err != nil || !ok {
+			t.Fatalf("UpgradeSession = %v, %v", ok, err)
+		}
+		g, _ := s.GetSession(ctx, tenantA, sess.ID)
+		if len(g.AMR) != 2 || g.AMR[1] != "otp" || g.RevokedAt != nil {
+			t.Errorf("sesi = %+v (harus [pwd otp] dan tetap hidup)", g)
+		}
+		// token yang belum terpakai (anak) dihapus: lama ditolak sebagai tak dikenal (bukan reuse); yang baru satu family
+		if _, err := s.FindRefreshTokenByHash(ctx, tenantA, hash(150)); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("token lama harus hilang: %v", err)
+		}
+		f, err := s.FindRefreshTokenByHash(ctx, tenantA, hash(162))
+		if err != nil || f.FamilyID != root.FamilyID || f.ParentID != "" || f.UsedAt != nil || f.SessionID != sess.ID {
+			t.Errorf("token baru = %+v, %v (family harus dipertahankan)", f, err)
+		}
+		// leluhur yang sudah terpakai tetap ada (deteksi reuse tetap bekerja untuk token lama dari rotasi sebelumnya)
+		if r, err := s.FindRefreshTokenByHash(ctx, tenantA, root.TokenHash); err != nil || r.UsedAt == nil {
+			t.Errorf("leluhur terpakai = %+v, %v", r, err)
+		}
+		// sesi tercabut tidak dapat dinaikkan
+		if _, err := s.RevokeSession(ctx, tenantA, sess.ID, "logout", now()); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := s.UpgradeSession(ctx, tenantA, sess.ID, []string{"pwd", "otp"}, []string{"pwd", "otp", "x"}, mk(163)); err != nil || ok {
+			t.Errorf("sesi tercabut = %v, %v, want false", ok, err)
+		}
+	})
+
+	t.Run("UpgradeSession serentak: tepat satu menang", func(t *testing.T) {
+		uu := newUser(t, s, tenantA, "upgrade-race@example.com")
+		sess, _ := newSession(t, s, tenantA, uu.ID)
+		wins, errs := race(10, func(i int) (bool, error) {
+			next := store.RefreshToken{ID: uuid.NewString(), SessionID: sess.ID, FamilyID: uuid.NewString(),
+				TokenHash: hash(byte(170 + i)), CreatedAt: now(), ExpiresAt: now().Add(time.Hour)}
+			return s.UpgradeSession(ctx, tenantA, sess.ID, []string{"pwd"}, []string{"pwd", "otp"}, next)
+		})
+		if wins != 1 || len(errs) != 0 {
+			t.Fatalf("upgrade serentak: wins=%d errs=%v", wins, errs)
+		}
+		live := 0
+		for i := 0; i < 10; i++ {
+			if f, err := s.FindRefreshTokenByHash(ctx, tenantA, hash(byte(170+i))); err == nil && f.UsedAt == nil {
+				live++
+			}
+		}
+		if live != 1 {
+			t.Errorf("token hidup setelah balapan = %d, want 1", live)
+		}
+	})
+
+	t.Run("CountUserSessions menghitung semua sesi (juga yang tercabut), terisolasi tenant", func(t *testing.T) {
+		uu := newUser(t, s, tenantA, "count-sessions@example.com")
+		if n, err := s.CountUserSessions(ctx, tenantA, uu.ID); err != nil || n != 0 {
+			t.Fatalf("awal = %d, %v", n, err)
+		}
+		s1, _ := newSession(t, s, tenantA, uu.ID)
+		newSession(t, s, tenantA, uu.ID)
+		if _, err := s.RevokeSession(ctx, tenantA, s1.ID, "logout", now()); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := s.CountUserSessions(ctx, tenantA, uu.ID); err != nil || n != 2 {
+			t.Errorf("setelah 2 sesi (1 tercabut) = %d, %v, want 2", n, err)
+		}
+		if n, err := s.CountUserSessions(ctx, tenantB, uu.ID); err != nil || n != 0 {
+			t.Errorf("tenant B = %d, %v, want 0", n, err)
+		}
+		if n, err := s.CountUserSessions(ctx, tenantA, "bukan-uuid"); err != nil || n != 0 {
+			t.Errorf("id cacat = %d, %v, want 0", n, err)
+		}
+	})
+
 	t.Run("isolasi tenant (IDOR)", func(t *testing.T) {
 		sess, rt := newSession(t, s, tenantA, ua.ID)
 		if _, err := s.GetSession(ctx, tenantB, sess.ID); !errors.Is(err, store.ErrNotFound) {
@@ -1113,4 +1209,184 @@ func sessIDs(r []store.Session) []string {
 		o = append(o, x.ID)
 	}
 	return o
+}
+
+// TestReserveLoginAttempt: reservasi atomik per pasangan lintas koneksi (kunci advisory) dan pelepasannya.
+func TestReserveLoginAttempt(t *testing.T) {
+	db, s := setup(t)
+	u := newUser(t, s, tenantA, "reserve@example.com")
+	other := newUser(t, s, tenantA, "reserve2@example.com")
+	const ip = "198.51.100.9"
+	since := now().Add(-24 * time.Hour)
+
+	t.Run("serentak: hanya batas yang diizinkan admit yang lolos", func(t *testing.T) {
+		const limit, workers = 3, 24
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		admittedN := 0
+		start := make(chan struct{})
+		for range workers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				_, ok, id, err := s.ReserveLoginAttempt(ctx, tenantA, u.ID, ip, store.AttemptPassword, now(), since,
+					func(ps store.PairState) bool { return ps.ConsecutiveFailures < limit })
+				if err != nil {
+					t.Errorf("ReserveLoginAttempt: %v", err)
+					return
+				}
+				if ok != (id != 0) {
+					t.Errorf("ok=%v id=%d tidak konsisten", ok, id)
+				}
+				if ok {
+					mu.Lock()
+					admittedN++
+					mu.Unlock()
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		if admittedN != limit {
+			t.Fatalf("diterima %d, want tepat %d (pembacaan keadaan dan sisipan harus atomik)", admittedN, limit)
+		}
+		if st, _ := s.PairFailureStateSince(ctx, tenantA, u.ID, ip, since); st.ConsecutiveFailures != limit {
+			t.Fatalf("baris tercatat = %d, want %d", st.ConsecutiveFailures, limit)
+		}
+	})
+
+	t.Run("ditolak tidak menulis; pasangan lain tidak terpengaruh", func(t *testing.T) {
+		before, _ := s.PairFailureStateSince(ctx, tenantA, other.ID, ip, since)
+		_, ok, id, err := s.ReserveLoginAttempt(ctx, tenantA, other.ID, ip, store.AttemptMFA, now(), since, func(store.PairState) bool { return false })
+		if err != nil || ok || id != 0 {
+			t.Fatalf("ok=%v id=%d err=%v", ok, id, err)
+		}
+		after, _ := s.PairFailureStateSince(ctx, tenantA, other.ID, ip, since)
+		if after.ConsecutiveFailures != before.ConsecutiveFailures {
+			t.Fatal("penolakan tidak boleh menulis baris")
+		}
+	})
+
+	t.Run("pelepasan menghapus hanya reservasi itu dan milik pengguna itu", func(t *testing.T) {
+		_, ok, id, err := s.ReserveLoginAttempt(ctx, tenantA, other.ID, ip, store.AttemptPassword, now(), since, func(store.PairState) bool { return true })
+		if err != nil || !ok {
+			t.Fatal(err)
+		}
+		if err := s.ReleaseLoginAttempt(ctx, tenantA, u.ID, id); err != nil { // pengguna salah: tidak menghapus apa pun
+			t.Fatal(err)
+		}
+		if st, _ := s.PairFailureStateSince(ctx, tenantA, other.ID, ip, since); st.ConsecutiveFailures != 1 {
+			t.Fatalf("setelah rilis oleh pengguna lain = %d, want 1", st.ConsecutiveFailures)
+		}
+		if err := s.ReleaseLoginAttempt(ctx, tenantA, other.ID, id); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.ReleaseLoginAttempt(ctx, tenantA, other.ID, id); err != nil { // idempoten
+			t.Fatal(err)
+		}
+		if st, _ := s.PairFailureStateSince(ctx, tenantA, other.ID, ip, since); st.ConsecutiveFailures != 0 {
+			t.Fatalf("setelah rilis = %d, want 0", st.ConsecutiveFailures)
+		}
+	})
+
+	t.Run("pengguna fiktif yang diterima menghasilkan ErrNotFound tanpa baris; non-anggota ditolak", func(t *testing.T) {
+		_, ok, id, err := s.ReserveLoginAttempt(ctx, tenantA, uuid.NewString(), ip, store.AttemptPassword, now(), since, func(store.PairState) bool { return true })
+		if !errors.Is(err, store.ErrNotFound) || ok || id != 0 {
+			t.Fatalf("fiktif: ok=%v id=%d err=%v", ok, id, err)
+		}
+		if _, _, _, err := s.ReserveLoginAttempt(ctx, tenantB, u.ID, ip, store.AttemptPassword, now(), since, func(store.PairState) bool { return true }); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("non-anggota tenant: %v", err)
+		}
+		if _, _, _, err := s.ReserveLoginAttempt(ctx, tenantA, u.ID, ip, "lain", now(), since, func(store.PairState) bool { return true }); !errors.Is(err, store.ErrInvalidArgument) {
+			t.Fatalf("kind tak valid: %v", err)
+		}
+	})
+
+	t.Run("status keanggotaan ikut dimuat", func(t *testing.T) {
+		got, err := s.FindUserByEmail(ctx, tenantA, u.Email)
+		if err != nil || got.MembershipStatus != store.MembershipActive {
+			t.Fatalf("%+v %v", got, err)
+		}
+		if err := db.Exec(`UPDATE tenant_memberships SET status = 'suspended' WHERE tenant_id = ? AND user_id = ?`, uuid.UUID(tenantA), u.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		for name, load := range map[string]func() (store.User, error){
+			"FindUserByEmail": func() (store.User, error) { return s.FindUserByEmail(ctx, tenantA, u.Email) },
+			"GetUser":         func() (store.User, error) { return s.GetUser(ctx, tenantA, u.ID) },
+		} {
+			got, err := load()
+			if err != nil || got.MembershipStatus != store.MembershipSuspended {
+				t.Errorf("%s: %+v %v, want suspended", name, got, err)
+			}
+		}
+	})
+}
+
+// Q30 butir 5: penjaga akun disabled pada ResetPassword harus atomik terhadap perubahan status yang belum commit.
+// Balapan: transaksi admin menonaktifkan akun (lock baris users, belum commit); ResetPassword mulai, melewati syarat
+// EXISTS pada tautan (snapshot lama: masih active), lalu UPDATE users menunggu lock. Setelah admin commit, UPDATE
+// bersyarat status harus menolak (0 baris), seluruh transaksi di-rollback: won=false, hash tidak berubah, tautan
+// tidak terpakai, sesi tidak dicabut.
+func TestResetPasswordRaceWithDisable(t *testing.T) {
+	db, s := setup(t)
+	u := newUser(t, s, tenantA, "race-disable@example.com")
+	sess, _ := newSession(t, s, tenantA, u.ID)
+	at := now()
+	r := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash(91), CreatedAt: at, ExpiresAt: at.Add(30 * time.Minute)}
+	if err := s.InsertPasswordReset(ctx, tenantA, r); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.GetUser(ctx, tenantA, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	admin := db.Begin()
+	if admin.Error != nil {
+		t.Fatal(admin.Error)
+	}
+	defer admin.Rollback()
+	if err := admin.Exec(`UPDATE users SET status = 'disabled' WHERE id = ?`, u.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	type out struct {
+		ok  bool
+		err error
+	}
+	done := make(chan out, 1)
+	go func() {
+		_, ok, err := s.ResetPassword(ctx, tenantA, r.ID, "$argon2id$penyerang", at)
+		done <- out{ok, err}
+	}()
+	select {
+	case o := <-done:
+		t.Fatalf("ResetPassword selesai sebelum admin commit (tidak menunggu lock): %+v", o)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := admin.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	var o out
+	select {
+	case o = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("ResetPassword tidak selesai setelah commit")
+	}
+	if o.err != nil || o.ok {
+		t.Fatalf("ResetPassword = ok:%v err:%v, want ok=false tanpa galat", o.ok, o.err)
+	}
+	got, err := s.GetUser(ctx, tenantA, u.ID)
+	if err != nil || got.Status != store.UserDisabled || got.PasswordHash != before.PasswordHash {
+		t.Fatalf("akun berubah: %+v %v (hash awal %q)", got, err, before.PasswordHash)
+	}
+	rec, err := s.FindPasswordResetByHash(ctx, tenantA, r.TokenHash)
+	if err != nil || rec.UsedAt != nil {
+		t.Fatalf("tautan harus tetap belum terpakai (rollback): %+v %v", rec, err)
+	}
+	var revoked int64
+	if err := db.Raw(`SELECT count(*) FROM auth_sessions WHERE id = ? AND revoked_at IS NOT NULL`, sess.ID).Scan(&revoked).Error; err != nil || revoked != 0 {
+		t.Errorf("sesi tercabut padahal reset ditolak: %d %v", revoked, err)
+	}
 }

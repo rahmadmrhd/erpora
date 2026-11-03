@@ -101,15 +101,16 @@ func TestIdentity_NoStubAuthN_EveryProtectedRouteNeedsToken(t *testing.T) {
 		t.Fatalf("tanpa token: %d %s", rec.Code, rec.Body)
 	}
 	// Header palsu bukan identitas: tidak ada jalur header-berbasis ke Principal (IDOR).
-	rec = get(e.a.Router, protectedPath, map[string]string{"X-User-Id": uuid.NewString(), "X-Actor": "api:dev"})
+	rec = get(e.a.Router, protectedPath, map[string]string{"X-User-Id": uuid.NewString(), "X-Actor": "user:palsu"})
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("header identitas palsu: %d", rec.Code)
 	}
-	// Rute publik tetap terbuka tanpa token.
-	for _, p := range []string{"/healthz", "/api/bootstrap"} {
-		if rec := get(e.a.Router, p, nil); rec.Code != http.StatusOK {
-			t.Errorf("%s publik = %d", p, rec.Code)
-		}
+	// Rute publik tetap terbuka tanpa token; bootstrap tidak lagi publik (C1.13, PRD-001 FR-106).
+	if rec := get(e.a.Router, "/healthz", nil); rec.Code != http.StatusOK {
+		t.Errorf("/healthz publik = %d", rec.Code)
+	}
+	if rec := get(e.a.Router, "/api/bootstrap", nil); rec.Code != http.StatusUnauthorized || errCodeOf(t, rec) != "unauthenticated" {
+		t.Errorf("/api/bootstrap tanpa token = %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -140,7 +141,7 @@ func TestIdentity_TenantMismatchAndExpiredTokens(t *testing.T) {
 		t.Fatalf("tid berbeda: %d %s", rec.Code, rec.Body)
 	}
 	old, err := token.NewIssuer(token.IssuerConfig{
-		Keyring: e.a.Identity.Keyring, Issuer: identity.TokenIssuer, Audience: identity.TokenAudience,
+		Keyring: e.a.Identity.Keyring, Issuer: identity.ClaimIssuer, Audience: identity.ClaimAudience,
 		Now: func() time.Time { return time.Now().Add(-time.Hour) },
 	})
 	if err != nil {

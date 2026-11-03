@@ -54,7 +54,7 @@ func TestAPI_EnableDisableRoundTrip(t *testing.T) {
 		t.Fatalf("notes saat disabled = %d %s", rec.Code, rec.Body)
 	}
 	rec = call(h, "GET", "/api/platform/modules/acme.example/history", "")
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"actor":"api:dev"`) || !strings.Contains(rec.Body.String(), `"event":"disabled"`) {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"actor":"user:`+a.authedUser(t).ID+`"`) || !strings.Contains(rec.Body.String(), `"event":"disabled"`) {
 		t.Fatalf("history = %d %s", rec.Code, rec.Body)
 	}
 	// Respons aksi memuat modul dan operasi; no-op menghasilkan operations [].

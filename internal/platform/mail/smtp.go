@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	netsmtp "net/smtp"
 	"net/textproto"
 	"strconv"
@@ -105,7 +106,7 @@ type smtpSender struct {
 // balasan 4xx), dibatasi, dengan jeda yang berlipat dua; 5xx, galat sertifikat/TLS, dan galat autentikasi tidak di-retry.
 func NewSMTP(cfg config.SMTPConfig, opts ...SMTPOption) (sdkmail.Sender, error) {
 	switch {
-	case strings.TrimSpace(cfg.Host) == "" || strings.ContainsAny(cfg.Host, " \t\r\n/@:"):
+	case !validHost(cfg.Host):
 		return nil, errors.New("mail: host SMTP tidak sah")
 	case cfg.Port < 1 || cfg.Port > 65535:
 		return nil, errors.New("mail: port SMTP harus 1..65535")
@@ -134,6 +135,20 @@ func NewSMTP(cfg config.SMTPConfig, opts ...SMTPOption) (sdkmail.Sender, error) 
 	return s, nil
 }
 
+// validHost menerima nama host atau literal IP (IPv4 maupun IPv6 polos, tanpa kurung dan tanpa zona), konsisten dengan
+// ERP_SMTP_HOST di config ("nama host atau IP"). Menolak kosong, spasi/kontrol, skema, port, jalur, dan userinfo: titik
+// dua hanya sah sebagai bagian literal IPv6.
+func validHost(h string) bool {
+	if strings.TrimSpace(h) == "" || strings.ContainsAny(h, " \t\r\n/@[]%") {
+		return false
+	}
+	if strings.Contains(h, ":") {
+		a, err := netip.ParseAddr(h)
+		return err == nil && a.Is6() && a.Zone() == ""
+	}
+	return true
+}
+
 func sleepCtx(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
 	defer t.Stop()
@@ -156,7 +171,7 @@ func (s *smtpSender) Send(ctx context.Context, m sdkmail.Message) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		lastErr = s.deliver(ctx, m.To, data)
+		lastErr = sanitizeErr(s.deliver(ctx, m.To, data))
 		if lastErr == nil {
 			return nil
 		}
@@ -173,6 +188,26 @@ func (s *smtpSender) Send(ctx context.Context, m sdkmail.Message) error {
 		}
 	}
 	return fmt.Errorf("mail: kirim SMTP gagal: %w", lastErr)
+}
+
+// ReplyError adalah balasan error server SMTP (4xx/5xx) TANPA teks balasan. Teks balasan server sering menggemakan alamat
+// penerima ("<budi@x.co>: User unknown"), sehingga tidak boleh masuk galat yang dicatat atau dikembalikan (PII dilarang
+// di log; security-guidelines). Hanya kode yang dipertahankan.
+type ReplyError struct{ Code int }
+
+func (e *ReplyError) Error() string { return "balasan SMTP " + strconv.Itoa(e.Code) }
+
+// SMTPCode mengembalikan kode balasan SMTP (untuk pencatat yang hanya boleh memuat kode dan kelas galat).
+func (e *ReplyError) SMTPCode() int { return e.Code }
+
+// sanitizeErr mengganti *textproto.Error (yang memuat teks server) dengan *ReplyError. Galat lain dikembalikan apa
+// adanya (galat jaringan/TLS tidak memuat alamat penerima).
+func sanitizeErr(err error) error {
+	var tpe *textproto.Error
+	if err != nil && errors.As(err, &tpe) {
+		return &ReplyError{Code: tpe.Code}
+	}
+	return err
 }
 
 // retryable: hanya kegagalan sementara. Galat sertifikat/TLS, STARTTLS tak ditawarkan, autentikasi, dan 5xx tidak.
@@ -194,6 +229,10 @@ func retryable(err error) bool {
 	if errors.As(err, &tpe) {
 		return tpe.Code >= 400 && tpe.Code < 500
 	}
+	var re *ReplyError
+	if errors.As(err, &re) {
+		return re.Code >= 400 && re.Code < 500
+	}
 	var ne net.Error
 	if errors.As(err, &ne) {
 		return true
@@ -209,30 +248,31 @@ func (s *smtpSender) tlsConfig() *tls.Config {
 func (s *smtpSender) deliver(ctx context.Context, to []string, data []byte) (err error) {
 	addr := net.JoinHostPort(s.cfg.Host, strconv.Itoa(s.cfg.Port))
 	d := net.Dialer{Timeout: s.connectTimeout}
-	conn, err := d.DialContext(ctx, "tcp", addr)
+	raw, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return err
 	}
+	conn := raw // dapat dibungkus TLS di bawah; goroutine pembatal hanya memegang raw (tidak pernah ditimpa)
 	deadline := s.now().Add(s.opTimeout)
 	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
 		deadline = dl
 	}
-	_ = conn.SetDeadline(deadline)
+	_ = raw.SetDeadline(deadline)
 	// ctx batal: tutup sambungan agar pembacaan/penulisan yang menggantung segera berakhir.
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = conn.Close()
+			_ = raw.Close() // menutup soket TCP mentah juga menghentikan I/O TLS di atasnya
 		case <-done:
 		}
 	}()
 
 	if s.cfg.TLSMode == config.SMTPTLSImplicit {
-		tc := tls.Client(conn, s.tlsConfig())
+		tc := tls.Client(raw, s.tlsConfig())
 		if err := tc.HandshakeContext(ctx); err != nil {
-			_ = conn.Close()
+			_ = raw.Close()
 			return err
 		}
 		conn = tc
@@ -291,7 +331,13 @@ func (s *smtpSender) deliver(ctx context.Context, to []string, data []byte) (err
 	if err = w.Close(); err != nil {
 		return err
 	}
-	return c.Quit()
+	// Server sudah menjawab 250 untuk DATA: pesan DITERIMA. Kegagalan QUIT sesudahnya (EOF, putus) tidak boleh
+	// dilaporkan sebagai galat yang dapat di-retry, sebab pengiriman ulang mengirim surat ganda.
+	if qerr := c.Quit(); qerr != nil {
+		s.log.WarnContext(ctx, "mail: QUIT SMTP gagal setelah pesan diterima server; pesan dianggap terkirim", "error", sanitizeErr(qerr))
+		_ = c.Close()
+	}
+	return nil
 }
 
 // pickAuth memilih PLAIN (utama) atau LOGIN menurut yang diiklankan server.

@@ -50,8 +50,13 @@ func (r *recorder) Handle(method, path, permission string, h http.Handler, opts 
 	cfg, optsOK := r.resolveOptions(method, path, opts)
 	valid = valid && optsOK
 	switch {
+	case permission == "" && cfg.Authenticated:
+		// Terautentikasi-saja: sengaja tanpa permission (module.Authenticated).
 	case permission == "":
-		r.problem(CodePermissionMissing, "route %s %s tidak punya permission; gunakan Public bila memang publik", method, path)
+		r.problem(CodePermissionMissing, "route %s %s tidak punya permission; gunakan Public bila memang publik, atau Authenticated bila cukup login", method, path)
+		valid = false
+	case cfg.Authenticated:
+		r.problem(CodeInvalidRouteOption, "route %s %s: Authenticated hanya untuk route tanpa permission (permission %q diberikan)", method, path, permission)
 		valid = false
 	case !r.caps[permission]:
 		r.problem(CodePermissionUndeclared, "permission %q pada route %s %s tidak ada di capabilities manifest", permission, method, path)
@@ -63,7 +68,7 @@ func (r *recorder) Handle(method, path, permission string, h http.Handler, opts 
 	r.routes = append(r.routes, RouteInfo{
 		Module: r.key, Method: method, Pattern: "/api/" + r.slug + path,
 		Permission: permission, Handler: h, MaxBodyBytes: cfg.MaxBodyBytes, Classification: cfg.Classification,
-		RequireMFA: cfg.RequireMFA,
+		RequireMFA: cfg.RequireMFA, Authenticated: cfg.Authenticated,
 	})
 }
 
@@ -72,6 +77,10 @@ func (r *recorder) Public(method, path string, h http.Handler, opts ...module.Ro
 	cfg, optsOK := r.resolveOptions(method, path, opts)
 	if cfg.RequireMFA {
 		r.problem(CodeInvalidRouteOption, "route %s %s: RequireMFA tidak berlaku pada route Public (tanpa autentikasi)", method, path)
+		optsOK = false
+	}
+	if cfg.Authenticated {
+		r.problem(CodeInvalidRouteOption, "route %s %s: Authenticated tidak berlaku pada route Public (gunakan Handle dengan permission kosong)", method, path)
 		optsOK = false
 	}
 	if !valid || !optsOK {

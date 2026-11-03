@@ -12,6 +12,10 @@
 // token). Semua kegagalan token menghasilkan ErrInvalidRefresh yang sama (401 generik); nilai token tidak pernah
 // masuk log atau galat, dan RefreshToken menyamarkan dirinya pada fmt/slog.
 //
+// Upgrade (kenaikan sesi ke otp, PRD-001 Q27) mengganti refresh token belum terpakai milik sesi dengan satu token
+// baru dalam family yang sama, atomik bersama kenaikan AMR. Token pra-upgrade menjadi "tidak dikenal": ditolak
+// seragam tanpa mencabut sesi; leluhur yang sudah terpakai tetap memicu deteksi reuse.
+//
 // Rotate memeriksa header Origin lebih dulu (cek CSRF cookie refresh): hilang atau lintas-origin
 // ditolak (ErrOriginNotAllowed) tanpa menyentuh token.
 //
@@ -46,6 +50,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -98,6 +103,9 @@ var (
 	ErrNoTenant = errors.New("session: context tanpa tenant")
 	// ErrInvalidInput berarti masukan Start tidak memenuhi aturan bentuk.
 	ErrInvalidInput = errors.New("session: masukan tidak valid")
+	// ErrAlreadyUpgraded berarti Upgrade tidak menerapkan apa pun: sesi sudah memuat faktor itu, atau upgrade
+	// serentak lain menang (tepat satu pemanggil berhasil). Tidak ada token baru yang terbit.
+	ErrAlreadyUpgraded = errors.New("session: sesi sudah dinaikkan")
 )
 
 // Session adalah sesi per perangkat (id = klaim sid).
@@ -136,6 +144,7 @@ type Store interface {
 	RevokeSession(ctx context.Context, t tenancy.TenantID, id, reason string, at time.Time) (bool, error)
 	RevokeUserSessions(ctx context.Context, t tenancy.TenantID, userID, exceptSessionID, reason string, at time.Time) ([]string, error)
 	RevokeSessionsOfFamily(ctx context.Context, t tenancy.TenantID, familyID, reason string, at time.Time) ([]string, error)
+	UpgradeSession(ctx context.Context, t tenancy.TenantID, sessionID string, oldAMR, newAMR []string, next store.RefreshToken) (bool, error)
 }
 
 var _ Store = (*store.Store)(nil)
@@ -249,8 +258,15 @@ func truncateUTF8(s string, max int) string {
 	return s
 }
 
-// userActive: anggota aktif tenant dengan status users.active.
+// userActive: anggota aktif tenant dengan status users.active (syarat membuat sesi baru: login).
 func (s *Service) userActive(ctx context.Context, t tenancy.TenantID, userID string) (bool, error) {
+	return s.userUsable(ctx, t, userID, false)
+}
+
+// userUsable: anggota aktif tenant dengan status users.active; allowLocked juga menerima users.locked. Status locked
+// hanya menolak LOGIN baru dan TIDAK mencabut sesi yang sudah ada (PRD-001 Q30 butir 4, 4 Nov 2026); pencabutan sesi
+// khusus status disabled (dan keanggotaan tenant nonaktif), jadi Rotate memakai allowLocked=true sedangkan Start tidak.
+func (s *Service) userUsable(ctx context.Context, t tenancy.TenantID, userID string, allowLocked bool) (bool, error) {
 	u, err := s.st.GetUser(ctx, t, userID)
 	if errors.Is(err, store.ErrNotFound) {
 		return false, nil
@@ -258,7 +274,7 @@ func (s *Service) userActive(ctx context.Context, t tenancy.TenantID, userID str
 	if err != nil {
 		return false, wrap("muat pengguna", err)
 	}
-	if u.Status != store.UserActive {
+	if u.Status != store.UserActive && (!allowLocked || u.Status != store.UserLocked) {
 		return false, nil
 	}
 	m, err := s.st.GetMembership(ctx, t, userID)
@@ -327,7 +343,8 @@ func (s *Service) Start(ctx context.Context, in StartInput) (Session, RefreshTok
 // Rotate menukar token refresh dengan token baru (rotasi tiap pakai). origin adalah nilai header Origin
 // permintaan (kosong bila hilang). Semua kegagalan token mengembalikan ErrInvalidRefresh; Origin salah
 // mengembalikan ErrOriginNotAllowed tanpa menyentuh token. Reuse atau kalah balapan mencabut family dan sesinya.
-// Pengguna harus masih aktif (bila tidak, sesi dicabut).
+// Pengguna harus masih aktif atau locked (disabled atau keanggotaan nonaktif: semua sesinya dicabut; locked tidak
+// mencabut sesi, PRD-001 Q30 butir 4).
 func (s *Service) Rotate(ctx context.Context, rawRefresh, origin string) (Session, RefreshToken, error) {
 	if s.origin == nil || !s.origin(origin) {
 		return Session{}, RefreshToken{}, ErrOriginNotAllowed
@@ -361,7 +378,7 @@ func (s *Service) Rotate(ctx context.Context, rawRefresh, origin string) (Sessio
 	if sess.RevokedAt != nil || !now.Before(sess.AbsoluteExpiresAt) || !now.Before(tok.ExpiresAt) {
 		return Session{}, RefreshToken{}, ErrInvalidRefresh
 	}
-	active, err := s.userActive(ctx, t, sess.UserID)
+	active, err := s.userUsable(ctx, t, sess.UserID, true) // locked: sesi yang ada tetap hidup (Q30 butir 4)
 	if err != nil {
 		return Session{}, RefreshToken{}, err
 	}
@@ -387,9 +404,77 @@ func (s *Service) Rotate(ctx context.Context, rawRefresh, origin string) (Sessio
 		return Session{}, RefreshToken{}, wrap("rotasi refresh token", err)
 	}
 	if !won {
+		// Token lenyap di antara pemuatan dan rotasi (Upgrade menggantikannya): bukan reuse, sesi tidak dicabut.
+		if _, ferr := s.st.FindRefreshTokenByHash(ctx, t, hash); errors.Is(ferr, store.ErrNotFound) {
+			return Session{}, RefreshToken{}, ErrInvalidRefresh
+		}
 		return Session{}, RefreshToken{}, s.reuse(ctx, t, tok, "lost_race", now)
 	}
 	return sess, RefreshToken{Value: raw, FamilyID: tok.FamilyID, ExpiresAt: exp}, nil
+}
+
+// Upgrade menaikkan sesi userID dengan faktor addAMR (mis. "otp" setelah MFA terverifikasi; pemanggil yang
+// memverifikasinya) dan MENGGANTI token refresh sesi dalam satu transaksi atomik (Store.UpgradeSession): token refresh
+// pra-upgrade (milik cookie lama, mungkin tercuri sebelum MFA) mati dan token baru pada family yang sama
+// dikembalikan untuk cookie baru. Token pra-upgrade ditolak sebagai ErrInvalidRefresh tanpa mencabut sesi (bukan
+// reuse); reuse leluhur yang sudah terpakai tetap mencabut family. userID HARUS berasal dari sumber tepercaya (Principal);
+// sesi milik pengguna lain, tak ada, tercabut, atau kedaluwarsa menghasilkan ErrSessionNotFound. Sesi yang sudah memuat
+// addAMR atau kalah balapan upgrade: ErrAlreadyUpgraded (tepat satu pemanggil serentak berhasil).
+func (s *Service) Upgrade(ctx context.Context, userID, sessionID, addAMR string) (Session, RefreshToken, error) {
+	if addAMR == "" || len(addAMR) > 32 {
+		return Session{}, RefreshToken{}, ErrInvalidInput
+	}
+	t, err := tenantOf(ctx)
+	if err != nil {
+		return Session{}, RefreshToken{}, err
+	}
+	now := s.clock()
+	sess, err := s.st.GetSession(ctx, t, sessionID)
+	if errors.Is(err, store.ErrNotFound) {
+		return Session{}, RefreshToken{}, ErrSessionNotFound
+	}
+	if err != nil {
+		return Session{}, RefreshToken{}, wrap("muat sesi", err)
+	}
+	if userID == "" || sess.UserID != userID || sess.RevokedAt != nil || !now.Before(sess.AbsoluteExpiresAt) {
+		return Session{}, RefreshToken{}, ErrSessionNotFound
+	}
+	if slices.Contains(sess.AMR, addAMR) {
+		return Session{}, RefreshToken{}, ErrAlreadyUpgraded
+	}
+	newAMR := append(slices.Clone(sess.AMR), addAMR)
+	rid, err1 := newID()
+	fam, err2 := newID() // cadangan; Store memakai family yang sudah ada
+	raw, nh, err3 := newRefreshSecret()
+	if err := errors.Join(err1, err2, err3); err != nil {
+		return Session{}, RefreshToken{}, err
+	}
+	exp := now.Add(RefreshSlidingTTL)
+	if exp.After(sess.AbsoluteExpiresAt) {
+		exp = sess.AbsoluteExpiresAt
+	}
+	next := store.RefreshToken{ID: rid, SessionID: sess.ID, FamilyID: fam, TokenHash: nh, CreatedAt: now, ExpiresAt: exp}
+	won, err := s.st.UpgradeSession(ctx, t, sess.ID, sess.AMR, newAMR, next)
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidArgument) {
+			return Session{}, RefreshToken{}, ErrInvalidInput
+		}
+		return Session{}, RefreshToken{}, wrap("naikkan sesi", err)
+	}
+	if !won {
+		cur, gerr := s.st.GetSession(ctx, t, sess.ID)
+		if gerr == nil && cur.RevokedAt != nil {
+			return Session{}, RefreshToken{}, ErrSessionNotFound
+		}
+		return Session{}, RefreshToken{}, ErrAlreadyUpgraded
+	}
+	sess.AMR = newAMR
+	// family token baru = family sesi (Store menentukannya); dibaca ulang agar RefreshToken.FamilyID akurat.
+	famID := fam
+	if got, ferr := s.st.FindRefreshTokenByHash(ctx, t, nh); ferr == nil {
+		famID = got.FamilyID
+	}
+	return sess, RefreshToken{Value: raw, FamilyID: famID, ExpiresAt: exp}, nil
 }
 
 // reuse mencabut seluruh family (dan sesinya), mencatat event keamanan tanpa token, dan mengembalikan
@@ -505,8 +590,9 @@ func (s *Service) RevokeAllForUser(ctx context.Context, userID string) error {
 	return s.revokeAll(ctx, userID, ReasonRevokeAll)
 }
 
-// OnUserDisabled adalah hook yang dipanggil saat pengguna dinonaktifkan atau dikunci: semua sesinya dicabut segera
-// (Rotate juga menolak pengguna yang tidak aktif sebagai pengaman bila hook terlewat).
+// OnUserDisabled adalah hook yang dipanggil saat pengguna dinonaktifkan (status disabled): semua sesinya dicabut segera
+// (Rotate juga menolak pengguna yang tidak aktif sebagai pengaman bila hook terlewat). Pengguna yang hanya dikunci
+// (locked) TIDAK dicabut sesinya (PRD-001 Q30 butir 4).
 func (s *Service) OnUserDisabled(ctx context.Context, userID string) error {
 	return s.revokeAll(ctx, userID, ReasonUserDisabled)
 }

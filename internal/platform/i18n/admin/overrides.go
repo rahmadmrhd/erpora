@@ -14,6 +14,7 @@ import (
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/i18n/store"
+	"erpora/internal/platform/identity"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/tenancy"
 	"erpora/sdk/httpx"
@@ -29,9 +30,6 @@ const (
 	PermRead   = "platform.i18n.read"
 	PermManage = "platform.i18n.manage"
 )
-
-// Actor adalah actor audit untuk operasi lewat API sebelum PRD-001 (autentikasi) tersedia.
-const Actor = "api:dev"
 
 const (
 	overridesPrefix = "/api/platform/i18n/overrides/"
@@ -174,9 +172,23 @@ type putBody struct {
 	Message *string `json:"message"`
 }
 
+// requireActor menurunkan aktor audit dari Principal request (`user:<id>`). Authenticate sudah menolak request tanpa
+// token; tanpa Principal di sini (rantai middleware salah rakit) jawabannya 401, tidak pernah aktor bawaan.
+func requireActor(w http.ResponseWriter, r *http.Request) (string, bool) {
+	actor, ok := identity.ActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, r, http.StatusUnauthorized, "unauthenticated", "autentikasi diperlukan", nil)
+	}
+	return actor, ok
+}
+
 func (a *API) putOverride(w http.ResponseWriter, r *http.Request) {
 	be, t, ok := a.ready(w, r)
 	if !ok || !requireJSON(w, r) {
+		return
+	}
+	actor, ok := requireActor(w, r)
+	if !ok {
 		return
 	}
 	body, err := httpx.DecodeJSON[putBody](w, r)
@@ -191,7 +203,7 @@ func (a *API) putOverride(w http.ResponseWriter, r *http.Request) {
 	}
 	ns, loc, key := r.PathValue("namespace"), r.PathValue("locale"), r.PathValue("key")
 	_, err = be.SetOverride(r.Context(), t, i18n.Override{Namespace: ns, Locale: loc, Key: key, Message: *body.Message},
-		Actor, ifMatchPrecondition(r.Header.Get("If-Match")))
+		actor, ifMatchPrecondition(r.Header.Get("If-Match")))
 	if err != nil {
 		writeOverrideError(w, r, err)
 		return
@@ -211,8 +223,12 @@ func (a *API) deleteOverride(w http.ResponseWriter, r *http.Request) {
 	if !ok || !requireJSON(w, r) {
 		return
 	}
+	actor, ok := requireActor(w, r)
+	if !ok {
+		return
+	}
 	existed, err := be.DeleteOverride(r.Context(), t, r.PathValue("namespace"), r.PathValue("locale"), r.PathValue("key"),
-		Actor, ifMatchPrecondition(r.Header.Get("If-Match")))
+		actor, ifMatchPrecondition(r.Header.Get("If-Match")))
 	if err != nil {
 		writeOverrideError(w, r, err)
 		return

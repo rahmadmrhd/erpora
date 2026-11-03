@@ -40,6 +40,7 @@ type attemptRow struct {
 	user, ip, kind string
 	success        bool
 	at             time.Time
+	id             int64
 }
 
 // fakeStore memenuhi AttemptStore dan LoginAccounts dengan semantik yang sama seperti store sungguhan (kegagalan
@@ -53,6 +54,7 @@ type fakeStore struct {
 	byEmail  map[string]string      // email ternormalisasi -> id
 	delay    time.Duration          // latensi DB tiruan per panggilan
 	failOn   map[string]error       // nama metode -> galat yang dikembalikan
+	nextID   int64
 }
 
 func newFakeStore() *fakeStore {
@@ -62,7 +64,7 @@ func newFakeStore() *fakeStore {
 func (f *fakeStore) addUser(email, hash, status string) store.User {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	u := &store.User{ID: uuid.NewString(), Email: store.NormalizeEmail(email), PasswordHash: hash, Status: status}
+	u := &store.User{ID: uuid.NewString(), Email: store.NormalizeEmail(email), PasswordHash: hash, Status: status, MembershipStatus: store.MembershipActive}
 	f.users[u.ID] = u
 	f.byEmail[u.Email] = u.ID
 	return *u
@@ -145,7 +147,64 @@ func (f *fakeStore) RecordLoginAttempt(_ context.Context, _ tenancy.TenantID, us
 	if _, ok := f.users[userID]; !ok {
 		return store.ErrNotFound
 	}
-	f.attempts = append(f.attempts, attemptRow{userID, ip, kind, success, at})
+	f.attempts = append(f.attempts, attemptRow{user: userID, ip: ip, kind: kind, success: success, at: at})
+	return nil
+}
+
+// pairStateLocked menghitung keadaan pasangan seperti kueri store sungguhan; pemanggil memegang f.mu.
+func (f *fakeStore) pairStateLocked(userID, ip string, since time.Time) store.PairState {
+	var lastSuccess time.Time
+	for _, a := range f.attempts {
+		if a.user == userID && a.ip == ip && a.success && a.at.After(lastSuccess) {
+			lastSuccess = a.at
+		}
+	}
+	var st store.PairState
+	for _, a := range f.attempts {
+		if a.user == userID && a.ip == ip && !a.success && a.at.After(lastSuccess) && !a.at.Before(since) {
+			st.ConsecutiveFailures++
+			if st.LastFailureAt == nil || a.at.After(*st.LastFailureAt) {
+				at := a.at
+				st.LastFailureAt = &at
+			}
+		}
+	}
+	return st
+}
+
+// ReserveLoginAttempt meniru store sungguhan: membaca keadaan, memutuskan, dan menyisipkan dalam SATU bagian kritis
+// (setara kunci advisory per pasangan).
+func (f *fakeStore) ReserveLoginAttempt(_ context.Context, _ tenancy.TenantID, userID, ip, kind string, at, since time.Time, admit func(store.PairState) bool) (store.PairState, bool, int64, error) {
+	if err := f.enter("ReserveLoginAttempt"); err != nil {
+		return store.PairState{}, false, 0, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	before := f.pairStateLocked(userID, ip, since)
+	if !admit(before) {
+		return before, false, 0, nil
+	}
+	if _, ok := f.users[userID]; !ok {
+		return before, false, 0, store.ErrNotFound
+	}
+	f.nextID++
+	f.attempts = append(f.attempts, attemptRow{user: userID, ip: ip, kind: kind, at: at, id: f.nextID})
+	return before, true, f.nextID, nil
+}
+
+func (f *fakeStore) ReleaseLoginAttempt(_ context.Context, _ tenancy.TenantID, userID string, id int64) error {
+	if err := f.enter("ReleaseLoginAttempt"); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	kept := f.attempts[:0]
+	for _, a := range f.attempts {
+		if a.id != id || a.user != userID || a.success {
+			kept = append(kept, a)
+		}
+	}
+	f.attempts = kept
 	return nil
 }
 

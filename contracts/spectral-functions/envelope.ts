@@ -1,4 +1,5 @@
 // Rule amplop respons, error standar, dan pagination (api-guidelines §4.2, §6, §8).
+import { isWellKnownPath } from "./paths";
 import {
   asArr,
   asObj,
@@ -48,14 +49,15 @@ export function flatten(root: unknown, schema: Obj, depth = 0): { props: Obj; re
 }
 
 /**
- * Operasi JWKS platform mengikuti RFC 7517 ({"keys": [...]}), bukan amplop {"data": ...}: satu-satunya pengecualian,
- * ditandai x-erp-raw-response: true dan hanya diterima pada kontrak platform untuk path JWKS (PRD-001 FR-102).
+ * Dokumen standar /.well-known/* pada kontrak platform (saat ini JWKS, RFC 7517: {"keys": [...]}) mengikuti bentuk
+ * standarnya, bukan amplop {"data": ...}: satu-satunya pengecualian, ditandai x-erp-raw-response: true dan hanya
+ * diterima pada kontrak platform (PRD-001 FR-102, Q25).
  */
 function isRawResponseException(op: Operation): boolean {
   return (
     op.node["x-erp-raw-response"] === true &&
     ctx().target === "platform" &&
-    op.path === "/.well-known/jwks.json"
+    isWellKnownPath(op.path)
   );
 }
 

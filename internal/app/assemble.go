@@ -28,18 +28,35 @@ import (
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/modules/store"
 	"erpora/internal/platform/observability"
+	"erpora/internal/platform/settings"
 	"erpora/internal/platform/tenancy"
+	sdkmail "erpora/sdk/mail"
 	"erpora/web"
 )
 
 // assembleOption mengubah perakitan (tes dan, kelak, pemasangan settings.Service).
 type assembleOption func(*assembleOptions)
 
-type assembleOptions struct{ publicURL PublicURLSource }
+type assembleOptions struct {
+	publicURL PublicURLSource
+	settings  *settings.Service
+	mail      sdkmail.Sender
+}
 
-// withPublicURLSource memasang sumber URL publik (bawaan: defaultPublicURLSource).
+// withPublicURLSource menimpa sumber URL publik (bawaan: settings platform terikat tenant, newSettingsURLSource).
 func withPublicURLSource(s PublicURLSource) assembleOption {
 	return func(o *assembleOptions) { o.publicURL = s }
+}
+
+// withSettings memasang settings.Service yang sudah dibuat pemanggil (Run memakainya juga untuk pemeriksaan URL
+// publik production sebelum perakitan); bawaan: dibuat di assemble.
+func withSettings(s *settings.Service) assembleOption {
+	return func(o *assembleOptions) { o.settings = s }
+}
+
+// withMailSender menimpa pengirim surat (tes memakai pengirim tiruan); bawaan: newMailSender sesuai ERP_MAIL_DRIVER.
+func withMailSender(m sdkmail.Sender) assembleOption {
+	return func(o *assembleOptions) { o.mail = m }
 }
 
 // assembly adalah hasil perakitan platform + lifecycle modul untuk satu proses serve.
@@ -93,12 +110,20 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	for _, o := range opts {
 		o(&ao)
 	}
-	if ao.publicURL == nil {
-		ao.publicURL = defaultPublicURLSource(cfg)
-	}
 	tid, err := defaultTenant(ctx, cfg, db)
 	if err != nil {
 		return nil, err
+	}
+	if ao.settings == nil {
+		ao.settings = newSettingsService(cfg, db, tid)
+	}
+	if ao.publicURL == nil {
+		ao.publicURL = newSettingsURLSource(cfg, ao.settings, tid)
+	}
+	if ao.mail == nil {
+		if ao.mail, err = newMailSender(cfg, log); err != nil {
+			return nil, &ExitError{Code: 2, Err: err}
+		}
 	}
 	snap := runtime.NewSnapshot()
 	notifier := runtime.NewLocalNotifier()
@@ -111,7 +136,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	}
 	// Mesin identitas dirakit sebelum modul: autentikasi nyata menggantikan stub authN sepenuhnya (tanpa flag untuk
 	// mematikannya); ERP_AUTHZ_STUB hanya menentukan keputusan permission sampai C2 (K-C1.9).
-	idStack, err := newIdentityStack(ctx, cfg, log, db, tid, ao.publicURL)
+	idStack, err := newIdentityStack(ctx, cfg, log, db, tid, ao.publicURL, identityExtras{Settings: ao.settings, Mail: ao.mail})
 	if err != nil {
 		return nil, fmt.Errorf("mesin identitas: %w", err)
 	}
@@ -136,6 +161,13 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	})
 	go svc.Watch(ctx, tid, lifecycle.DefaultPollInterval)
 
+	// Keputusan bertipe: Principal wajib, aturan MFA ADR-0013 §4, lalu permission lewat stub (sampai C2). Daftar Desk
+	// tetap memakai stub (Allow bool) karena hanya menyaring menu; route Desk sendiri tetap lewat TypedAuthorizer.
+	stub := authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log)
+	authz, err := runtime.NewTypedAuthorizer(stub, mfaState{idStack.MFAState}, log)
+	if err != nil {
+		return nil, err
+	}
 	router := httpserver.NewRouter(httpserver.Deps{
 		Logger:     log,
 		Tracer:     prov.Tracer,
@@ -148,11 +180,12 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		// Deteksi N+1 hanya di development (ERP_DB_NPLUSONE_THRESHOLD, 0 = mati).
 		NPlusOneThreshold: cfg.DBNPlusOneThreshold,
 		I18n:              i18nSvc,
-		Bootstrap:         bootstrapFrom(reg, snap, i18nSvc, cfg.ModulesAdminAPIEnabled()),
+		Bootstrap:         withCurrentUser(bootstrapFrom(reg, snap, i18nSvc, cfg.ModulesAdminAPIEnabled()), idStack.Store, log),
 		// Urutan ADR-0013 §4: tenantContext, batas IP, Authenticate, batas principal, permission.
 		Authenticate:   idStack.authenticate(log),
 		IPLimit:        identity.IPLimit(idStack.IPLimiter),
 		PrincipalLimit: identity.PrincipalLimit(idStack.Principals),
+		TrustedProxies: cfg.TrustedProxies,
 	})
 	// JWKS publik di luar /api/{slug} (K-C1.8): hanya kunci pending/active/retiring, Cache-Control max-age 300.
 	router.Handle(jwksRoute, token.JWKSHandler(idStack.Keyring), httpserver.WithoutTenant(), httpserver.Public())
@@ -160,7 +193,6 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	apis.I18n.Bind(i18nSvc)
 	// Daftar Desk memakai Authorizer yang sama dengan permission route (stub sampai PRD-001): penyaringan menu
 	// hanya lewat Authorizer.Allow, backend adalah otoritas.
-	stub := authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log)
 	apis.Desks.Bind(desks.NewService(desks.Deps{
 		Registry: reg, Status: snap, Authz: stub, Overrides: desksstore.New(database.ControlDB{DB: db}), Log: log,
 	}))
@@ -175,12 +207,6 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	mountOpts = append(mountOpts, runtime.WithServices(services))
 	if prov.Meter != nil {
 		mountOpts = append(mountOpts, runtime.WithMeter(prov.Meter.Meter("erpora/modules")))
-	}
-	// Keputusan bertipe: Principal wajib, aturan MFA ADR-0013 §4, lalu permission lewat stub (sampai C2). Daftar Desk
-	// tetap memakai stub (Allow bool) karena hanya menyaring menu; route Desk sendiri tetap lewat TypedAuthorizer.
-	authz, err := runtime.NewTypedAuthorizer(stub, mfaState{idStack.MFAState}, log)
-	if err != nil {
-		return nil, err
 	}
 	runtime.Mount(router, reg, snap, authz, log, mountOpts...)
 	registerTestRoutes(router)

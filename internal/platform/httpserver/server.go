@@ -5,8 +5,8 @@ import (
 	"context"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -52,6 +52,9 @@ type Deps struct {
 	// IPLimit membungkus route ber-RateLimited() (endpoint auth/token): batas laju per IP klien, setelah tenantContext
 	// dan SEBELUM Authenticate; nil = tanpa batas.
 	IPLimit func(http.Handler) http.Handler
+	// TrustedProxies (ERP_TRUSTED_PROXIES) adalah proxy yang boleh dipercaya melaporkan IP klien lewat X-Forwarded-For
+	// (lihat resolveClientIP). Kosong (bawaan) = IP klien selalu alamat peer TCP.
+	TrustedProxies []netip.Prefix
 	// PrincipalLimit membungkus route ber-RateLimited() yang non-Public: batas laju per principal, SETELAH Authenticate;
 	// nil = tanpa batas.
 	PrincipalLimit func(http.Handler) http.Handler
@@ -98,9 +101,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	id := requestIDFor(req)
 	setBaseHeaders(w.Header(), id)
 	ctx := observability.WithRequestID(req.Context(), id)
-	// IP klien = alamat peer TCP saja. X-Forwarded-For tidak dipercaya sampai konfigurasi proxy tepercaya ada;
-	// di balik reverse proxy semua klien tampak berasal dari IP proxy (lihat docs/operations/deployment.md).
-	ctx = httpx.WithClientIP(ctx, peerIP(req))
+	// IP klien = peer TCP, atau hop X-Forwarded-For pertama yang bukan proxy tepercaya bila peer termasuk
+	// ERP_TRUSTED_PROXIES (resolveClientIP). Batas laju IP dan lockout bergantung pada ini (docs/operations/deployment.md).
+	ctx = httpx.WithClientIP(ctx, resolveClientIP(req, r.deps.TrustedProxies))
 	r.mux.ServeHTTP(w, req.WithContext(ctx))
 }
 
@@ -190,13 +193,4 @@ func (r *Router) nPlusOneThreshold() int {
 		return r.deps.NPlusOneThreshold
 	}
 	return 0
-}
-
-// peerIP mengembalikan host dari r.RemoteAddr ("" bila tidak dapat diurai).
-func peerIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return ""
-	}
-	return host
 }

@@ -76,6 +76,8 @@ type fakeSMTP struct {
 	wantUser, wantPass string   // kredensial yang diterima; kosong = auth tidak diperlukan
 	rcptReply          string   // balasan RCPT (default 250 OK); mis. "550 no such user"
 	dataReplies        []string // balasan akhir DATA per percobaan berurutan (kosong = 250 OK); mis. "451 try again"
+	dropAfterData      bool     // putus tanpa menjawab QUIT setelah menjawab 250 untuk DATA
+	listen             string   // alamat listen (default 127.0.0.1:0)
 
 	mu       sync.Mutex
 	accepted int
@@ -87,18 +89,23 @@ type fakeSMTP struct {
 
 func newFakeSMTP(t *testing.T, cert tls.Certificate, mod func(*fakeSMTP)) *fakeSMTP {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &fakeSMTP{ln: ln, cert: cert, offerSTARTTLS: true, authMechs: []string{"PLAIN", "LOGIN"}}
+	s := &fakeSMTP{cert: cert, offerSTARTTLS: true, authMechs: []string{"PLAIN", "LOGIN"}}
 	if mod != nil {
 		mod(s)
 	}
+	listen := s.listen
+	if listen == "" {
+		listen = "127.0.0.1:0"
+	}
+	ln, err := net.Listen("tcp", listen)
+	if err != nil {
+		t.Skipf("tidak dapat listen di %s: %v", listen, err)
+	}
+	s.ln = ln
 	s.wg.Add(1)
 	go s.serve()
 	t.Cleanup(func() {
-		_ = ln.Close()
+		_ = s.ln.Close()
 		s.wg.Wait()
 	})
 	return s
@@ -259,6 +266,9 @@ func (s *fakeSMTP) handle(raw net.Conn) {
 			s.mails = append(s.mails, receivedMail{From: from, To: rcpt, Data: sb.String()})
 			s.mu.Unlock()
 			w("250 queued")
+			if s.dropAfterData {
+				return
+			}
 		case verb == "RSET", verb == "NOOP":
 			w("250 ok")
 		case verb == "QUIT":

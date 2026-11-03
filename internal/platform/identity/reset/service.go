@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/textproto"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -70,6 +72,7 @@ func (e *PolicyError) Error() string {
 // Store adalah bagian *store.Store yang dipakai layanan (paket ini bebas GORM).
 type Store interface {
 	FindUserByEmail(ctx context.Context, t tenancy.TenantID, email string) (store.User, error)
+	GetUser(ctx context.Context, t tenancy.TenantID, userID string) (store.User, error)
 	GetPreferences(ctx context.Context, t tenancy.TenantID, userID string) (store.Preferences, error)
 	InvalidatePasswordResets(ctx context.Context, t tenancy.TenantID, userID string, at time.Time) (int64, error)
 	InsertPasswordReset(ctx context.Context, t tenancy.TenantID, r store.PasswordReset) error
@@ -354,19 +357,12 @@ func (s *Service) process(ctx context.Context, t tenancy.TenantID, email, locale
 		return
 	}
 	now := s.now()
-	// Batalkan tautan lama LEBIH DULU, baru sisipkan yang baru (urutan terbalik akan membatalkan tautan baru).
-	if _, err := s.st.InvalidatePasswordResets(ctx, t, u.ID, now); err != nil {
-		s.log.ErrorContext(ctx, "reset: gagal membatalkan tautan lama", "user_id", u.ID, "error", err)
-		return
-	}
+	// Semua yang dapat gagal tanpa efek samping dikerjakan SEBELUM menyentuh tautan lama: token, render, dan validasi
+	// alamat penerima dengan aturan yang sama dengan pengirim (sdkmail.Validate). Alamat yang tidak dapat dikirimi
+	// (mis. data lama yang tersimpan sebelum aturan ketat) tidak boleh menghanguskan tautan yang masih berlaku.
 	raw, hash, err := newToken()
 	if err != nil {
 		s.log.ErrorContext(ctx, "reset: gagal membuat token", "user_id", u.ID, "error", err)
-		return
-	}
-	rec := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash[:], CreatedAt: now, ExpiresAt: now.Add(TokenTTL)}
-	if err := s.st.InsertPasswordReset(ctx, t, rec); err != nil {
-		s.log.ErrorContext(ctx, "reset: gagal menyimpan tautan", "user_id", u.ID, "error", err)
 		return
 	}
 	prefLocale := ""
@@ -381,14 +377,43 @@ func (s *Service) process(ctx context.Context, t tenancy.TenantID, email, locale
 		return
 	}
 	msg.To = []string{u.Email}
+	if err := sdkmail.Validate(msg); err != nil {
+		// Pesan galat sdkmail tidak memuat alamat; tetap hanya user_id yang dicatat. Dari luar tak terbedakan.
+		s.log.WarnContext(ctx, "reset: alamat email akun tidak dapat dikirimi; tautan tidak diterbitkan dan tautan lama dipertahankan", "user_id", u.ID, "error", err)
+		return
+	}
+	// Batalkan tautan lama LEBIH DULU, baru sisipkan yang baru (urutan terbalik akan membatalkan tautan baru).
+	if _, err := s.st.InvalidatePasswordResets(ctx, t, u.ID, now); err != nil {
+		s.log.ErrorContext(ctx, "reset: gagal membatalkan tautan lama", "user_id", u.ID, "error", err)
+		return
+	}
+	rec := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash[:], CreatedAt: now, ExpiresAt: now.Add(TokenTTL)}
+	if err := s.st.InsertPasswordReset(ctx, t, rec); err != nil {
+		s.log.ErrorContext(ctx, "reset: gagal menyimpan tautan", "user_id", u.ID, "error", err)
+		return
+	}
 	if err := s.sender.Send(ctx, msg); err != nil {
-		s.log.ErrorContext(ctx, "reset: gagal mengirim email reset", "user_id", u.ID, "error", err)
+		s.log.ErrorContext(ctx, "reset: gagal mengirim email reset", "user_id", u.ID, "error", sendErrValue(err))
 	}
 }
 
+// sendErrValue menyiapkan galat pengiriman untuk log tanpa PII: balasan server SMTP (teks sering menggemakan alamat
+// penerima) hanya dicatat kodenya; galat lain (jaringan, validasi) tidak memuat alamat dan dicatat apa adanya.
+func sendErrValue(err error) string {
+	var tpe *textproto.Error
+	if errors.As(err, &tpe) {
+		return "balasan SMTP " + strconv.Itoa(tpe.Code)
+	}
+	var coded interface{ SMTPCode() int }
+	if errors.As(err, &coded) {
+		return "balasan SMTP " + strconv.Itoa(coded.SMTPCode())
+	}
+	return err.Error()
+}
+
 // Complete menyelesaikan reset: token dari tautan dan sandi baru. Urutan: token cacat (tanpa menyentuh DB) -> hash
-// token -> cari (tak ada/terpakai/kedaluwarsa = ErrInvalidToken seragam) -> kebijakan sandi (*PolicyError; tautan tidak
-// terpakai) -> hash argon2id lewat pembatas hash (argon2 baru berjalan setelah token nyata ditemukan, sehingga token
+// token -> kebijakan sandi (*PolicyError; tautan tidak terpakai; diperiksa SEBELUM mencari tautan agar probing token dengan
+// sandi lemah tidak membuka status token) -> cari (tak ada/terpakai/kedaluwarsa/pemilik disabled = ErrInvalidToken seragam) -> hash argon2id lewat pembatas hash (argon2 baru berjalan setelah token nyata ditemukan, sehingga token
 // acak tidak memperkuat DoS; 429 lewat guard.AsRateLimited, tautan tidak terpakai) -> store.ResetPassword atomik
 // (pakai tautan sekali, ganti hash, buka locked, cabut SEMUA sesi, hapus percobaan; kalah balapan = ErrInvalidToken)
 // -> session.MarkRevoked agar instance ini langsung menolak sesi tercabut.
@@ -414,6 +439,20 @@ func (s *Service) Complete(ctx context.Context, rawToken, newPassword string) er
 	}
 	now := s.now()
 	if rec.UsedAt != nil || !rec.ExpiresAt.After(now) {
+		return ErrInvalidToken
+	}
+	// Pemilik tautan disabled: ditolak seperti token tidak sah (PRD-001 Q30 butir 5), sebelum argon2 berjalan dan tanpa
+	// memakai tautan. Ini hanya pra-periksa (hemat argon2); jaminan atomiknya ada di Store.ResetPassword: UPDATE users bersyarat
+	// status IN ('active','locked') dan rollback seluruh transaksi bila 0 baris, sehingga penonaktifan konkuren yang belum
+	// commit pun tidak tertimpa.
+	owner, err := s.st.GetUser(ctx, t, rec.UserID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrInvalidToken
+		}
+		return fmt.Errorf("reset: muat pemilik tautan: %w", err)
+	}
+	if owner.Status != store.UserActive && owner.Status != store.UserLocked {
 		return ErrInvalidToken
 	}
 	phc, err := s.gate.Hash(ctx, s.hasher, newPassword)

@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,12 +17,17 @@ import (
 	"erpora/internal/platform/identity/guard"
 	"erpora/internal/platform/identity/mfa"
 	"erpora/internal/platform/identity/password"
+	"erpora/internal/platform/identity/reset"
 	"erpora/internal/platform/identity/session"
 	identitystore "erpora/internal/platform/identity/store"
 	"erpora/internal/platform/identity/token"
+	"erpora/internal/platform/mail"
 	"erpora/internal/platform/modules/runtime"
+	"erpora/internal/platform/settings"
+	settingsstore "erpora/internal/platform/settings/store"
 	"erpora/internal/platform/tenancy"
 	sdkidentity "erpora/sdk/identity"
+	sdkmail "erpora/sdk/mail"
 )
 
 const (
@@ -41,43 +44,71 @@ const (
 func DirectPublicRoutes() []string { return []string{jwksRoute} }
 
 // PublicURLSource menyediakan URL publik aplikasi. Keputusan pemilik produk 3 Nov 2026: sumbernya tabel settings
-// platform (settings.Service.PublicURL), BUKAN ERP_PUBLIC_URL. Antarmuka ada di titik pemakaian agar paket settings
-// (dibangun terpisah) dapat dipasang tanpa mengubah perakitan identitas.
-//
-// TODO(C1.10 -> settings): ganti defaultPublicURLSource dengan *settings.Service (PublicURLOrDevDefault di development)
-// begitu internal/platform/settings tersedia; ErrPublicURLNotConfigured menjadi settings.ErrNotConfigured.
+// platform (settings.Service.PublicURL), BUKAN ERP_PUBLIC_URL; implementasi bawaan: newSettingsURLSource.
 type PublicURLSource interface {
 	PublicURL(ctx context.Context) (string, error)
 }
 
-// ErrPublicURLNotConfigured: URL publik belum diisi. Pada production `serve` gagal start (lihat checkPublicURL).
-var ErrPublicURLNotConfigured = errors.New("URL publik belum dikonfigurasi")
+// ErrPublicURLNotConfigured: URL publik belum diisi (settings.ErrNotConfigured). Pada production `serve` gagal start
+// (lihat checkPublicURL).
+var ErrPublicURLNotConfigured = settings.ErrNotConfigured
 
 // publicURLFunc mengadaptasi fungsi menjadi PublicURLSource.
 type publicURLFunc func(ctx context.Context) (string, error)
 
 func (f publicURLFunc) PublicURL(ctx context.Context) (string, error) { return f(ctx) }
 
-// defaultPublicURLSource adalah adaptor sementara: development diturunkan dari ERP_HTTP_ADDR, production belum ada
-// sumbernya (ErrPublicURLNotConfigured) sampai settings tersedia. Tidak membaca cfg.PublicURL.
-func defaultPublicURLSource(cfg config.Config) PublicURLSource {
-	return publicURLFunc(func(context.Context) (string, error) {
-		if cfg.Env != config.EnvDevelopment {
-			return "", ErrPublicURLNotConfigured
+// fallbackDevURL dipakai di development bila ERP_HTTP_ADDR tidak berbentuk host:port (sama dengan perilaku lama).
+const fallbackDevURL = "http://localhost:8080"
+
+// newSettingsService membuat settings.Service di atas tabel settings tenant. Sealer hanya dibutuhkan nilai terenkripsi
+// (public_url bukan); bila ERP_SECRET_KEY belum valid, sealer nil dan newIdentityStack yang menggagalkan startup.
+func newSettingsService(cfg config.Config, db *database.DB, tid tenancy.TenantID) *settings.Service {
+	var sealer *crypto.Sealer
+	if sl, err := crypto.NewSealerFromMaterial([]byte(cfg.SecretKey), []byte(cfg.SecretKeyPrevious)); err == nil {
+		sealer = sl
+	}
+	conn := database.SingleTenantConnector{Default: tid, DB: database.TenantDB{DB: db}}
+	return settings.NewService(settingsstore.New(conn, sealer), settings.Options{Production: cfg.Env == config.EnvProduction})
+}
+
+// settingsURLSource adalah PublicURLSource di atas settings.Service yang terikat pada tenant default: pemanggil tanpa
+// tenant di context (pemeriksa Origin, pemeriksaan start production) tetap membaca setting tenant itu. Di development
+// dan hanya bila setting belum diisi, dipakai URL turunan ERP_HTTP_ADDR (PublicURLOrDevDefault); di production selalu
+// settings.ErrNotConfigured bila belum diisi.
+type settingsURLSource struct {
+	svc        *settings.Service
+	tid        tenancy.TenantID
+	devDefault string
+}
+
+func newSettingsURLSource(cfg config.Config, svc *settings.Service, tid tenancy.TenantID) PublicURLSource {
+	dev := ""
+	if cfg.Env == config.EnvDevelopment {
+		if dev = settings.DevURLFromHTTPAddr(cfg.HTTPAddr); dev == "" {
+			dev = fallbackDevURL
 		}
-		host, port, err := net.SplitHostPort(cfg.HTTPAddr)
-		if err != nil {
-			return "http://localhost:8080", nil
-		}
-		switch host {
-		case "", "0.0.0.0", "::", "[::]":
-			host = "localhost"
-		}
-		if strings.Contains(host, ":") {
-			host = "[" + host + "]"
-		}
-		return "http://" + host + ":" + port, nil
-	})
+	}
+	return settingsURLSource{svc: svc, tid: tid, devDefault: dev}
+}
+
+func (s settingsURLSource) PublicURL(ctx context.Context) (string, error) {
+	if _, ok := tenancy.FromContext(ctx); !ok {
+		ctx = tenancy.WithTenant(ctx, s.tid)
+	}
+	return s.svc.PublicURLOrDevDefault(ctx, s.devDefault)
+}
+
+// newMailSender memilih pengirim surat sesuai ERP_MAIL_DRIVER: smtp, atau log (isi surat penuh hanya di development).
+func newMailSender(cfg config.Config, log *slog.Logger) (sdkmail.Sender, error) {
+	if cfg.MailDriver == config.MailDriverSMTP {
+		return mail.NewSMTP(cfg.SMTP, mail.WithSMTPLogger(log))
+	}
+	var opts []mail.LogOption
+	if cfg.Env == config.EnvDevelopment {
+		opts = append(opts, mail.WithBody())
+	}
+	return mail.NewLog(log, opts...), nil
 }
 
 // checkPublicURL dipanggil `serve` sebelum merakit: di production tanpa URL publik start gagal (ErrPublicURLNotConfigured).
@@ -117,13 +148,20 @@ func lazyOriginChecker(cfg config.Config, src PublicURLSource) session.OriginChe
 	}
 }
 
+// identityExtras adalah komponen luar identitas yang dibutuhkan Service dan Admin: settings (URL publik) dan pengirim
+// surat (reset sandi).
+type identityExtras struct {
+	Settings *settings.Service
+	Mail     sdkmail.Sender
+}
+
 // identityStack adalah perakitan mesin identitas untuk satu proses serve (PRD-001 C1): kunci dan token, sesi dan
 // revokasi, pembatas laju dan lockout, MFA, serta pembaca keadaan MFA untuk keputusan otorisasi.
 //
-// Titik pemasangan identity.Service dan identity.Admin ke modul core (C1.11/C1.12): isi Service dan/atau Admin pada
-// stack ini; installCoreIdentity (dipasang sebagai runtime.Services.Identity) memasangkannya pada context modul
-// `erp.core` saja (route, command cli:core:*, hook, seed). runtime.Services.installIdentity menegakkan pembatasan
-// itu di sisi platform, jadi modul lain tidak pernah menerimanya. Sampai Service/Admin ada, hook tidak memasang apa pun.
+// Titik pemasangan identity.Service dan identity.Admin ke modul core (C1.11/C1.12): Service dan Admin diisi
+// newIdentityStack (C1.10b); installCoreIdentity (dipasang sebagai runtime.Services.Identity) memasangkannya pada context modul
+// `erp.core` saja (route, command cli:core:*, hook, seed; Admin sendiri hanya menerima hak sistem berawalan "cli:core:", jadi hook/seed tidak dapat memakainya, PRD-001 Q30). runtime.Services.installIdentity menegakkan pembatasan
+// itu di sisi platform, jadi modul lain tidak pernah menerimanya.
 type identityStack struct {
 	Store         *identitystore.Store
 	Sealer        *crypto.Sealer
@@ -131,6 +169,7 @@ type identityStack struct {
 	Issuer        *token.Issuer
 	Verifier      *token.Verifier
 	Promoter      *token.Promoter
+	Retention     *guard.RetentionWorker
 	Revocations   *session.RevocationList
 	Sessions      *session.Service
 	Hasher        *password.Hasher
@@ -142,7 +181,11 @@ type identityStack struct {
 	IPLimiter     *guard.IPLimiter
 	Principals    *guard.PrincipalLimiter
 
-	// Service dan Admin diisi C1.11/C1.12 (implementasi sdk/identity.Service dan Admin belum ada pada C1.10).
+	// Reset adalah alur lupa/reset sandi (surat lewat pengirim dari identityExtras).
+	Reset *reset.Service
+
+	// Service dan Admin adalah implementasi sdk/identity.Service dan Admin (C1.10b); installCoreIdentity memasangnya
+	// pada context modul core (C1.11) dan command cli:core:* (C1.12).
 	Service sdkidentity.Service
 	Admin   sdkidentity.Admin
 
@@ -151,9 +194,9 @@ type identityStack struct {
 
 // newIdentityStack merakit dan menyalakan mesin identitas. Gagal tertutup: ERP_SECRET_KEY wajib, keyring wajib
 // dapat dimuat dengan satu kunci aktif, dan daftar sesi tercabut wajib termuat sebelum request pertama dilayani
-// (tanpa daftar itu sesi tercabut bisa lolos). Pekerja latar (promosi kunci, muat ulang daftar tercabut) berjalan
+// (tanpa daftar itu sesi tercabut bisa lolos). Pekerja latar (promosi kunci, retensi login_attempts, muat ulang daftar tercabut) berjalan
 // sampai ctx selesai.
-func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, tid tenancy.TenantID, urls PublicURLSource) (*identityStack, error) {
+func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, tid tenancy.TenantID, urls PublicURLSource, ext identityExtras) (*identityStack, error) {
 	if err := cfg.RequireSecretKey(); err != nil {
 		return nil, err
 	}
@@ -178,16 +221,21 @@ func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, 
 	} else if created {
 		log.Info("kunci penandatangan JWT pertama dibuat", "kid", s.Keyring.Active().ID)
 	}
-	if s.Issuer, err = token.NewIssuer(token.IssuerConfig{Keyring: s.Keyring, Issuer: identity.TokenIssuer, Audience: identity.TokenAudience}); err != nil {
+	if s.Issuer, err = token.NewIssuer(token.IssuerConfig{Keyring: s.Keyring, Issuer: identity.ClaimIssuer, Audience: identity.ClaimAudience}); err != nil {
 		return nil, err
 	}
-	if s.Verifier, err = token.NewVerifier(token.VerifierConfig{Keyring: s.Keyring, Issuer: identity.TokenIssuer, Audience: identity.TokenAudience}); err != nil {
+	if s.Verifier, err = token.NewVerifier(token.VerifierConfig{Keyring: s.Keyring, Issuer: identity.ClaimIssuer, Audience: identity.ClaimAudience}); err != nil {
 		return nil, err
 	}
 	if s.Promoter, err = token.NewPromoter(token.PromoterConfig{Keyring: s.Keyring, Log: log}); err != nil {
 		return nil, err
 	}
 	go s.Promoter.Run(ctx) // promosi pending -> active, retiring -> retired; berhenti bersama ctx
+	// Retensi login_attempts (data pribadi; PRD-001 Q30 butir 3): pangkas baris > 30 hari tiap jam; berhenti bersama ctx.
+	if s.Retention, err = guard.NewRetentionWorker(guard.RetentionConfig{Store: st, Tenant: tid, Log: log}); err != nil {
+		return nil, err
+	}
+	go s.Retention.Run(ctx)
 
 	// Daftar sesi tercabut: muat awal (gagal = startup gagal), lalu langganan notifikasi + muat ulang berkala.
 	tctx := tenancy.WithTenant(ctx, tid)
@@ -244,6 +292,24 @@ func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, 
 		return nil, fmt.Errorf("mfa: %w", err)
 	}
 	if s.MFAState, err = identity.NewMFAStateReader(st, 0, nil); err != nil {
+		return nil, err
+	}
+	if ext.Settings == nil || ext.Mail == nil {
+		return nil, errors.New("identitas: Settings dan Mail wajib")
+	}
+	if s.Reset, err = reset.New(reset.Config{
+		Store: st, Sessions: s.Sessions, Gate: s.Gate, Sender: ext.Mail, PublicURL: urls, Argon2: params, Logger: log,
+	}); err != nil {
+		return nil, fmt.Errorf("reset sandi: %w", err)
+	}
+	deps := identity.Deps{
+		Login: s.Authenticator, Gate: s.Gate, Hasher: s.Hasher, Lockout: s.Lockout, Sessions: s.Sessions, Issuer: s.Issuer,
+		Keys: s.Keyring, MFA: s.MFA, MFAState: s.MFAState, Reset: s.Reset, Settings: ext.Settings, Store: st, Log: log,
+	}
+	if s.Service, err = identity.NewService(deps); err != nil {
+		return nil, err
+	}
+	if s.Admin, err = identity.NewAdmin(deps); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -399,3 +465,32 @@ func (n *channelNotifier) Publish(ctx context.Context, channel string) {
 		}()
 	}
 }
+
+// Reserve, Fail, dan Release memenuhi mfa.LockReserver: percobaan kode direservasi (dicatat sebagai kegagalan kind
+// `mfa`, pasangan (akun, IP) yang sama dengan login sandi) secara atomik lintas instance sebelum kode diverifikasi.
+func (m mfaLockout) Reserve(ctx context.Context, userID, ip string) (any, mfa.LockState, error) {
+	res, st, err := m.l.Reserve(ctx, identitystore.AttemptMFA, userID, ip)
+	if err != nil || !res.Reserved() {
+		return nil, mfa.LockState(st), err
+	}
+	return res, mfa.LockState{}, nil
+}
+
+func (m mfaLockout) Fail(ctx context.Context, token any) (mfa.LockState, error) {
+	res, ok := token.(guard.Reservation)
+	if !ok {
+		return mfa.LockState{}, errors.New("identity: token reservasi MFA tidak valid")
+	}
+	st, err := m.l.Fail(ctx, res)
+	return mfa.LockState(st), err
+}
+
+func (m mfaLockout) Release(ctx context.Context, token any) error {
+	res, ok := token.(guard.Reservation)
+	if !ok {
+		return errors.New("identity: token reservasi MFA tidak valid")
+	}
+	return m.l.Release(ctx, res)
+}
+
+var _ mfa.LockReserver = mfaLockout{}

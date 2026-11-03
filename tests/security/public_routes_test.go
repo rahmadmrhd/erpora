@@ -11,15 +11,16 @@ import (
 	"erpora/internal/app"
 )
 
-// TestEveryRouteHasPermissionOrIsPublic: setiap route modul harus punya permission atau Public.
+// TestEveryRouteHasPermissionOrIsPublic: setiap route modul harus punya permission, Public, atau Authenticated
+// (terautentikasi-saja; allowlist di authenticated_routes_test.go).
 func TestEveryRouteHasPermissionOrIsPublic(t *testing.T) {
 	reg, err := app.BuildRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range reg.Routes() {
-		if !r.Public && r.Permission == "" {
-			t.Errorf("route %s %s (%s) tanpa permission dan tidak Public", r.Method, r.Pattern, r.Module)
+		if !r.Public && !r.Authenticated && r.Permission == "" {
+			t.Errorf("route %s %s (%s) tanpa permission dan tidak Public atau Authenticated", r.Method, r.Pattern, r.Module)
 		}
 	}
 }

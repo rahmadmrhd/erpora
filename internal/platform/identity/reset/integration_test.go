@@ -264,3 +264,47 @@ func TestIntegrationNewRequestInvalidatesOldLinkAndUnknownEmailLeavesNoTrace(t *
 		t.Errorf("surat = %d, want 2 (tak ada surat untuk email tak dikenal)", n)
 	}
 }
+
+// Q30 butir 5: pemilik tautan disabled. Layanan menolak seperti token tidak sah, dan penjaga atomik di
+// store.ResetPassword (terhadap perubahan status di antara pra-periksa dan penyimpanan) tidak memakai tautan serta tidak
+// mengubah akun maupun sesinya. Setelah diaktifkan lagi, tautan yang sama masih dapat dipakai.
+func TestIntegrationDisabledOwnerCannotCompleteReset(t *testing.T) {
+	e := newIntEnv(t)
+	u := e.addUser(t, "budi@example.org")
+	sid := e.newSession(t, u.ID)
+	raw := e.requestToken(t, "budi@example.org") // diterbitkan saat aktif
+	if err := e.st.SetUserStatus(tctx(), testTenant, u.ID, store.UserDisabled); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Complete(tctx(), raw, goodPass); !errors.Is(err, reset.ErrInvalidToken) {
+		t.Fatalf("Complete akun disabled: err = %v, want ErrInvalidToken", err)
+	}
+	tok, _ := base64.RawURLEncoding.DecodeString(raw)
+	sum := sha256.Sum256(tok)
+	rec, err := e.st.FindPasswordResetByHash(tctx(), testTenant, sum[:])
+	if err != nil || rec.UsedAt != nil {
+		t.Fatalf("tautan tidak boleh terpakai: %+v %v", rec, err)
+	}
+	// Penjaga atomik langsung di store.
+	_, won, err := e.st.ResetPassword(tctx(), testTenant, rec.ID, "$argon2id$x", e.clk.Now())
+	if err != nil || won {
+		t.Fatalf("ResetPassword akun disabled: won=%v err=%v, want won=false", won, err)
+	}
+	got, err := e.st.GetUser(tctx(), testTenant, u.ID)
+	if err != nil || got.Status != store.UserDisabled || got.PasswordHash == "$argon2id$x" {
+		t.Fatalf("akun berubah: %+v %v", got, err)
+	}
+	if rec2, _ := e.st.FindPasswordResetByHash(tctx(), testTenant, sum[:]); rec2.UsedAt != nil {
+		t.Error("ResetPassword menandai tautan terpakai padahal ditolak")
+	}
+	if len(e.sess.got()) != 0 {
+		t.Errorf("sesi tercabut padahal reset ditolak: %v (sesi %s)", e.sess.got(), sid)
+	}
+	// Diaktifkan lagi: tautan yang sama dapat dipakai.
+	if err := e.st.SetUserStatus(tctx(), testTenant, u.ID, store.UserActive); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Complete(tctx(), raw, goodPass); err != nil {
+		t.Fatalf("setelah diaktifkan lagi: %v", err)
+	}
+}

@@ -301,13 +301,20 @@ func TestServe_HTTPContract(t *testing.T) {
 	base := "http://" + addr
 	waitStatus(t, base+"/readyz", 200, 20*time.Second)
 
-	t.Run("bootstrap ETag -> 304", func(t *testing.T) {
-		resp, _ := getWith(t, base+"/api/bootstrap", nil)
-		etag := resp.Header.Get("ETag")
-		if resp.StatusCode != 200 || etag == "" {
-			t.Fatalf("status=%d etag=%q", resp.StatusCode, etag)
+	t.Run("bootstrap wajib login; ETag per pengguna -> 304", func(t *testing.T) {
+		if resp, body := getWith(t, base+"/api/bootstrap", nil); resp.StatusCode != 401 || !strings.Contains(body, `"unauthenticated"`) {
+			t.Fatalf("tanpa token: status=%d body=%s", resp.StatusCode, body)
 		}
-		resp, body := getWith(t, base+"/api/bootstrap", map[string]string{"If-None-Match": etag})
+		auth := map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)}
+		resp, body := getWith(t, base+"/api/bootstrap", auth)
+		etag := resp.Header.Get("ETag")
+		if resp.StatusCode != 200 || etag == "" || !strings.Contains(body, `"user":{`) || !strings.Contains(body, `"permRev":0`) {
+			t.Fatalf("status=%d etag=%q body=%s", resp.StatusCode, etag, body)
+		}
+		if !strings.Contains(resp.Header.Get("Cache-Control"), "private") || !strings.Contains(resp.Header.Get("Vary"), "Authorization") {
+			t.Errorf("Cache-Control=%q Vary=%q", resp.Header.Get("Cache-Control"), resp.Header.Get("Vary"))
+		}
+		resp, body = getWith(t, base+"/api/bootstrap", map[string]string{"Authorization": auth["Authorization"], "If-None-Match": etag})
 		if resp.StatusCode != 304 || body != "" {
 			t.Fatalf("status=%d body=%q", resp.StatusCode, body)
 		}

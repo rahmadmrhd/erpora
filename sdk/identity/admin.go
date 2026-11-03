@@ -52,6 +52,9 @@ type Admin interface {
 	UnlockAccount(ctx context.Context, email string) error
 	// LogoutAllDevices mencabut seluruh sesi pengguna.
 	LogoutAllDevices(ctx context.Context, userID string) error
+	// SetPublicURL mengisi setting platform `platform.public_url` (URL publik aplikasi untuk tautan email dan
+	// pemeriksaan Origin; PRD-001 Q24). Aditif (C1.10b); dipanggil command core:settings:set.
+	SetPublicURL(ctx context.Context, rawURL string) error
 }
 
 type adminKey struct{}

@@ -18,15 +18,22 @@ paths:
       description: >-
         Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status
         tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini.
-        Memuat juga bahasa yang didukung dan revisi katalog terjemahan per namespace aktif (i18n). ETag = revision snapshot
-        (ditambah penanda revisi katalog bila ada).
-      x-erp-public: true
+        Memuat juga bahasa yang didukung dan revisi katalog terjemahan per namespace aktif (i18n).
+        Wajib autentikasi (PRD-001 FR-106; tidak lagi publik): tanpa token valid 401 `unauthenticated`. Respons selalu
+        untuk pengguna pada token itu (`user`, `permRev`), tidak pernah dari parameter klien. Karena isinya per
+        pengguna, respons `Cache-Control: private, no-cache` dan `Vary: Authorization`, dan ETag memuat identitas
+        pengguna sehingga dua pengguna tidak pernah berbagi ETag atau 304. Pengguna tak ditemukan atau nonaktif juga 401.
+        Tanpa permission tertentu: cukup login (`x-erp-authenticated`).
+      x-erp-authenticated: true
       parameters:
         - { name: If-None-Match, in: header, schema: { type: string } }
       responses:
         '200':
           description: Manifest.
-          headers: { ETag: { $ref: 'erp:common#/components/headers/ETag' } }
+          headers:
+            ETag: { $ref: 'erp:common#/components/headers/ETag' }
+            Cache-Control: { description: 'private, no-cache', schema: { type: string } }
+            Vary: { description: Authorization, schema: { type: string } }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BootstrapEnvelope' }
@@ -38,12 +45,24 @@ paths:
                     - { key: acme.example, slug: example, version: 1.0.0, status: enabled, basePath: /example, offline: false }
                   permissions: []
                   revision: 5
+                  user: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c, email: ani@example.test, displayName: Ani }
+                  permRev: 0
                   features: { modulesAdminApi: true }
                   i18n:
                     defaultLocale: id
                     locales: [{ code: id, name: Bahasa Indonesia }, { code: en, name: English }]
                     revisions: { ui: 3f9a1c20b7d84e55, platform: 8c01d2e9a4b6f730, example: 11aa22bb33cc44dd }
-        '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+        '304': { description: Tidak berubah (If-None-Match cocok dengan ETag pengguna ini). }
+        '401':
+          description: Tanpa token, token tidak valid atau kedaluwarsa (unauthenticated, token_expired), atau pengguna tidak ditemukan atau nonaktif.
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: >-
+            Token ber-scope terbatas tidak dapat membaca bootstrap (`permission_denied`, sama dengan route modul). Aturan MFA sengaja TIDAK berlaku di
+            endpoint ini (PRD-001 Q29 butir 2): sesi yang baru login sandi tetap dilayani agar UI dapat menampilkan layar
+            verifikasi/pendaftaran MFA. Tidak memuat data pengguna.
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '503': { $ref: 'erp:common#/components/responses/NotReady' }
   /.well-known/jwks.json:
     x-erp-singleton: true
     get:
@@ -178,7 +197,7 @@ paths:
                   page: { $ref: 'erp:common#/components/schemas/Page' }
               example:
                 data:
-                  - { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
+                  - { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', updatedAt: '2026-10-29T10:00:00Z' }
                 page: { page: 1, pageSize: 25, total: 1, hasMore: false }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
@@ -217,7 +236,7 @@ paths:
                 required: [data]
                 properties: { data: { $ref: '#/components/schemas/I18nOverride' } }
               example:
-                data: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
+                data: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', updatedAt: '2026-10-29T10:00:00Z' }
         '400':
           description: >
             invalid_i18n_override dengan error.details[].code salah satu: unknown_key, invalid_syntax, param_mismatch,
@@ -239,7 +258,7 @@ paths:
                   code: version_mismatch
                   message: Override telah berubah; muat ulang lalu coba lagi.
                   details:
-                    current: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
+                    current: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', updatedAt: '2026-10-29T10:00:00Z' }
         '415':
           description: >
             unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8).
@@ -276,7 +295,7 @@ paths:
                   code: version_mismatch
                   message: Override telah berubah; muat ulang lalu coba lagi.
                   details:
-                    current: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'api:dev', updatedAt: '2026-10-29T10:00:00Z' }
+                    current: { namespace: example, locale: id, key: note.title, message: Klien, etag: '"3f9a1c20b7d84e55"', updatedBy: 'user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c', updatedAt: '2026-10-29T10:00:00Z' }
         '415':
           description: >
             unsupported_media_type: mutasi wajib Content-Type application/json (charset utf-8).
@@ -614,6 +633,15 @@ components:
                   offline: { type: boolean }
             permissions: { type: array, items: { type: string } }
             revision: { type: integer, format: int64 }
+            user:
+              type: object
+              description: Pengguna pada token request (additive, PRD-001 FR-106). Tanpa data kredensial atau keamanan.
+              required: [id, email, displayName]
+              properties:
+                id: { $ref: 'erp:common#/components/schemas/Uuid' }
+                email: { type: string }
+                displayName: { type: string }
+            permRev: { type: integer, format: int64, minimum: 0, description: 'Revisi permission pengguna (cache klien per permRev). Stub 0 sampai C2.' }
             features:
               type: object
               description: Bendera kemampuan server untuk UI (additive).
@@ -721,7 +749,7 @@ components:
           type: string
           x-erp-classification: internal
         etag: { type: string, description: 'ETag kuat baris (hash isi); dipakai pada If-Match.' }
-        updatedBy: { type: string, description: 'api:dev atau cli:<pengguna>.' }
+        updatedBy: { type: string, description: 'user:<id> (pengguna terautentikasi) atau cli:<pengguna>.' }
         updatedAt: { $ref: 'erp:common#/components/schemas/Timestamp' }
     I18nCatalogEnvelope:
       type: object
@@ -808,7 +836,7 @@ components:
         event:
           type: string
           description: installed, enabled, disabled, upgraded, uninstalled, operation_failed, interrupted, retried, reconciled.
-        actor: { type: string, description: 'cli:<user>, api:dev, system:reconcile, atau system:migrate.' }
+        actor: { type: string, description: 'user:<id> (pengguna terautentikasi), cli:<user>, system:reconcile, atau system:migrate.' }
         operationId:
           oneOf:
             - { $ref: 'erp:common#/components/schemas/Uuid' }

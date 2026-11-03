@@ -41,6 +41,18 @@ func TestRotateIssuesNewTokenAndMarksParentUsed(t *testing.T) {
 	suiteRotateIssuesNewTokenAndMarksParentUsed(t, newFakeWorld(t))
 }
 
+func TestUpgradeReplacesRefreshTokenWithoutRevokingSession(t *testing.T) {
+	suiteUpgradeReplacesRefreshTokenWithoutRevokingSession(t, newFakeWorld(t))
+}
+
+func TestUpgradeOwnershipAndPreconditions(t *testing.T) {
+	suiteUpgradeOwnershipAndPreconditions(t, newFakeWorld(t))
+}
+
+func TestConcurrentUpgradeExactlyOneSucceeds(t *testing.T) {
+	suiteConcurrentUpgradeExactlyOneSucceeds(t, newFakeWorld(t))
+}
+
 func TestReuseOfUsedTokenRevokesFamilyAndSession(t *testing.T) {
 	suiteReuseOfUsedTokenRevokesFamilyAndSession(t, newFakeWorld(t))
 }
@@ -329,5 +341,41 @@ func TestAllTokenFailuresAreIndistinguishable(t *testing.T) {
 		if m != msgs[0] {
 			t.Fatalf("pesan galat berbeda antar penyebab: %q vs %q", m, msgs[0])
 		}
+	}
+}
+
+// racingBackend menjalankan hook tepat sebelum RotateRefreshToken: mensimulasikan Upgrade yang menggantikan token di
+// antara pemuatan token dan rotasi.
+type racingBackend struct {
+	fakeBackend
+	before func()
+}
+
+func (r *racingBackend) RotateRefreshToken(ctx context.Context, t tenancy.TenantID, usedID string, at time.Time, next store.RefreshToken) (bool, error) {
+	if r.before != nil {
+		f := r.before
+		r.before = nil
+		f()
+	}
+	return r.fakeBackend.RotateRefreshToken(ctx, t, usedID, at, next)
+}
+
+// Rotasi yang kalah karena token digantikan Upgrade (token lenyap) bukan reuse: ditolak seragam, sesi tidak dicabut.
+func TestRotateLosingToUpgradeDoesNotRevokeSession(t *testing.T) {
+	rb := &racingBackend{fakeBackend: fakeBackend{newFakeStore()}}
+	w := newWorld(t, rb, t0)
+	a := w.instance()
+	user := w.be.NewUser(t, w.ctx)
+	sess, tok := w.start(a, user)
+	rb.before = func() {
+		if _, _, err := a.svc.Upgrade(w.ctx, user, sess.ID, "otp"); err != nil {
+			t.Errorf("Upgrade: %v", err)
+		}
+	}
+	if _, _, err := a.svc.Rotate(w.ctx, tok.Value, goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) {
+		t.Fatalf("err = %v, want ErrInvalidRefresh", err)
+	}
+	if row := w.sessionRow(sess.ID); row.RevokedAt != nil || a.list.IsRevoked(sess.ID) {
+		t.Fatal("sesi tidak boleh dicabut: ini bukan reuse")
 	}
 }

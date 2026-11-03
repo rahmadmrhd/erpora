@@ -30,7 +30,7 @@ export type paths = {
     };
     /**
      * Manifest bootstrap untuk frontend
-     * @description Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini. Memuat juga bahasa yang didukung dan revisi katalog terjemahan per namespace aktif (i18n). ETag = revision snapshot (ditambah penanda revisi katalog bila ada).
+     * @description Daftar modul terkompilasi (tanpa platform.core) dengan status efektif. Status efektif dihitung lifecycle dari status tersimpan di store dan kompatibilitas binary (Effective), lalu dipublikasikan ke runtime snapshot yang dibaca endpoint ini. Memuat juga bahasa yang didukung dan revisi katalog terjemahan per namespace aktif (i18n). Wajib autentikasi (PRD-001 FR-106; tidak lagi publik): tanpa token valid 401 `unauthenticated`. Respons selalu untuk pengguna pada token itu (`user`, `permRev`), tidak pernah dari parameter klien. Karena isinya per pengguna, respons `Cache-Control: private, no-cache` dan `Vary: Authorization`, dan ETag memuat identitas pengguna sehingga dua pengguna tidak pernah berbagi ETag atau 304. Pengguna tak ditemukan atau nonaktif juga 401. Tanpa permission tertentu: cukup login (`x-erp-authenticated`).
      */
     get: operations["getBootstrap"];
     put?: never;
@@ -263,9 +263,20 @@ export type components = {
           version: string;
         }[];
         permissions: string[];
+        /**
+         * Format: int64
+         * @description Revisi permission pengguna (cache klien per permRev). Stub 0 sampai C2.
+         */
+        permRev?: number;
         /** Format: int64 */
         revision: number;
         tenantId: components["schemas"]["common.Uuid"];
+        /** @description Pengguna pada token request (additive, PRD-001 FR-106). Tanpa data kredensial atau keamanan. */
+        user?: {
+          displayName: string;
+          email: string;
+          id: components["schemas"]["common.Uuid"];
+        };
       };
     };
     "common.Error": {
@@ -356,7 +367,7 @@ export type components = {
       };
     };
     Event: {
-      /** @description cli:<user>, api:dev, system:reconcile, atau system:migrate. */
+      /** @description user:<id> (pengguna terautentikasi), cli:<user>, system:reconcile, atau system:migrate. */
       actor: string;
       details: {
         [key: string]: unknown;
@@ -388,7 +399,7 @@ export type components = {
       message: string;
       namespace: string;
       updatedAt: components["schemas"]["common.Timestamp"];
-      /** @description api:dev atau cli:<pengguna>. */
+      /** @description user:<id> (pengguna terautentikasi) atau cli:<pengguna>. */
       updatedBy: string;
     };
     I18nOverrideBody: {
@@ -623,7 +634,11 @@ export interface operations {
       /** @description Manifest. */
       200: {
         headers: {
+          /** @description private, no-cache */
+          "Cache-Control"?: string;
           ETag: components["headers"]["common.ETag"];
+          /** @description Authorization */
+          Vary?: string;
           [name: string]: unknown;
         };
         content: {
@@ -662,22 +677,47 @@ export interface operations {
            *             "version": "1.0.0"
            *           }
            *         ],
+           *         "permRev": 0,
            *         "permissions": [],
            *         "revision": 5,
-           *         "tenantId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+           *         "tenantId": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+           *         "user": {
+           *           "displayName": "Ani",
+           *           "email": "ani@example.test",
+           *           "id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
+           *         }
            *       }
            *     }
            */
           "application/json": components["schemas"]["BootstrapEnvelope"];
         };
       };
-      /** @description Tidak berubah (If-None-Match cocok dengan ETag). */
+      /** @description Tidak berubah (If-None-Match cocok dengan ETag pengguna ini). */
       304: {
         headers: {
           [name: string]: unknown;
         };
         content?: never;
       };
+      /** @description Tanpa token, token tidak valid atau kedaluwarsa (unauthenticated, token_expired), atau pengguna tidak ditemukan atau nonaktif. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
+      /** @description Token ber-scope terbatas tidak dapat membaca bootstrap (`permission_denied`, sama dengan route modul). Aturan MFA sengaja TIDAK berlaku di endpoint ini (PRD-001 Q29 butir 2): sesi yang baru login sandi tetap dilayani agar UI dapat menampilkan layar verifikasi/pendaftaran MFA. Tidak memuat data pengguna. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["common.Error"];
+        };
+      };
+      503: components["responses"]["common.NotReady"];
     };
   };
   listDesks: {
@@ -877,7 +917,7 @@ export interface operations {
            *           "message": "Klien",
            *           "namespace": "example",
            *           "updatedAt": "2026-10-29T10:00:00Z",
-           *           "updatedBy": "api:dev"
+           *           "updatedBy": "user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
            *         }
            *       ],
            *       "page": {
@@ -941,7 +981,7 @@ export interface operations {
            *         "message": "Klien",
            *         "namespace": "example",
            *         "updatedAt": "2026-10-29T10:00:00Z",
-           *         "updatedBy": "api:dev"
+           *         "updatedBy": "user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
            *       }
            *     }
            */
@@ -979,7 +1019,7 @@ export interface operations {
            *             "message": "Klien",
            *             "namespace": "example",
            *             "updatedAt": "2026-10-29T10:00:00Z",
-           *             "updatedBy": "api:dev"
+           *             "updatedBy": "user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
            *           }
            *         },
            *         "message": "Override telah berubah; muat ulang lalu coba lagi."
@@ -1046,7 +1086,7 @@ export interface operations {
            *             "message": "Klien",
            *             "namespace": "example",
            *             "updatedAt": "2026-10-29T10:00:00Z",
-           *             "updatedBy": "api:dev"
+           *             "updatedBy": "user:0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
            *           }
            *         },
            *         "message": "Override telah berubah; muat ulang lalu coba lagi."

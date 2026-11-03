@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -87,6 +88,7 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				"ERP_SMTP_PASSWORD":         config.RedactSecret(c.SMTP.Password),
 				"ERP_SMTP_FROM":             c.SMTP.From,
 				"ERP_SMTP_TLS_MODE":         c.SMTP.TLSMode,
+				"ERP_TRUSTED_PROXIES":       trustedProxiesString(c),
 				"flavor":                    buildinfo.Flavor(),
 				"database.environment":      databaseEnvironment(cmd.Context(), c),
 			}
@@ -103,4 +105,13 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 	})
 	inspect.AddCommand(newInspectRoutesCmd("routes", false), newInspectModulesCmd(), newInspectPermissionsCmd("permissions", false))
 	return inspect
+}
+
+// trustedProxiesString mencetak ERP_TRUSTED_PROXIES dalam bentuk ternormalisasi (dipisah koma; kosong bila tidak diisi).
+func trustedProxiesString(c config.Config) string {
+	parts := make([]string, len(c.TrustedProxies))
+	for i, p := range c.TrustedProxies {
+		parts[i] = p.String()
+	}
+	return strings.Join(parts, ",")
 }

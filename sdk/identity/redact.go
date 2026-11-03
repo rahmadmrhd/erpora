@@ -15,7 +15,7 @@ import (
 // Serialisasi JSON: tipe yang HANYA berperan sebagai input (LoginInput, RefreshInput, ResetInput,
 // ChangeInput, ConfirmMFAInput, VerifyInput, CreateAdminInput) juga menyamarkan diri pada json.Marshal
 // (mis. slog JSON handler yang men-marshal isi slice/map); decoding tidak terpengaruh karena tidak ada
-// UnmarshalJSON. Tipe hasil (LoginResult, EnrollmentInfo, RecoveryCodes) tetap di-marshal apa adanya
+// UnmarshalJSON. Tipe hasil (LoginResult, EnrollmentInfo, RecoveryCodes, ConfirmMFAResult) tetap di-marshal apa adanya
 // karena memang dikirim ke klien sebagai respons; satu-satunya jalur penyamaran mereka adalah
 // Formatter/LogValuer, jadi jangan menaruhnya mentah di dalam slice/map yang dicatat ke slog JSON handler.
 // Batasan: redaksi Format/MarshalJSON tidak berlaku bila nilai pembawa rahasia menjadi field TAK DIEKSPOR
@@ -74,7 +74,7 @@ func (x LoginInput) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, x.Str
 func (x LoginInput) LogValue() slog.Value       { return logAttrs(x.attrs()) }
 
 func (x RefreshInput) attrs() []attr {
-	return []attr{secret("RefreshToken"), plain("ClientIP", x.ClientIP), plain("UserAgent", x.UserAgent)}
+	return []attr{secret("RefreshToken"), plain("Origin", x.Origin), plain("ClientIP", x.ClientIP), plain("UserAgent", x.UserAgent)}
 }
 func (x RefreshInput) String() string             { return renderAttrs("RefreshInput", x.attrs()) }
 func (x RefreshInput) GoString() string           { return x.String() }
@@ -117,6 +117,12 @@ func (x RecoveryCodes) String() string             { return renderAttrs("Recover
 func (x RecoveryCodes) GoString() string           { return x.String() }
 func (x RecoveryCodes) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, x.String()) }
 func (x RecoveryCodes) LogValue() slog.Value       { return logAttrs(x.attrs()) }
+
+func (x ConfirmMFAResult) attrs() []attr              { return []attr{secret("Codes"), plain("Session", x.Session)} }
+func (x ConfirmMFAResult) String() string             { return renderAttrs("ConfirmMFAResult", x.attrs()) }
+func (x ConfirmMFAResult) GoString() string           { return x.String() }
+func (x ConfirmMFAResult) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, x.String()) }
+func (x ConfirmMFAResult) LogValue() slog.Value       { return logAttrs(x.attrs()) }
 
 func (x ConfirmMFAInput) attrs() []attr {
 	return []attr{secret("Code"), plain("ClientIP", x.ClientIP), plain("UserAgent", x.UserAgent)}

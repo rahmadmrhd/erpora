@@ -10,6 +10,7 @@ package authtest
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -55,7 +56,7 @@ func Authed(t testing.TB, h http.Handler, issuer *token.Issuer, tid tenancy.Tena
 	})
 }
 
-// BearerFromDB menerbitkan token uji untuk proses `serve` (biner) yang memakai database dsn dan ERP_SECRET_KEY uji
+// BearerFromDB menerbitkan token uji (untuk pengguna nyata tetap di database) untuk proses `serve` (biner) yang memakai database dsn dan ERP_SECRET_KEY uji
 // proses ini (testsupport/secretkey). Kunci penandatangan dibaca dari tabel signing_keys (server sudah membuat kunci
 // aktif pertama saat start), jadi panggil setelah server siap. Server mengenali kid-nya lewat keyring-nya sendiri.
 func BearerFromDB(t testing.TB, dsn string) string {
@@ -92,12 +93,28 @@ func BearerFromDB(t testing.TB, dsn string) string {
 	if kr.Active().IsZero() {
 		t.Fatal("authtest: tidak ada kunci penandatangan aktif; server belum menyiapkannya")
 	}
-	issuer, err := token.NewIssuer(token.IssuerConfig{Keyring: kr, Issuer: identity.TokenIssuer, Audience: identity.TokenAudience})
+	issuer, err := token.NewIssuer(token.IssuerConfig{Keyring: kr, Issuer: identity.ClaimIssuer, Audience: identity.ClaimAudience})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Mint(t, issuer, tid)
+	// Bootstrap (dan kelak rute lain) memuat pengguna dari database: pengguna uji harus nyata, aktif, dan anggota tenant.
+	// Email tetap: panggilan berulang pada database yang sama memakai pengguna yang sama (ETag bootstrap per pengguna).
+	u, err := st.CreateUser(tenancy.WithTenant(ctx, tid), tid, identitystore.NewUser{Email: bearerUserEmail, Name: "Pengguna Uji", Status: identitystore.UserActive})
+	if errors.Is(err, identitystore.ErrEmailTaken) {
+		u, err = st.FindUserByEmail(tenancy.WithTenant(ctx, tid), tid, bearerUserEmail)
+	}
+	if err != nil {
+		t.Fatalf("authtest: pengguna uji: %v", err)
+	}
+	raw, err := issuer.Issue(token.Claims{Subject: u.ID, SessionID: uuid.NewString(), TenantID: tid.String(), AMR: []string{"pwd"}})
+	if err != nil {
+		t.Fatalf("authtest: terbitkan token: %v", err)
+	}
+	return raw
 }
+
+// bearerUserEmail adalah email pengguna nyata milik BearerFromDB.
+const bearerUserEmail = "authtest@example.test"
 
 // keyStore memetakan *store.Store ke token.KeyStore (salinan adaptor internal/app; tes tidak mengimpor internal/app
 // karena tes internal/app memakai paket ini).

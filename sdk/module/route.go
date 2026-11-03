@@ -16,6 +16,9 @@ type RouteConfig struct {
 	// RequireMFA true bila route menuntut sesi yang faktor keduanya sudah diverifikasi (klaim amr memuat otp),
 	// apa pun status faktor pengguna (ADR-0013 §4). Hanya memperketat akses.
 	RequireMFA bool
+	// Authenticated true bila route hanya mewajibkan Principal terautentikasi tanpa permission tertentu (opsi
+	// Authenticated; PRD-001 Q29). Hanya sah pada Registrar.Handle dengan permission kosong.
+	Authenticated bool
 }
 
 // RouteOption mengubah RouteConfig pada Registrar.Handle/Public (Q26 butir 13).
@@ -48,6 +51,14 @@ func Classify(c Classification) RouteOption {
 // memperketat akses; pelonggaran (route yang boleh dipanggil sesi yang menunggu MFA) bukan opsi modul, melainkan
 // daftar platform yang berlaku hanya untuk route auth modul `erp.core`.
 func RequireMFA() RouteOption { return func(c *RouteConfig) { c.RequireMFA = true } }
+
+// Authenticated menyatakan route yang cukup dengan Principal terautentikasi, tanpa permission tertentu (mis. logout,
+// ganti sandi, dan MFA modul core: pengguna harus dapat mengelola sesinya sendiri apa pun hak permission-nya). Dipakai
+// pada Registrar.Handle dengan permission kosong ("" + Authenticated()); registry menolak kombinasi lain (permission
+// terisi, atau route Public) sebagai invalid_route_option. Platform tetap menegakkan Principal (401) dan aturan MFA
+// ADR-0013 §4, hanya pemeriksaan permission yang dilewati; kontrak OpenAPI route ini memakai `x-erp-authenticated`.
+// Route yang memakai opsi ini harus tercantum di allowlist keamanan tests/security/authenticated_routes.txt.
+func Authenticated() RouteOption { return func(c *RouteConfig) { c.Authenticated = true } }
 
 // ResolveRouteOptions menerapkan opsi berurutan; opsi nil diabaikan.
 func ResolveRouteOptions(opts ...RouteOption) RouteConfig {

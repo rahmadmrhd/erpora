@@ -55,15 +55,16 @@ type Reason string
 
 // Sebab internal.
 const (
-	ReasonUnknownEmail    Reason = "unknown_email"
-	ReasonWrongPassword   Reason = "wrong_password"
-	ReasonAccountLocked   Reason = "account_locked"
-	ReasonAccountDisabled Reason = "account_disabled"
-	ReasonInvalidHash     Reason = "invalid_stored_hash"
-	ReasonPairBlocked     Reason = "pair_blocked"
-	ReasonIPLimited       Reason = "ip_limited"
-	ReasonTargetLimited   Reason = "target_limited"
-	ReasonHashBusy        Reason = "hash_busy"
+	ReasonUnknownEmail       Reason = "unknown_email"
+	ReasonWrongPassword      Reason = "wrong_password"
+	ReasonAccountLocked      Reason = "account_locked"
+	ReasonAccountDisabled    Reason = "account_disabled"
+	ReasonInvalidHash        Reason = "invalid_stored_hash"
+	ReasonPairBlocked        Reason = "pair_blocked"
+	ReasonIPLimited          Reason = "ip_limited"
+	ReasonTargetLimited      Reason = "target_limited"
+	ReasonHashBusy           Reason = "hash_busy"
+	ReasonMembershipInactive Reason = "membership_inactive"
 )
 
 // Outcome adalah hasil seragam Authenticator.Verify.
@@ -113,10 +114,12 @@ type AuthenticatorConfig struct {
 // (dengan hash tiruan untuk email tak dikenal dan akun yang tak boleh masuk), dan pencatatan kegagalan menjadi SATU
 // hasil seragam. Dipakai service login (C1.10/C1.11). Aman untuk dipakai serentak.
 //
-// Urutan: batas IP -> cari akun -> jeda pasangan (429 sebelum hash; tidak dicatat) -> batas per email -> verifikasi
-// (hash tiruan bila perlu) -> catat kegagalan. Semua jalur gagal mengeluarkan urutan panggilan database yang sama (akun
-// tak dikenal memakai UUID acak untuk panggilan tiruan dan pelacak jeda di memori) dan baru menjawab setelah lantai
-// MinFailureDuration.
+// Urutan: batas IP -> cari akun -> reservasi percobaan (atomik per pasangan: jeda pasangan = 429 sebelum hash dan tanpa
+// mencatat; selain itu percobaan langsung dicatat sebagai kegagalan SEBELUM verifikasi, sehingga permintaan serentak
+// tidak lolos bersama-sama) -> batas per email -> verifikasi (hash tiruan bila perlu; akun locked/disabled/keanggotaan
+// tenant nonaktif/tak dikenal diperlakukan sama) -> sukses atau keluar bukan-kegagalan: reservasi dilepas; gagal: kunci
+// akun lintas IP dievaluasi. Semua jalur gagal mengeluarkan urutan panggilan database yang sama (akun tak dikenal
+// memakai UUID acak untuk panggilan tiruan dan pelacak jeda di memori) dan baru menjawab setelah lantai MinFailureDuration.
 type Authenticator struct {
 	accounts LoginAccounts
 	lockout  *Lockout
@@ -205,28 +208,49 @@ func (a *Authenticator) Verify(ctx context.Context, in LoginInput) (Outcome, err
 		return Outcome{}, fmt.Errorf("guard: cari akun: %w", err)
 	}
 
-	// Jeda pasangan (akun, IP): ditolak sebelum hash dan tanpa dicatat. Email tak dikenal diperlakukan sama lewat
-	// pelacak di memori dan satu bacaan tiruan (jumlah round-trip DB sama).
-	var st State
+	// Jeda pasangan (akun, IP) dan reservasi percobaan: satu langkah atomik per pasangan (kunci advisory di database).
+	// Pasangan yang sedang dijeda ditolak sebelum hash dan tanpa mencatat apa pun; selain itu percobaan ini langsung
+	// dicatat sebagai kegagalan SEBELUM verifikasi, sehingga permintaan serentak saling melihat dan hanya sebanyak yang
+	// diizinkan jadwal jeda yang sampai ke argon2 (PRD-001 Q16/Q19). Email tak dikenal diperlakukan sama lewat pelacak
+	// memori (cek dan catat atomik) dan satu panggilan database tiruan (jumlah round-trip sama).
+	var (
+		res Reservation
+		st  State
+	)
 	if known {
-		if st, _, err = a.lockout.checkPair(ctx, t, user.ID, ipKey); err != nil {
+		if res, st, err = a.lockout.reservePair(ctx, t, store.AttemptPassword, user.ID, ipKey); err != nil {
 			return Outcome{}, err
 		}
 	} else {
-		a.lockout.dummyCheck(ctx, t)
-		st = a.lockout.unknownCheck(t, email, ipKey)
+		res, st = a.lockout.reserveUnknown(ctx, t, email, ipKey)
 	}
 	if st.PairBlocked {
 		return limited(st.RetryAfter, ReasonPairBlocked), nil
 	}
+	// Dari sini setiap jalan keluar selain kegagalan kredensial MELEPAS reservasi (sukses, dibatasi laju, galat, dan
+	// panic yang dipulihkan pemanggil): defer menjamin pelepasan, flag released mencegah pelepasan ganda dan menandai
+	// jalur kegagalan (Fail sudah mencatat kegagalan; tidak boleh dilepas). Pola sama dengan Service.ChangePassword.
+	released := false
+	release := func() {
+		if released {
+			return
+		}
+		released = true
+		if err := a.lockout.Release(ctx, res); err != nil {
+			a.log.WarnContext(ctx, "identity: gagal melepas reservasi percobaan login", "error", err.Error())
+		}
+	}
+	defer release()
 
 	if ok, d := a.target.Allow(EmailTargetKey("login", t, email)); !ok {
+		release()
 		return limited(d, ReasonTargetLimited), nil
 	}
 
-	// Verifikasi. Akun yang tak boleh masuk (tak dikenal, locked, disabled) diverifikasi terhadap hash tiruan
-	// berparameter terkonfigurasi: biaya argon2 sama, hasil dipaksa gagal.
-	usable := known && user.Status == store.UserActive
+	// Verifikasi. Akun yang tak boleh masuk (tak dikenal, locked, disabled, keanggotaan tenant nonaktif) diverifikasi
+	// terhadap hash tiruan berparameter terkonfigurasi: biaya argon2 sama, hasil dipaksa gagal, dan jalur kegagalan
+	// (pencatatan dan lantai waktu) identik dengan sandi salah.
+	usable := known && user.Status == store.UserActive && user.MembershipStatus == store.MembershipActive
 	hasher, phc := a.dummy, a.dummy.DummyHash()
 	if usable {
 		hasher, phc = a.hasher, user.PasswordHash
@@ -239,6 +263,8 @@ func (a *Authenticator) Verify(ctx context.Context, in LoginInput) (Outcome, err
 		reason = ReasonAccountLocked
 	case user.Status != store.UserActive:
 		reason = ReasonAccountDisabled
+	case user.MembershipStatus != store.MembershipActive:
+		reason = ReasonMembershipInactive
 	}
 	ok, rehash, verr := runVerify(ctx, a.gate, hasher, in.Password, phc)
 	if errors.Is(verr, password.ErrInvalidHash) {
@@ -249,30 +275,29 @@ func (a *Authenticator) Verify(ctx context.Context, in LoginInput) (Outcome, err
 		_, _, verr = runVerify(ctx, a.gate, a.dummy, in.Password, a.dummy.DummyHash())
 	}
 	if retry, limitedErr := AsRateLimited(verr); limitedErr {
+		release()
 		return limited(retry, ReasonHashBusy), nil
 	}
 	if verr != nil {
+		release()
 		return Outcome{}, fmt.Errorf("guard: verifikasi sandi: %w", verr)
 	}
 
 	if ok && usable {
+		release() // sandi benar bukan kegagalan; sukses penuh dicatat pemanggil lewat RegisterSuccess (setelah MFA bila ada)
 		user.PasswordHash = ""
 		return Outcome{Kind: Success, User: user, NeedsRehash: rehash}, nil
 	}
 
 	out := Outcome{Kind: InvalidCredentials, Reason: reason}
-	if known {
-		fst, err := a.lockout.RegisterFailure(ctx, user.ID, ipKey)
-		if err != nil {
-			return Outcome{}, err
-		}
-		if fst.AccountLocked && user.Status == store.UserActive {
-			out.LockedNow = true
-			a.log.WarnContext(ctx, "identity: akun dikunci (kegagalan lintas IP melampaui ambang)", "user_id", user.ID)
-		}
-	} else {
-		a.lockout.unknownFail(t, email, ipKey)
-		a.lockout.dummyFailure(ctx, t)
+	released = true // kegagalan dicatat oleh reservasi lewat Fail; jangan dilepas
+	fst, err := a.lockout.Fail(ctx, res)
+	if err != nil {
+		return Outcome{}, err
+	}
+	if known && fst.AccountLocked && user.Status == store.UserActive {
+		out.LockedNow = true
+		a.log.WarnContext(ctx, "identity: akun dikunci (kegagalan lintas IP melampaui ambang)", "user_id", user.ID)
 	}
 	if rem := a.floor - a.now().Sub(start); rem > 0 {
 		_ = a.sleep(ctx, rem) // ctx batal: pemanggil sudah pergi, jawaban tak dibaca

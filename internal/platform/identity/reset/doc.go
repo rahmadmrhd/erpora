@@ -39,8 +39,12 @@
 //   - Penerima email adalah alamat tersimpan (bukan masukan mentah); akun disabled tidak menerima email; akun locked
 //     menerima (reset adalah salah satu jalur unlock). Locale email: user_preferences.locale, lalu parameter, lalu "id".
 //   - Log tidak pernah memuat email, token, atau tautan (hanya user_id).
-//   - Complete: token cacat ditolak tanpa DB -> cari hash -> kebijakan sandi (sebelum hash argon2 dan sebelum menyentuh
-//     status token) -> hash lewat pembatas hash -> store.ResetPassword atomik -> session.MarkRevoked.
+//   - Complete: token cacat ditolak tanpa DB -> kebijakan sandi (lebih dulu daripada pencarian tautan, sehingga probing
+//     token dengan sandi lemah tidak membuka status token, dan sebelum hash argon2) -> cari hash -> hash lewat pembatas
+//     hash -> store.ResetPassword atomik -> session.MarkRevoked.
+//   - Request: token, render, dan validasi alamat penerima (aturan sdk/mail) dikerjakan SEBELUM tautan lama dibatalkan;
+//     alamat yang tidak dapat dikirimi tidak menghanguskan tautan yang masih berlaku (peringatan tanpa email).
+//   - Galat pengiriman dicatat tanpa PII: balasan server SMTP hanya kodenya.
 //
 // # Cara merakit (internal/app, C1.10/C1.12)
 //

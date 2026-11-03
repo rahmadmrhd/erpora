@@ -1,0 +1,8 @@
+# Allowlist route terautentikasi-tanpa-permission (kontrak x-erp-authenticated; module.Authenticated; PRD-001 Q29). Satu
+# pola "METHOD /path" per baris. Route ini hanya mewajibkan Principal terautentikasi (aturan MFA ADR-0013 §4 tetap
+# berlaku, kecuali yang dikecualikan secara eksplisit), tanpa pemeriksaan permission: setiap penambahan wajib melewati
+# review keamanan, sama seperti public_routes.txt.
+#
+# Bootstrap (PRD-001 FR-106): hanya data pengguna sendiri dan daftar modul; sengaja tidak diblokir aturan mfa_required
+# (Q29 butir 2) karena UI membutuhkannya untuk layar enroll/verify MFA.
+GET /api/bootstrap

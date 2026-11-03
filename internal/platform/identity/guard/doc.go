@@ -10,11 +10,13 @@
 //	NewIPLimiter(LimiterConfig) (*IPLimiter, error)              // Allow(ip) (ok bool, retryAfter time.Duration)
 //	NewPrincipalLimiter(LimiterConfig) (*PrincipalLimiter, error) // Allow(key) (ok bool, retryAfter time.Duration)
 //	TargetKey / EmailTargetKey(scope, tenant, ...)               // kunci sasaran ter-hash (tanpa email di memori)
-//	NormalizeIP(ip) string                                       // IPv6 -> /64, IPv4-mapped -> IPv4, tak terurai -> "unknown"
+//	NormalizeIP(ip) string                                       // IPv6 -> /64, IPv4-mapped -> IPv4, tak terurai -> "unknown"; IDEMPOTEN
 //	NewLockout(AttemptStore, LockoutConfig, now) (*Lockout, error)
 //	  Check(ctx, userID, ip) (State, error)                      // BACA-SAJA: jeda pasangan + akun locked
 //	  RegisterFailure / RegisterMFAFailure(ctx, userID, ip) (State, error)
 //	  RegisterSuccess(ctx, userID, ip) error
+//	  Reserve(ctx, kind, userID, ip) (Reservation, State, error) // atomik per pasangan: cek + catat gagal SEBELUM verifikasi
+//	  Fail(ctx, Reservation) (State, error) / Release(ctx, Reservation) error // selesaikan: gagal (kunci akun) / bukan gagal
 //	  Unlock(ctx, userID) error                                  // idempoten
 //	NewHashGate(capacity, maxWait) (*HashGate, error)            // Do, Verify, Hash; ErrHashBusy -> *RateLimitedError
 //	NewAuthenticator(AuthenticatorConfig) (*Authenticator, error)
@@ -33,8 +35,11 @@
 //   - Success belum mencatat sukses: panggil RegisterSuccess HANYA setelah autentikasi selesai penuh (setelah MFA bila
 //     akun berfaktor aktif), karena sukses mereset hitungan pasangan. Hash dengan NeedsRehash disimpan ulang lewat
 //     HashGate.Hash.
-//   - Pemeriksa guess-limit lain (MFA, C1.9) memanggil Lockout.Check sebelum memverifikasi kode, menolak tanpa
-//     memverifikasi dan tanpa mencatat bila PairBlocked atau AccountLocked, lalu RegisterMFAFailure pada kegagalan.
+//   - Pemeriksa guess-limit lain (MFA, C1.9) memanggil Lockout.Reserve sebelum memverifikasi kode: bila PairBlocked atau
+//     AccountLocked ditolak tanpa memverifikasi dan tanpa mencatat; selain itu percobaan sudah tercatat sebagai kegagalan
+//     (atomik lintas instance lewat kunci advisory per pasangan, sehingga permintaan serentak tidak lolos bersama-sama).
+//     Kode salah: Fail; kode benar atau keluar bukan-kegagalan: Release. (Check + RegisterMFAFailure tetap ada untuk
+//     pemanggil lama; tidak membatasi tebakan serentak.)
 //     guard.State identik bentuknya dengan mfa.LockState (PairBlocked, AccountLocked, RetryAfter): konversi
 //     mfa.LockState(st) cukup di perekat (internal/app).
 //

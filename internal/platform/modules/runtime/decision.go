@@ -54,6 +54,9 @@ type RouteOptions struct {
 	PendingVerify bool
 	// PendingEnroll: route boleh dipanggil administrator yang belum punya faktor (mfa/enroll, mfa/confirm, logout).
 	PendingEnroll bool
+	// AuthenticatedOnly: route tanpa permission (module.Authenticated; PRD-001 Q29). Decide tetap mensyaratkan Principal
+	// (401), token tanpa scope terbatas, dan aturan MFA ADR-0013 §4; hanya pemeriksaan permission yang dilewati.
+	AuthenticatedOnly bool
 }
 
 // MFAState adalah keadaan MFA pengguna yang dibutuhkan keputusan; diperoleh dari MFAStateReader per request
@@ -80,8 +83,8 @@ type Decider interface {
 // Principal wajib, aturan MFA ADR-0013 §4 untuk SEMUA pengguna manusia, dan RequireMFA.
 //
 // Urutan Decide: tanpa Principal -> Unauthenticated; token ber-scope terbatas -> Forbidden; aturan MFA ->
-// MFARequired; permission -> Forbidden; selain itu Allow. MFA diperiksa SEBELUM permission agar sesi yang belum
-// memenuhi MFA tidak dapat menebak permission lewat 403 permission_denied.
+// MFARequired; permission -> Forbidden (dilewati pada route AuthenticatedOnly); selain itu Allow. MFA diperiksa
+// SEBELUM permission agar sesi yang belum memenuhi MFA tidak dapat menebak permission lewat 403 permission_denied.
 type TypedAuthorizer struct {
 	permissions Authorizer
 	mfa         MFAStateReader
@@ -118,6 +121,17 @@ func (a *TypedAuthorizer) Allow(ctx context.Context, permission string) bool {
 
 // Decide: lihat doc TypedAuthorizer.
 func (a *TypedAuthorizer) Decide(ctx context.Context, permission string, opts RouteOptions) Decision {
+	if d := a.sessionDecision(ctx, opts); d != Allow {
+		return d
+	}
+	if !opts.AuthenticatedOnly && !a.permissions.Allow(ctx, permission) {
+		return Forbidden
+	}
+	return Allow
+}
+
+// sessionDecision adalah bagian keputusan yang tidak bergantung pada permission: Principal, scope token, dan MFA.
+func (a *TypedAuthorizer) sessionDecision(ctx context.Context, opts RouteOptions) Decision {
 	p, ok := identity.FromContext(ctx)
 	if !ok || p.UserID == "" {
 		return Unauthenticated
@@ -127,13 +141,7 @@ func (a *TypedAuthorizer) Decide(ctx context.Context, permission string, opts Ro
 	if len(p.TokenScope) > 0 {
 		return Forbidden
 	}
-	if d := a.mfaDecision(ctx, p, opts); d != Allow {
-		return d
-	}
-	if !a.permissions.Allow(ctx, permission) {
-		return Forbidden
-	}
-	return Allow
+	return a.mfaDecision(ctx, p, opts)
 }
 
 // mfaDecision menerapkan ADR-0013 §4. Hanya Principal manusia yang tunduk pada MFA (akun layanan memakai token

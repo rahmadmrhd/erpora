@@ -502,23 +502,42 @@ func suiteDisabledUserSessionsRevokedImmediately(t *testing.T, w *world) {
 		eventually(t, "instance lain menolak sesi pengguna nonaktif", func() bool { return b.list.IsRevoked(sid) })
 	}
 
-	// pengaman: hook terlewat, Rotate menolak pengguna nonaktif/terkunci dan mencabut semua sesinya
-	for _, status := range []string{store.UserDisabled, store.UserLocked} {
+	// pengaman: hook terlewat, Rotate menolak pengguna nonaktif (disabled) dan mencabut semua sesinya
+	{
 		u := w.be.NewUser(t, w.ctx)
 		x1, rt1 := w.start(a, u)
 		x2, _ := w.start(a, u)
-		w.be.SetStatus(t, w.ctx, u, status)
+		w.be.SetStatus(t, w.ctx, u, store.UserDisabled)
 		if _, _, err := a.svc.Rotate(w.ctx, rt1.Value, goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) {
-			t.Fatalf("pengguna %s: Rotate harus ErrInvalidRefresh, dapat %v", status, err)
+			t.Fatalf("pengguna disabled: Rotate harus ErrInvalidRefresh, dapat %v", err)
 		}
 		for _, s := range []session.Session{x1, x2} {
 			if w.sessionRow(s.ID).RevokedAt == nil || !a.list.IsRevoked(s.ID) {
-				t.Fatalf("pengguna %s: sesi %s harus tercabut", status, s.ID)
+				t.Fatalf("pengguna disabled: sesi %s harus tercabut", s.ID)
 			}
 		}
 		// dan Start untuk pengguna itu ditolak
 		if _, _, err := a.svc.Start(w.ctx, session.StartInput{UserID: u}); !errors.Is(err, session.ErrUserNotActive) {
-			t.Fatalf("pengguna %s: Start harus ErrUserNotActive, dapat %v", status, err)
+			t.Fatalf("pengguna disabled: Start harus ErrUserNotActive, dapat %v", err)
+		}
+	}
+
+	// Q30 butir 4: locked hanya menolak login baru; sesi yang ada tetap valid dan dapat di-refresh, TIDAK dicabut.
+	{
+		u := w.be.NewUser(t, w.ctx)
+		x1, rt1 := w.start(a, u)
+		x2, _ := w.start(a, u)
+		w.be.SetStatus(t, w.ctx, u, store.UserLocked)
+		if _, _, err := a.svc.Rotate(w.ctx, rt1.Value, goodOrigin); err != nil {
+			t.Fatalf("pengguna locked: Rotate harus berhasil (sesi tidak dicabut), dapat %v", err)
+		}
+		for _, s := range []session.Session{x1, x2} {
+			if w.sessionRow(s.ID).RevokedAt != nil || a.list.IsRevoked(s.ID) {
+				t.Fatalf("pengguna locked: sesi %s tidak boleh tercabut", s.ID)
+			}
+		}
+		if _, _, err := a.svc.Start(w.ctx, session.StartInput{UserID: u}); !errors.Is(err, session.ErrUserNotActive) {
+			t.Fatalf("pengguna locked: Start (login baru) harus ErrUserNotActive, dapat %v", err)
 		}
 	}
 
@@ -714,4 +733,130 @@ func suiteRevokeIsIdempotentAndBroadcastsOnce(t *testing.T, w *world) {
 		t.Fatal("MarkRevoked harus mencatat di daftar lokal")
 	}
 	eventually(t, "MarkRevoked disiarkan", func() bool { return other.list.IsRevoked(s3.ID) })
+}
+
+// Upgrade (naik ke otp): token refresh pra-MFA diganti dan mati tanpa mencabut sesi (bukan reuse); leluhur yang sudah
+// terpakai tetap memicu deteksi reuse; AMR sesi naik.
+func suiteUpgradeReplacesRefreshTokenWithoutRevokingSession(t *testing.T, w *world) {
+	a := w.instance()
+	user := w.be.NewUser(t, w.ctx)
+	sess, root := w.start(a, user)
+	_, cur, err := a.svc.Rotate(w.ctx, root.Value, goodOrigin) // root kini leluhur terpakai; cur token saat ini
+	must(t, err)
+
+	up, fresh, err := a.svc.Upgrade(w.ctx, user, sess.ID, "otp")
+	if err != nil {
+		t.Fatalf("Upgrade: %v", err)
+	}
+	if strings.Join(up.AMR, ",") != "pwd,otp" || fresh.Value == "" || fresh.Value == cur.Value || fresh.ExpiresAt.IsZero() {
+		t.Fatalf("hasil = %+v %+v", up, fresh)
+	}
+	if row := w.sessionRow(sess.ID); strings.Join(row.AMR, ",") != "pwd,otp" || row.RevokedAt != nil {
+		t.Fatalf("sesi = %+v", row)
+	}
+	if got := w.tokenRow(fresh.Value); got.FamilyID != root.FamilyID || got.UsedAt != nil {
+		t.Fatalf("token baru harus satu family dan belum terpakai: %+v", got)
+	}
+	// token pra-upgrade ditolak seragam, sesi TETAP hidup (bukan serangan reuse)
+	before := w.notifier.count(session.ChannelSessionRevoked)
+	if _, _, err := a.svc.Rotate(w.ctx, cur.Value, goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) {
+		t.Fatalf("token pra-upgrade harus ErrInvalidRefresh: %v", err)
+	}
+	if row := w.sessionRow(sess.ID); row.RevokedAt != nil || a.list.IsRevoked(sess.ID) || w.notifier.count(session.ChannelSessionRevoked) != before {
+		t.Fatal("token pra-upgrade tidak boleh mencabut sesi")
+	}
+	// token baru bekerja dan AMR dipertahankan
+	got, next, err := a.svc.Rotate(w.ctx, fresh.Value, goodOrigin)
+	if err != nil || strings.Join(got.AMR, ",") != "pwd,otp" {
+		t.Fatalf("rotasi token baru: %+v %v", got, err)
+	}
+	// leluhur lama yang sudah terpakai tetap memicu reuse (mencabut family termasuk token baru)
+	if _, _, err := a.svc.Rotate(w.ctx, root.Value, goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) {
+		t.Fatalf("reuse leluhur: %v", err)
+	}
+	if row := w.sessionRow(sess.ID); row.RevokedAt == nil {
+		t.Fatal("reuse leluhur harus mencabut sesi")
+	}
+	if _, _, err := a.svc.Rotate(w.ctx, next.Value, goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) {
+		t.Fatalf("family harus mati: %v", err)
+	}
+	if strings.Contains(w.logs.String(), fresh.Value) {
+		t.Fatal("token mentah tidak boleh masuk log")
+	}
+}
+
+func suiteUpgradeOwnershipAndPreconditions(t *testing.T, w *world) {
+	a := w.instance()
+	user := w.be.NewUser(t, w.ctx)
+	other := w.be.NewUser(t, w.ctx)
+	sess, _ := w.start(a, user)
+
+	if _, _, err := a.svc.Upgrade(w.ctx, other, sess.ID, "otp"); !errors.Is(err, session.ErrSessionNotFound) {
+		t.Fatalf("sesi milik pengguna lain: %v", err)
+	}
+	if _, _, err := a.svc.Upgrade(w.otherCtx, user, sess.ID, "otp"); !errors.Is(err, session.ErrSessionNotFound) {
+		t.Fatalf("lintas tenant: %v", err)
+	}
+	if _, _, err := a.svc.Upgrade(w.ctx, user, uuid.NewString(), "otp"); !errors.Is(err, session.ErrSessionNotFound) {
+		t.Fatalf("sesi tak ada: %v", err)
+	}
+	if _, _, err := a.svc.Upgrade(w.ctx, user, sess.ID, ""); !errors.Is(err, session.ErrInvalidInput) {
+		t.Fatalf("faktor kosong: %v", err)
+	}
+	if row := w.sessionRow(sess.ID); strings.Join(row.AMR, ",") != "pwd" {
+		t.Fatalf("percobaan gagal tidak boleh mengubah sesi: %+v", row)
+	}
+	if _, _, err := a.svc.Upgrade(w.ctx, user, sess.ID, "otp"); err != nil {
+		t.Fatalf("Upgrade: %v", err)
+	}
+	if _, _, err := a.svc.Upgrade(w.ctx, user, sess.ID, "otp"); !errors.Is(err, session.ErrAlreadyUpgraded) {
+		t.Fatalf("upgrade ulang: %v", err)
+	}
+	must(t, a.svc.Revoke(w.ctx, sess.ID, session.ReasonLogout))
+	if _, _, err := a.svc.Upgrade(w.ctx, user, sess.ID, "x"); !errors.Is(err, session.ErrSessionNotFound) {
+		t.Fatalf("sesi tercabut: %v", err)
+	}
+}
+
+func suiteConcurrentUpgradeExactlyOneSucceeds(t *testing.T, w *world) {
+	a := w.instance()
+	user := w.be.NewUser(t, w.ctx)
+	sess, _ := w.start(a, user)
+	const n = 10
+	type res struct {
+		rt  session.RefreshToken
+		err error
+	}
+	out := make(chan res, n)
+	var wg sync.WaitGroup
+	gate := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-gate
+			_, rt, err := a.svc.Upgrade(w.ctx, user, sess.ID, "otp")
+			out <- res{rt, err}
+		}()
+	}
+	close(gate)
+	wg.Wait()
+	close(out)
+	wins := 0
+	var winner session.RefreshToken
+	for r := range out {
+		switch {
+		case r.err == nil:
+			wins++
+			winner = r.rt
+		case !errors.Is(r.err, session.ErrAlreadyUpgraded):
+			t.Errorf("galat tak terduga: %v", r.err)
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("upgrade serentak: %d pemenang, want 1", wins)
+	}
+	if _, _, err := a.svc.Rotate(w.ctx, winner.Value, goodOrigin); err != nil {
+		t.Fatalf("token pemenang harus berlaku: %v", err)
+	}
 }

@@ -19,8 +19,8 @@ import (
 // selalu satu proses, dan klaim hanya menolak token dari sistem lain. Diekspor agar perakitan (internal/app) dan helper
 // uji memakai nilai yang sama.
 const (
-	TokenIssuer   = "erpora"
-	TokenAudience = "erpora-api" //nolint:gosec // G101 salah sasaran: nilai klaim aud JWT, bukan kredensial
+	ClaimIssuer   = "erpora"
+	ClaimAudience = "erpora-api" //nolint:gosec // G101 salah sasaran: nilai klaim aud JWT, bukan kredensial
 )
 
 // Kode galat 401 (api-guidelines §12). Hanya dua: klien tidak pernah diberi tahu mengapa token ditolak, kecuali

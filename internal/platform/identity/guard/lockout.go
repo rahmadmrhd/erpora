@@ -21,6 +21,8 @@ var ErrNoTenant = errors.New("guard: context tanpa tenant")
 // *store.Store; tes unit memakai fake. Penghitung hidup di database (login_attempts) sehingga berlaku lintas instance.
 type AttemptStore interface {
 	RecordLoginAttempt(ctx context.Context, t tenancy.TenantID, userID, ip, kind string, success bool, at time.Time) error
+	ReserveLoginAttempt(ctx context.Context, t tenancy.TenantID, userID, ip, kind string, at, since time.Time, admit func(store.PairState) bool) (store.PairState, bool, int64, error)
+	ReleaseLoginAttempt(ctx context.Context, t tenancy.TenantID, userID string, id int64) error
 	PairFailureStateSince(ctx context.Context, t tenancy.TenantID, userID, ip string, since time.Time) (store.PairState, error)
 	CrossIPFailures(ctx context.Context, t tenancy.TenantID, userID string, since time.Time) (store.CrossIPState, error)
 	GetUser(ctx context.Context, t tenancy.TenantID, id string) (store.User, error)
@@ -220,7 +222,12 @@ func (l *Lockout) registerFailure(ctx context.Context, kind, userID, ip string) 
 	if err != nil {
 		return State{}, fmt.Errorf("guard: baca keadaan pasangan: %w", err)
 	}
-	st := l.stateFor(ps.ConsecutiveFailures, ps.LastFailureAt, now)
+	return l.crossIPLock(ctx, t, userID, now, l.stateFor(ps.ConsecutiveFailures, ps.LastFailureAt, now))
+}
+
+// crossIPLock memeriksa ambang kunci akun lintas IP setelah sebuah kegagalan tercatat dan mengunci akun bila
+// terlampaui; st adalah keadaan pasangan yang dikembalikan (AccountLocked diisi di sini).
+func (l *Lockout) crossIPLock(ctx context.Context, t tenancy.TenantID, userID string, now time.Time, st State) (State, error) {
 	cs, err := l.store.CrossIPFailures(ctx, t, userID, now.Add(-l.cfg.AccountWindow))
 	if err != nil {
 		return st, fmt.Errorf("guard: baca kegagalan lintas IP: %w", err)
@@ -262,21 +269,135 @@ func (l *Lockout) Unlock(ctx context.Context, userID string) error {
 	return nil
 }
 
-// --- Operasi tiruan dan pelacak email tak dikenal (keseragaman respons dan jejak DB; dipakai Authenticator) ---
+// --- Reservasi percobaan (check -> verifikasi -> catat yang atomik per pasangan) ---
 
-// dummyCheck mengeluarkan kueri baca yang sama dengan Check untuk pengguna fiktif: email tak dikenal menghasilkan jumlah
-// dan bentuk round-trip database yang sama dengan akun nyata. Hasil dan galat diabaikan.
-func (l *Lockout) dummyCheck(ctx context.Context, t tenancy.TenantID) {
-	_, _ = l.store.PairFailureStateSince(ctx, t, uuid.NewString(), UnknownIP, l.now().UTC().Add(-l.cfg.PairWindow))
+// Reservation adalah satu percobaan autentikasi yang sudah dicatat sebagai KEGAGALAN sebelum kredensial diverifikasi.
+// Alasannya (PRD-001 Q16/Q19, ADR-0013 section 5): bila check, verifikasi, dan pencatatan terpisah, permintaan serentak
+// pada pasangan yang sedang di ambang jeda semuanya lolos check dan masing-masing mendapat tebakan; dengan reservasi
+// yang atomik per pasangan (kunci advisory di database, lintas instance) permintaan serentak saling melihat dan hanya
+// sebanyak yang diizinkan jadwal jeda yang sampai ke verifikasi. Selesaikan SELALU dengan tepat satu dari: Fail
+// (kredensial salah; baris dipertahankan) atau Release (bukan kegagalan: sukses, dibatasi laju, galat infrastruktur).
+type Reservation struct {
+	// After adalah keadaan pasangan bila percobaan ini gagal (hitungan sudah termasuk reservasi ini).
+	After State
+
+	userID  string
+	ipKey   string
+	kind    string
+	id      int64
+	at      time.Time
+	unknown bool   // jalur email tak dikenal: reservasi di memori + operasi tiruan di database
+	ukey    string // kunci pelacak memori (jalur tak dikenal)
 }
 
-// dummyFailure meniru registerFailure: satu INSERT yang tidak memasukkan baris (ErrNotFound pada pengguna fiktif)
-// diikuti dua kueri baca. Hasil dan galat diabaikan.
-func (l *Lockout) dummyFailure(ctx context.Context, t tenancy.TenantID) {
-	id, now := uuid.NewString(), l.now().UTC()
-	_ = l.store.RecordLoginAttempt(ctx, t, id, UnknownIP, store.AttemptPassword, false, now)
-	_, _ = l.store.PairFailureStateSince(ctx, t, id, UnknownIP, now.Add(-l.cfg.PairWindow))
-	_, _ = l.store.CrossIPFailures(ctx, t, id, now.Add(-l.cfg.AccountWindow))
+// Reserved menyatakan apakah reservasi sungguh dibuat (false bila pasangan sedang dijeda/diblokir: tidak ada yang
+// dicatat dan tidak ada yang perlu diselesaikan).
+func (r Reservation) Reserved() bool { return r.id != 0 || r.unknown && r.ukey != "" }
+
+// reservePair mereservasi satu percobaan untuk pasangan (userID, ipKey) bila pasangan tidak sedang dijeda; ipKey sudah
+// dinormalisasi. State.PairBlocked true berarti ditolak (tanpa verifikasi dan tanpa mencatat apa pun).
+func (l *Lockout) reservePair(ctx context.Context, t tenancy.TenantID, kind, userID, ipKey string) (Reservation, State, error) {
+	now := l.now().UTC()
+	var blocked State
+	before, admitted, id, err := l.store.ReserveLoginAttempt(ctx, t, userID, ipKey, kind, now, now.Add(-l.cfg.PairWindow), func(ps store.PairState) bool {
+		blocked = l.stateFor(ps.ConsecutiveFailures, ps.LastFailureAt, now)
+		return !blocked.PairBlocked
+	})
+	if err != nil {
+		return Reservation{}, State{}, fmt.Errorf("guard: reservasi percobaan: %w", err)
+	}
+	if !admitted {
+		return Reservation{}, blocked, nil
+	}
+	after := l.stateFor(before.ConsecutiveFailures+1, &now, now)
+	return Reservation{After: after, userID: userID, ipKey: ipKey, kind: kind, id: id, at: now}, State{}, nil
+}
+
+// Reserve memeriksa status akun lalu mereservasi satu percobaan (kind: store.AttemptPassword atau store.AttemptMFA)
+// untuk (userID, ip): menggantikan pasangan Check + RegisterFailure bagi pemverifikasi yang tebakannya harus dibatasi
+// (kode TOTP/recovery). State.AccountLocked atau State.PairBlocked true berarti ditolak TANPA reservasi: tolak tanpa
+// memverifikasi dan jangan membedakan sebabnya ke klien.
+func (l *Lockout) Reserve(ctx context.Context, kind, userID, ip string) (Reservation, State, error) {
+	t, err := tenantFrom(ctx)
+	if err != nil {
+		return Reservation{}, State{}, err
+	}
+	u, err := l.store.GetUser(ctx, t, userID)
+	if err != nil {
+		return Reservation{}, State{}, fmt.Errorf("guard: baca status akun: %w", err)
+	}
+	if u.Status == store.UserLocked {
+		return Reservation{}, State{AccountLocked: true}, nil
+	}
+	return l.reservePair(ctx, t, kind, userID, NormalizeIP(ip))
+}
+
+// Fail menyelesaikan reservasi sebagai kegagalan (kredensial salah): baris sudah tercatat, jadi hanya ambang kunci
+// akun lintas IP yang dievaluasi (akun dikunci bila terlampaui). Mengembalikan keadaan pasangan setelah percobaan ini.
+func (l *Lockout) Fail(ctx context.Context, r Reservation) (State, error) {
+	t, err := tenantFrom(ctx)
+	if err != nil {
+		return State{}, err
+	}
+	if r.unknown {
+		l.dummyCrossIP(ctx, t)
+		return r.After, nil
+	}
+	if r.id == 0 {
+		return State{}, errors.New("guard: Fail tanpa reservasi")
+	}
+	return l.crossIPLock(ctx, t, r.userID, l.now().UTC(), r.After)
+}
+
+// Release membatalkan reservasi karena percobaan ternyata bukan kegagalan (sandi/kode benar, dibatasi laju, atau galat
+// infrastruktur): menghapus baris reservasi. Berjalan walau ctx sudah dibatalkan (tanpa pelepasan, kegagalan palsu
+// menumpuk saat beban tinggi). Bila gagal, reservasi tersisa hanya konservatif (dihitung sebagai kegagalan). Aman
+// dipanggil pada reservasi yang tidak dibuat.
+func (l *Lockout) Release(ctx context.Context, r Reservation) error {
+	if !r.Reserved() {
+		return nil
+	}
+	ctx = context.WithoutCancel(ctx)
+	t, err := tenantFrom(ctx)
+	if err != nil {
+		return err
+	}
+	if r.unknown {
+		l.unknown.remove(r.ukey, r.at)
+		_ = l.store.ReleaseLoginAttempt(ctx, t, uuid.NewString(), 1) // tiruan: jejak database sama dengan akun nyata
+		return nil
+	}
+	if err := l.store.ReleaseLoginAttempt(ctx, t, r.userID, r.id); err != nil {
+		return fmt.Errorf("guard: lepas reservasi: %w", err)
+	}
+	return nil
+}
+
+// --- Jalur email tak dikenal (keseragaman respons dan jejak DB; dipakai Authenticator) ---
+
+// reserveUnknown meniru reservePair untuk email yang TIDAK dikenal: keputusan diambil atomik di pelacak memori (cek
+// dan tambah dalam satu bagian kritis), lalu satu panggilan ReserveLoginAttempt tiruan (pengguna fiktif; INSERT tidak
+// memasukkan baris) mengeluarkan jumlah dan bentuk round-trip database yang sama dengan akun nyata. Hasil dan galat
+// panggilan tiruan diabaikan.
+func (l *Lockout) reserveUnknown(ctx context.Context, t tenancy.TenantID, email, ipKey string) (Reservation, State) {
+	now := l.now().UTC()
+	since := now.Add(-l.cfg.PairWindow)
+	key := l.unknown.key(t, email, ipKey)
+	var blocked State
+	admitted, n := l.unknown.reserve(key, now, since, func(n int, last *time.Time) bool {
+		blocked = l.stateFor(n, last, now)
+		return !blocked.PairBlocked
+	})
+	_, _, _, _ = l.store.ReserveLoginAttempt(ctx, t, uuid.NewString(), UnknownIP, store.AttemptPassword, now, since, func(store.PairState) bool { return admitted })
+	if !admitted {
+		return Reservation{}, blocked
+	}
+	return Reservation{After: l.stateFor(n+1, &now, now), unknown: true, ukey: key, at: now}, State{}
+}
+
+// dummyCrossIP meniru pembacaan lintas IP pada kegagalan akun nyata (satu kueri baca; hasil diabaikan).
+func (l *Lockout) dummyCrossIP(ctx context.Context, t tenancy.TenantID) {
+	_, _ = l.store.CrossIPFailures(ctx, t, uuid.NewString(), l.now().UTC().Add(-l.cfg.AccountWindow))
 }
 
 // unknownPairs melacak kegagalan per (tenant, email, IP) untuk email yang TIDAK dikenal, di memori, dengan jadwal jeda
@@ -312,45 +433,47 @@ func pruneBefore(ts []time.Time, since time.Time) []time.Time {
 }
 
 // state mengembalikan hitungan dan waktu gagal terakhir dalam jendela; 0 dan nil bila tak ada.
-func (u *unknownPairs) state(key string, since time.Time) (int, *time.Time) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	p, ok := u.m.get(key)
-	if !ok {
-		return 0, nil
-	}
-	*p = pruneBefore(*p, since)
-	if len(*p) == 0 {
-		return 0, nil
-	}
-	last := (*p)[len(*p)-1]
-	return len(*p), &last
-}
-
-func (u *unknownPairs) fail(key string, now, since time.Time) (int, *time.Time) {
+// reserve memutuskan dan mencatat dalam satu bagian kritis (serial per instance): admit dipanggil dengan hitungan dan
+// waktu gagal terakhir dalam jendela (sebelum percobaan ini); bila true, now ditambahkan sebagai kegagalan
+// (reservasi). Mengembalikan hasil keputusan dan hitungan sebelum percobaan ini.
+func (u *unknownPairs) reserve(key string, now, since time.Time, admit func(n int, last *time.Time) bool) (bool, int) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	p, ok := u.m.get(key)
 	if !ok {
 		p = u.m.add(key, nil)
 	}
-	ts := append(pruneBefore(*p, since), now)
+	ts := pruneBefore(*p, since)
+	n := len(ts)
+	var last *time.Time
+	if n > 0 {
+		l := ts[n-1]
+		last = &l
+	}
+	if !admit(n, last) {
+		*p = ts
+		return false, n
+	}
+	ts = append(ts, now)
 	if len(ts) > u.capPerKey {
 		ts = ts[len(ts)-u.capPerKey:]
 	}
 	*p = ts
-	last := now
-	return len(ts), &last
+	return true, n
 }
 
-func (l *Lockout) unknownCheck(t tenancy.TenantID, email, ipKey string) State {
-	now := l.now().UTC()
-	n, last := l.unknown.state(l.unknown.key(t, email, ipKey), now.Add(-l.cfg.PairWindow))
-	return l.stateFor(n, last, now)
-}
-
-func (l *Lockout) unknownFail(t tenancy.TenantID, email, ipKey string) State {
-	now := l.now().UTC()
-	n, last := l.unknown.fail(l.unknown.key(t, email, ipKey), now, now.Add(-l.cfg.PairWindow))
-	return l.stateFor(n, last, now)
+// remove membuang satu kegagalan bercap at (reservasi yang dilepas).
+func (u *unknownPairs) remove(key string, at time.Time) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	p, ok := u.m.get(key)
+	if !ok {
+		return
+	}
+	for i := len(*p) - 1; i >= 0; i-- {
+		if (*p)[i].Equal(at) {
+			*p = append((*p)[:i], (*p)[i+1:]...)
+			return
+		}
+	}
 }
