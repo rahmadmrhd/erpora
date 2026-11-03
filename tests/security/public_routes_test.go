@@ -24,7 +24,8 @@ func TestEveryRouteHasPermissionOrIsPublic(t *testing.T) {
 	}
 }
 
-// TestPublicRoutesMatchAllowlist: route Public harus persis sama dengan public_routes.txt.
+// TestPublicRoutesMatchAllowlist: route Public (registry modul + rute publik platform di router) harus persis sama
+// dengan public_routes.txt.
 // Menambah route publik berarti sengaja mengubah allowlist (dan melewati review keamanan).
 func TestPublicRoutesMatchAllowlist(t *testing.T) {
 	reg, err := app.BuildRegistry()
@@ -37,6 +38,8 @@ func TestPublicRoutesMatchAllowlist(t *testing.T) {
 			actual = append(actual, r.Method+" "+r.Pattern)
 		}
 	}
+	// Rute publik yang didaftarkan platform langsung di router (mis. JWKS) tidak ada di registry; sumbernya satu.
+	actual = append(actual, app.DirectPublicRoutes()...)
 	allowed := readAllowlist(t, "public_routes.txt")
 
 	var unexpected, missing []string

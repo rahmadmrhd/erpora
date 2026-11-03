@@ -18,12 +18,12 @@ func TestAssemble_ModulesMutationRequiresJSONContentType(t *testing.T) {
 	const install = "/api/platform/modules/acme.example/install"
 	req := httptest.NewRequest(http.MethodPost, install, strings.NewReader(""))
 	rec := httptest.NewRecorder()
-	a.Router.ServeHTTP(rec, req)
+	a.authed(t).ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnsupportedMediaType || errCodeOf(t, rec) != "unsupported_media_type" {
 		t.Fatalf("tanpa Content-Type: %d %s", rec.Code, rec.Body)
 	}
 	for _, body := range []string{"", "{}"} {
-		if rec := call(a.Router, http.MethodPost, install, body); rec.Code != http.StatusOK {
+		if rec := call(a.authed(t), http.MethodPost, install, body); rec.Code != http.StatusOK {
 			t.Fatalf("body %q dengan application/json: %d %s", body, rec.Code, rec.Body)
 		}
 	}
@@ -60,10 +60,10 @@ func TestAssemble_ModulesAdminMutationGate(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if rec := call(a.Router, http.MethodPost, enable, ""); rec.Code != tc.wantEnable {
+			if rec := call(a.authed(t), http.MethodPost, enable, ""); rec.Code != tc.wantEnable {
 				t.Errorf("POST %s = %d, want %d: %s", enable, rec.Code, tc.wantEnable, rec.Body)
 			}
-			if rec := call(a.Router, http.MethodGet, "/api/platform/modules", ""); rec.Code != tc.wantList {
+			if rec := call(a.authed(t), http.MethodGet, "/api/platform/modules", ""); rec.Code != tc.wantList {
 				t.Errorf("GET /api/platform/modules = %d, want %d: %s", rec.Code, tc.wantList, rec.Body)
 			}
 		})

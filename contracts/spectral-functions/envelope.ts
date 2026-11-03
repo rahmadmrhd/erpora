@@ -47,9 +47,22 @@ export function flatten(root: unknown, schema: Obj, depth = 0): { props: Obj; re
   return { props, required };
 }
 
+/**
+ * Operasi JWKS platform mengikuti RFC 7517 ({"keys": [...]}), bukan amplop {"data": ...}: satu-satunya pengecualian,
+ * ditandai x-erp-raw-response: true dan hanya diterima pada kontrak platform untuk path JWKS (PRD-001 FR-102).
+ */
+function isRawResponseException(op: Operation): boolean {
+  return (
+    op.node["x-erp-raw-response"] === true &&
+    ctx().target === "platform" &&
+    op.path === "/.well-known/jwks.json"
+  );
+}
+
 export function successEnvelope(root: unknown): Result[] {
   const out: Result[] = [];
   for (const op of operations(currentDoc(root))) {
+    if (isRawResponseException(op)) continue;
     const responses = asObj(op.node.responses) ?? {};
     for (const [code, resp] of Object.entries(responses)) {
       if (!isSuccess(code) || code === "204") continue;

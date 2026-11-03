@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"erpora/internal/platform/testsupport/authtest"
 	"erpora/internal/platform/testsupport/pgtest"
 	"erpora/internal/platform/testsupport/secretkey"
 )
@@ -308,6 +310,38 @@ func TestServe_HTTPContract(t *testing.T) {
 		resp, body := getWith(t, base+"/api/bootstrap", map[string]string{"If-None-Match": etag})
 		if resp.StatusCode != 304 || body != "" {
 			t.Fatalf("status=%d body=%q", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("JWKS publik tanpa material privat", func(t *testing.T) {
+		resp, body := getWith(t, base+"/.well-known/jwks.json", nil)
+		if resp.StatusCode != 200 || resp.Header.Get("Cache-Control") != "public, max-age=300" {
+			t.Fatalf("status=%d Cache-Control=%q body=%s", resp.StatusCode, resp.Header.Get("Cache-Control"), body)
+		}
+		var jwks struct{ Keys []map[string]any }
+		if err := json.Unmarshal([]byte(body), &jwks); err != nil || len(jwks.Keys) == 0 {
+			t.Fatalf("JWKS tidak valid: %v %s", err, body)
+		}
+		for _, k := range jwks.Keys {
+			if _, hasPrivate := k["d"]; hasPrivate || k["kty"] != "OKP" || k["crv"] != "Ed25519" || k["alg"] != "EdDSA" {
+				t.Fatalf("kunci tidak sesuai atau membocorkan material privat: %v", k)
+			}
+		}
+	})
+
+	t.Run("autentikasi nyata: tanpa token 401, token sah lolos, token buruk 401", func(t *testing.T) {
+		const target = "/api/platform/modules" // butuh autentikasi; stub permission development = allow
+		resp, body := getWith(t, base+target, nil)
+		if resp.StatusCode != 401 || !strings.Contains(body, `"unauthenticated"`) || resp.Header.Get("WWW-Authenticate") != "Bearer" {
+			t.Fatalf("tanpa token: status=%d body=%s", resp.StatusCode, body)
+		}
+		resp, body = getWith(t, base+target, map[string]string{"Authorization": "Bearer bukan.token.sah"})
+		if resp.StatusCode != 401 || !strings.Contains(body, `"unauthenticated"`) {
+			t.Fatalf("token buruk: status=%d body=%s", resp.StatusCode, body)
+		}
+		resp, body = getWith(t, base+target, map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)})
+		if resp.StatusCode != 200 {
+			t.Fatalf("token sah: status=%d body=%s", resp.StatusCode, body)
 		}
 	})
 

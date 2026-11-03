@@ -10,6 +10,10 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// WellKnownJWKSPath adalah satu-satunya path di luar "/api/" yang boleh ada di kontrak platform: JWKS publik
+// (PRD-001 FR-102, ADR-0013 §3, K-C1.8). Modul tidak pernah boleh memilikinya.
+const WellKnownJWKSPath = "/.well-known/jwks.json"
+
 // Doc adalah satu dokumen kontrak: "common", "platform", atau slug modul.
 type Doc struct {
 	Name string         // "common" | "platform" | slug modul
@@ -17,7 +21,7 @@ type Doc struct {
 }
 
 // Parse menguraikan satu dokumen OpenAPI 3.1. Ditolak: YAML tidak valid, anchor/alias, kunci non-string,
-// `openapi` selain 3.1.x, path di luar "/api/", dan $ref selain bentuk yang diizinkan ParseRef.
+// `openapi` selain 3.1.x, path di luar "/api/" (kecuali WellKnownJWKSPath pada kontrak platform), dan $ref selain bentuk yang diizinkan ParseRef.
 func Parse(name string, data []byte) (*Doc, error) {
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
@@ -39,7 +43,7 @@ func Parse(name string, data []byte) (*Doc, error) {
 	}
 	if paths, ok := spec["paths"].(map[string]any); ok {
 		for p := range paths {
-			if !strings.HasPrefix(p, "/api/") {
+			if !strings.HasPrefix(p, "/api/") && (name != "platform" || p != WellKnownJWKSPath) {
 				return nil, fmt.Errorf("kontrak %s: path %q harus diawali /api/", name, p)
 			}
 		}

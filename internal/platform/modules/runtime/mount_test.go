@@ -228,7 +228,8 @@ func TestMount_MiddlewareOrder(t *testing.T) {
 	if rec := f.do("GET", "/api/notes/items"); rec.Code != 200 {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	if got := strings.Join(order, ","); got != "authn,tenant" {
+	// ADR-0013 §4: tenantContext sebelum Authenticate (sebelumnya terbalik; diubah sengaja pada C1.10).
+	if got := strings.Join(order, ","); got != "tenant,authn" {
 		t.Errorf("urutan = %q", got)
 	}
 	found := false

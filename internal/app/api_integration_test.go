@@ -34,7 +34,7 @@ func errCodeOf(t *testing.T, rec *httptest.ResponseRecorder) string {
 
 func TestAPI_EnableDisableRoundTrip(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 
 	if rec := call(h, "POST", "/api/platform/modules/acme.example/install", ""); rec.Code != 200 {
 		t.Fatalf("install = %d %s", rec.Code, rec.Body)
@@ -91,7 +91,7 @@ func insertForeign(t *testing.T, db *gorm.DB, other uuid.UUID, opID uuid.UUID) {
 // CLAUDE.md / keputusan 9: baris milik tenant lain tidak pernah terlihat atau dipakai lewat API.
 func TestAPI_IDOR_OtherTenantRows(t *testing.T) {
 	_, a, _, db := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 	other, foreignOp := uuid.New(), uuid.New()
 	insertForeign(t, db, other, foreignOp)
 

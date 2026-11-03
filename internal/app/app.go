@@ -86,7 +86,16 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return errors.New("migrasi platform belum diterapkan: jalankan erpora migrate up")
 	}
 
-	a, err := assemble(ctx, cfg, log, db, prov, reg, api)
+	// Production gagal start tanpa URL publik (keputusan pemilik produk 3 Nov 2026; sumber: settings platform).
+	// Production tanpa ERP_MAIL_DRIVER eksplisit juga gagal start (surat reset sandi tidak akan terkirim; Config.RequireMailDriver).
+	if err := cfg.RequireMailDriver(); err != nil {
+		return &ExitError{Code: 2, Err: err}
+	}
+	urls := defaultPublicURLSource(cfg)
+	if err := checkPublicURL(ctx, cfg, urls); err != nil {
+		return &ExitError{Code: 2, Err: err}
+	}
+	a, err := assemble(ctx, cfg, log, db, prov, reg, api, withPublicURLSource(urls))
 	if err != nil {
 		return err
 	}

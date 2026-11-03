@@ -1,6 +1,26 @@
 // Dibangkitkan oleh `erpora contracts:generate` dari contracts/openapi/platform.yaml. JANGAN DIEDIT.
 
 export type paths = {
+  "/.well-known/jwks.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * JWKS kunci publik penandatangan access token
+     * @description JSON Web Key Set (RFC 7517, OKP/Ed25519 menurut RFC 8037) untuk memverifikasi access token JWT EdDSA (PRD-001 FR-102, ADR-0013 §3). Hanya kunci berstatus pending, active, dan retiring; kunci retired dan material privat tidak pernah disajikan. Publik, di luar /api/{slug} (K-C1.8), dan bentuknya mengikuti RFC sehingga TIDAK memakai amplop {"data": ...} (pengecualian terbatas pada operasi ini lewat x-erp-raw-response).
+     */
+    get: operations["getJwks"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/bootstrap": {
     parameters: {
       query?: never;
@@ -379,6 +399,22 @@ export type components = {
     I18nOverridePreconditionDetails: {
       current: components["schemas"]["I18nOverride"];
     };
+    JwkPublicKey: {
+      /** @constant */
+      alg: "EdDSA";
+      /** @constant */
+      crv: "Ed25519";
+      kid: string;
+      /** @constant */
+      kty: "OKP";
+      /** @constant */
+      use: "sig";
+      /** @description Kunci publik Ed25519 mentah (32 byte) base64url tanpa padding. */
+      x: string;
+    };
+    Jwks: {
+      keys: components["schemas"]["JwkPublicKey"][];
+    };
     /** @description Rujukan pesan i18n; klien menerjemahkan dari katalog namespace `ns`. */
     MessageRef: {
       /** @description Kunci lengkap bertitik, mis. nav.notes. */
@@ -537,6 +573,42 @@ export type components = {
 };
 export type $defs = Record<string, never>;
 export interface operations {
+  getJwks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Himpunan kunci publik. */
+      200: {
+        headers: {
+          /** @description public, max-age=300 (JWKSMaxAge); kunci pending sudah terpublikasi sebelum dipakai menandatangani. */
+          "Cache-Control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "keys": [
+           *         {
+           *           "alg": "EdDSA",
+           *           "crv": "Ed25519",
+           *           "kid": "k1Xm2Qe4rT9wYz0a",
+           *           "kty": "OKP",
+           *           "use": "sig",
+           *           "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+           *         }
+           *       ]
+           *     }
+           */
+          "application/json": components["schemas"]["Jwks"];
+        };
+      };
+    };
+  };
   getBootstrap: {
     parameters: {
       query?: never;

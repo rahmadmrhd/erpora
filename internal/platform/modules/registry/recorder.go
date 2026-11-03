@@ -63,12 +63,17 @@ func (r *recorder) Handle(method, path, permission string, h http.Handler, opts 
 	r.routes = append(r.routes, RouteInfo{
 		Module: r.key, Method: method, Pattern: "/api/" + r.slug + path,
 		Permission: permission, Handler: h, MaxBodyBytes: cfg.MaxBodyBytes, Classification: cfg.Classification,
+		RequireMFA: cfg.RequireMFA,
 	})
 }
 
 func (r *recorder) Public(method, path string, h http.Handler, opts ...module.RouteOption) {
 	valid := r.validRoute(method, path) && r.validHandler(method, path, h)
 	cfg, optsOK := r.resolveOptions(method, path, opts)
+	if cfg.RequireMFA {
+		r.problem(CodeInvalidRouteOption, "route %s %s: RequireMFA tidak berlaku pada route Public (tanpa autentikasi)", method, path)
+		optsOK = false
+	}
 	if !valid || !optsOK {
 		return
 	}

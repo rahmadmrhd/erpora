@@ -47,6 +47,8 @@ type RouteInfo struct {
 	// MaxBodyBytes sudah diberi default (module.DefaultMaxBodyBytes); Classification kosong = tidak dinyatakan.
 	MaxBodyBytes   int64
 	Classification module.Classification
+	// RequireMFA: route menuntut amr memuat otp (module.RequireMFA; ADR-0013 §4).
+	RequireMFA bool
 	// Deprecated dan DeprecatedParams diisi Build dari kontrak (operasi dengan method dan path persis sama; platform.core
 	// lewat dispatch ServeMux): operasi ditandai deprecated, dan parameter query deprecated (PRD-000 FR-23.3).
 	Deprecated       bool

@@ -571,3 +571,35 @@ func TestLint_DecimalNotNumber_NullableOneOf(t *testing.T) {
 		})
 	}
 }
+
+// Pengecualian amplop JWKS (PRD-001 FR-102) hanya berlaku dengan penanda x-erp-raw-response pada operasi JWKS kontrak
+// platform; tanpa penanda, respons RFC 7517 tetap melanggar amplop {"data": ...} (api-guidelines §4.2).
+func TestLint_JWKSEnvelopeExceptionNeedsMarker(t *testing.T) {
+	bun := requireBun(t)
+	root := t.TempDir()
+	copyRepoSubset(t, root, "example", "exampleaddon")
+	editFile(t, root, "contracts/openapi/platform.yaml", [2]string{"      x-erp-raw-response: true\n", ""})
+	repo, err := LoadRepo(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.ToolsRoot = realRoot
+	res, err := Lint(context.Background(), repo, "", bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, r := range res {
+		if r.Severity == SeverityInfo {
+			continue
+		}
+		if r.Rule != "erp-success-envelope" || r.Target != "platform" || !strings.Contains(r.Message, "/.well-known/jwks.json") {
+			t.Errorf("temuan tak terduga: %+v", r)
+			continue
+		}
+		found = true
+	}
+	if !found {
+		t.Errorf("JWKS tanpa x-erp-raw-response harus melanggar erp-success-envelope: %v", res)
+	}
+}

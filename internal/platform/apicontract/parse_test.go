@@ -58,3 +58,19 @@ func TestParse_OperationsOrderedWithExtensions(t *testing.T) {
 		t.Errorf("ExternalRefs = %v, want [beta common]", got)
 	}
 }
+
+// WellKnownJWKSPath satu-satunya path di luar /api/ yang diterima, dan hanya pada kontrak platform.
+func TestParse_WellKnownJWKSPathOnlyOnPlatform(t *testing.T) {
+	doc := func(path string) []byte {
+		return []byte("openapi: 3.1.0\ninfo: { title: t, version: 1.0.0 }\npaths:\n  " + path + ":\n    get: { operationId: x }\n")
+	}
+	if _, err := Parse("platform", doc(WellKnownJWKSPath)); err != nil {
+		t.Errorf("platform harus menerima %s: %v", WellKnownJWKSPath, err)
+	}
+	if _, err := Parse("example", doc(WellKnownJWKSPath)); err == nil {
+		t.Error("kontrak modul tidak boleh memuat path di luar /api/")
+	}
+	if _, err := Parse("platform", doc("/.well-known/other.json")); err == nil {
+		t.Error("platform tidak boleh memuat path well-known lain")
+	}
+}

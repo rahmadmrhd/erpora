@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib" // driver database/sql untuk memeriksa DB dari test
 
+	"erpora/internal/platform/testsupport/authtest"
 	"erpora/internal/platform/testsupport/pgtest"
 )
 
@@ -94,18 +95,19 @@ func bootstrapState(t *testing.T, base string) (revision int64, etag string, sta
 	return b.Data.Revision, resp.Header.Get("ETag"), status
 }
 
-func waitCode(t *testing.T, url string, want int, d time.Duration) {
+func waitCode(t *testing.T, url string, want int, d time.Duration, hdr map[string]string) {
 	t.Helper()
-	waitStatusJSON(t, url, want, d)
+	waitStatusJSON(t, url, want, d, hdr)
 }
 
 // waitStatusJSON seperti waitStatus tetapi tanpa header Accept: text/html (endpoint API).
-func waitStatusJSON(t *testing.T, url string, want int, d time.Duration) string {
+// hdr (opsional) dikirim pada tiap percobaan, mis. Authorization untuk route yang butuh autentikasi.
+func waitStatusJSON(t *testing.T, url string, want int, d time.Duration, hdr map[string]string) string {
 	t.Helper()
 	deadline := time.Now().Add(d)
 	last := 0
 	for time.Now().Before(deadline) {
-		resp, body := getWith(t, url, nil)
+		resp, body := getWith(t, url, hdr)
 		last = resp.StatusCode
 		if last == want {
 			return body
@@ -139,7 +141,9 @@ func TestCLI_ManageBothModules(t *testing.T) {
 	startServe(t, dsn, addr)
 	base := "http://" + addr
 	waitStatus(t, base+"/readyz", 200, 20*time.Second)
-	waitCode(t, base+"/api/example-addon/summary", 200, 5*time.Second)
+	// Autentikasi nyata (C1.10): token uji sah dari kunci penandatangan yang disiapkan server saat start.
+	auth := map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)}
+	waitCode(t, base+"/api/example-addon/summary", 200, 5*time.Second, auth)
 	rev0, etag0, st := bootstrapState(t, base)
 	if st["acme.example"] != "enabled" || st["acme.example-addon"] != "enabled" || rev0 == 0 {
 		t.Fatalf("bootstrap awal: rev=%d %v", rev0, st)
@@ -155,7 +159,7 @@ func TestCLI_ManageBothModules(t *testing.T) {
 	}
 
 	mustCLI(t, dsn, 0, "modules", "disable", "acme.example-addon")
-	waitCode(t, base+"/api/example-addon/summary", 403, 6*time.Second) // watcher lintas proses (<= 3 x 2s)
+	waitCode(t, base+"/api/example-addon/summary", 403, 6*time.Second, auth) // watcher lintas proses (<= 3 x 2s)
 
 	mustCLI(t, dsn, 0, "modules", "disable", "acme.example")
 	out = mustCLI(t, dsn, 3, "example:recount")

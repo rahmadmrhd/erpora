@@ -15,6 +15,7 @@ import (
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/i18n/store"
 	"erpora/internal/platform/modules/lifecycle"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 // callJSON mengirim request dengan Content-Type application/json (PUT/DELETE override wajib; 415 bila tidak).
@@ -35,7 +36,7 @@ const overrideURL = "/api/platform/i18n/overrides/ui/id/actions.save"
 // bootstrap berubah -> DELETE -> kembali ke bawaan.
 func TestI18nOverrideFlow_PutChangesCatalogAndBootstrapThenDeleteRestores(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 	cat0, etag0 := catalogOf(t, h, "/api/platform/i18n/id/ui")
 	boot0, bootETag0 := i18nBootstrap(t, h)
 	if cat0.Data.Messages["actions.save"] != "Simpan" {
@@ -90,7 +91,7 @@ func TestI18nOverrideFlow_PutChangesCatalogAndBootstrapThenDeleteRestores(t *tes
 // error.message mengikuti Accept-Language dan tertimpa override, sementara code tetap (Requirement 4.4, 12.9).
 func TestI18nOverrideFlow_ErrorMessageOverriddenCodeStable(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 	type envelope struct {
 		Error struct{ Code, Message string }
 	}
@@ -125,7 +126,7 @@ func TestI18nOverrideFlow_ErrorMessageOverriddenCodeStable(t *testing.T) {
 // Validasi lewat DB nyata dan list/If-Match.
 func TestI18nOverrideAPI_ValidationListAndIfMatch(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 	if rec := callJSON(h, http.MethodPut, "/api/platform/i18n/overrides/ui/id/tidak.ada", `{"message":"x"}`, nil); rec.Code != http.StatusBadRequest || errCodeOf(t, rec) != "invalid_i18n_override" {
 		t.Errorf("kunci tak ada: %d %s", rec.Code, rec.Body)
 	}
@@ -175,13 +176,13 @@ func TestI18nOverrideAPI_MutationGate(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, a, _, _ := setupAssemblyWith(t, tc.mutate)
-			if rec := callJSON(a.Router, http.MethodPut, overrideURL, `{"message":"x"}`, nil); rec.Code != tc.wantPut {
+			if rec := callJSON(a.authed(t), http.MethodPut, overrideURL, `{"message":"x"}`, nil); rec.Code != tc.wantPut {
 				t.Errorf("PUT = %d, want %d: %s", rec.Code, tc.wantPut, rec.Body)
 			}
-			if rec := get(a.Router, "/api/platform/i18n/overrides", nil); rec.Code != tc.wantList {
+			if rec := get(a.authed(t), "/api/platform/i18n/overrides", nil); rec.Code != tc.wantList {
 				t.Errorf("GET list = %d, want %d", rec.Code, tc.wantList)
 			}
-			if rec := callJSON(a.Router, http.MethodDelete, overrideURL, "", nil); rec.Code != tc.wantDelete {
+			if rec := callJSON(a.authed(t), http.MethodDelete, overrideURL, "", nil); rec.Code != tc.wantDelete {
 				t.Errorf("DELETE = %d, want %d", rec.Code, tc.wantDelete)
 			}
 		})
@@ -195,7 +196,7 @@ func TestI18nOverrideFlow_ServiceWriteVisibleThroughAPI(t *testing.T) {
 	if err != nil || !changed {
 		t.Fatalf("SetOverride: %v %v", changed, err)
 	}
-	if cat, _ := catalogOf(t, a.Router, "/api/platform/i18n/id/ui"); cat.Data.Messages["actions.save"] != "Simpan via CLI" {
+	if cat, _ := catalogOf(t, a.authed(t), "/api/platform/i18n/id/ui"); cat.Data.Messages["actions.save"] != "Simpan via CLI" {
 		t.Errorf("katalog = %q", cat.Data.Messages["actions.save"])
 	}
 	row, err := a.I18n.GetOverride(t.Context(), a.Tenant, "ui", "id", "actions.save")
@@ -213,7 +214,7 @@ func TestI18nOverrideFlow_ServiceWriteVisibleThroughAPI(t *testing.T) {
 // R-13: CLI (NewGuardedI18n) menolak override untuk namespace modul yang belum enabled dan menerimanya setelah enabled.
 func TestI18nCLI_RejectsInactiveModuleNamespace(t *testing.T) {
 	e := newRefEnv(t)
-	cfg := config.Config{DatabaseURL: e.dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond}
+	cfg := config.Config{DatabaseURL: e.dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond, SecretKey: secretkey.Bytes()}
 	ctx := t.Context()
 
 	svc, tid, _, cleanup, err := NewGuardedI18n(ctx, cfg, testLog())

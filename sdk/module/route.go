@@ -13,6 +13,9 @@ type RouteConfig struct {
 	// MaxBodyBytesSet true bila MaxBodyBytes(n) dipanggil; n <= 0 yang diberikan eksplisit ditolak registry.
 	MaxBodyBytesSet bool
 	Classification  Classification // "" = tidak dinyatakan
+	// RequireMFA true bila route menuntut sesi yang faktor keduanya sudah diverifikasi (klaim amr memuat otp),
+	// apa pun status faktor pengguna (ADR-0013 §4). Hanya memperketat akses.
+	RequireMFA bool
 }
 
 // RouteOption mengubah RouteConfig pada Registrar.Handle/Public (Q26 butir 13).
@@ -39,6 +42,12 @@ func Classify(c Classification) RouteOption {
 		cfg.Classification = MaxClassification(cfg.Classification, c)
 	}
 }
+
+// RequireMFA menuntut sesi dengan faktor kedua terverifikasi (amr memuat `otp`) untuk route ini, walau pengguna
+// belum punya faktor MFA: tanpa itu platform menjawab 403 `mfa_required` (ADR-0013 §4, FR-107). Opsi ini hanya
+// memperketat akses; pelonggaran (route yang boleh dipanggil sesi yang menunggu MFA) bukan opsi modul, melainkan
+// daftar platform yang berlaku hanya untuk route auth modul `erp.core`.
+func RequireMFA() RouteOption { return func(c *RouteConfig) { c.RequireMFA = true } }
 
 // ResolveRouteOptions menerapkan opsi berurutan; opsi nil diabaikan.
 func ResolveRouteOptions(opts ...RouteOption) RouteConfig {

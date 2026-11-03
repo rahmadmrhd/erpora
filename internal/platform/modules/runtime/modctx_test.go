@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -12,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"erpora/internal/platform/database"
+	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 	"erpora/sdk/authz"
@@ -101,5 +104,42 @@ func TestModuleContext_InstallsI18nFromServices(t *testing.T) {
 	}
 	if l, _ := sdki18n.LocaleFrom(ctx); l != "id" {
 		t.Errorf("locale = %q", l)
+	}
+}
+
+type ctxMarkerKey struct{}
+
+// ADR-0013 7a butir 5: identity.Service/Admin hanya dipasang pada context modul core; penegakan ada di platform
+// (installIdentity), bukan pada hook, sehingga hook yang salah rakit pun tidak dapat bocor ke modul lain.
+func TestModuleContext_IdentityInstalledOnlyForCoreModule(t *testing.T) {
+	svc := Services{Identity: func(ctx context.Context) context.Context {
+		return context.WithValue(ctx, ctxMarkerKey{}, true)
+	}}
+	conn := fakeConnector(t)
+	core, _ := ModuleContext(context.Background(), tenantA, CoreModuleKey, conn, nil, "cli:core:create-admin", svc)
+	if core.Value(ctxMarkerKey{}) != true {
+		t.Error("modul core harus menerima identitas")
+	}
+	for _, key := range []string{"acme.notes", "evil.core", "erp.core-addon", ""} {
+		other, _ := ModuleContext(context.Background(), tenantA, key, conn, nil, "", svc)
+		if other.Value(ctxMarkerKey{}) != nil {
+			t.Errorf("modul %q tidak boleh menerima identitas", key)
+		}
+	}
+}
+
+func TestRouteContext_IdentityInstalledOnlyForCoreModuleRoutes(t *testing.T) {
+	svc := Services{Identity: func(ctx context.Context) context.Context {
+		return context.WithValue(ctx, ctxMarkerKey{}, true)
+	}}
+	for module, want := range map[string]bool{CoreModuleKey: true, "acme.notes": false} {
+		var got bool
+		h := requestLimitsMW(registry.RouteInfo{Module: module, MaxBodyBytes: 1024}, svc, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			got = r.Context().Value(ctxMarkerKey{}) == true
+		}))
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil))
+		if got != want {
+			t.Errorf("modul %s: identitas terpasang = %v, want %v", module, got, want)
+		}
 	}
 }

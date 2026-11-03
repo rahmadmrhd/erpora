@@ -12,6 +12,12 @@ function pathsOf(root: unknown): [string, Obj][] {
   return Object.entries(paths).map(([p, v]) => [p, asObj(v) ?? {}]);
 }
 
+/**
+ * Satu-satunya path platform di luar /api/ (JWKS publik; PRD-001 FR-102, ADR-0013 §3, K-C1.8). Dikecualikan dari
+ * rule awalan dan kebab-case; hanya berlaku pada kontrak platform.
+ */
+export const WELL_KNOWN_JWKS = "/.well-known/jwks.json";
+
 const segs = (p: string): string[] => p.split("/").filter((s) => s !== "");
 
 /** Segmen setelah /api/<slug>; /api/bootstrap tidak punya sisa. */
@@ -26,7 +32,7 @@ export function pathModulePrefix(root: unknown): Result[] {
   for (const [p] of pathsOf(root)) {
     const ok =
       target === "platform"
-        ? p === "/api/bootstrap" || p.startsWith("/api/platform/")
+        ? p === "/api/bootstrap" || p === WELL_KNOWN_JWKS || p.startsWith("/api/platform/")
         : p.startsWith(`/api/${slug}/`);
     if (!ok) {
       const want = target === "platform" ? "/api/platform/ atau /api/bootstrap" : `/api/${slug}/`;
@@ -42,6 +48,7 @@ export function pathModulePrefix(root: unknown): Result[] {
 export function pathKebabCase(root: unknown): Result[] {
   const out: Result[] = [];
   for (const [p] of pathsOf(root)) {
+    if (p === WELL_KNOWN_JWKS && ctx().target === "platform") continue;
     for (const s of segs(p)) {
       const ok = s.startsWith("{") ? PARAM.test(s) : KEBAB.test(s);
       if (!ok) {

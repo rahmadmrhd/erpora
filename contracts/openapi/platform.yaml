@@ -44,6 +44,31 @@ paths:
                     locales: [{ code: id, name: Bahasa Indonesia }, { code: en, name: English }]
                     revisions: { ui: 3f9a1c20b7d84e55, platform: 8c01d2e9a4b6f730, example: 11aa22bb33cc44dd }
         '304': { description: Tidak berubah (If-None-Match cocok dengan ETag). }
+  /.well-known/jwks.json:
+    x-erp-singleton: true
+    get:
+      operationId: getJwks
+      summary: JWKS kunci publik penandatangan access token
+      description: >-
+        JSON Web Key Set (RFC 7517, OKP/Ed25519 menurut RFC 8037) untuk memverifikasi access token JWT EdDSA
+        (PRD-001 FR-102, ADR-0013 §3). Hanya kunci berstatus pending, active, dan retiring; kunci retired dan
+        material privat tidak pernah disajikan. Publik, di luar /api/{slug} (K-C1.8), dan bentuknya mengikuti RFC
+        sehingga TIDAK memakai amplop {"data": ...} (pengecualian terbatas pada operasi ini lewat x-erp-raw-response).
+      x-erp-public: true
+      x-erp-raw-response: true
+      responses:
+        '200':
+          description: Himpunan kunci publik.
+          headers:
+            Cache-Control:
+              description: public, max-age=300 (JWKSMaxAge); kunci pending sudah terpublikasi sebelum dipakai menandatangani.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Jwks' }
+              example:
+                keys:
+                  - { kty: OKP, crv: Ed25519, use: sig, alg: EdDSA, kid: k1Xm2Qe4rT9wYz0a, x: 11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo }
   /api/platform/desks:
     get:
       operationId: listDesks
@@ -548,6 +573,23 @@ components:
       description: Key modul, mis. acme.example.
       schema: { type: string }
   schemas:
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items: { $ref: '#/components/schemas/JwkPublicKey' }
+    JwkPublicKey:
+      type: object
+      required: [kty, crv, use, alg, kid, x]
+      properties:
+        kty: { type: string, const: OKP }
+        crv: { type: string, const: Ed25519 }
+        use: { type: string, const: sig }
+        alg: { type: string, const: EdDSA }
+        kid: { type: string, maxLength: 64 }
+        x: { type: string, description: Kunci publik Ed25519 mentah (32 byte) base64url tanpa padding. }
     BootstrapEnvelope:
       type: object
       required: [data]
