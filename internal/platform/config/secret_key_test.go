@@ -45,12 +45,16 @@ func assertKeyHint(t *testing.T, err error) {
 	msg := err.Error()
 	for _, want := range []string{
 		"erpora secret:generate", "hanya build pengembang", "openssl rand -base64 32",
-		"[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))",
+		// Bentuk yang jalan di Windows PowerShell 5.1 DAN 7+ (GetBytes(32) statis baru ada di .NET 6, gagal di 5.1).
+		"$b = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)",
 		"docs/operations/deployment.md",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("petunjuk harus memuat %q: %v", want, err)
 		}
+	}
+	if strings.Contains(msg, "]::GetBytes(32)") {
+		t.Errorf("petunjuk tidak boleh memakai GetBytes(32) statis (tidak ada di Windows PowerShell 5.1): %v", err)
 	}
 	// Get-Random bukan CSPRNG: hanya boleh muncul sebagai larangan, bukan sebagai resep.
 	if strings.Contains(msg, "Get-Random -Max") || strings.Contains(msg, "| % {") {
