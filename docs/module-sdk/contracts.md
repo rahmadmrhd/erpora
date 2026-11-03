@@ -8,7 +8,7 @@ Panduan kontrak untuk penulis modul (PRD-000 FR-23). Bentuk wajib endpoint ada d
 | Pemilik | File | Isi |
 | --- | --- | --- |
 | Platform (bersama) | `contracts/openapi/common.yaml` | Hanya komponen: amplop, `Decimal`, `Uuid`, `Timestamp`, parameter/header standar, respons error |
-| Platform | `contracts/openapi/platform.yaml` | `/api/bootstrap`, `/api/platform/*` |
+| Platform | `contracts/openapi/platform.yaml` | `/api/bootstrap`, `/api/platform/*`, `/.well-known/jwks.json` |
 | Setiap modul | `modules/<dir>/openapi.yaml` | Path di bawah `/api/<slug>/` saja; di-embed lewat `module.ContractSource` (`OpenAPI() []byte`) |
 
 Semua kontrak memakai `openapi: 3.1.0`; YAML dengan anchor/alias ditolak. Rujukan lintas dokumen hanya `erp:<common|platform|slug>#/<pointer>`
@@ -21,6 +21,7 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 | --- | --- | --- |
 | `x-erp-permission` | operasi | Permission `<slug>.<resource>.<action>` (platform: `platform.<resource>.<action>`); harus ada di `capabilities` manifest |
 | `x-erp-public` | operasi | Route tanpa permission (`Registrar.Public`) |
+| `x-erp-authenticated` | operasi | Route yang cukup dengan login, tanpa permission tertentu (PRD-001 Q29, disetujui pemilik produk 3 Nov 2026): `Registrar.Handle(method, path, "", h, module.Authenticated())` pada modul, atau route platform langsung di router (`GET /api/bootstrap`). Tanpa `x-erp-permission` dan tanpa 403 permission, tetapi 401 wajib didokumentasikan; Principal dan aturan MFA tetap berlaku. Test kesesuaian memeriksa route non-publik tanpa permission ↔ penanda ini, dan route berpenanda ini wajib masuk `tests/security/authenticated_routes.txt` |
 | `x-erp-classification` | properti, parameter | `public`, `internal`, `confidential`, `highly_confidential` (security-guidelines §2). Tanpa anotasi dianggap `internal` |
 | `x-erp-singleton` | path item | Resource tunggal atau nama tetap yang tidak dijamakkan (`/api/example/ping`, `…/modules/{key}/history`); api-guidelines §2 |
 | `x-erp-allow-put` | operasi | Mengizinkan `PUT` (api-guidelines §3) |
@@ -41,15 +42,15 @@ Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` dan
 
 | Rule | Menegakkan | Pasal |
 | --- | --- | --- |
-| `erp-path-module-prefix` | Path modul `/api/<slug>/…`; platform `/api/platform/` atau `/api/bootstrap` | api-guidelines §2; FR-23.1 |
+| `erp-path-module-prefix` | Path modul `/api/<slug>/…`; platform `/api/platform/`, `/api/bootstrap`, atau dokumen standar `/.well-known/*` (daftar izin ketat di `apicontract.Parse`: hanya `/.well-known/jwks.json`) | api-guidelines §2; FR-23.1; PRD-001 Q25 |
 | `erp-path-kebab-case`, `erp-path-no-trailing-slash`, `erp-path-no-crud-verb` | Segmen kebab-case, parameter camelCase, tanpa `/`, tanpa kata kerja CRUD | §2 |
 | `erp-path-collection-plural` | Koleksi terakhir jamak (kecuali `x-erp-singleton` atau aksi `POST`) | §2 |
 | `erp-path-max-nesting` | Maksimal satu sub-koleksi setelah `{id}` | §2 |
-| `erp-operation-permission` | `x-erp-permission` berformat benar atau `x-erp-public` | §1, §13 |
+| `erp-operation-permission` | `x-erp-permission` berformat benar, `x-erp-public`, atau `x-erp-authenticated` | §1, §13 |
 | `erp-operation-id` | `operationId` ada, camelCase, unik | §13 |
 | `erp-property-camel-case`, `erp-enum-snake-case` | Nama properti dan nilai enum | §4.1 |
 | `erp-decimal-not-number` | Uang/kuantitas string desimal, bukan `number`: `$ref` ke `Decimal`, atau `oneOf` berisi `$ref` Decimal dan `{type: 'null'}` untuk yang nullable (K21, 1 Nov 2026); `number` dan `oneOf` tanpa Decimal ditolak | §4.1 |
-| `erp-success-envelope` | Respons sukses JSON berbentuk `{data}` | §4.2 |
+| `erp-success-envelope` | Respons sukses JSON berbentuk `{data}`; pengecualian hanya operasi `/.well-known/*` kontrak platform yang bertanda `x-erp-raw-response: true` (bentuk RFC, mis. JWKS `{keys}`) | §4.2; PRD-001 Q25 |
 | `erp-error-standard` | 4xx/5xx memakai komponen error `erp:common` | §8 |
 | `erp-collection-pagination` | `GET` koleksi memakai `page`+`pageSize` atau `cursor`+`limit` | §6 |
 | `erp-post-idempotency-key` | `POST` punya header `Idempotency-Key` | §7.2 |
@@ -57,7 +58,7 @@ Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` dan
 | `erp-no-put` | `PUT` hanya dengan `x-erp-allow-put` | §3 |
 | `erp-ref-dependency` | `erp:<slug>` hanya ke dependensi manifest | FR-23.1 |
 | `erp-examples` | Respons 2xx dan `requestBody` JSON punya contoh | §13 |
-| `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tanpa parameter non-header dan tanpa `requestBody` tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); publik dengan masukan tetap wajib minimal satu 4xx | §13 |
+| `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tanpa parameter non-header dan tanpa `requestBody` tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); publik dengan masukan tetap wajib minimal satu 4xx. Operasi `x-erp-authenticated` tanpa 403 tetapi wajib `401` | §13 |
 | `erp-classification-valid` | `x-erp-classification` salah satu dari empat kelas | security-guidelines §2 |
 | `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential`, kecuali pengecualian `x-erp-allow-highly-confidential` (data HR) atau `x-erp-credential-response: true` pada properti (kredensial, allowlist modul/operationId/properti) | FR-24.2; security-guidelines §2, §3.4 |
 | `erp-no-sensitive-in-url` | Data sensitif (mis. `token`, `password`) tidak lewat path atau query | FR-24.2 |

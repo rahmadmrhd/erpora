@@ -183,7 +183,7 @@ erpora/
 ├── contracts/                     # kontrak MILIK PLATFORM + aturan bersama (bukan kontrak modul)
 │   ├── openapi/
 │   │   ├── common.yaml            # komponen bersama: amplop data/error/page, Decimal, UUID, Timestamp, header
-│   │   └── platform.yaml          # endpoint platform: /api/bootstrap, /api/platform/*
+│   │   └── platform.yaml          # endpoint platform: /api/bootstrap, /api/platform/*, /.well-known/jwks.json
 │   ├── spectral.yaml              # ruleset linter OpenAPI (FR-23)
 │   ├── spectral-functions/        # fungsi kustom linter (TS, dijalankan Bun)
 │   └── module.schema.json
@@ -345,11 +345,11 @@ Setiap kebutuhan memiliki kriteria penerimaan (AC) yang dapat diverifikasi.
 | -------------------- | --------------------------------------------------------------------------- |
 | `GET /healthz`       | Liveness, tanpa dependensi eksternal                                        |
 | `GET /readyz`        | Readiness: koneksi PostgreSQL + migrasi platform sudah diterapkan           |
-| `GET /api/bootstrap` | Bootstrap manifest: `appVersion`, `tenantId` (tenant default), `modules[]` dari runtime snapshot (FR-19: `key`, `slug`, `version`, `status`, `basePath`, `offline`), `permissions: []`, `revision`. Header `ETag` = revision |
+| `GET /api/bootstrap` | Bootstrap manifest: `appVersion`, `tenantId` (tenant default), `modules[]` dari runtime snapshot (FR-19: `key`, `slug`, `version`, `status`, `basePath`, `offline`), `permissions: []`, `revision`. Header `ETag` = revision. **Diubah PRD-001 (C1.13, Q29):** wajib login (`x-erp-authenticated`; bukan lagi publik), menambah `user` dan `permRev`, ETag per pengguna (`Cache-Control: private`, `Vary: Authorization`) |
 | `GET /*`             | SPA handler: file statis dari embed. Path tanpa ekstensi dan bukan `/api/*` diarahkan ke `index.html` |
 
 - Router: `net/http.ServeMux` dengan pola method+path (Go ≥ 1.22). Tidak memakai framework router. ServeMux adalah **detail implementasi platform** dan tidak pernah diekspos ke modul (lihat FR-05). Karena itu platform bisa beralih ke router lain (mis. chi) tanpa breaking change pada modul.
-- **Semua endpoint WAJIB mengikuti [`docs/architecture/api-guidelines.md`](../architecture/api-guidelines.md)**: struktur URL, amplop `data`/`error`, camelCase, desimal sebagai string, pagination, filter, `If-Match`, `Idempotency-Key`, dan katalog kode error. Ini berlaku juga untuk `/api/bootstrap` dan endpoint platform.
+- **Semua endpoint WAJIB mengikuti [`docs/architecture/api-guidelines.md`](../architecture/api-guidelines.md)**: struktur URL, amplop `data`/`error`, camelCase, desimal sebagai string, pagination, filter, `If-Match`, `Idempotency-Key`, dan katalog kode error. Ini berlaku juga untuk `/api/bootstrap` dan endpoint platform. **Satu-satunya pengecualian amplop:** dokumen standar `/.well-known/*` pada kontrak platform (saat ini `/.well-known/jwks.json`, bentuk RFC 7517 `{"keys": [...]}`), ditandai `x-erp-raw-response: true` di kontrak; keputusan pemilik produk 3 Nov 2026, dicatat sebagai PRD-001 Q25.
 - Error API memakai envelope JSON yang konsisten (`{"error": {"code", "message", "details", "requestId", "traceId"}}`, didefinisikan di `contracts/openapi/common.yaml`).
 - Header cache: aset ber-hash → `immutable, max-age=31536000`; `index.html` dan `sw.js` → `no-cache`.
 - `/api/*` yang tidak ditemukan mengembalikan 404 JSON, **bukan** `index.html`.
@@ -690,7 +690,7 @@ uninstall: check dependents → status uninstalled → revision++
 - `module_lifecycle_events`: log audit append-only (`tenant_id`, `module_key`, `event`, `actor`, `operation_id`, `details`, `occurred_at`). Blueprint §7 mensyaratkan pencatatan siapa dan kapan.
 - `platform_state`: key-value platform (`default_tenant_id`, `environment` (penanda lingkungan, FR-22.5), dsb.).
 - `tenant_state`: `tenant_id` (PK), `module_state_revision`.
-- `actor` di fase ini: `cli:<os-user>` atau `api:dev` (belum ada identitas). Kolomnya berbentuk string bebas agar nanti bisa diisi user ID.
+- `actor` di fase ini: `cli:<os-user>` atau `api:dev` (belum ada identitas; sejak PRD-001 C1.13 aksi API memakai `user:<id>` dari Principal, `api:dev` dihapus). Kolomnya berbentuk string bebas agar nanti bisa diisi user ID.
 
 **19.5. Konsistensi & konkurensi**
 - Operasi lifecycle per tenant **diserialisasi** dengan PostgreSQL session advisory lock (`pg_advisory_lock(hash(tenant_id))`). Lock diambil pada **satu koneksi khusus** yang dipegang selama operasi (`(*gorm.DB).Connection(...)`), karena operasi mencakup beberapa transaksi dan koneksi pool biasa bisa berganti di antara transaksi. Operasi kedua menunggu dengan timeout lalu gagal dengan `operation_in_progress`.
@@ -888,7 +888,7 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 | Pemilik | File | Isi |
 | --- | --- | --- |
 | Platform (bersama) | `contracts/openapi/common.yaml` | **Hanya komponen**: amplop `data`/`error`/`page`, `Decimal`, `Uuid`, `Timestamp`, `Date`, parameter & header standar, respons error standar. Tanpa path |
-| Platform | `contracts/openapi/platform.yaml` | Endpoint platform: `/api/bootstrap`, `/api/platform/*` |
+| Platform | `contracts/openapi/platform.yaml` | Endpoint platform: `/api/bootstrap`, `/api/platform/*`, dan dokumen standar `/.well-known/*` (saat ini `/.well-known/jwks.json`; PRD-001 Q25) |
 | Setiap modul | `modules/<x>/openapi.yaml` | Endpoint & skema milik modul itu saja |
 
 - Kontrak modul berada di **Go module modul tersebut** (ikut di-tag dan di-versi bersama modul) dan di-embed ke binary.
@@ -899,7 +899,7 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 - Skema yang dirujuk modul lain dianggap **API publik modul**. Mengubahnya secara breaking mengikuti aturan evolusi di api-guidelines §14.
 
 **23.2. Kesesuaian kontrak dan kode** (test otomatis, gagal = CI gagal)
-- Setiap route di `Registry.Routes()` milik modul X **harus** punya operasi di `modules/X/openapi.yaml` dengan method, path, dan `x-erp-permission` yang **sama persis** dengan `Registrar.Handle`. Sebaliknya, setiap operasi di kontrak harus punya route terdaftar.
+- Setiap route di `Registry.Routes()` milik modul X **harus** punya operasi di `modules/X/openapi.yaml` dengan method, path, dan `x-erp-permission` (atau `x-erp-public` untuk `Registrar.Public`, atau `x-erp-authenticated` untuk route `Handle` tanpa permission beropsi `module.Authenticated()`; PRD-001 Q29) yang **sama persis** dengan `Registrar.Handle`. Sebaliknya, setiap operasi di kontrak harus punya route terdaftar.
 - Setiap `x-erp-permission` harus merujuk resource/aksi yang dideklarasikan di `module.json`.
 - **Test kontrak respons**: integration test memvalidasi respons nyata endpoint modul referensi terhadap skema di kontraknya.
 
@@ -910,7 +910,7 @@ Setiap modul **memiliki kontrak API-nya sendiri**. Tidak ada satu file OpenAPI y
 | --- | --- |
 | Path kebab-case, koleksi jamak, nesting ≤ 1, tanpa trailing slash, tanpa kata kerja CRUD | §2 |
 | Path kontrak modul diawali `/api/{slug}/` sesuai manifest | §2, 23.1 |
-| Setiap operasi punya `x-erp-permission` berformat `<resource>.<action>` dan `operationId` unik | §1, §13 |
+| Setiap operasi punya `x-erp-permission` berformat `<resource>.<action>` (atau `x-erp-public`, atau `x-erp-authenticated` sejak PRD-001 Q29) dan `operationId` unik | §1, §13 |
 | Nama properti camelCase; enum snake_case | §4.1 |
 | Properti bernama/berformat uang & kuantitas tidak boleh bertipe `number` (harus `$ref` ke `Decimal`) | §4.1 |
 | Respons sukses memakai amplop `data`; respons 4xx/5xx merujuk skema error standar | §4.2, §8 |

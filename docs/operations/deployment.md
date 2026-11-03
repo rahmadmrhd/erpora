@@ -81,6 +81,11 @@ Semua konfigurasi memakai environment variable. Daftar lengkapnya ada di `.env.e
 | `ERP_SMTP_PASSWORD` | | — | Sandi SMTP (tidak dipotong spasinya). Disamarkan (`****`) di log dan `erpora inspect config`; simpan di file env dengan izin akses terbatas |
 | `ERP_SMTP_FROM` | ✅ bila `smtp` | — | Alamat pengirim polos ASCII (mis. `noreply@example.com`; tanpa nama tampilan) |
 | `ERP_SMTP_TLS_MODE` | | `starttls` | `starttls` (STARTTLS wajib; server tanpa STARTTLS ditolak, tidak ada downgrade), `tls` (TLS implisit), atau `none` (hanya development, tanpa autentikasi; ditolak saat `ERP_ENV=production`). Sertifikat server selalu diverifikasi |
+| `ERP_TRUSTED_PROXIES` | | *(kosong)* | Daftar IP atau CIDR proxy tepercaya, dipisah koma (mis. `10.0.0.0/8,192.0.2.5`); entri IP tunggal menjadi `/32` atau `/128`. **Wajib diisi bila aplikasi berjalan di belakang reverse proxy** (nginx, Caddy, Traefik, load balancer): batas laju per IP dan lockout per pasangan (akun, IP) memakai IP klien, dan tanpa variabel ini semua klien tampak berasal dari IP proxy (saling mengunci dan batas per IP menjadi batas global). Bila peer TCP ada di daftar, `X-Forwarded-For` dibaca dari kanan ke kiri dan hop pertama yang bukan proxy tepercaya menjadi IP klien (maks. 32 hop terkanan, header maks. 4096 byte; header cacat dianggap tidak tepercaya dan dipakai alamat peer); `X-Real-IP` tidak dipakai. Bila kosong (bawaan), `X-Forwarded-For` diabaikan sehingga tidak dapat dipalsukan. Proxy Anda harus **menambahkan** IP peer ke `X-Forwarded-For` (bukan menggantinya). Maks. 64 entri, tanpa `/0`, tanpa hostname atau port; nilai tidak valid membuat start gagal (exit 2). Keputusan pemilik produk 3 Nov 2026 (PRD-001 Q26) |
+| `ERP_ARGON2_MEMORY_KIB` | | `19456` (19 MiB) | Memori per hash argon2id dalam KiB (parameter hash sandi, bawaan OWASP Password Storage Cheat Sheet). Rentang `19456`–`262144`. Nilai di luar rentang membuat `erpora` gagal start (exit 2). Memori dipakai per hash yang sedang berjalan, sehingga naikkan hanya dengan memperhitungkan RAM. Menaikkan nilai tidak membatalkan hash lama: login berikutnya yang sandinya benar menyimpan ulang hash dengan parameter baru |
+| `ERP_ARGON2_TIME` | | `2` | Jumlah iterasi argon2id. Rentang `1`–`10`; nilai `1` hanya diterima bila `ERP_ARGON2_MEMORY_KIB` minimal `47104` (46 MiB, setara OWASP) |
+| `ERP_ARGON2_PARALLELISM` | | `1` | Jumlah lane paralel argon2id. Rentang `1`–`16` |
+| `ERP_ARGON2_MAX_CONCURRENT` | | `min(jumlah CPU, 4)`, minimal `1` | Batas jumlah hash argon2id yang berjalan serentak dalam satu proses (hash sandi, verifikasi, dan verifikasi tiruan), rentang `1`–`64`. Batas ini menjaga RAM: memori terburuk ≈ batas × memori per hash (±19 MiB per verifikasi pada bawaan, ±76 MiB untuk batas 4). Saat penuh, permintaan login menunggu sebentar lalu dijawab `429 rate_limited` dengan header `Retry-After` |
 | `ERP_ENV` | | `production` | `development` mengaktifkan API mutasi modul, deteksi N+1, & log teks |
 | `ERP_HTTP_ADDR` | | `127.0.0.1:8080` | Alamat listen. Jangan pakai `0.0.0.0` kecuali ada firewall/proxy |
 | `ERP_LOG_FORMAT` | | `json` | `json` atau `text` |
@@ -121,6 +126,18 @@ Data tersegel (kunci privat JWT, secret MFA, secret settings) membawa **id kunci
 - `ERP_SECRET_KEY_PREVIOUS: id kunci pada header segel bertabrakan dengan ERP_SECRET_KEY`: dua kunci berbeda kebetulan berid sama (peluang 1/256), sehingga header segel tidak dapat membedakannya. **Buat kunci baru lain** (ulangi langkah 2; `secret:generate` atau `openssl` menghasilkan nilai berbeda tiap kali), isi ke `ERP_SECRET_KEY`, dan simpan kunci lama tetap di `ERP_SECRET_KEY_PREVIOUS`.
 - `ERP_SECRET_KEY_PREVIOUS: tidak boleh sama dengan ERP_SECRET_KEY`: kunci lama dan baru identik; kosongkan `ERP_SECRET_KEY_PREVIOUS` bila tidak sedang rotasi.
 - Format atau panjang salah (bukan base64 standar dengan padding, atau bukan 32 byte): koreksi nilainya; startup (`serve`) dan `erpora doctor` melaporkannya.
+
+### 3.3. URL publik aplikasi (settings platform)
+
+URL publik aplikasi (dipakai untuk tautan reset sandi di email dan pemeriksaan `Origin`) **tidak** diisi lewat env. Nilainya disimpan di tabel `settings` tenant dengan kunci `platform.public_url` (PRD-001 Q24).
+
+- **Production:** `serve` gagal start (exit 2) bila `platform.public_url` belum diisi. Nilainya harus http(s) absolut dengan host, **https wajib**, tanpa userinfo, query, atau fragmen, maksimum 512 karakter.
+- **Development:** bila belum diisi, nilai bawaan diturunkan dari `ERP_HTTP_ADDR`.
+- **Pengisian awal:** lewat `erpora core:settings:set --key platform.public_url --value <url>`. Command ini **dijadwalkan pada PRD-001 C1.12 dan belum tersedia**. Sampai C1.12 selesai, belum ada command resmi untuk mengisi nilai ini di production.
+
+### 3.4. Retensi `login_attempts`
+
+Tabel `login_attempts` memuat user_id dan alamat IP percobaan login (data pribadi; UU PDP). Proses `serve` menjalankan pekerja latar yang menghapus baris lebih tua dari **30 hari** segera saat start dan lalu tiap **jam** (PRD-001 Q30, ADR-0013 §5). Tidak ada konfigurasi atau cron tambahan; pekerja berhenti bersama proses saat shutdown. Pekerja boleh berjalan di beberapa instance (penghapusan idempoten). Galat pemangkasan dicatat di log (`identity: pemangkasan login_attempts gagal`) dan dicoba lagi pada putaran berikutnya; log tidak memuat data pengguna.
 
 ## 4. Instalasi di Linux (systemd)
 
@@ -174,7 +191,7 @@ Catatan operasional CLI `erpora modules`:
 
 Saat login pertama, Administrator wajib mendaftarkan MFA (TOTP). Simpan recovery code di tempat aman. Bila Administrator terakhir kehilangan akses MFA, jalankan `erpora core:reset-mfa` di server.
 
-Pengaturan SMTP untuk email reset password diisi lewat menu **Settings → Platform → Email** setelah login (bukan env).
+Pengaturan SMTP untuk email reset password untuk sementara diisi lewat env `ERP_MAIL_DRIVER` dan `ERP_SMTP_*` (lihat §3; PRD-001 K-C1.6). Pemindahannya ke menu **Settings → Platform → Email** dijadwalkan pada PRD-001 C3 tanpa mengubah `sdk/mail`.
 
 ### 4.4. Service systemd
 

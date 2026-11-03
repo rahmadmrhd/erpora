@@ -392,7 +392,7 @@ Properti yang harus selalu benar (diuji dengan test berbasis properti/fuzz bila 
 
 | Ancaman | Risiko | Mitigasi |
 | --- | --- | --- |
-| **S**poofing | Memakai endpoint mutasi tanpa hak | Gerbang `ERP_ENV`/flag admin + permission `platform.i18n.manage`; actor tercatat `api:dev` sampai PRD-001 |
+| **S**poofing | Memakai endpoint mutasi tanpa hak | Gerbang `ERP_ENV`/flag admin + permission `platform.i18n.manage`; actor tercatat `user:<id>` dari Principal (sebelumnya `api:dev` sampai PRD-001 C1.13) |
 | **T**ampering | Override berisi HTML/skrip yang dirender sebagai markup; mengubah argumen sehingga merusak tampilan | Tanpa HTML (hanya tag rich bernama valid yang dirender komponen React, bukan `innerHTML`); `Params()` harus sama; lint `dangerouslySetInnerHTML` (M3g) |
 | **R**epudiation | Perubahan istilah tanpa jejak | Log terstruktur `i18n_override_changed` (tenant, ns, locale, key, actor, trace_id) sampai audit writer PRD-001 |
 | **I**nformation disclosure | Katalog/override terbaca tanpa login; salah simpan data sensitif di override | Katalog hanya teks terjemahan; endpoint publik hanya fase ini (Keputusan D-4); dokumentasi melarang data pribadi/rahasia di pesan; PRD-001 mengetatkan namespace modul ke pengguna terautentikasi |
