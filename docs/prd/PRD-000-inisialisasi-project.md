@@ -264,7 +264,7 @@ Clean Architecture bersifat **selektif** (Blueprint §5.1). Modul CRUD sederhana
 | D1  | Modul lain hanya boleh mengimpor `modules/<x>/contract`; `modules/<x>/internal/**` tertutup | Compiler (`internal/`) |
 | D2  | `internal/platform/**` tidak boleh mengimpor `modules/**`                               | Arch test (root `go.mod` me-`require` semua modul demi composition root, jadi compiler tidak mencegahnya) |
 | D3  | `*/internal/domain` tidak boleh mengimpor `net/http`, `gorm.io/**`, `pgx`, `database/sql`, `infrastructure`, `presentation` | Arch test |
-| D3b | `gorm.io/**` hanya boleh diimpor oleh `modules/*/internal/infrastructure/**`, `internal/platform/database`, `internal/platform/modules/store`, `internal/platform/i18n/store` (Q35), `internal/platform/desks/store`, `internal/platform/identity/store` (Q42), dan `sdk/data` | Arch test |
+| D3b | `gorm.io/**` hanya boleh diimpor oleh `modules/*/internal/infrastructure/**`, `internal/platform/database`, `internal/platform/modules/store`, `internal/platform/i18n/store` (Q35), `internal/platform/desks/store`, `internal/platform/identity/store` (Q42), `internal/platform/settings/store` (PRD-001 Q20), dan `sdk/data` | Arch test |
 | D4  | `*/internal/application` tidak boleh mengimpor `presentation` atau `infrastructure`     | Arch test           |
 | D5  | `sdk` tidak boleh mengimpor root module maupun `modules/*`                              | Compiler (`sdk/go.mod` tidak me-`require` keduanya; `internal/` root tidak bisa diimpor dari Go module lain) |
 | D6  | `contract/` modul tidak boleh mengimpor `internal/` modul lain                          | Compiler            |

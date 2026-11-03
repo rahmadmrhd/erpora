@@ -91,6 +91,7 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 		root + "/internal/platform/i18n/store",     // PRD-000 Q35 D-1
 		root + "/internal/platform/desks/store",    // revisi M3a, design.md section 6 (timpaan Desk, hanya baca)
 		root + "/internal/platform/identity/store", // PRD-000 Q42, ADR-0013 (identitas lokal, control DB)
+		root + "/internal/platform/settings/store", // PRD-001 Q20 (subset Settings platform di C1, tenant DB)
 		sdk + "/data",
 	} {
 		assertNone(t, Check(repoWith(pkg(ok, "gorm.io/gorm"))), "D3b")

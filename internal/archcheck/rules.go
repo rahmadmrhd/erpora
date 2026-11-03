@@ -24,6 +24,7 @@ var GormAllowedPaths = []string{
 	"internal/platform/i18n/store",
 	"internal/platform/desks/store",
 	"internal/platform/identity/store",
+	"internal/platform/settings/store",
 	"sdk/data",
 }
 

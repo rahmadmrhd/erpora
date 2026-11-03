@@ -34,7 +34,7 @@ func TestLifecycleTables_Exist(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		var want int64 = 3 // tenant; mencapai 3 sejak 0003_roles_min; control mencapai 5 sejak 0005_identity
+		var want int64 = 4 // tenant; mencapai 4 sejak 0004_settings (0003_roles_min); control mencapai 5 sejak 0005_identity
 		if s.Target == migrate.Control {
 			want = 5
 		}
@@ -101,7 +101,7 @@ func TestMigrateUp_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		var want int64 = 3 // tenant; mencapai 3 sejak 0003_roles_min; control mencapai 5 sejak 0005_identity
+		var want int64 = 4 // tenant; mencapai 4 sejak 0004_settings (0003_roles_min); control mencapai 5 sejak 0005_identity
 		if s.Target == migrate.Control {
 			want = 5
 		}
