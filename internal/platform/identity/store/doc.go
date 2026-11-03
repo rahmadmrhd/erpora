@@ -34,7 +34,7 @@
 //	TouchLastLogin(ctx, t, userID, at) error
 //	SetUserStatus(ctx, t, userID, status) error             // active|disabled
 //	LockUser(ctx, t, userID, at) (bool, error)              // bersyarat: hanya dari active
-//	UnlockUser(ctx, t, userID) (bool, error)                // locked->active + hapus login_attempts tenant itu
+//	UnlockUser(ctx, t, userID) (bool, error)                // SELALU hapus login_attempts tenant itu; true bila locked->active
 //	GetPreferences(ctx, t, userID) (Preferences, error)
 //	UpsertPreferences(ctx, t, userID, locale, timezone) error
 //
@@ -101,7 +101,8 @@
 // Percobaan login dan lockout (Q16):
 //
 //	RecordLoginAttempt(ctx, t, userID, ip, kind, success, at) error // kind: AttemptPassword|AttemptMFA
-//	PairFailureState(ctx, t, userID, ip) (PairState, error)         // gagal sejak sukses terakhir pasangan (akun, IP)
+//	PairFailureState(ctx, t, userID, ip) (PairState, error)         // gagal sejak sukses terakhir pasangan (akun, IP), tanpa batas waktu
+//	PairFailureStateSince(ctx, t, userID, ip, since) (PairState, error) // hanya gagal >= since (24 jam, 3 Nov 2026); since nol = tanpa batas
 //	CrossIPFailures(ctx, t, userID, since) (CrossIPState, error)    // gagal lintas IP; tidak direset sukses
 //	PruneLoginAttempts(ctx, t, before) (int64, error)
 //	  // Hanya pengguna yang dikenal dapat dicatat (user_id NOT NULL); email tak dikenal ditangani pemanggil

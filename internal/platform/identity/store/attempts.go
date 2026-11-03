@@ -30,23 +30,38 @@ func (s *Store) RecordLoginAttempt(ctx context.Context, t tenancy.TenantID, user
 	return nil
 }
 
-// PairFailureState menghitung kegagalan berturut-turut pasangan (akun, IP): jumlah gagal setelah sukses terakhir
-// pasangan itu (bila ada) beserta waktu gagal terakhir. Dasar jeda bertingkat dan pemblokiran pasangan (Q16).
+// PairFailureState menghitung kegagalan berturut-turut pasangan (akun, IP) tanpa batas waktu: jumlah gagal setelah
+// sukses terakhir pasangan itu (bila ada) beserta waktu gagal terakhir. Sama dengan PairFailureStateSince dengan since
+// nol. Dasar jeda bertingkat dan pemblokiran pasangan (Q16).
 func (s *Store) PairFailureState(ctx context.Context, t tenancy.TenantID, userID, ip string) (PairState, error) {
+	return s.PairFailureStateSince(ctx, t, userID, ip, time.Time{})
+}
+
+// PairFailureStateSince seperti PairFailureState tetapi hanya menghitung kegagalan dengan waktu >= since
+// (keputusan pemilik produk 3 Nov 2026: hanya 24 jam terakhir yang dihitung; kegagalan lebih tua diabaikan). Sukses
+// terakhir pasangan tetap mereset hitungan, berapa pun usianya. since nol berarti tanpa batas.
+func (s *Store) PairFailureStateSince(ctx context.Context, t tenancy.TenantID, userID, ip string, since time.Time) (PairState, error) {
 	uid, ok := parseID(userID)
 	if !ok {
 		return PairState{}, nil
 	}
+	lower := "'-infinity'::timestamptz"
+	args := []any{tid(t), uid, ip}
+	if !since.IsZero() {
+		lower = "?::timestamptz"
+		args = append(args, since.UTC())
+	}
+	args = append(args, tid(t), uid, ip)
 	var r struct {
 		ConsecutiveFailures int        `gorm:"column:consecutive_failures"`
 		LastFailureAt       *time.Time `gorm:"column:last_failure_at"`
 	}
 	if err := s.db(ctx).Raw(`SELECT count(*) AS consecutive_failures, max(attempted_at) AS last_failure_at
 		FROM login_attempts
-		WHERE tenant_id = ? AND user_id = ? AND ip = ? AND success = false
+		WHERE tenant_id = ? AND user_id = ? AND ip = ? AND success = false AND attempted_at >= `+lower+`
 		  AND attempted_at > COALESCE((SELECT max(attempted_at) FROM login_attempts
 		       WHERE tenant_id = ? AND user_id = ? AND ip = ? AND success = true), '-infinity'::timestamptz)`,
-		tid(t), uid, ip, tid(t), uid, ip).Scan(&r).Error; err != nil {
+		args...).Scan(&r).Error; err != nil {
 		return PairState{}, wrap("hitung kegagalan pasangan", err)
 	}
 	return PairState{ConsecutiveFailures: r.ConsecutiveFailures, LastFailureAt: utcPtr(r.LastFailureAt)}, nil

@@ -238,8 +238,10 @@ func (s *Store) LockUser(ctx context.Context, t tenancy.TenantID, userID string,
 	return n == 1, nil
 }
 
-// UnlockUser membuka akun locked dan menghapus catatan percobaan login pengguna itu pada tenant t (agar jendela
-// lintas IP tidak langsung mengunci ulang). false bila akun tidak berstatus locked.
+// UnlockUser membuka akun locked (bila ada) dan SELALU menghapus catatan percobaan login pengguna itu pada tenant t,
+// sehingga jeda/blokir per pasangan (akun, IP) pada akun yang masih active juga hilang dan jendela lintas IP tidak
+// langsung mengunci ulang. Idempoten. Mengembalikan true hanya bila status berubah dari locked ke active; false
+// (tanpa galat) bila akun tidak locked, tidak ada, atau bukan anggota tenant t (catatan tenant lain tidak disentuh).
 func (s *Store) UnlockUser(ctx context.Context, t tenancy.TenantID, userID string) (bool, error) {
 	uid, ok := parseID(userID)
 	if !ok {
@@ -248,10 +250,10 @@ func (s *Store) UnlockUser(ctx context.Context, t tenancy.TenantID, userID strin
 	unlocked := false
 	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		n, err := exec(tx, `UPDATE users SET status = 'active', locked_at = NULL, updated_at = now() WHERE id = ? AND status = 'locked' AND `+memberExists("users.id"), uid, tid(t))
-		if err != nil || n == 0 {
+		if err != nil {
 			return err
 		}
-		unlocked = true
+		unlocked = n > 0
 		_, err = exec(tx, `DELETE FROM login_attempts WHERE tenant_id = ? AND user_id = ?`, tid(t), uid)
 		return err
 	})

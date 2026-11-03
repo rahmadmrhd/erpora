@@ -269,6 +269,65 @@ func TestUsers(t *testing.T) {
 		}
 	})
 
+	t.Run("UnlockUser selalu menghapus catatan percobaan, idempoten, terbatas pada pengguna dan tenant", func(t *testing.T) {
+		at := now()
+		blocked := newUser(t, s, tenantA, "pairblocked@example.com")
+		bystander := newUser(t, s, tenantA, "bystander@example.com")
+		const ip = "198.51.100.77"
+		for i := 0; i < 25; i++ {
+			_ = s.RecordLoginAttempt(ctx, tenantA, blocked.ID, ip, store.AttemptPassword, false, at)
+		}
+		_ = s.RecordLoginAttempt(ctx, tenantA, bystander.ID, ip, store.AttemptPassword, false, at)
+		if st, _ := s.PairFailureState(ctx, tenantA, blocked.ID, ip); st.ConsecutiveFailures != 25 {
+			t.Fatalf("persiapan: %+v", st)
+		}
+		// akun masih active (hanya pasangan yang terblokir): UnlockUser tetap membersihkan pasangan
+		if ok, err := s.UnlockUser(ctx, tenantA, blocked.ID); err != nil || ok {
+			t.Fatalf("UnlockUser pada akun active = %v, %v, want false (status tidak berubah, tanpa galat)", ok, err)
+		}
+		if st, _ := s.PairFailureState(ctx, tenantA, blocked.ID, ip); st.ConsecutiveFailures != 0 || st.LastFailureAt != nil {
+			t.Errorf("pasangan setelah UnlockUser = %+v, want bersih", st)
+		}
+		if st, _ := s.CrossIPFailures(ctx, tenantA, blocked.ID, at.Add(-time.Hour)); st.Failures != 0 {
+			t.Errorf("lintas IP setelah UnlockUser = %+v, want 0", st)
+		}
+		got, _ := s.GetUser(ctx, tenantA, blocked.ID)
+		if got.Status != store.UserActive {
+			t.Errorf("status = %s", got.Status)
+		}
+		// pengguna lain tidak terpengaruh
+		if st, _ := s.PairFailureState(ctx, tenantA, bystander.ID, ip); st.ConsecutiveFailures != 1 {
+			t.Errorf("pengguna lain = %+v, want 1", st)
+		}
+		// idempoten
+		if ok, err := s.UnlockUser(ctx, tenantA, blocked.ID); err != nil || ok {
+			t.Errorf("UnlockUser ulang = %v, %v", ok, err)
+		}
+		// akun locked tetap terbuka (dan true)
+		_ = s.RecordLoginAttempt(ctx, tenantA, blocked.ID, ip, store.AttemptPassword, false, at)
+		if ok, _ := s.LockUser(ctx, tenantA, blocked.ID, at); !ok {
+			t.Fatal("lock gagal")
+		}
+		if ok, err := s.UnlockUser(ctx, tenantA, blocked.ID); err != nil || !ok {
+			t.Fatalf("UnlockUser akun locked = %v, %v, want true", ok, err)
+		}
+		if st, _ := s.PairFailureState(ctx, tenantA, blocked.ID, ip); st.ConsecutiveFailures != 0 {
+			t.Errorf("setelah membuka locked = %+v", st)
+		}
+		// tenant lain tidak dapat membersihkan catatan tenant A (non-anggota di tenant B)
+		_ = s.RecordLoginAttempt(ctx, tenantA, bystander.ID, ip, store.AttemptPassword, false, at)
+		if _, err := s.UnlockUser(ctx, tenantB, bystander.ID); err != nil {
+			t.Fatal(err)
+		}
+		if st, _ := s.PairFailureState(ctx, tenantA, bystander.ID, ip); st.ConsecutiveFailures != 2 {
+			t.Errorf("tenant B menghapus catatan tenant A: %+v, want 2", st)
+		}
+		// ID bukan UUID: tanpa efek, tanpa galat
+		if ok, err := s.UnlockUser(ctx, tenantA, "bukan-uuid"); err != nil || ok {
+			t.Errorf("UnlockUser(bukan-uuid) = %v, %v", ok, err)
+		}
+	})
+
 	t.Run("preferensi", func(t *testing.T) {
 		u := newUser(t, s, tenantA, "pref@example.com")
 		p, err := s.GetPreferences(ctx, tenantA, u.ID)
@@ -903,6 +962,53 @@ func TestLoginAttempts(t *testing.T) {
 		}
 		if st, _ = s.CrossIPFailures(ctx, tenantA, w.ID, base.Add(4*time.Second)); st.Failures != 2 || st.DistinctIPs != 2 {
 			t.Errorf("jendela lebih sempit = %+v, want 2 gagal dari 2 IP", st)
+		}
+	})
+
+	t.Run("jendela waktu: hanya kegagalan dalam jendela yang dihitung, sukses mereset", func(t *testing.T) {
+		w := newUser(t, s, tenantA, "window@example.com")
+		const ip = "203.0.113.50"
+		ref := now()
+		since := ref.Add(-24 * time.Hour)
+		// 3 gagal lebih tua dari 24 jam (tidak dihitung), 2 gagal dalam 24 jam (dihitung)
+		for i := 0; i < 3; i++ {
+			rec(w.ID, ip, false, ref.Add(-25*time.Hour).Add(time.Duration(i)*time.Minute))
+		}
+		for i := 0; i < 2; i++ {
+			rec(w.ID, ip, false, ref.Add(-23*time.Hour).Add(time.Duration(i)*time.Minute))
+		}
+		st, err := s.PairFailureStateSince(ctx, tenantA, w.ID, ip, since)
+		if err != nil || st.ConsecutiveFailures != 2 || st.LastFailureAt == nil || !st.LastFailureAt.Equal(ref.Add(-23*time.Hour).Add(time.Minute)) {
+			t.Fatalf("PairFailureStateSince = %+v, %v, want 2 gagal dalam jendela", st, err)
+		}
+		// tanpa jendela (zero) dan API lama menghitung semua 5: perilaku lama tetap utuh
+		if st, _ = s.PairFailureStateSince(ctx, tenantA, w.ID, ip, time.Time{}); st.ConsecutiveFailures != 5 {
+			t.Errorf("since nol = %+v, want 5 (tanpa batas)", st)
+		}
+		if st, _ = s.PairFailureState(ctx, tenantA, w.ID, ip); st.ConsecutiveFailures != 5 {
+			t.Errorf("PairFailureState lama = %+v, want 5", st)
+		}
+		// batas tepat: baris pada waktu == since dihitung (>= since)
+		rec(w.ID, ip, false, since)
+		if st, _ = s.PairFailureStateSince(ctx, tenantA, w.ID, ip, since); st.ConsecutiveFailures != 3 {
+			t.Errorf("baris tepat di batas = %+v, want 3", st)
+		}
+		// semua kegagalan lebih tua dari jendela: nol, tanpa waktu gagal terakhir
+		if st, _ = s.PairFailureStateSince(ctx, tenantA, w.ID, ip, ref.Add(time.Hour)); st.ConsecutiveFailures != 0 || st.LastFailureAt != nil {
+			t.Errorf("jendela di masa depan = %+v, want kosong", st)
+		}
+		// sukses dalam jendela mereset; gagal sesudahnya dihitung
+		rec(w.ID, ip, true, ref.Add(-time.Hour))
+		if st, _ = s.PairFailureStateSince(ctx, tenantA, w.ID, ip, since); st.ConsecutiveFailures != 0 {
+			t.Errorf("setelah sukses = %+v, want 0", st)
+		}
+		rec(w.ID, ip, false, ref.Add(-30*time.Minute))
+		if st, _ = s.PairFailureStateSince(ctx, tenantA, w.ID, ip, since); st.ConsecutiveFailures != 1 {
+			t.Errorf("gagal sesudah sukses = %+v, want 1", st)
+		}
+		// pasangan/tenant lain tidak terpengaruh
+		if st, _ = s.PairFailureStateSince(ctx, tenantB, w.ID, ip, since); st.ConsecutiveFailures != 0 {
+			t.Errorf("tenant B = %+v", st)
 		}
 	})
 
