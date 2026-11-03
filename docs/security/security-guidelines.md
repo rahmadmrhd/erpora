@@ -109,6 +109,7 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 
 - **Open redirect**: parameter `returnTo`/`redirect_uri` hanya menerima path relatif same-origin atau URL dari allowlist.
 - Pesan login tidak membedakan "user tidak ada" dan "password salah"; respons waktu dibuat seragam.
+- **Password**: dinormalisasi ke Unicode NFKC sebelum di-hash, diverifikasi, dan diperiksa kebijakan (ASVS 5.0; keputusan pemilik produk 3 Nov 2026, PRD-001 Q17). Batas 1024 byte diperiksa pada masukan mentah sebelum normalisasi (cegah DoS); panjang minimum 12 dalam rune pasca-NFKC; daftar sandi umum dicari pada NFKC + huruf kecil.
 
 ### 3.6. Celah sisi browser (OWASP A03, A05)
 

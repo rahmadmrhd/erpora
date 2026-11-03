@@ -104,7 +104,7 @@ Simpan konfigurasi di file env dengan izin terbatas, lalu muat dengan `erpora se
 Data tersegel (kunci privat JWT, secret MFA, secret settings) membawa **id kunci** pada headernya; id itu diturunkan dari material kunci (byte pertama SHA-256), sehingga kunci yang dipindah dari `ERP_SECRET_KEY` ke `ERP_SECRET_KEY_PREVIOUS` tetap dikenali. Kunci di `ERP_SECRET_KEY_PREVIOUS` **hanya dipakai membuka**; segel baru selalu memakai `ERP_SECRET_KEY`.
 
 1. **Cadangkan** backup database terbaru **dan** nilai kunci lama (terpisah satu sama lain, mis. di password manager tim). Jangan menimpa kunci lama sebelum langkah 5 selesai dan terverifikasi.
-2. **Buat kunci baru** (32 byte acak, base64): `openssl rand -base64 32`, atau PowerShell 7+ `[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))`, atau di mesin developer `task erpora -- secret:generate`. Jangan memakai `Get-Random` (bukan CSPRNG).
+2. **Buat kunci baru** (32 byte acak, base64): `openssl rand -base64 32`, atau PowerShell (Windows PowerShell 5.1 dan 7+) `$b = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)`, atau di mesin developer `task erpora -- secret:generate`. Jangan memakai `Get-Random` (bukan CSPRNG).
 3. **Pasang di file env, lalu restart `serve`:** salin nilai `ERP_SECRET_KEY` yang lama persis ke `ERP_SECRET_KEY_PREVIOUS`, dan isi `ERP_SECRET_KEY` dengan kunci baru. Setelah restart, data lama tetap terbuka dan data yang baru ditulis tersegel dengan kunci baru. `erpora inspect config` menampilkan kedua variabel sebagai `****` (nilainya tidak pernah dicetak); `erpora doctor` (build pengembang) melaporkan kunci yang tidak valid sebagai FAIL.
 4. **Segel ulang semua data dengan kunci baru** memakai `core:reseal`. ⚠️ *Command ini belum ada (lihat status di atas); langkah ini tidak dapat dijalankan sekarang.*
 5. **Lepas `ERP_SECRET_KEY_PREVIOUS`** dari file env dan restart, hanya setelah `core:reseal` selesai tanpa galat. ⚠️ **Melepasnya sebelum reseal membuat semua data yang masih tersegel dengan kunci lama tidak terbaca** (kunci privat JWT lama, secret MFA, secret settings); pemulihannya hanya dengan memasang kembali kunci lama di `ERP_SECRET_KEY_PREVIOUS`, sehingga kunci lama harus tetap tersimpan sampai langkah ini terverifikasi.
@@ -226,7 +226,7 @@ Caddy mengurus sertifikat TLS (Let's Encrypt) secara otomatis. Nginx juga bisa d
 1. Pasang PostgreSQL untuk Windows (installer resmi), lalu buat role & database seperti §4.1 melalui `psql`.
 2. Letakkan `erpora.exe` di `C:\erpora\bin\` dan file env di `C:\erpora\erpora.env` (batasi izin akses ke Administrators dan akun service). Isi `ERP_SECRET_KEY` di file env itu (wajib untuk `serve`); buat sekali di PowerShell:
    ```powershell
-   $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
+   $b = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
    ```
 3. Migrasi & modul (PowerShell sebagai Administrator):
    ```powershell
