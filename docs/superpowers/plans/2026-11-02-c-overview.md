@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | **C1 Identity lokal** | FR-101, 102, 106, 107, 108; modul `core` (`required`); `core:create-admin`, `core:rotate-keys`, `core:reset-mfa`; role `Administrator` minimal (lihat keputusan K-C1) | Principal nyata di context, 401 vs 403, pengganti `api:dev` | `2026-11-02-c1-identity-lokal.md` (rinci) |
 | **C2 Authorization** | FR-110 s.d. 119 (manifest `resources`/`field_groups`, scope, field group, `sdk/authz` penuh, IDOR, cache `perm_rev`, UI matriks) | **T4 resource-metadata** (grup 19 sampai 25), lalu grup 26 | ditulis setelah C1 |
-| **C3 Settings dan Audit** | FR-120, 130, 131, 132 (settings berskema, preferensi, audit append-only) | Sumber konfigurasi SMTP yang proper menggantikan env sementara C1 | ditulis setelah C2 |
+| **C3 Settings dan Audit** | FR-120, 130, 131, 132 (settings berskema, preferensi, audit append-only) | Sumber konfigurasi SMTP yang proper menggantikan env sementara C1. **Melanjutkan subset yang sudah dibangun di C1** (tabel tenant `settings` dan paket `internal/platform/settings`, `settings/store` dengan satu kunci tertutup `platform.public_url`; PRD-001 Q24): C3 menambah schema/validasi per tipe, audit, cache revisi, `Get[T]`, dan UI secara aditif | ditulis setelah C2 |
 | **C4 Integrasi** | FR-103 (OIDC), FR-104 (PAT), FR-105 (client credentials) | | ditulis setelah C3 |
 
 ## Kondisi awal kode (hasil pemetaan 2 Nov 2026)
@@ -43,7 +43,7 @@
 
 | Butir | Keputusan |
 | --- | --- |
-| Lockout | Jeda bertingkat per pasangan (akun, IP) (5 gagal; 20 gagal blokir pasangan 1 jam); `locked` akun hanya bila >= 50 gagal lintas >= 5 IP dalam 1 jam; unlock lewat reset sandi, command baru `core:unlock --email`, atau admin. Risiko residual DoS (botnet) diterima |
+| Lockout | Jeda bertingkat per pasangan (akun, IP) (5 gagal; 20 gagal blokir pasangan 1 jam; hanya kegagalan dalam 24 jam terakhir yang dihitung, Q19 3 Nov 2026); `locked` akun hanya bila >= 50 gagal lintas >= 5 IP dalam 1 jam; unlock lewat reset sandi, command baru `core:unlock --email`, atau admin. Risiko residual DoS (botnet) diterima |
 | `ERP_SECRET_KEY` | Wajib hanya untuk `serve` dan `core:*`; `migrate`/`inspect`/`doctor`/`modules`/`i18n` tidak butuh (format divalidasi bila terisi); rotasi via `ERP_SECRET_KEY_PREVIOUS` (hanya membuka) dan `core:reseal` kelak; segel membawa id kunci, header ikut AAD |
 | Penanda kredensial linter (merinci K-C1.4) | Allowlist (modul, operationId, properti): `accessToken` login/refresh, `secret`/`otpauthUri` enroll MFA, `codes` confirm MFA dan regenerate recovery codes; penanda pada properti; `refresh*` di body selalu ERROR; penanda tingkat operasi saja tidak cukup |
 | Akses Service/Admin | `identity.Service`/`identity.Admin` hanya dipasang pada context modul `core` dan alasan sistem `cli:core:*`; aturan arch `IDENT` melarang modul lain memanggil `identity.AdminFrom`/`ServiceFrom` |

@@ -224,7 +224,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | 409 | `invalid_state`, `request_in_progress`, `conflict` | Status dokumen / proses paralel / bentrok unik |
 | 412 | `version_mismatch` | `If-Match` tidak cocok |
 | 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak |
-| 429 | `rate_limited` | Dengan header `Retry-After` |
+| 429 | `rate_limited` | Dengan header `Retry-After` berupa bilangan bulat detik (dibulatkan ke atas, minimal 1; `httpx.TooManyRequests`). Tidak membedakan sebab (batas IP, identitas sasaran, jeda lockout, pembatas hash) agar tidak membocorkan keberadaan akun (PRD-001 FR-101) |
 | 415 | `unsupported_media_type` | Endpoint yang mewajibkan `Content-Type: application/json` walau body kosong/`{}` (mutasi `/api/platform/modules`, Q32; mutasi `PUT`/`DELETE /api/platform/i18n/overrides/...`, Q34); body JSON biasa yang salah media type tetap `400 bad_request` dengan `details[].code = unsupported_media_type` (Q30) |
 | 500 | `internal_error` | Kesalahan server |
 | 501 | `not_implemented` | Endpoint sudah terdaftar dan terdokumentasi di kontrak tetapi belum disambungkan ke use case (kerangka hasil `make:handler`); sementara, bukan kontrak jangka panjang |
