@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<body>
+<p>Hello{{if .Name}} {{.Name}}{{end}},</p>
+<p>We received a request to reset the password of your {{.AppName}} account.</p>
+<p>To reset your password and choose a new one, open the link below. The link is valid for {{.ExpiresMinutes}} minutes and can be used only once:</p>
+<p><a href="{{.Link}}">Reset your password</a></p>
+<p>After the password is changed, all your other signed-in sessions will be signed out.</p>
+<p>If you did not request a password reset, you can ignore this email; your password has not changed.</p>
+</body>
+</html>

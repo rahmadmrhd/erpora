@@ -80,6 +80,13 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				"ERP_MODULES_ADMIN_API":     strconv.FormatBool(c.ModulesAdminAPI),
 				"ERP_DB_NPLUSONE_THRESHOLD": strconv.Itoa(c.DBNPlusOneThreshold),
 				"ERP_DB_SLOW_QUERY_MS":      strconv.FormatInt(c.DBSlowQuery.Milliseconds(), 10),
+				"ERP_MAIL_DRIVER":           c.MailDriver,
+				"ERP_SMTP_HOST":             c.SMTP.Host,
+				"ERP_SMTP_PORT":             strconv.Itoa(c.SMTP.Port),
+				"ERP_SMTP_USERNAME":         c.SMTP.Username,
+				"ERP_SMTP_PASSWORD":         config.RedactSecret(c.SMTP.Password),
+				"ERP_SMTP_FROM":             c.SMTP.From,
+				"ERP_SMTP_TLS_MODE":         c.SMTP.TLSMode,
 				"flavor":                    buildinfo.Flavor(),
 				"database.environment":      databaseEnvironment(cmd.Context(), c),
 			}

@@ -65,6 +65,15 @@ type Config struct {
 	// (Hash, Verify, dan verifikasi tiruan) yang berjalan serentak dalam satu proses; permintaan berikutnya menunggu
 	// sebentar lalu dijawab 429 rate_limited. Memori terburuk = batas x ERP_ARGON2_MEMORY_KIB (default 19 MiB per hash).
 	Argon2MaxConcurrent int
+	// MailDriver (ERP_MAIL_DRIVER, log|smtp, default log) memilih pengirim surat FR-108. log tidak membuka soket dan
+	// tidak menulis isi surat ke log kecuali pemasang memintanya (hanya development); smtp memakai SMTP.
+	MailDriver string
+	// SMTP (ERP_SMTP_*, env sementara K-C1.6 sampai Settings C3): wajib lengkap hanya bila MailDriver smtp.
+	// ERP_SMTP_PASSWORD bertipe Secret (tersamar di log dan `inspect config`).
+	SMTP SMTPConfig
+	// MailDriverExplicit true bila ERP_MAIL_DRIVER diisi operator (bukan bawaan). RequireMailDriver memakainya: di
+	// production driver log hanya sah bila dipilih eksplisit.
+	MailDriverExplicit bool
 }
 
 // ModulesAdminAPIEnabled: endpoint mutasi modul aktif bila ERP_ENV=development atau ERP_MODULES_ADMIN_API=true.
@@ -93,6 +102,13 @@ type raw struct {
 	Argon2Time      string `env:"ERP_ARGON2_TIME"`
 	Argon2Parallel  string `env:"ERP_ARGON2_PARALLELISM"`
 	Argon2MaxConc   string `env:"ERP_ARGON2_MAX_CONCURRENT"`
+	MailDriver      string `env:"ERP_MAIL_DRIVER"`
+	SMTPHost        string `env:"ERP_SMTP_HOST"`
+	SMTPPort        string `env:"ERP_SMTP_PORT"`
+	SMTPUsername    string `env:"ERP_SMTP_USERNAME"`
+	SMTPPassword    string `env:"ERP_SMTP_PASSWORD"`
+	SMTPFrom        string `env:"ERP_SMTP_FROM"`
+	SMTPTLSMode     string `env:"ERP_SMTP_TLS_MODE"`
 }
 
 // Load membaca konfigurasi. envFile "" = tanpa file; environment proses menang atas isi file.
@@ -202,6 +218,10 @@ func Load(envFile string) (Config, error) {
 		return Config{}, err
 	}
 	if err := loadArgon2MaxConcurrent(&c, r.Argon2MaxConc); err != nil {
+		return Config{}, err
+	}
+	if err := loadMail(&c, mailRaw{Driver: r.MailDriver, Host: r.SMTPHost, Port: r.SMTPPort, Username: r.SMTPUsername,
+		Password: r.SMTPPassword, From: r.SMTPFrom, TLSMode: r.SMTPTLSMode}); err != nil {
 		return Config{}, err
 	}
 	if err := loadSecretKeys(&c, r.SecretKey, r.SecretKeyPrev); err != nil {

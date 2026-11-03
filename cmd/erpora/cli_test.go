@@ -28,6 +28,7 @@ func clearEnv(t *testing.T) {
 	for _, k := range []string{
 		"ERP_DATABASE_URL", "ERP_ENV", "ERP_HTTP_ADDR", "ERP_LOG_FORMAT",
 		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_SECRET_KEY", "ERP_SECRET_KEY_PREVIOUS",
+		"ERP_MAIL_DRIVER", "ERP_SMTP_HOST", "ERP_SMTP_PORT", "ERP_SMTP_USERNAME", "ERP_SMTP_PASSWORD", "ERP_SMTP_FROM", "ERP_SMTP_TLS_MODE",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -182,5 +183,27 @@ func TestInspectConfig_SecretKeyOptionalAndRedacted(t *testing.T) {
 	}
 	if strings.Contains(out, secretkey.B64()) || strings.Contains(out, os.Getenv("ERP_SECRET_KEY_PREVIOUS")) {
 		t.Errorf("nilai kunci bocor:\n%s", out)
+	}
+}
+
+// Sandi SMTP tidak pernah tercetak oleh `inspect config` (K-C1.6): hanya penanda tersamar.
+func TestInspectConfig_SMTPPasswordRedacted(t *testing.T) {
+	clearEnv(t)
+	const pw = "S3cr3t-sandi-smtp-uji"
+	t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@127.0.0.1:1/db")
+	t.Setenv("ERP_MAIL_DRIVER", "smtp")
+	t.Setenv("ERP_SMTP_HOST", "smtp.example.com")
+	t.Setenv("ERP_SMTP_FROM", "noreply@example.com")
+	t.Setenv("ERP_SMTP_USERNAME", "mailer")
+	t.Setenv("ERP_SMTP_PASSWORD", pw)
+	out, err := run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_SMTP_PASSWORD=****\n") || !strings.Contains(out, "ERP_SMTP_HOST=smtp.example.com\n") {
+		t.Errorf("sandi SMTP harus tersamarkan:\n%s", out)
+	}
+	if strings.Contains(out, pw) {
+		t.Errorf("sandi SMTP bocor:\n%s", out)
 	}
 }
