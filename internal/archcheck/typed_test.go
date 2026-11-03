@@ -1,6 +1,7 @@
 package archcheck
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -90,6 +91,9 @@ func TestIdent_FixtureViolations(t *testing.T) {
 		"unsafe_bad.go":               1, // impor unsafe
 		"ctxinject_windows.go":        1, // varian GOOS=windows (M-4)
 		"ctxinject_linux.go":          1, // varian GOOS=linux (M-4)
+		"ctxinject_arm64.go":          1, // varian linux/arm64 dari matriks rilis (I-3)
+		"ctxinject_nocgo.go":          1, // varian CGO_ENABLED=0 (I-3)
+		"unsafe_reflect_bad.go":       2, // unsafe.Pointer tanpa impor unsafe (C-1)
 	}
 	total := 0
 	for f, n := range want {
@@ -121,19 +125,20 @@ func TestCheckSecurity_NoDuplicateViolations(t *testing.T) {
 	}
 }
 
+// loadCoreRepo memuat satu modul fixture di bawah root repo tiruan testdata/corerepo.
 func loadCoreRepo(t *testing.T, dir string) []TypedPackage {
 	t.Helper()
-	pkgs, err := LoadTyped("testdata/corerepo/modules/"+dir, "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off")
+	pkgs, err := LoadTypedFrom("testdata/corerepo", "testdata/corerepo/"+dir, "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off")
 	if err != nil {
 		t.Fatal(err)
 	}
 	return pkgs
 }
 
-// IDENT: modul core (path erpora/modules/core DAN direktori modules/core) boleh membaca identity.AdminFrom dan
-// identity.ServiceFrom (Q16, 3 Nov 2026), tetapi pemasang konteks tetap dilarang di dalamnya.
+// IDENT: modul core (path erpora/modules/core DAN direktori persis <root>/modules/core) boleh membaca
+// identity.AdminFrom dan identity.ServiceFrom (Q16, 3 Nov 2026), tetapi pemasang konteks tetap dilarang di dalamnya.
 func TestIdent_CoreModuleMayReadServiceAndAdmin(t *testing.T) {
-	got := byRule(CheckSecurity(loadCoreRepo(t, "core")), "IDENT")
+	got := byRule(CheckSecurity(loadCoreRepo(t, "modules/core")), "IDENT")
 	if len(got) != 1 || !strings.Contains(got[0].Detail, "identity.WithPrincipal") {
 		t.Fatalf("IDENT di modul core = %+v, want tepat 1 (WithPrincipal) dan tanpa AdminFrom/ServiceFrom", got)
 	}
@@ -141,36 +146,63 @@ func TestIdent_CoreModuleMayReadServiceAndAdmin(t *testing.T) {
 
 // M-3: go.mod berpath erpora/modules/core di direktori lain (modules/acme) tidak mendapat hak core.
 func TestIdent_CorePathInOtherDirectoryGetsNoCoreRights(t *testing.T) {
-	got := byRule(CheckSecurity(loadCoreRepo(t, "acme")), "IDENT")
+	got := byRule(CheckSecurity(loadCoreRepo(t, "modules/acme")), "IDENT")
 	if len(got) != 3 {
 		t.Fatalf("IDENT di modules/acme berpath core = %d, want 3 (AdminFrom, ServiceFrom, WithPrincipal): %+v", len(got), got)
 	}
 }
 
-// M-4: varian OS menambah satu OS lain selain host (dengan CGO_ENABLED=0); host sendiri sudah dicakup konfigurasi bawaan.
-func TestBuildTypedVariants_SkipsHostOS(t *testing.T) {
-	has := func(vs []typedVariant, goos string) bool {
+// M-3 (jangkar): direktori yang hanya BERAKHIRAN /modules/core (other/modules/core) bukan <root>/modules/core.
+func TestIdent_CoreRightsAnchoredToRepoRoot(t *testing.T) {
+	got := byRule(CheckSecurity(loadCoreRepo(t, "other/modules/core")), "IDENT")
+	if len(got) != 3 {
+		t.Fatalf("IDENT di other/modules/core = %d, want 3 (tanpa hak core): %+v", len(got), got)
+	}
+}
+
+// C-1: berkas hasil cgo (_cgo_gotypes.go dan sejenisnya) tidak dipindai untuk unsafe.Pointer (kode bangkitan
+// toolchain, bukan kode modul); berkas lain, termasuk yang berkepala "Code generated", tetap dipindai.
+func TestIsCgoGenerated(t *testing.T) {
+	for name, want := range map[string]bool{
+		"_cgo_gotypes.go": true, "_cgo_export.go": true, "x.go": false, "cgo.go": false, "gen.gen.go": false,
+	} {
+		if got := isCgoGenerated(filepath.Join("a", "b", name)); got != want {
+			t.Errorf("isCgoGenerated(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// M-4/I-3: varian dari matriks rilis (ci.yml job build) selain target host, tanpa cgo; host dicakup konfigurasi bawaan.
+func TestBuildTypedVariants_FromReleaseMatrix(t *testing.T) {
+	has := func(vs []typedVariant, goos, goarch string) bool {
 		for _, v := range vs {
-			for _, e := range v.env {
-				if e == "GOOS="+goos {
-					return true
-				}
+			joined := strings.Join(v.env, " ")
+			if strings.Contains(joined, "GOOS="+goos) && strings.Contains(joined, "GOARCH="+goarch) {
+				return true
 			}
 		}
 		return false
 	}
-	lin, win := buildTypedVariants("linux"), buildTypedVariants("windows")
-	if has(lin, "linux") || !has(lin, "windows") || has(win, "windows") || !has(win, "linux") {
-		t.Fatalf("varian OS salah: linux=%+v windows=%+v", lin, win)
+	win := buildTypedVariants("windows", "amd64")
+	lin := buildTypedVariants("linux", "amd64")
+	if has(win, "windows", "amd64") || !has(win, "linux", "amd64") || !has(win, "linux", "arm64") {
+		t.Errorf("varian host windows/amd64 salah: %+v", win)
 	}
-	for _, vs := range [][]typedVariant{lin, win} {
-		if !has(vs, "linux") && !has(vs, "windows") {
-			continue
-		}
+	if has(lin, "linux", "amd64") || !has(lin, "linux", "arm64") || !has(lin, "windows", "amd64") {
+		t.Errorf("varian host linux/amd64 salah: %+v", lin)
+	}
+	for _, vs := range [][]typedVariant{win, lin} {
+		hasDevtools := false
 		for _, v := range vs {
-			if len(v.env) > 0 && v.env[len(v.env)-1] != "CGO_ENABLED=0" {
-				t.Errorf("varian OS harus CGO_ENABLED=0: %+v", v)
+			if len(v.flags) == 1 && v.flags[0] == "-tags=devtools" {
+				hasDevtools = true
 			}
+			if len(v.env) > 0 && !strings.Contains(strings.Join(v.env, " "), "CGO_ENABLED=0") {
+				t.Errorf("varian lintas-target harus CGO_ENABLED=0: %+v", v)
+			}
+		}
+		if !hasDevtools {
+			t.Errorf("varian tag devtools hilang: %+v", vs)
 		}
 	}
 }

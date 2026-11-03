@@ -19,9 +19,13 @@ type Package struct {
 // GoMod adalah ringkasan satu go.mod.
 type GoMod struct {
 	Path, Dir, GoVersion, Toolchain string
+	Replaces                        []Replace       // direktif replace di go.mod (aturan MODNEST)
 	Requires                        []string        // semua require (langsung + indirect)
 	Indirect                        map[string]bool // require bertanda "// indirect"
 }
+
+// Replace adalah satu direktif replace di go.mod. NewVersion kosong berarti target berupa path lokal.
+type Replace struct{ Old, New, NewVersion string }
 
 // Work adalah ringkasan go.work. Nil pada Repo.Work = pemeriksaan workspace dilewati.
 type Work struct {
@@ -53,6 +57,8 @@ type Repo struct {
 	Manifests map[string]Manifest // by module path
 	Work      *Work
 	Web       map[string]WebPackage // by module path; hanya modul yang punya web/package.json
+	// NestedGoMods: path absolut go.mod bersarang di bawah modules/<x>/ (selain go.mod akar modul); dilarang (MODNEST).
+	NestedGoMods []string
 }
 
 // Violation adalah satu pelanggaran aturan.

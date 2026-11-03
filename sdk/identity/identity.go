@@ -68,8 +68,15 @@ type principalKey struct{}
 // principalBox membungkus Principal di context. Tipe dan field-nya tak diekspor dengan sengaja: modul
 // jahat dapat menelusuri rantai context lewat refleksi, meniru tipe kunci principalKey, dan memasang
 // nilai Principal mentah dengan kunci yang sama. Karena yang diterima FromContext hanya *principalBox
-// dengan ok true (field tak diekspor tidak dapat diisi dari luar paket tanpa unsafe), nilai mentah atau
-// kotak nol buatan refleksi ditolak, dan isi kotak sah tidak terbaca lewat ctx.Value(kunciTiruan).
+// dengan ok true, nilai mentah atau kotak nol buatan reflect.New ditolak (field tak diekspor tidak dapat
+// diisi lewat API refleksi biasa), dan isi kotak sah tidak terbaca lewat ctx.Value(kunciTiruan).
+//
+// Batas yang dinyatakan jujur: ini mempersulit pemalsuan murni-refleksi, tetapi TIDAK menghalangi kode
+// yang memakai unsafe.Pointer, termasuk lewat reflect.NewAt (nilai unsafe.Pointer dapat diperoleh dari
+// reflect.Value.UnsafePointer tanpa menyebut paket unsafe), yang dapat mengisi kotak nol maupun
+// memutasi kotak sah di tempat. Itu batas bahasa Go, bukan sesuatu yang dapat diperbaiki di sini.
+// Mitigasinya adalah aturan arsitektur IDENT yang menandai ekspresi unsafe.Pointer di kode modul
+// (ditegakkan archcheck), bukan kotak ini.
 type principalBox struct {
 	p  Principal
 	ok bool

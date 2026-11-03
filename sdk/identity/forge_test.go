@@ -76,7 +76,7 @@ func TestFromContextRejectsForgedPrincipal(t *testing.T) {
 }
 
 // Kunci tiruan tidak boleh membocorkan nilai sah: ctx.Value(kunciPalsu) bukan Principal/Service/Admin
-// yang dapat dipakai, dan isi kotak tidak dapat dibaca lewat refleksi (field tak diekspor).
+// yang dapat dipakai, melainkan kotak bertipe tak diekspor yang field-nya semuanya tak diekspor.
 func TestForgedKeyCannotReadValues(t *testing.T) {
 	ctx := context.Background()
 	ctx = identity.WithPrincipal(ctx, identity.Principal{UserID: "u1"})
@@ -102,9 +102,10 @@ func TestForgedKeyCannotReadValues(t *testing.T) {
 		if rv.Kind() != reflect.Pointer || rv.Elem().Kind() != reflect.Struct {
 			t.Fatalf("%s: kotak bukan pointer ke struct: %T", name, raw)
 		}
+		// Seluruh field kotak tak diekspor (properti desain; jangan diekspor tanpa sengaja).
 		for i := 0; i < rv.Elem().NumField(); i++ {
-			if rv.Elem().Type().Field(i).IsExported() || rv.Elem().Field(i).CanInterface() {
-				t.Errorf("%s: field kotak %q dapat dibaca dari luar paket", name, rv.Elem().Type().Field(i).Name)
+			if rv.Elem().Type().Field(i).IsExported() {
+				t.Errorf("%s: field kotak %q diekspor", name, rv.Elem().Type().Field(i).Name)
 			}
 		}
 	}
@@ -158,11 +159,50 @@ func TestAdminFromRejectsForged(t *testing.T) {
 	}
 }
 
-// zeroBox membuat nilai nol bertipe nilai yang disimpan paket di context (kotak nol hasil refleksi:
-// field tak diekspor tidak dapat diisi dari luar paket).
+// zeroBox membuat nilai nol bertipe nilai yang disimpan paket di context lewat reflect.New (field tak
+// diekspor tetap nol, jadi penanda sah tidak terisi). Ini hanya menguji penolakan oleh penanda ok untuk
+// pemalsuan murni-refleksi; BUKAN bukti kekebalan terhadap kode yang memakai unsafe (lihat
+// TestKnownLimitationUnsafeReflectForgery).
 func zeroBox(valType reflect.Type) any {
 	if valType.Kind() == reflect.Pointer {
 		return reflect.New(valType.Elem()).Interface()
 	}
 	return reflect.New(valType).Elem().Interface()
+}
+
+// TestKnownLimitationUnsafeReflectForgery MENDOKUMENTASIKAN batas yang diketahui, bukan jaminan keamanan:
+// kode yang memperoleh unsafe.Pointer (di sini lewat reflect.Value.UnsafePointer, tanpa menyebut paket
+// unsafe) dapat mengisi kotak nol lewat reflect.NewAt dan melewati penanda ok, serta memutasi kotak sah
+// di tempat. Ini batas bahasa Go; mitigasinya aturan arsitektur IDENT (archcheck) yang menandai
+// ekspresi unsafe.Pointer di kode modul. Tes ini sengaja menegaskan bahwa serangan BERHASIL; bila suatu
+// saat Go menutupnya, tes ini melapor Skip dengan pesan agar dihapus (bukan regresi).
+func TestKnownLimitationUnsafeReflectForgery(t *testing.T) {
+	legit := identity.WithPrincipal(context.Background(), identity.Principal{UserID: "u1"})
+	key, valType := forgeKey(t, legit, "principalKey")
+
+	// Layout sama dengan principalBox{p Principal; ok bool}, tetapi dengan field diekspor agar dapat di-Set.
+	layout := reflect.StructOf([]reflect.StructField{
+		{Name: "P", Type: reflect.TypeOf(identity.Principal{})},
+		{Name: "Ok", Type: reflect.TypeOf(true)},
+	})
+	fill := func(box any, p identity.Principal) {
+		w := reflect.NewAt(layout, reflect.ValueOf(box).UnsafePointer()).Elem()
+		w.Field(0).Set(reflect.ValueOf(p))
+		w.Field(1).SetBool(true)
+	}
+
+	// 1) Kotak nol palsu yang diisi lewat NewAt diterima FromContext.
+	forged := zeroBox(valType)
+	fill(forged, identity.Principal{UserID: "evil"})
+	got, ok := identity.FromContext(context.WithValue(context.Background(), key, forged))
+	if !ok || got.UserID != "evil" {
+		t.Skipf("serangan NewAt tidak lagi berhasil (got=%+v ok=%v): Go menutup celah; hapus tes ini", got, ok)
+	}
+
+	// 2) Kotak sah dapat dimutasi di tempat sehingga principal berubah untuk semua yang berbagi ctx.
+	shared := identity.WithPrincipal(context.Background(), identity.Principal{UserID: "victim"})
+	fill(shared.Value(key), identity.Principal{UserID: "evil"})
+	if p, _ := identity.FromContext(shared); p.UserID != "evil" {
+		t.Skipf("mutasi in-place tidak lagi berhasil (p=%+v): hapus tes ini", p)
+	}
 }

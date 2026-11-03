@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -22,6 +23,9 @@ type TypedPackage struct {
 	// ModuleDir adalah direktori go.mod pemilik paket (absolut). Dipakai aturan IDENT untuk mengunci hak modul core
 	// ke direktori modules/core, bukan hanya ke path Go module (M-3).
 	ModuleDir string
+	// RepoRoot adalah root repo (absolut) yang dimuat; kosong bila tidak diketahui (LoadTyped tanpa root). Hak modul
+	// core hanya berlaku bila ModuleDir persis <RepoRoot>/modules/core.
+	RepoRoot string
 	// Slug adalah namespace i18n modul pemilik (slug di module.json; bila tidak ada, nama terakhir path
 	// Go module). Dipakai aturan I1.
 	Slug  string
@@ -34,34 +38,68 @@ type TypedPackage struct {
 // typedVariant adalah satu konfigurasi build untuk memuat paket: flag go dan environment tambahan.
 type typedVariant struct{ flags, env []string }
 
-// typedBuildVariants adalah kombinasi build yang dimuat untuk analisis aturan keamanan bertipe. Berkas modul
-// ber-`//go:build devtools` atau bersufiks/ber-tag OS (`*_windows.go`, `*_linux.go`) tidak ikut dimuat pada
-// konfigurasi bawaan, sehingga tanpa varian tambahan ia lolos semua aturan (IDENT, EGRESS, I1, DECODE). Varian OS
-// memakai CGO_ENABLED=0 agar paket ber-cgo tidak galat saat dimuat lintas OS; varian OS yang sama dengan host
-// dilewati (sudah dicakup konfigurasi bawaan). Batasan: GOARCH dan tag selain devtools tidak dicakup.
-var typedBuildVariants = buildTypedVariants(runtime.GOOS)
+// releaseTargets adalah target (GOOS, GOARCH) matriks rilis di .github/workflows/ci.yml (job `build`); rilis lintas
+// target dibangun tanpa cgo (cross-compile). Ubah daftar ini bersama matriks itu.
+var releaseTargets = []struct{ goos, goarch string }{
+	{"linux", "amd64"}, {"linux", "arm64"}, {"windows", "amd64"},
+}
 
-func buildTypedVariants(hostOS string) []typedVariant {
+// typedBuildVariants adalah kombinasi build yang dimuat untuk analisis aturan keamanan bertipe. Berkas modul
+// ber-`//go:build devtools`, bersufiks OS/arsitektur (`*_windows.go`, `*_arm64.go`), atau ber-tag `!cgo` tidak ikut
+// dimuat pada konfigurasi bawaan, sehingga tanpa varian tambahan ia lolos semua aturan (IDENT, EGRESS, I1, DECODE).
+// Varian: bawaan (host), tag `devtools`, dan tiap target matriks rilis selain target host dengan CGO_ENABLED=0
+// (rilis lintas target dibangun tanpa cgo; host dicakup konfigurasi bawaan). Batasan: tag selain `devtools`, GOARCH
+// di luar matriks rilis, dan GOAMD64/GOARM tidak dicakup. Varian dimuat bersamaan agar waktu dinding tidak berlipat.
+var typedBuildVariants = buildTypedVariants(runtime.GOOS, runtime.GOARCH)
+
+func buildTypedVariants(hostOS, hostArch string) []typedVariant {
 	vs := []typedVariant{{}, {flags: []string{"-tags=devtools"}}}
-	for _, goos := range []string{"linux", "windows"} {
-		if goos != hostOS {
-			vs = append(vs, typedVariant{env: []string{"GOOS=" + goos, "CGO_ENABLED=0"}})
+	for _, t := range releaseTargets {
+		if t.goos == hostOS && t.goarch == hostArch {
+			continue
 		}
+		vs = append(vs, typedVariant{env: []string{"GOOS=" + t.goos, "GOARCH=" + t.goarch, "CGO_ENABLED=0"}})
 	}
 	return vs
 }
 
-// LoadTyped memuat "./..." di dir dengan informasi tipe (tanpa file test), untuk setiap kombinasi di
-// typedBuildVariants (tag devtools dan OS lain). Paket yang sama dapat muncul beberapa kali (satu per varian); CheckSecurity membuang
-// pelanggaran ganda. env menambah environment proses (mis. GOWORK=off untuk fixture).
+// LoadTyped memuat "./..." di dir tanpa root repo yang diketahui (modul tidak mendapat hak core). Lihat LoadTypedFrom.
 func LoadTyped(dir string, env ...string) ([]TypedPackage, error) {
-	var out []TypedPackage
-	for _, v := range typedBuildVariants {
-		pkgs, err := loadTypedOnce(dir, v.flags, append(append([]string{}, v.env...), env...))
-		if err != nil {
+	return LoadTypedFrom("", dir, env...)
+}
+
+// LoadTypedFrom memuat "./..." di dir dengan informasi tipe (tanpa file test), untuk setiap kombinasi di
+// typedBuildVariants (bersamaan). Paket yang sama dapat muncul beberapa kali (satu per varian); CheckSecurity membuang
+// pelanggaran ganda. root adalah root repo (boleh kosong) untuk penentuan modul core. env menambah environment
+// proses (mis. GOWORK=off untuk fixture).
+func LoadTypedFrom(root, dir string, env ...string) ([]TypedPackage, error) {
+	absRoot := ""
+	if root != "" {
+		var err error
+		if absRoot, err = filepath.Abs(root); err != nil {
 			return nil, err
 		}
-		out = append(out, pkgs...)
+	}
+	results := make([][]TypedPackage, len(typedBuildVariants))
+	errs := make([]error, len(typedBuildVariants))
+	var wg sync.WaitGroup
+	for i, v := range typedBuildVariants {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = loadTypedOnce(dir, v.flags, append(append([]string{}, v.env...), env...))
+		}()
+	}
+	wg.Wait()
+	var out []TypedPackage
+	for i := range results {
+		if errs[i] != nil {
+			return nil, errs[i]
+		}
+		for _, tp := range results[i] {
+			tp.RepoRoot = absRoot
+			out = append(out, tp)
+		}
 	}
 	return out, nil
 }
@@ -120,7 +158,7 @@ func LoadTypedRepo(root string) ([]TypedPackage, error) {
 	}
 	var all []TypedPackage
 	for _, gm := range mods {
-		pkgs, err := LoadTyped(filepath.Dir(gm))
+		pkgs, err := LoadTypedFrom(root, filepath.Dir(gm))
 		if err != nil {
 			return nil, err
 		}
@@ -139,8 +177,8 @@ func LoadTypedRepo(root string) ([]TypedPackage, error) {
 // IDENT: kode non-test modul tidak boleh memanggil atau mereferensikan identity.WithPrincipal, identity.WithService,
 // identity.WithAdmin, dan mail.WithSender (hak platform; tes modul memakai identitytest). Kode non-test juga tidak
 // boleh mengimpor erpora/sdk/identity/identitytest dan testing. Selain modul core, kode non-test juga tidak boleh
-// memanggil atau mereferensikan identity.AdminFrom dan identity.ServiceFrom. Impor unsafe dan direktif
-// //go:linkname dilarang karena dapat memintas deteksi berbasis types.Func.
+// memanggil atau mereferensikan identity.AdminFrom dan identity.ServiceFrom. Impor unsafe, direktif //go:linkname,
+// dan setiap ekspresi bertipe unsafe.Pointer dilarang karena dapat memintas deteksi berbasis types.Func.
 //
 // DECODE: input tidak boleh didekode langsung ke tipe dari paket internal/infrastructure, termasuk lewat
 // slice, map, atau struct pembungkus (mass assignment, security-guidelines §3.1). json.Unmarshal/Decode di
@@ -233,6 +271,19 @@ func CheckSecurity(pkgs []TypedPackage) []Violation {
 				}
 				return true
 			})
+		}
+		// IDENT (C-1): setiap ekspresi bertipe unsafe.Pointer di kode non-test modul dilarang, terlepas dari ada tidaknya
+		// `import "unsafe"`: refleksi (reflect.Value.UnsafePointer, reflect.NewAt, SetPointer) menghasilkan nilai bertipe
+		// unsafe.Pointer lewat inferensi tipe dan dapat memalsukan/membajak nilai context tanpa impor. Berkas bantu cgo
+		// (_cgo_*) dikecualikan; unsafe.Pointer yang diperoleh lewat cgo/assembly tidak dipindai (risiko residual).
+		for expr, tv := range p.Info.Types {
+			if tv.Type == nil || !isUnsafePointer(tv.Type) {
+				continue
+			}
+			if isCgoGenerated(p.Fset.Position(expr.Pos()).Filename) {
+				continue
+			}
+			add("IDENT", expr.Pos(), "ekspresi bertipe unsafe.Pointer di kode non-test modul dilarang (termasuk yang didapat lewat refleksi tanpa impor unsafe): dapat memalsukan nilai context identitas")
 		}
 		// httpx.DecodeJSON[T]: tipe target ada di Info.Instances.
 		for id, inst := range p.Info.Instances {
@@ -332,14 +383,34 @@ var coreOnlyCtxFuncs = map[string]map[string]bool{
 const coreModulePath = modulesBase + "core"
 
 // isCoreModule: paket milik modul core sejati, yaitu path Go module erpora/modules/core DAN direktori go.mod-nya
-// <root>/modules/core. Path saja tidak cukup: go.mod berpath core di direktori lain tidak mendapat hak core.
+// persis <RepoRoot>/modules/core (bukan sekadar berakhiran /modules/core). Path saja tidak cukup: go.mod berpath core
+// di direktori lain tidak mendapat hak core.
 // (Aturan MODPATH di Check juga menolak path yang tidak cocok dengan direktorinya.)
+// isUnsafePointer: t bertipe unsafe.Pointer (termasuk tipe bernama yang underlying-nya unsafe.Pointer).
+func isUnsafePointer(t types.Type) bool {
+	b, ok := t.Underlying().(*types.Basic)
+	return ok && b.Kind() == types.UnsafePointer
+}
+
+// isCgoGenerated: berkas bantu bangkitan cgo (_cgo_gotypes.go, _cgo_export.go, ...). Hanya nama berkas yang dicek,
+// bukan header "Code generated", agar modul tidak dapat menghindari pemindaian dengan menulis header itu.
+func isCgoGenerated(filename string) bool {
+	return strings.HasPrefix(filepath.Base(filename), "_cgo_")
+}
+
 func isCoreModule(p TypedPackage) bool {
-	if p.Module != coreModulePath || p.ModuleDir == "" {
+	if p.Module != coreModulePath || p.ModuleDir == "" || p.RepoRoot == "" {
 		return false
 	}
-	dir := filepath.ToSlash(filepath.Clean(p.ModuleDir))
-	return strings.HasSuffix(dir, "/modules/core")
+	want, err1 := filepath.Abs(filepath.Join(p.RepoRoot, "modules", "core"))
+	got, err2 := filepath.Abs(p.ModuleDir)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(want, got)
+	}
+	return want == got
 }
 
 func coreOnlyCtx(fn *types.Func) bool {

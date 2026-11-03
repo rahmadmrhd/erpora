@@ -48,19 +48,33 @@ type Sender interface {
 
 type senderKey struct{}
 
-// WithSender memasang s di ctx; dipanggil platform saat merakit modul.
-func WithSender(ctx context.Context, s Sender) context.Context {
-	return context.WithValue(ctx, senderKey{}, s)
+// senderBox membungkus Sender di context (pola sama dengan sdk/identity). Tipe dan field-nya tak
+// diekspor: modul jahat dapat meniru kunci senderKey lewat refleksi, lalu membaca Sender platform dari
+// ctx.Value(kunciTiruan) dan memanggil Send langsung (melewati Validate), atau memasang Sender
+// miliknya. Karena From hanya menerima *senderBox dengan ok true, nilai mentah atau kotak nol buatan
+// refleksi ditolak (gagal tertutup) dan nilai di bawah kunci tiruan bukan Sender yang dapat dipanggil.
+//
+// Batas: ini mempersulit pemalsuan murni-refleksi, tetapi tidak menghalangi kode yang memakai
+// unsafe.Pointer (termasuk lewat reflect.NewAt); aturan arsitektur IDENT menandai ekspresi
+// unsafe.Pointer di kode modul. Mutasi in-place kotak sah lewat unsafe adalah batas bahasa.
+type senderBox struct {
+	s  Sender
+	ok bool
 }
 
-// From mengembalikan Sender di ctx; ok false bila tidak ada, nil, atau nil bertipe (mis. (*T)(nil)
-// yang dibungkus antarmuka) sehingga pemanggil tidak panik saat memakainya.
+// WithSender memasang s di ctx; dipanggil platform saat merakit modul.
+func WithSender(ctx context.Context, s Sender) context.Context {
+	return context.WithValue(ctx, senderKey{}, &senderBox{s: s, ok: true})
+}
+
+// From mengembalikan Sender di ctx; ok false bila tidak ada, nil, nil bertipe (mis. (*T)(nil) yang
+// dibungkus antarmuka), atau nilai di bawah kunci itu bukan kotak sah buatan WithSender.
 func From(ctx context.Context) (Sender, bool) {
-	s, ok := ctx.Value(senderKey{}).(Sender)
-	if !ok || isNil(s) {
+	b, ok := ctx.Value(senderKey{}).(*senderBox)
+	if !ok || b == nil || !b.ok || isNil(b.s) {
 		return nil, false
 	}
-	return s, true
+	return b.s, true
 }
 
 // Send memvalidasi m (Validate) lalu mengirimnya lewat Sender di ctx. Tanpa Sender mengembalikan

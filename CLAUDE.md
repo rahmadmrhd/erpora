@@ -34,7 +34,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 
 ## Aturan arsitektur (ditegakkan otomatis — jangan dilanggar)
 
-- Monorepo **multi Go module** (`go.work`): root `erpora` (platform + `cmd/erpora` + `internal/app`), `sdk/`, dan setiap `modules/<name>/` = Go module sendiri. Semua `go.mod`: `go 1.27`, `toolchain go1.27.3`.
+- Monorepo **multi Go module** (`go.work`): root `erpora` (platform + `cmd/erpora` + `internal/app`), `sdk/`, dan setiap `modules/<name>/` = Go module sendiri. Semua `go.mod`: `go 1.27`, `toolchain go1.27.3`. Satu `go.mod` per modul (tanpa `go.mod` bersarang; `replace` lokal hanya `erpora/sdk => ../../sdk` dan `erpora/modules/<x> => ../<x>`, `MODNEST`).
 - Modul hanya boleh mengakses modul lain lewat `modules/<x>/contract` **dan** hanya bila tercantum di `dependencies` manifest + `require` go.mod (D1, D8). Modul tidak boleh mengimpor root module; akses platform hanya lewat `sdk/` (D9).
 - `internal/platform/**` tidak boleh mengimpor `modules/**` (D2); hanya `internal/app` yang merakit modul (D7).
 - Frontend modul berada di dalam modulnya: `modules/<name>/web` (package `@erpora/module-<name>`). Komponen generik dari `@erpora/ui` (`packages/ui`), layanan frontend platform dari `@erpora/platform-web` — **bukan** dari modul Core. `web/` hanya app shell yang merakit modul. Dependency `package.json` modul harus sama dengan `manifest.dependencies` (F1–F3).

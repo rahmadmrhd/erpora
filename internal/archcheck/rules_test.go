@@ -507,3 +507,68 @@ func TestMODPATH_ModulePathMustMatchDirectory(t *testing.T) {
 	assertViolation(t, Check(mk("modules/acme", root+"/modules/core")), "MODPATH") // penyamar
 	assertViolation(t, Check(mk("vendor/acme", root+"/modules/acme")), "MODPATH")  // di luar modules/
 }
+
+func modRepo(replaces ...Replace) Repo {
+	r := repoWith()
+	r.Root = filepath.Join(string(filepath.Separator), "r")
+	r.Mods = append([]GoMod{}, r.Mods...)
+	r.Mods = append(r.Mods, GoMod{
+		Path: root + "/modules/acme", Dir: filepath.Join(r.Root, "modules", "acme"), GoVersion: "1.27", Toolchain: "go1.27.3",
+		Requires: []string{sdk}, Replaces: replaces,
+	})
+	return r
+}
+
+// MODNEST (I-2, keputusan pemilik produk 3 Nov 2026): satu go.mod per modul bisnis; go.mod bersarang di bawah
+// modules/<x>/ dilarang.
+func TestMODNEST_NestedGoModForbidden(t *testing.T) {
+	r := modRepo()
+	assertNone(t, Check(r), "MODNEST")
+	r.NestedGoMods = []string{filepath.Join(r.Root, "modules", "acme", "internal", "tools", "go.mod")}
+	assertViolation(t, Check(r), "MODNEST")
+}
+
+// MODNEST: replace lokal hanya sah ke SDK (../../sdk) dan modul saudara (../<nama>) sesuai template generator;
+// replace lokal lain (juga ke modul pihak ketiga atau path absolut) dilarang.
+func TestMODNEST_LocalReplaceAllowlist(t *testing.T) {
+	ok := []Replace{
+		{Old: sdk, New: "../../sdk"},
+		{Old: example, New: "../example"},
+	}
+	assertNone(t, Check(modRepo(ok...)), "MODNEST")
+	for _, bad := range []Replace{
+		{Old: sdk, New: "../other-sdk"},
+		{Old: sdk, New: "/abs/sdk"},
+		{Old: example, New: "../../elsewhere/example"},
+		{Old: "github.com/x/y", New: "../hack"},
+		{Old: "github.com/x/y", New: "./vendor/y"},
+	} {
+		assertViolation(t, Check(modRepo(bad)), "MODNEST")
+	}
+	// replace ke versi (bukan path lokal) tidak diatur aturan ini.
+	assertNone(t, Check(modRepo(Replace{Old: "github.com/x/y", New: "github.com/x/y2", NewVersion: "v1.0.0"})), "MODNEST")
+}
+
+func TestFindNestedGoMods(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel string) {
+		full := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("module x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod")                      // akar: sah
+	write("internal/tools/go.mod")       // bersarang
+	write("testdata/fx/go.mod")          // testdata bukan fixture archcheck: tetap bersarang
+	write("web/node_modules/pkg/go.mod") // node_modules diabaikan
+	got, err := findNestedGoMods(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("go.mod bersarang = %v, want 2 (internal/tools, testdata/fx)", got)
+	}
+}

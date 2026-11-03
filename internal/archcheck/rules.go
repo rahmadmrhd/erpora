@@ -214,6 +214,12 @@ func Check(r Repo) []Violation {
 		}
 	}
 
+	// MODNEST: go.mod bersarang di bawah modules/<x>/ dilarang (satu go.mod akar per modul; modul dikelola lewat
+	// go.work + manifest).
+	for _, nested := range r.NestedGoMods {
+		add("MODNEST", nested, "go.mod bersarang dilarang di bawah modules/<x>/ (hanya satu go.mod akar per modul)")
+	}
+
 	// Aturan level go.mod.
 	vers, tcs := map[string][]string{}, map[string][]string{}
 	for _, m := range r.Mods {
@@ -228,6 +234,23 @@ func Check(r Repo) []Violation {
 					add("MODPATH", m.Path, "go.mod di modules/"+parts[1]+" harus berpath "+modulesBase+parts[1])
 				case !isModDir && strings.HasPrefix(m.Path, modulesBase):
 					add("MODPATH", m.Path, "modul berpath "+modulesBase+"... harus berada di modules/<nama> (ditemukan di "+filepath.ToSlash(rel)+")")
+				}
+			}
+		}
+		// MODNEST (I-2): replace lokal di go.mod modul bisnis hanya sah ke SDK (../../sdk) dan modul saudara
+		// (../<nama>), persis seperti template generator (GOWORK=off butuh replace itu). Replace lokal lain
+		// (path absolut, modul pihak ketiga, direktori di luar modules/) dilarang.
+		if m.Dir != "" && strings.HasPrefix(m.Path, modulesBase) {
+			for _, rp := range m.Replaces {
+				if rp.NewVersion != "" {
+					continue // bukan path lokal
+				}
+				target := filepath.ToSlash(rp.New)
+				switch {
+				case rp.Old == sdkModule && target == "../../sdk":
+				case strings.HasPrefix(rp.Old, modulesBase) && target == "../"+strings.TrimPrefix(rp.Old, modulesBase):
+				default:
+					add("MODNEST", m.Path, "replace lokal "+rp.Old+" => "+rp.New+" dilarang: hanya erpora/sdk => ../../sdk dan erpora/modules/<x> => ../<x> yang sah")
 				}
 			}
 		}
