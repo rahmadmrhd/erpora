@@ -101,7 +101,8 @@ func TestServe_SecondSignalTerminatesDuringShutdown(t *testing.T) {
 	}
 	time.Sleep(700 * time.Millisecond) // shutdown anggun sudah dimulai dan tertahan
 	select {
-	case <-p.done:
+	case err := <-p.done:
+		p.done <- err // kembalikan untuk cleanup startServeBin (tanpa ini cleanup menunggu selamanya)
 		t.Fatal("proses berhenti sebelum sinyal kedua padahal request lambat masih berjalan")
 	default:
 	}
