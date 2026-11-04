@@ -11,7 +11,7 @@
 | Milestone | Cakupan | Membuka | Rencana |
 | --- | --- | --- | --- |
 | **C1 Identity lokal** | FR-101, 102, 106, 107, 108; modul `core` (`required`); `core:create-admin`, `core:rotate-keys`, `core:reset-mfa`; role `Administrator` minimal (lihat keputusan K-C1) | Principal nyata di context, 401 vs 403, pengganti `api:dev` | `2026-11-02-c1-identity-lokal.md` (rinci) |
-| **C2 Authorization** | FR-110 s.d. 119 (manifest `resources`/`field_groups`, scope, field group, `sdk/authz` penuh, IDOR, cache `perm_rev`, UI matriks) | **T4 resource-metadata** (grup 19 sampai 25), lalu grup 26 | ditulis setelah C1 |
+| **C2 Authorization** | FR-110 s.d. 119 (manifest `resources`/`field_groups`, scope, field group, `sdk/authz` penuh, IDOR, cache `perm_rev`, UI matriks) | **T4 resource-metadata** (grup 19 sampai 25), lalu grup 26 | `2026-11-04-c2-authorization.md` (rinci; T4 terbuka setelah Checkpoint Wave 1) |
 | **C3 Settings dan Audit** | FR-120, 130, 131, 132 (settings berskema, preferensi, audit append-only) | Sumber konfigurasi SMTP yang proper menggantikan env sementara C1. **Melanjutkan subset yang sudah dibangun di C1** (tabel tenant `settings` dan paket `internal/platform/settings`, `settings/store` dengan satu kunci tertutup `platform.public_url`; PRD-001 Q24): C3 menambah schema/validasi per tipe, audit, cache revisi, `Get[T]`, dan UI secara aditif | ditulis setelah C2 |
 | **C4 Integrasi** | FR-103 (OIDC), FR-104 (PAT), FR-105 (client credentials) | | ditulis setelah C3 |
 
