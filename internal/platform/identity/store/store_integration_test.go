@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1388,5 +1389,68 @@ func TestResetPasswordRaceWithDisable(t *testing.T) {
 	var revoked int64
 	if err := db.Raw(`SELECT count(*) FROM auth_sessions WHERE id = ? AND revoked_at IS NOT NULL`, sess.ID).Scan(&revoked).Error; err != nil || revoked != 0 {
 		t.Errorf("sesi tercabut padahal reset ditolak: %d %v", revoked, err)
+	}
+}
+
+// WithEmailLock menserialkan pemegang email yang sama (advisory lock transaksi): pemegang kedua baru masuk setelah
+// yang pertama selesai; email berbeda tidak saling menunggu; galat fn dikembalikan apa adanya dan lock dilepas.
+func TestWithEmailLock_SerializesSameEmailOnly(t *testing.T) {
+	_, s := setup(t)
+	var inside, maxInside int32
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := s.WithEmailLock(ctx, "  Sama@Example.test ", func(context.Context) error {
+				n := atomic.AddInt32(&inside, 1)
+				for {
+					m := atomic.LoadInt32(&maxInside)
+					if n <= m || atomic.CompareAndSwapInt32(&maxInside, m, n) {
+						break
+					}
+				}
+				time.Sleep(80 * time.Millisecond)
+				atomic.AddInt32(&inside, -1)
+				return nil
+			})
+			if err != nil {
+				t.Errorf("WithEmailLock: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if maxInside != 1 {
+		t.Fatalf("pemegang serentak = %d, want 1 (email sama harus diserialkan)", maxInside)
+	}
+
+	// Email berbeda tidak saling menunggu: B selesai saat A masih memegang lock.
+	hold, release := make(chan struct{}), make(chan struct{})
+	go func() {
+		_ = s.WithEmailLock(ctx, "a@example.test", func(context.Context) error { close(hold); <-release; return nil })
+	}()
+	<-hold
+	done := make(chan error, 1)
+	go func() { done <- s.WithEmailLock(ctx, "b@example.test", func(context.Context) error { return nil }) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("email berbeda tidak boleh menunggu")
+	}
+	close(release)
+
+	// Galat fn diteruskan apa adanya dan lock dilepas (pemanggilan berikutnya tidak menunggu).
+	boom := errors.New("boom")
+	if err := s.WithEmailLock(ctx, "a@example.test", func(context.Context) error { return boom }); !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want boom", err)
+	}
+	if err := s.WithEmailLock(ctx, "a@example.test", func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithEmailLock(ctx, "   ", func(context.Context) error { return nil }); !errors.Is(err, store.ErrInvalidArgument) {
+		t.Fatalf("email kosong: %v", err)
 	}
 }

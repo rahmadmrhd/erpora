@@ -465,6 +465,11 @@ func (s *fakeStore) UserRoleKeys(_ context.Context, _ tenancy.TenantID, userID s
 	return slices.Clone(s.roles[userID]), nil
 }
 
+// WithEmailLock pada fake cukup menjalankan fn (tes fake berjalan serial); serialisasi sungguhan diuji terhadap PostgreSQL.
+func (s *fakeStore) WithEmailLock(ctx context.Context, _ string, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func (s *fakeStore) CountUserSessions(_ context.Context, _ tenancy.TenantID, userID string) (int, error) {
 	return s.sessionCnt[userID], nil
 }

@@ -209,6 +209,11 @@ func describe(err error) error {
 	}
 }
 
+// stdinPasswordNotice dicetak ke stderr (bukan stdout) saat stdin bukan terminal: tanpa prompt, operator di mintty/Git
+// Bash (stdin berupa pipe) bisa mengira command macet lalu mengetik sandi yang tampil di layar. Tidak memuat sandi.
+const stdinPasswordNotice = "core:create-admin: stdin bukan terminal; sandi dibaca satu baris dari stdin dan tidak disembunyikan. " +
+	"Untuk prompt tersembunyi, jalankan di terminal biasa (PowerShell, cmd, bash/ssh) atau awali dengan winpty di Git Bash."
+
 // readPassword membaca sandi: dari prompt tersembunyi (dua kali, dicocokkan) bila stdin adalah terminal, selain itu
 // satu baris dari stdin (mis. `printf '%s\n' "$PW" | erpora core:create-admin ...`). Tidak ada flag sandi: argumen
 // proses terlihat oleh pengguna lain di sistem dan tersimpan di riwayat shell.
@@ -237,6 +242,9 @@ func readPassword(inv module.Invocation) (string, error) {
 	}
 	if inv.In == nil {
 		return "", errors.New("stdin tidak tersedia: beri sandi lewat stdin atau jalankan di terminal")
+	}
+	if inv.Err != nil {
+		fmt.Fprintln(inv.Err, stdinPasswordNotice)
 	}
 	line, err := bufio.NewReaderSize(io.LimitReader(inv.In, maxPasswordInput+1), maxPasswordInput+1).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {

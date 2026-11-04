@@ -24,7 +24,9 @@ type CommandRun struct {
 	Flags   map[string]string
 	Out     io.Writer
 	// In adalah masukan standar command (stdin proses; mis. sandi core:create-admin); nil = tidak ada.
-	In    io.Reader
+	In io.Reader
+	// Err adalah stderr proses untuk pemberitahuan command; nil = dibuang.
+	Err   io.Writer
 	Actor string
 }
 
@@ -87,7 +89,7 @@ func RunModuleCommand(ctx context.Context, cfg config.Config, log *slog.Logger, 
 		flags = map[string]string{}
 	}
 	started := time.Now()
-	err = run.Command.Command.Run(mctx, module.Invocation{Args: run.Args, Flags: flags, Out: out, In: run.In, Env: env})
+	err = run.Command.Command.Run(mctx, module.Invocation{Args: run.Args, Flags: flags, Out: out, In: run.In, Err: run.Err, Env: env})
 	log.InfoContext(mctx, "command modul selesai", "command", name, "actor", run.Actor, "system_reason", reason,
 		"erp.module.key", key, "duration_ms", time.Since(started).Milliseconds(), "error", err)
 	if err != nil {

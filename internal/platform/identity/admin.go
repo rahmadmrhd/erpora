@@ -122,25 +122,37 @@ func (a *admin) CreateAdmin(ctx context.Context, in sdkidentity.CreateAdminInput
 	if err != nil {
 		return sdkidentity.UserSummary{}, mapErr("hash sandi", err)
 	}
-	u, err := a.d.Store.CreateUser(ctx, t, store.NewUser{Email: email, Name: name, PasswordHash: phc, Status: store.UserDisabled})
-	action := "identity.admin_created"
-	switch {
-	case errors.Is(err, store.ErrEmailTaken):
-		if u, err = a.resumable(ctx, t, email); err != nil {
-			return sdkidentity.UserSummary{}, err
+	// Seluruh alur (buat/lanjutkan, atur sandi, beri role, aktifkan) diserialkan per email: tanpa ini, run A yang baru
+	// membuat akun nonaktif tanpa role tampak sebagai "sisa yang dapat dilanjutkan" bagi run B serentak, yang lalu
+	// menimpa sandi A, dan keduanya sukses. Dengan kunci, run kedua menunggu lalu melihat akun sudah aktif atau
+	// berrole dan ditolak ErrEmailTaken (Q28). Hash sandi dihitung di luar kunci agar kunci dipegang sesingkat mungkin.
+	var sum sdkidentity.UserSummary
+	err = a.d.Store.WithEmailLock(ctx, email, func(ctx context.Context) error {
+		u, err := a.d.Store.CreateUser(ctx, t, store.NewUser{Email: email, Name: name, PasswordHash: phc, Status: store.UserDisabled})
+		action := "identity.admin_created"
+		switch {
+		case errors.Is(err, store.ErrEmailTaken):
+			if u, err = a.resumable(ctx, t, email); err != nil {
+				return err
+			}
+			if err := a.d.Store.SetPasswordHash(ctx, t, u.ID, phc); err != nil {
+				return mapErr("atur ulang sandi", err)
+			}
+			action = "identity.admin_resumed"
+		case err != nil:
+			return mapErr("buat pengguna", err)
 		}
-		if err := a.d.Store.SetPasswordHash(ctx, t, u.ID, phc); err != nil {
-			return sdkidentity.UserSummary{}, mapErr("atur ulang sandi", err)
+		if err := a.promote(ctx, t, u.ID); err != nil {
+			return err
 		}
-		action = "identity.admin_resumed"
-	case err != nil:
-		return sdkidentity.UserSummary{}, mapErr("buat pengguna", err)
+		a.audit(ctx, action, actor, u.ID)
+		sum = sdkidentity.UserSummary{ID: u.ID, Email: u.Email, Name: u.Name}
+		return nil
+	})
+	if err != nil {
+		return sdkidentity.UserSummary{}, mapErr("buat administrator", err)
 	}
-	if err := a.promote(ctx, t, u.ID); err != nil {
-		return sdkidentity.UserSummary{}, err
-	}
-	a.audit(ctx, action, actor, u.ID)
-	return sdkidentity.UserSummary{ID: u.ID, Email: u.Email, Name: u.Name}, nil
+	return sum, nil
 }
 
 // resumable memuat akun dengan email itu bila ia sisa CreateAdmin yang terputus (nonaktif, tanpa role, belum pernah

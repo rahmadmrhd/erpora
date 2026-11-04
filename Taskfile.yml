@@ -69,7 +69,8 @@ tasks:
   test:integration:
     desc: Jalankan test integrasi (tag integration) di root module
     cmds:
-      - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
+      # -timeout: suite internal/app (argon2 + -race) mendekati batas bawaan 10 menit per paket di CI.
+      - go test {{if ne OS "windows"}}-race{{end}} -timeout 25m -tags integration ./...
 
   test:metadata-cli:
     desc: Tes CLI metadata:migrate dan metadata:diff ujung ke ujung (butuh ERP_TEST_DATABASE_URL ke server PostgreSQL pengembangan atau CI)

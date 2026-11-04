@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -369,5 +370,54 @@ func TestRunModuleCommand_InputPassedAndIdentityOnlyForCore(t *testing.T) {
 	}
 	if _, ok := sdkidentity.ServiceFrom(seen); ok {
 		t.Error("varian CLI tidak memasang identity.Service")
+	}
+}
+
+// PRD-001 Q28 + serialisasi: beberapa CreateAdmin serentak untuk email yang sama (kata sandi berbeda) menghasilkan
+// tepat satu sukses; sisanya ErrEmailTaken, dan satu-satunya sandi yang berlaku adalah milik yang sukses (tidak ada
+// akun yang sandinya ditimpa run lain).
+func TestCoreAdmin_ConcurrentCreateAdminSameEmailExactlyOneWins(t *testing.T) {
+	e := newCoreEnv(t)
+	const runs, rounds = 5, 4
+	for round := 0; round < rounds; round++ {
+		email := "serentak" + string(rune('a'+round)) + "@example.test"
+		passwords := make([]string, runs)
+		errs := make([]error, runs)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := 0; i < runs; i++ {
+			passwords[i] = "kata-sandi-serentak-" + string(rune('a'+i)) + "-2026"
+			e.remember(passwords[i])
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				_, errs[i] = e.adm().CreateAdmin(e.sys("cli:core:create-admin"), sdkidentity.CreateAdminInput{Email: email, Name: "Serentak", Password: passwords[i]})
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		winner := -1
+		for i, err := range errs {
+			switch {
+			case err == nil:
+				if winner >= 0 {
+					t.Fatalf("ronde %d: lebih dari satu sukses (%d dan %d)", round, winner, i)
+				}
+				winner = i
+			case !errors.Is(err, sdkidentity.ErrEmailTaken):
+				t.Fatalf("ronde %d run %d: err = %v, want ErrEmailTaken", round, i, err)
+			}
+		}
+		if winner < 0 {
+			t.Fatalf("ronde %d: tidak ada yang sukses: %v", round, errs)
+		}
+		for i, pw := range passwords {
+			_, err := e.login(email, pw)
+			if (i == winner) != (err == nil) {
+				t.Errorf("ronde %d: login dengan sandi run %d (pemenang %d) err = %v", round, i, winner, err)
+			}
+		}
 	}
 }

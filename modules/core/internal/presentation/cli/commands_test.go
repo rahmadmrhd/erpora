@@ -305,3 +305,35 @@ func TestSettingsSet_OnlyPublicURLKey(t *testing.T) {
 		t.Errorf("galat validasi harus diteruskan ke operator: %v", err)
 	}
 }
+
+// Stdin non-terminal (mis. mintty/Git Bash di Windows tanpa winpty) tidak punya prompt: pengguna harus diberi tahu di
+// stderr bahwa sandi dibaca satu baris dan TIDAK disembunyikan. stdout tetap bersih untuk skrip yang memakai pipe.
+func TestCreateAdmin_NonTTYStdinWritesNoticeToErrNotOut(t *testing.T) {
+	a := &fakeAdmin{}
+	var out, errw bytes.Buffer
+	err := byName(t, "create-admin").Run(sdkidentity.WithAdmin(context.Background(), a), module.Invocation{
+		Flags: map[string]string{"email": "admin@example.test"}, Out: &out, Err: &errw, In: strings.NewReader(testPassword + "\n"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice := errw.String()
+	for _, want := range []string{"stdin", "tidak disembunyikan", "winpty"} {
+		if !strings.Contains(notice, want) {
+			t.Errorf("pemberitahuan stderr %q tidak memuat %q", notice, want)
+		}
+	}
+	if strings.Contains(notice, testPassword) || strings.Contains(out.String(), testPassword) {
+		t.Errorf("sandi bocor: stderr=%q stdout=%q", notice, out.String())
+	}
+	if strings.Contains(out.String(), "tidak disembunyikan") {
+		t.Errorf("pemberitahuan tidak boleh ke stdout: %q", out.String())
+	}
+}
+
+// Err nil (pemanggil tanpa stderr) tidak boleh membuat panik.
+func TestCreateAdmin_NonTTYStdinWithoutErrWriter(t *testing.T) {
+	if _, err := run(t, "create-admin", &fakeAdmin{}, map[string]string{"email": "admin@example.test"}, testPassword+"\n"); err != nil {
+		t.Fatal(err)
+	}
+}

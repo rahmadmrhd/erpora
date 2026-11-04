@@ -135,7 +135,7 @@ func (m *Module) Register(r module.Registrar) error {
 
 - `Handle(method, path, permission, h)` memasang route terproteksi. `permission` wajib ada di `capabilities`.
 - `Public(method, path, h)` memasang route tanpa permission. Gunakan hanya bila memang publik, karena setiap route publik harus ditinjau.
-- `Command(c)` mendaftarkan perintah CLI. `Name` tanpa prefix slug. Registry menyimpannya sebagai `<slug>:<name>`, misalnya `example:recount`. Satu segmen grup `<grup>:<aksi>` diizinkan (modul `core`: `core:settings:set`). Command menerima `Invocation.In` (stdin proses) untuk masukan yang tidak boleh lewat flag, mis. sandi; ia berjalan di bawah hak sistem `cli:<slug>:<nama>` dan hanya berjalan bila modulnya enabled.
+- `Command(c)` mendaftarkan perintah CLI. `Name` tanpa prefix slug. Registry menyimpannya sebagai `<slug>:<name>`, misalnya `example:recount`. Satu segmen grup `<grup>:<aksi>` diizinkan (modul `core`: `core:settings:set`). Command menerima `Invocation.In` (stdin proses) untuk masukan yang tidak boleh lewat flag, mis. sandi, dan `Invocation.Err` (stderr proses; boleh nil) untuk pemberitahuan yang bukan hasil command agar `Out` tetap bersih bagi skrip; ia berjalan di bawah hak sistem `cli:<slug>:<nama>` dan hanya berjalan bila modulnya enabled.
 - `path` relatif terhadap prefix modul. `/ping` dipasang sebagai `/api/example/ping`.
 
 Pelanggaran dikumpulkan dan dilaporkan sekaligus saat startup dengan kode problem, misalnya `permission_undeclared`, `invalid_route`, `route_conflict`, `invalid_command`, dan `command_conflict`. Tabel lengkap ada di `internal/platform/modules/registry/errors.go`.

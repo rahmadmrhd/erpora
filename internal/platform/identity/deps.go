@@ -104,6 +104,8 @@ type Store interface {
 	RevokeRole(ctx context.Context, t tenancy.TenantID, userID, roleKey string) (bool, error)
 	UserRoleKeys(ctx context.Context, t tenancy.TenantID, userID string) ([]string, error)
 	CountUserSessions(ctx context.Context, t tenancy.TenantID, userID string) (int, error)
+	// WithEmailLock menjalankan fn selama memegang kunci per email ternormalisasi (serialisasi CreateAdmin; Q28).
+	WithEmailLock(ctx context.Context, email string, fn func(ctx context.Context) error) error
 }
 
 // AuditEvent adalah peristiwa keamanan operasi Admin untuk Auditor. Tidak pernah memuat email, sandi, atau secret:
