@@ -13,6 +13,10 @@ export type IconName = string;
  */
 export type DeskMenu = DeskItem | DeskGroup;
 /**
+ * Item menu: tepat satu dari permission atau access (PRD-000 Q43).
+ */
+export type DeskItem = DeskPermissionItem | DeskAccessItem;
+/**
  * Id menu, unik dalam satu Desk (item, grup, dan anak grup).
  */
 export type DeskMenuId = string;
@@ -127,7 +131,7 @@ export interface ModuleManifest {
    */
   settings?: {};
 }
-export interface DeskItem {
+export interface DeskPermissionItem {
   id: DeskMenuId;
   label: MessageKey;
   icon?: IconName;
@@ -139,6 +143,19 @@ export interface DeskItem {
    * Salah satu capabilities modul; item disembunyikan bila pengguna tidak memilikinya.
    */
   permission: string;
+}
+export interface DeskAccessItem {
+  id: DeskMenuId;
+  label: MessageKey;
+  icon?: IconName;
+  /**
+   * Path internal relatif base route modul (/notes); tanpa skema, host, //, query, atau fragmen.
+   */
+  to: string;
+  /**
+   * Pengganti eksplisit permission: item terlihat bagi setiap pengguna yang login (PRD-000 Q43). Tidak boleh bersama permission.
+   */
+  access: "authenticated";
 }
 export interface DeskGroup {
   id: DeskMenuId;

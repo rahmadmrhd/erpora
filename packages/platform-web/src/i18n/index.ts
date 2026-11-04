@@ -12,6 +12,7 @@ export {
   setActiveLocale,
 } from "./locale";
 export { I18nProvider, useTranslation } from "./provider";
+export { flattenCatalog, type StaticI18nProps, StaticI18nProvider } from "./static";
 export { createTestI18n, type TestI18n } from "./testing";
 export type {
   ArgsOf,

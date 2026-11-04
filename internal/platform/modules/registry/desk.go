@@ -19,7 +19,8 @@ const dashboardID = "dashboard"
 const maxDeskToLen = 200
 
 // CheckDesk memeriksa bagian "desk" manifest di luar yang sudah dicakup JSON Schema (revisi M3a, design.md
-// Komponen 5): id menu unik, permission termasuk capabilities modul, "to" path internal yang bersih, tidak ada
+// Komponen 5): id menu unik, tiap item punya tepat satu dari permission (termasuk capabilities modul) atau
+// access "authenticated" (PRD-000 Q43), "to" path internal yang bersih, tidak ada
 // menu yang menyamar sebagai Dashboard, dan setiap kunci label ada di katalog bahasa dasar modul. catalogs
 // adalah katalog modul (module.CatalogSource; nil bila tidak ada, sehingga semua label dianggap tidak ada).
 // Dipakai Build dan `module:check`; Field berupa JSON pointer ke module.json. nil bila modul tanpa Desk.
@@ -87,8 +88,15 @@ func checkDesk(mf module.Manifest, hasLabel func(string) bool) []Problem {
 		case !validDeskTo(m.To):
 			add(base+"/to", CodeDeskInvalidTo, "path %q tidak valid: wajib path internal relatif base route (diawali \"/\", bersih, tanpa \"//\", skema, host, query, atau fragmen)", m.To)
 		}
-		if !caps[m.Permission] {
-			add(base+"/permission", CodeDeskUnknownPermission, "permission %q bukan salah satu capabilities modul", m.Permission)
+		switch {
+		case m.Permission != "" && m.Access != "":
+			add(base+"/access", CodeDeskAccessConflict, "item memuat permission dan access sekaligus: pilih tepat satu (access hanya sebagai pengganti permission)")
+		case m.Access != "":
+			if m.Access != module.DeskAccessAuthenticated {
+				add(base+"/access", CodeDeskAccessInvalid, "access %q tidak dikenal: satu-satunya nilai sah adalah %q", m.Access, module.DeskAccessAuthenticated)
+			}
+		case !caps[m.Permission]:
+			add(base+"/permission", CodeDeskUnknownPermission, "permission %q bukan salah satu capabilities modul (atau tulis \"access\": \"authenticated\" sebagai pengganti permission)", m.Permission)
 		}
 	}
 

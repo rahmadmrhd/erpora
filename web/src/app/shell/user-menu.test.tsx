@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { CurrentUserSource } from "@erpora/platform-web";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderShell, type ShellHarnessOptions } from "./shell-test-support";
 import { UserMenu } from "./user-menu";
@@ -78,6 +78,29 @@ describe("UserMenu", () => {
     expect(document.getElementById(hintId as string)).toHaveTextContent(
       "Belum tersedia di versi ini",
     );
+  });
+
+  test("Ubah sandi: tautan ke halaman akun dari sumber pengguna (C1.14); tanpa path tidak tampil", async () => {
+    const { user, router } = await openMenu("panel", {
+      user: source({ manageAccountPath: () => "/core/change-password" }),
+    });
+    const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent?.trim());
+    expect(items).toEqual(["Pengaturan", "Ubah sandi", "Muat ulang", "Keluar"]);
+    await user.click(screen.getByRole("menuitem", { name: "Ubah sandi" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/core/change-password"));
+  });
+
+  test("Ubah sandi tidak tampil bila kemampuan manageAccount mati atau path bukan path internal aman", async () => {
+    const off = await openMenu("panel", {
+      user: source({
+        capabilities: { manageAccount: false, signOut: true },
+        manageAccountPath: () => "/core/change-password",
+      }),
+    });
+    expect(screen.queryByRole("menuitem", { name: "Ubah sandi" })).toBeNull();
+    off.unmount();
+    await openMenu("panel", { user: source({ manageAccountPath: () => "https://evil.test/x" }) });
+    expect(screen.queryByRole("menuitem", { name: "Ubah sandi" })).toBeNull();
   });
 
   test("Keluar aktif memanggil sumber pengguna bila didukung", async () => {

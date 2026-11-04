@@ -13,7 +13,7 @@ Fakta yang memengaruhi keputusan:
 - Pemilik produk menetapkan **ERP Design System (DS)** sebagai sumber token, tipografi (Figtree dan skala zinc), dan acuan komponen (Q33 butir 2). DS adalah artefak desain, bukan paket npm.
 - **Frappe UI** adalah pustaka Vue. Stack frontend repo adalah React, sehingga Frappe UI hanya dipakai sebagai rujukan UX dan perilaku, tidak sebagai dependensi.
 - DS memakai komponen shadcn/Radix dengan token yang perlu disesuaikan. Penyesuaian yang sudah tercatat mencakup kontras (K-14, sebagian pasangan token DS gagal 4,5:1), dimensi shell (K-15), dan label bawaan (K-5, K-24).
-- Anggaran bundle entry shell adalah 200 KB gzip (NFR-04). Pengukuran spike menunjukkan ruang yang sempit. Entry shell terukur 187,9 KB gzip pada 29 Okt 2026 (Q38).
+- Anggaran bundle entry shell adalah 210 KB gzip (NFR-04; semula 200 KB, dinaikkan PRD-000 Q43, 4 Nov 2026). Pengukuran spike menunjukkan ruang yang sempit. Entry shell terukur 187,9 KB gzip pada 29 Okt 2026 (Q38).
 - `make:module --frontend` dan templat modul belum sepenuhnya selaras dengan bentuk frontend referensi (task 13.4 M3a belum selesai).
 
 ## Opsi yang dipertimbangkan
@@ -40,7 +40,7 @@ Fakta yang memengaruhi keputusan:
 
 - **Positif:** modul baru memakai komponen dan token yang sama tanpa membuat versinya sendiri; arah dependensi frontend dapat diperiksa otomatis (`dependency-cruiser`, aturan F1 sampai F4); route dan navigasi modul tidak perlu mengubah kode shell.
 - **Negatif dan biaya:**
-  - Anggaran bundle sempit: entry shell 187,9 KB dari 200 KB gzip (Q38). Tambahan fitur harus memakai lazy loading (TanStack DB sudah lazy, K-21).
+  - Anggaran bundle sempit: entry shell 187,9 KB dari 200 KB gzip saat itu (Q38; kini 210 KB, Q43). Tambahan fitur harus memakai lazy loading (TanStack DB sudah lazy, K-21).
   - Setiap `shadcn add` memerlukan langkah adaptasi (ganti impor `cn`, pin versi, token DS). Langkah ini terdokumentasi, tetapi manual.
   - Salinan komponen harus dipelihara repo sendiri.
   - `bun-plugin-tailwind` 0.1.2 membawa mesin Tailwind 4.1.14 sementara paket `tailwindcss` 4.3.3 dipakai untuk tema; utilitas yang baru di versi lebih baru dapat hilang diam-diam (lihat Risiko design M3a).
@@ -53,7 +53,7 @@ Fakta yang memengaruhi keputusan:
 
 ## Pemicu evaluasi ulang
 
-- Entry shell melampaui 200 KB gzip dan mitigasi K-12 sudah habis.
+- Entry shell melampaui 210 KB gzip dan mitigasi K-12 sudah habis.
 - DS berubah secara material (token, tipografi, atau komponen inti), atau pemilik produk memutuskan mengganti sumber desain.
 - Modul pihak ketiga (marketplace, fase 06) membutuhkan ekstensi tampilan di luar route dan navigasi. Ini memicu keputusan kontrak UI extension.
 - Pustaka komponen React yang dipakai (Radix, shadcn CLI, Tailwind) berhenti dipelihara atau mengubah lisensinya.

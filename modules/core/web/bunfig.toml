@@ -1,0 +1,3 @@
+# `bun test` di dalam paket memakai setup yang sama dengan root (web/test); urutan penting.
+[test]
+preload = ["../../../web/test/dom.ts", "../../../web/test/setup.ts"]

@@ -101,6 +101,7 @@
     "anonymous": "User",
     "menu": "Account menu",
     "manageAccount": "Manage Account",
+    "changePassword": "Change password",
     "signOut": "Sign Out",
     "unavailable": "Not available in this version",
     "settings": "Settings",

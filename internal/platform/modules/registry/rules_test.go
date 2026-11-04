@@ -140,14 +140,16 @@ func TestBuild_ReportsAllProblemsAtOnce(t *testing.T) {
 }
 
 func TestRules_ReservedSlug(t *testing.T) {
-	// Daftar lengkap keputusan rencana 4 / ADR-006 keputusan 7, ditambah "ui" (namespace i18n) "sdk" (package @erpora/module-sdk), dan "desks" (namespace /desks/<slug-desk> Desk kustom, revisi M3a); keputusan pemilik produk.
+	// Daftar lengkap keputusan rencana 4 / ADR-006 keputusan 7, ditambah "ui" (namespace i18n) "sdk" (package @erpora/module-sdk), "desks" (namespace /desks/<slug-desk> Desk kustom, revisi M3a), serta "login", "logout", "forgot-password", dan "reset-password" (gerbang autentikasi pra-bootstrap, PRD-001 Q33); keputusan pemilik produk.
 	slugs := []string{
 		"platform", "api", "assets", "settings", "bootstrap", "healthz", "readyz", "sw", "make", "db",
 		"module", "modules", "contracts", "route", "permission", "migrate", "serve", "inspect",
 		"version", "list", "doctor", "completion", "help", "ui", "sdk", "desks",
+		// Gerbang autentikasi pra-bootstrap milik shell di jalur tingkat atas (PRD-001 Q33 butir 2).
+		"login", "logout", "forgot-password", "reset-password",
 	}
-	if len(slugs) != 26 {
-		t.Fatalf("daftar uji harus 26 slug, ada %d", len(slugs))
+	if len(slugs) != 30 {
+		t.Fatalf("daftar uji harus 30 slug, ada %d", len(slugs))
 	}
 	for _, slug := range slugs {
 		t.Run(slug, func(t *testing.T) {

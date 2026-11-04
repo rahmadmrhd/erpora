@@ -13,7 +13,7 @@ import {
 } from "@erpora/platform-web/metadata";
 ```
 
-- Hanya lewat **subpath** `@erpora/platform-web/metadata`. Paket ini **tidak** diekspor dari barrel utama `@erpora/platform-web`, supaya tidak masuk bundel awal (anggaran 200 KB gzip, `task web:check`). Muat malas dengan `import()` dari kode yang memerlukannya (halaman form atau daftar).
+- Hanya lewat **subpath** `@erpora/platform-web/metadata`. Paket ini **tidak** diekspor dari barrel utama `@erpora/platform-web`, supaya tidak masuk bundel awal (anggaran 210 KB gzip, `task web:check`). Muat malas dengan `import()` dari kode yang memerlukannya (halaman form atau daftar).
 - Isi: tipe metadata, evaluator kondisi dan ekspresi, templat label, desimal berskala, pencocokan `pattern`, validator record, registri tipe field, pemuat malas per resource, dan format tampilan desimal.
 
 ## Bentuk metadata (`ResourceMeta`)

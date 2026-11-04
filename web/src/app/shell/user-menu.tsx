@@ -1,3 +1,4 @@
+import { useNavigate } from "@erpora/module-sdk";
 import {
   safeInternalHref,
   useCurrentUser,
@@ -47,6 +48,11 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
   const actions = useShellActions();
   const anonymous = useMessage({ ns: "platform", key: "user.anonymous" });
   const hintId = useId();
+  const navigate = useNavigate();
+  // Halaman akun (mis. Ubah sandi) hanya bila sumber mendukung dan path-nya internal yang aman.
+  const accountPath = source.capabilities.manageAccount
+    ? safeInternalHref(source.manageAccountPath?.())
+    : null;
 
   const name = user?.displayName ?? anonymous;
   const email = user?.email ?? null;
@@ -101,6 +107,12 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
         <Icon name="settings" />
         {t("user.settings")}
       </DropdownMenuItem>
+      {accountPath ? (
+        <DropdownMenuItem onSelect={() => void navigate({ to: accountPath })}>
+          <Icon name="key" />
+          {t("user.changePassword")}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem onSelect={() => actions.reload()}>
         <Icon name="refresh-cw" />
         {t("user.reload")}

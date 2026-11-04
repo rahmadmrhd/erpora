@@ -88,7 +88,7 @@ Contoh properti `desk` di `modules/example/module.json` (sumber menu, dibaca ser
 - `label` dan `menus[].label` adalah kunci i18n di namespace modul; `icon` memakai nama dari `iconRegistry`.
 - `menus` berisi item atau grup satu tingkat (grup tidak boleh bersarang, anak grup minimal satu).
 - `to` relatif terhadap base route modul (`/notes` menjadi `/example/notes`). Tanpa skema, host, `//`, query, atau fragmen. **Tidak boleh `/`**: indeks adalah Dashboard shell.
-- `permission` harus salah satu `capabilities` modul; item disembunyikan bila pengguna tidak memilikinya.
+- Setiap item memuat tepat satu dari `permission` atau `access` (PRD-000 Q43). `permission` harus salah satu `capabilities` modul; item disembunyikan bila pengguna tidak memilikinya. `"access": "authenticated"` menggantikan `permission` untuk item yang terlihat bagi semua pengguna yang login (server menyaringnya dari Principal, bukan dari permission); keduanya sekaligus atau tak satu pun ditolak.
 - `dashboard` (opsional) hanya mengisi `label` dan `icon` item Dashboard bawaan. Dashboard sendiri dibangkitkan platform di `/<slug>`, tidak dideklarasikan sebagai menu.
 
 Registry di shell (`@erpora/platform-web`, `registry/`) mencocokkan modul dengan bootstrap berdasarkan `key`:
@@ -185,7 +185,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
 ## Anggaran bundle dan performa
 
-- Anggaran entry shell: **200 KB gzip** (NFR-04). Build (`web/build.ts`) gagal bila JS awal melampauinya (`BUDGET` di `web/tools/budget.ts`). Build juga melaporkan JS awal, chunk lazy, CSS, font, dan 15 kontributor terbesar.
+- Anggaran entry shell: **210 KB gzip** (NFR-04). Build (`web/build.ts`) gagal bila JS awal melampauinya (`BUDGET` di `web/tools/budget.ts`). Build juga melaporkan JS awal, chunk lazy, CSS, font, dan 15 kontributor terbesar.
 - Entry terukur pada 29 Okt 2026: 187,9 KB gzip (Q38). Ruang tersisa sempit.
 - Aturan untuk modul:
   - Halaman dan komponen berat dimuat lewat `lazyRouteComponent(() => import(...))`.

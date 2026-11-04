@@ -33,7 +33,7 @@ M3a adalah blok pertama M3 (frontend core, PRD-000 Q33). Ia membangun fondasi ya
 1. THE web workspace SHALL memakai React dan TypeScript `strict` dengan `noUncheckedIndexedAccess`, dan `bun run typecheck` SHALL lolos tanpa error.
 2. THE build SHALL memakai Tailwind CSS v4 lewat `bun-plugin-tailwind` pada `Bun.build` dan dev server, dengan `@source` yang memindai `packages/ui` dan `modules/*/web`.
 3. WHEN `bun run build` dijalankan, THE hasil build SHALL lolos pemeriksaan `csp-check` (tanpa `<script>` inline, event handler inline, atau URL `javascript:`).
-4. THE build SHALL menjaga entry JS app shell ≤ 200 KB gzip (NFR-04) dan melaporkan ukurannya di output build; WHEN anggaran terlampaui, THE build SHALL gagal.
+4. THE build SHALL menjaga entry JS app shell ≤ 210 KB gzip (NFR-04; PRD-000 Q43) dan melaporkan ukurannya di output build; WHEN anggaran terlampaui, THE build SHALL gagal.
 5. THE dependency baru SHALL dikunci versinya di `bun.lock` (NFR-02), dan aturan impor F1–F3 (`dependency-cruiser`) SHALL tetap lolos.
 6. [TODO: konfirmasi] Versi React (usulan: 19.x terbaru yang stabil), Tailwind v4, dan shadcn CLI terbaru; semuanya dipin versi pasti.
 

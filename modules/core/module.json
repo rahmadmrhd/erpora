@@ -14,5 +14,12 @@
   "capabilities": [],
   "migrations": { "strategy": "none" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
-  "offline": { "mode": "online-only" }
+  "offline": { "mode": "online-only" },
+  "desk": {
+    "label": "desk.title",
+    "icon": "shield",
+    "menus": [
+      { "id": "change-password", "label": "nav.change_password", "icon": "key", "to": "/change-password", "access": "authenticated" }
+    ]
+  }
 }

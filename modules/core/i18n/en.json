@@ -1,4 +1,10 @@
 {
+  "desk": {
+    "title": "Core"
+  },
+  "nav": {
+    "change_password": "Change password"
+  },
   "password": {
     "violation": {
       "too_short": "Password is too short (at least 12 characters).",
@@ -11,5 +17,100 @@
     "wrong_current_password": "The current password is incorrect.",
     "invalid_token": "The link is invalid or no longer valid.",
     "invalid_code": "The code is invalid."
+  },
+  "auth": {
+    "brand": "ERPora",
+    "common": {
+      "loading": "Loading…",
+      "email": "Email",
+      "password": "Password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "backToLogin": "Back to sign in",
+      "signOut": "Sign out",
+      "passwordHint": "At least 12 characters."
+    },
+    "validation": {
+      "required": "This field is required.",
+      "email": "Enter a valid email address.",
+      "mismatch": "The two passwords do not match.",
+      "code": "Enter the 6-digit code.",
+      "recovery": "Enter a recovery code."
+    },
+    "login": {
+      "title": "Sign in",
+      "description": "Sign in to your ERPora account.",
+      "forgot": "Forgot password?",
+      "submit": "Sign in"
+    },
+    "mfa": {
+      "verify": {
+        "title": "Two-step verification",
+        "description": "Enter the 6-digit code from your authenticator app.",
+        "codeLabel": "Verification code",
+        "submit": "Verify",
+        "useRecovery": "Use a recovery code",
+        "useTotp": "Use an authenticator code",
+        "recoveryLabel": "Recovery code",
+        "recoveryHint": "Each recovery code can be used only once."
+      },
+      "enroll": {
+        "title": "Turn on two-step verification",
+        "description": "Administrator accounts must use two-step verification. Scan the QR code with an authenticator app, then enter the 6-digit code it shows.",
+        "qrLabel": "QR code for the authenticator app",
+        "secretLabel": "Or enter this key manually",
+        "codeLabel": "Code from the authenticator app",
+        "submit": "Turn on",
+        "retry": "Try again"
+      },
+      "recoveryCodes": {
+        "title": "Save your recovery codes",
+        "warning": "These codes are shown only once. Keep them somewhere safe: without them you cannot sign in if you lose access to your authenticator app.",
+        "listLabel": "Recovery codes",
+        "acknowledge": "I have saved these recovery codes",
+        "continue": "Continue"
+      }
+    },
+    "forgot": {
+      "title": "Forgot password",
+      "description": "Enter your account email. If it is registered, we will send a link to reset your password.",
+      "submit": "Send link",
+      "sentTitle": "Check your email",
+      "sent": "If that email is registered, a link to reset your password has been sent. The link is valid for 30 minutes."
+    },
+    "reset": {
+      "title": "Reset password",
+      "description": "Create a new password for your account.",
+      "newPassword": "New password",
+      "confirmPassword": "Repeat new password",
+      "submit": "Save new password",
+      "successTitle": "Password changed",
+      "success": "All your sessions have been signed out. Please sign in with your new password.",
+      "toLogin": "Go to sign in",
+      "missingToken": "The password reset link is incomplete or no longer valid.",
+      "requestNew": "Request a new link"
+    },
+    "errors": {
+      "invalid_credentials": "Incorrect email or password.",
+      "account_locked": "The account is locked. Reset your password or contact an administrator.",
+      "rate_limited": "Too many attempts. Try again in {seconds} seconds.",
+      "rate_limited_generic": "Too many attempts. Try again later.",
+      "validation_failed": "The data you entered is not valid.",
+      "mfa_required": "Two-step verification is required.",
+      "unauthenticated": "Your session has ended. Please sign in again.",
+      "conflict": "Two-step verification is already on.",
+      "invalid_state": "Two-step verification has not been set up.",
+      "network": "Cannot reach the server. Check your connection and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "changePassword": {
+    "title": "Change password",
+    "description": "Change your account password. Your sessions on other devices will be signed out.",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Repeat new password",
+    "submit": "Save new password",
+    "success": "Password changed. Sessions on other devices have been signed out."
   }
 }

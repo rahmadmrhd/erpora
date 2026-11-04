@@ -458,7 +458,7 @@ Modul `example` dipindahkan ke metadata dengan hasil identik secara perilaku (`c
 | Metadata membengkak menjadi bahasa pemrograman | Tidak ada parameter atau logika bebas; kait Go untuk kasus rumit (D-5) |
 | Mesin selisih tidak mencakup seluruh objek PostgreSQL | Subset objek yang dimodelkan didokumentasikan; objek tak dimodelkan diabaikan dengan peringatan terdokumentasi |
 | Ketergantungan T4 pada PRD-001 | Tahap dipisah (D-12); T1 sampai T3 dapat dirilis lebih dulu |
-| Bundel melampaui 200 KB | Metadata per resource dimuat malas; evaluator dan validator kecil; uji anggaran |
+| Bundel melampaui 210 KB | Metadata per resource dimuat malas; evaluator dan validator kecil; uji anggaran |
 | Migrasi `example` mengubah kontrak tanpa sengaja | `contracts:breaking` dan tes kesesuaian sebagai gerbang |
 | Pustaka YAML belum terbukti tahan bom alias | Batas ukuran dan kedalaman sendiri sebelum parse; tes YAML berbahaya |
 | Keluhan ergonomi YAML (verbositas penyertaan) | Skema JSON untuk editor; contoh di panduan; evaluasi ulang D-1 setelah T1 |

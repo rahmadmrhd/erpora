@@ -254,6 +254,7 @@ declare module "./types" {
       "todo.description": {};
       "todo.title": {};
       "user.anonymous": {};
+      "user.changePassword": {};
       "user.manageAccount": {};
       "user.menu": {};
       "user.reload": {};

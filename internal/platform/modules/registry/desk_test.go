@@ -92,6 +92,12 @@ func TestBuild_DeskProblems(t *testing.T) {
 			deskSpec(map[string]any{"id": "notes", "label": "nav", "to": "/a", "permission": "notes.items.read"}), deskFS(), "desk_label_unknown"},
 		"id dashboard dilarang": {
 			deskSpec(deskItem("dashboard", "/a", "notes.items.read")), deskFS(), "desk_dashboard_locked"},
+		"permission dan access bersamaan (Q43)": {
+			deskSpec(map[string]any{"id": "notes", "label": "nav.notes", "to": "/a", "permission": "notes.items.read", "access": "authenticated"}), deskFS(), "desk_access_conflict"},
+		"access bukan authenticated (Q43)": {
+			deskSpec(map[string]any{"id": "notes", "label": "nav.notes", "to": "/a", "access": "everyone"}), deskFS(), "desk_access_invalid"},
+		"tanpa permission dan tanpa access (Q43)": {
+			deskSpec(map[string]any{"id": "notes", "label": "nav.notes", "to": "/a"}), deskFS(), "desk_unknown_permission"},
 		"to indeks dilarang": {
 			deskSpec(deskItem("notes", "/", "notes.items.read")), deskFS(), "desk_dashboard_locked"},
 	}
@@ -164,5 +170,19 @@ func TestBuild_DeskProblemsAreSortedInErrorText(t *testing.T) {
 	_, err := Build(testOpts(), deskModule(deskSpec(deskItem("notes", "/a", "notes.items.delete")), deskFS()))
 	if err == nil || !strings.Contains(err.Error(), "[desk_unknown_permission]") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBuild_DeskAccessAuthenticatedIsAccepted(t *testing.T) {
+	// PRD-000 Q43: item boleh memakai access "authenticated" sebagai pengganti permission, juga sebagai anak grup,
+	// tanpa capability.
+	desk := deskSpec(
+		map[string]any{"id": "pwd", "label": "nav.notes", "to": "/a", "access": "authenticated"},
+		map[string]any{"id": "g", "label": "nav.group", "children": []any{
+			map[string]any{"id": "kid", "label": "nav.archive", "to": "/b", "access": "authenticated"},
+		}})
+	base := newFake(manifestSpec{key: "acme.notes", slug: "notes", i18n: i18nSpec("id"), desk: desk}, nil)
+	if _, err := Build(testOpts(), catalogFake{fakeModule: base, fsys: deskFS()}); err != nil {
+		t.Fatalf("access authenticated harus lolos tanpa capabilities: %v", err)
 	}
 }

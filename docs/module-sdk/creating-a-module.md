@@ -67,7 +67,7 @@ Properti `desk` adalah menu Desk modul. Server membacanya untuk menyusun daftar 
 - `icon` memakai nama dari `iconRegistry` di `@erpora/ui`.
 - `menus` berisi item atau grup satu tingkat. Setiap `id` unik dalam satu Desk, termasuk id anak grup.
 - `to` relatif terhadap base route modul (`/notes`), tanpa skema, host, `//`, query, atau fragmen. Tidak boleh `/`: indeks `/<slug>` adalah Dashboard bawaan shell dan tidak dideklarasikan sebagai menu.
-- `permission` harus salah satu `capabilities` modul. Item disembunyikan bila pengguna tidak memilikinya.
+- Setiap item memuat **tepat satu** dari `permission` atau `access` (PRD-000 Q43). `permission` harus salah satu `capabilities` modul; item disembunyikan bila pengguna tidak memilikinya. `"access": "authenticated"` adalah pengganti eksplisit `permission` (satu-satunya nilai sah): item terlihat bagi setiap pengguna yang login, tanpa capability. Pakai `access` hanya untuk hak yang memang milik semua pengguna login dan endpoint-nya cukup `AuthenticatedOnly` (mis. Ubah sandi); item tanpa keduanya, atau dengan keduanya, ditolak.
 - Dashboard tidak dihitung sebagai menu yang diizinkan. Desk tanpa menu yang diizinkan tidak tampil.
 
 Skema lengkap ada di `contracts/module.schema.json` (`desk`, `deskItem`, `deskGroup`). Rujukan rute dan pengujiannya dijelaskan di [`frontend.md`](frontend.md).
@@ -86,7 +86,7 @@ Aturan yang diperiksa registry:
 | `capabilities` | Harus berawalan `<slug>.` dan unik antarmodul. Setiap permission di `Handle` harus ada di sini. |
 | `migrations.strategy` | `versioned` atau `none`. |
 | `offline.mode` | `online-only`, `offline-read`, `offline-draft`, atau `offline-write`. |
-| `desk` | Wajib untuk modul berdirektori `web/` (`module:check`, aturan `DESK`). Id menu unik dalam Desk, `to` bersih dan tidak berupa indeks, `permission` termasuk `capabilities`, dan label ada di katalog. Lihat bagian 2 di atas. |
+| `desk` | Wajib untuk modul berdirektori `web/` (`module:check`, aturan `DESK`). Id menu unik dalam Desk, `to` bersih dan tidak berupa indeks, tiap item punya tepat satu dari `permission` (termasuk `capabilities`) atau `access` `authenticated`, dan label ada di katalog. Lihat bagian 2 di atas. |
 
 Field yang sudah dicadangkan untuk marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`, `license`) dan PRD-001 (`resources`, `scope_dimensions`, `default_roles`, `settings`) boleh dibiarkan kosong.
 

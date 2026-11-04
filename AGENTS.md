@@ -63,7 +63,7 @@ Bila permintaan bertentangan dengan PRD/ADR/api-guidelines, **tanyakan dulu** se
 - `task test:generator` (lama, ±12 menit; Docker + Bun) membuktikan `make:module` lolos semua gate; jalankan bila mengubah template/generator. Path repo tidak boleh berspasi.
 - Lingkungan dev: `task db:up`, `task dev:setup` (migrate + install semua modul), `task erpora -- doctor`, `task erpora -- db:fresh --seed` (hanya development; mengetik nama DB), `task erpora -- module:check`, `task release:verify-tag -- modules/<dir>/vX.Y.Z`.
 - Di Windows, `-race` dilewati (tidak ada cgo/gcc); CI Linux tetap menjalankannya.
-- Frontend: `bun test` dari root dan `task web:check` (typecheck, lint, deps, `i18n:generate --check`, test, build dengan anggaran bundle 200 KB gzip); `task web:test` untuk uji saja. Komponen shadcn: `task shadcn:check` (offline, sudah ikut `web:check`), `task shadcn:verify` (daring, hanya melapor drift, bukan gate).
+- Frontend: `bun test` dari root dan `task web:check` (typecheck, lint, deps, `i18n:generate --check`, test, build dengan anggaran bundle 210 KB gzip); `task web:test` untuk uji saja. Komponen shadcn: `task shadcn:check` (offline, sudah ikut `web:check`), `task shadcn:verify` (daring, hanya melapor drift, bukan gate).
 - Jangan menambah perintah Taskfile yang memakai `rm`/`cp`/`sed` atau utilitas khusus Unix.
 
 ## Konvensi kerja

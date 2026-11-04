@@ -206,6 +206,10 @@
       "pattern": "^[a-z][a-z0-9-]{0,39}$"
     },
     "deskItem": {
+      "description": "Item menu: tepat satu dari permission atau access (PRD-000 Q43).",
+      "oneOf": [{ "$ref": "#/$defs/deskPermissionItem" }, { "$ref": "#/$defs/deskAccessItem" }]
+    },
+    "deskPermissionItem": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "label", "to", "permission"],
@@ -220,6 +224,23 @@
           "maxLength": 200
         },
         "permission": { "type": "string", "minLength": 1, "description": "Salah satu capabilities modul; item disembunyikan bila pengguna tidak memilikinya." }
+      }
+    },
+    "deskAccessItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "to", "access"],
+      "properties": {
+        "id": { "$ref": "#/$defs/deskMenuId" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "icon": { "$ref": "#/$defs/iconName" },
+        "to": {
+          "type": "string",
+          "description": "Path internal relatif base route modul (/notes); tanpa skema, host, //, query, atau fragmen.",
+          "pattern": "^/([A-Za-z0-9._~%-]+(/[A-Za-z0-9._~%-]+)*)?$",
+          "maxLength": 200
+        },
+        "access": { "enum": ["authenticated"], "description": "Pengganti eksplisit permission: item terlihat bagi setiap pengguna yang login (PRD-000 Q43). Tidak boleh bersama permission." }
       }
     },
     "deskGroup": {

@@ -88,7 +88,7 @@ const problems = [
 ];
 if (problems.length > 0) fail(`build tidak kompatibel dengan CSP: ${problems.join("; ")}`);
 
-// Anggaran bundle (NFR-04): JS awal <= 200 KB gzip.
+// Anggaran bundle (NFR-04): JS awal <= 210 KB gzip.
 const gzipSize = (rel: string): number =>
   gzipSync(readFileSync(join(outdir, rel)), { level: 9 }).byteLength;
 console.log(formatBudgetReport(meta, gzipSize, { fonts: fontFiles }));

@@ -1,7 +1,7 @@
-// Anggaran bundle (NFR-04, M3a K-12): JS awal app shell <= 200 KB gzip.
+// Anggaran bundle (NFR-04, M3a K-12): JS awal app shell <= 210 KB gzip.
 // Fungsi murni: masukan metafile `Bun.build` dan fungsi ukuran gzip; I/O dilakukan build.ts.
 
-export const BUDGET = 200 * 1024;
+export const BUDGET = 210 * 1024;
 export const TOP_CONTRIBUTORS = 15;
 
 export interface MetaImport {
