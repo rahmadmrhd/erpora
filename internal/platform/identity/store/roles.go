@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	authzstore "erpora/internal/platform/authorization/store"
 	"erpora/internal/platform/tenancy"
 )
 
@@ -26,6 +27,11 @@ func (s *Store) tenantDB(ctx context.Context, t tenancy.TenantID) (*gorm.DB, err
 // GrantRole memberi role (menurut key, mis. "administrator") kepada pengguna. true bila baru diberikan, false bila
 // sudah dimiliki; ErrNotFound bila role tidak ada. Keberadaan pengguna adalah tanggung jawab pemanggil (tabel
 // users ada di control DB; tenant DB dapat berupa database terpisah).
+//
+// Pemberian yang benar-benar mengubah user_roles menaikkan authz_state.permission_revision pada TRANSAKSI TENANT
+// YANG SAMA (PRD-001 C2 Global Constraints; ADR-0013 §10.3): user_roles dan authz_state sama-sama tabel tenant,
+// sehingga hak efektif pengguna tidak pernah berubah tanpa revisi baru (cache hak tidak basi). Pemberian ulang
+// yang tidak mengubah apa pun (false) tidak menaikkan revisi.
 func (s *Store) GrantRole(ctx context.Context, t tenancy.TenantID, userID, roleKey string, at time.Time) (bool, error) {
 	uid, ok := parseID(userID)
 	if !ok {
@@ -35,26 +41,36 @@ func (s *Store) GrantRole(ctx context.Context, t tenancy.TenantID, userID, roleK
 	if err != nil {
 		return false, err
 	}
-	n, err := exec(db, `INSERT INTO user_roles (user_id, role_id, granted_at)
-		SELECT ?::uuid, r.id, ?::timestamptz FROM roles r WHERE r.key = ? ON CONFLICT DO NOTHING`, uid, at.UTC(), roleKey)
+	granted := false
+	err = db.Transaction(func(tx *gorm.DB) error {
+		n, err := exec(tx, `INSERT INTO user_roles (user_id, role_id, granted_at)
+			SELECT ?::uuid, r.id, ?::timestamptz FROM roles r WHERE r.key = ? ON CONFLICT DO NOTHING`, uid, at.UTC(), roleKey)
+		if err != nil {
+			return wrap("beri role", err)
+		}
+		if n == 1 {
+			granted = true
+			_, err := authzstore.BumpRevision(tx)
+			return err
+		}
+		var exists int64
+		if err := tx.Raw(`SELECT count(*) FROM roles WHERE key = ?`, roleKey).Scan(&exists).Error; err != nil {
+			return wrap("beri role", err)
+		}
+		if exists == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
 	if err != nil {
-		return false, wrap("beri role", err)
+		return false, err
 	}
-	if n == 1 {
-		return true, nil
-	}
-	var exists int64
-	if err := db.Raw(`SELECT count(*) FROM roles WHERE key = ?`, roleKey).Scan(&exists).Error; err != nil {
-		return false, wrap("beri role", err)
-	}
-	if exists == 0 {
-		return false, ErrNotFound
-	}
-	return false, nil
+	return granted, nil
 }
 
 // RevokeRole mencabut role dari pengguna; false bila tidak dimiliki atau role tidak ada. Larangan mencabut
-// administrator terakhir adalah aturan service (FR-113), bukan store.
+// administrator terakhir adalah aturan service (FR-113), bukan store. Pencabutan yang benar-benar menghapus baris
+// menaikkan permission_revision pada transaksi tenant yang sama (lihat GrantRole).
 func (s *Store) RevokeRole(ctx context.Context, t tenancy.TenantID, userID, roleKey string) (bool, error) {
 	uid, ok := parseID(userID)
 	if !ok {
@@ -64,11 +80,23 @@ func (s *Store) RevokeRole(ctx context.Context, t tenancy.TenantID, userID, role
 	if err != nil {
 		return false, err
 	}
-	n, err := exec(db, `DELETE FROM user_roles WHERE user_id = ? AND role_id = (SELECT id FROM roles WHERE key = ?)`, uid, roleKey)
+	revoked := false
+	err = db.Transaction(func(tx *gorm.DB) error {
+		n, err := exec(tx, `DELETE FROM user_roles WHERE user_id = ? AND role_id = (SELECT id FROM roles WHERE key = ?)`, uid, roleKey)
+		if err != nil {
+			return wrap("cabut role", err)
+		}
+		if n > 0 {
+			revoked = true
+			_, err := authzstore.BumpRevision(tx)
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		return false, wrap("cabut role", err)
+		return false, err
 	}
-	return n > 0, nil
+	return revoked, nil
 }
 
 // UserRoleKeys memuat key role milik pengguna, terurut.

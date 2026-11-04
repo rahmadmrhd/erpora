@@ -115,7 +115,8 @@
 //	  // Hanya pengguna yang dikenal dapat dicatat (user_id NOT NULL); email tak dikenal ditangani pemanggil
 //	  // (batas laju per IP/identitas sasaran). Catat sukses hanya setelah autentikasi selesai penuh.
 //
-// Peran (tenant DB lewat TenantConnector):
+// Peran (tenant DB lewat TenantConnector). GrantRole dan RevokeRole yang mengubah user_roles menaikkan
+// authz_state.permission_revision pada transaksi tenant yang sama (authorization/store.BumpRevision; PRD-001 C2):
 //
 //	GrantRole(ctx, t, userID, roleKey, at) (bool, error)
 //	RevokeRole(ctx, t, userID, roleKey) (bool, error)

@@ -102,7 +102,7 @@ func TestIdentityTables_MigrationUpAndDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		want := int64(4)
+		want := int64(5)
 		if s.Target == migrate.Control {
 			want = 5
 		}
