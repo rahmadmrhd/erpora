@@ -13,6 +13,7 @@ declare module "@erpora/platform-web" {
       "auth.common.passwordHint": {};
       "auth.common.showPassword": {};
       "auth.common.signOut": {};
+      "auth.common.signOutFailed": {};
       "auth.errors.account_locked": {};
       "auth.errors.conflict": {};
       "auth.errors.generic": {};

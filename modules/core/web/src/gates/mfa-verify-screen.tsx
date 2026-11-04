@@ -49,6 +49,11 @@ export function MfaVerifyScreen() {
     void submit(mode === "totp" ? code : recovery);
   }
 
+  async function onSignOut() {
+    // false = server tidak mengakui logout: sesi masih aktif, jadi beri tahu pengguna (bukan diam).
+    if (!(await logout())) setFailure([{ key: "auth.common.signOutFailed" }]);
+  }
+
   function switchMode() {
     setMode((m) => (m === "totp" ? "recovery" : "totp"));
     setFieldError(undefined);
@@ -60,7 +65,7 @@ export function MfaVerifyScreen() {
       title={t("auth.mfa.verify.title")}
       description={mode === "totp" ? t("auth.mfa.verify.description") : undefined}
       footer={
-        <Button type="button" variant="link" onClick={() => void logout()}>
+        <Button type="button" variant="link" onClick={() => void onSignOut()}>
           {t("auth.common.signOut")}
         </Button>
       }

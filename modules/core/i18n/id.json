@@ -28,6 +28,7 @@
       "hidePassword": "Sembunyikan sandi",
       "backToLogin": "Kembali ke halaman masuk",
       "signOut": "Keluar",
+      "signOutFailed": "Gagal keluar. Sesi Anda masih aktif; coba lagi.",
       "passwordHint": "Minimal 12 karakter."
     },
     "validation": {

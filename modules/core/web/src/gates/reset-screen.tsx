@@ -1,5 +1,5 @@
 import { LoadingButton } from "@erpora/ui";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { attempt, authClient } from "../api";
 import { type AuthMessage, describeFailure } from "./errors";
 import { GateLink } from "./nav";
@@ -15,6 +15,8 @@ import { readResetToken, scrubResetToken } from "./reset-token";
 export function ResetScreen() {
   const t = useCoreT();
   const [token, setToken] = useState(() => readResetToken(window.location.hash));
+  // Token aktif untuk pembanding saat respons tiba: respons submit token lama (sebelum hashchange) harus diabaikan.
+  const activeToken = useRef(token);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
@@ -29,7 +31,9 @@ export function ResetScreen() {
       const fresh = readResetToken(window.location.hash);
       if (fresh === null) return; // fragmen lain: token yang sedang dipakai tidak diubah
       scrubResetToken();
+      activeToken.current = fresh;
       setToken(fresh);
+      setBusy(false); // permintaan token lama (bila ada) tidak boleh menahan form token baru
       // Isian, galat, dan penolakan milik token sebelumnya tidak berlaku lagi untuk token baru.
       setPassword("");
       setConfirm("");
@@ -56,6 +60,7 @@ export function ResetScreen() {
     const out = await attempt(() =>
       authClient.post("/api/core/auth/password/reset", { body: { token, newPassword: password } }),
     );
+    if (activeToken.current !== token) return; // respons untuk token yang sudah diganti: abaikan seluruhnya
     setBusy(false);
     if (out.ok) {
       setPassword("");

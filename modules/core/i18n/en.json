@@ -28,6 +28,7 @@
       "hidePassword": "Hide password",
       "backToLogin": "Back to sign in",
       "signOut": "Sign out",
+      "signOutFailed": "Could not sign out. Your session is still active; try again.",
       "passwordHint": "At least 12 characters."
     },
     "validation": {

@@ -283,6 +283,92 @@ describe("logout dan keadaan", () => {
     expect(auth.getState()).toEqual({ status: "anonymous" });
   });
 
+  test("logout 401 token_expired + refresh 429/5xx/jaringan: sesi server belum tentu hilang, TIDAK keluar, token tetap", async () => {
+    const refreshFailures: Array<[string, () => Response | Promise<Response>]> = [
+      [
+        "429",
+        () => json({ error: { code: "rate_limited", message: "x" } }, 429, { "Retry-After": "30" }),
+      ],
+      ["500", () => apiError(500, "internal_error")],
+      [
+        "jaringan",
+        () => {
+          throw new TypeError("network");
+        },
+      ],
+    ];
+    for (const [name, handler] of refreshFailures) {
+      const server = fakeServer({
+        [LOGOUT]: () => apiError(401, "token_expired"),
+        [REFRESH]: handler,
+      });
+      const auth = createAuthController({ fetch: server.fetch });
+      auth.acceptSession({ accessToken: "t-" + name, expiresIn: 600, mfaState: "none" });
+      expect(await auth.logout(), name).toBe(false);
+      expect(auth.getAccessToken(), name).toBe("t-" + name);
+      expect(auth.getState(), name).toEqual({ status: "authenticated" });
+      expect(server.count(REFRESH), name).toBe(1);
+    }
+  });
+
+  test("logout 401 token_expired + refresh timeout: tidak keluar", async () => {
+    const calls: string[] = [];
+    const fetchFn = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), "http://localhost").pathname;
+      calls.push(path);
+      if (path === LOGOUT) return Promise.resolve(apiError(401, "token_expired"));
+      return new Promise<Response>((_res, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("dibatalkan", "AbortError")),
+        );
+      });
+    }) as typeof fetch;
+    const auth = createAuthController({ fetch: fetchFn, refreshTimeoutMs: 20 });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await auth.logout()).toBe(false);
+    expect(auth.getAccessToken()).toBe("t");
+    expect(auth.getState()).toEqual({ status: "authenticated" });
+  });
+
+  test("logout 401 token_expired + refresh DITOLAK server (cookie tidak berlaku): sudah anonymous, dianggap keluar", async () => {
+    const server = fakeServer({
+      [LOGOUT]: () => apiError(401, "token_expired"),
+      [REFRESH]: () => apiError(401, "unauthenticated"),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await auth.logout()).toBe(true);
+    expect(auth.getAccessToken()).toBeUndefined();
+    expect(auth.getState()).toEqual({ status: "anonymous" });
+  });
+
+  test("logout 401 token_expired + refresh berhasil: logout diulang dengan token baru lalu keluar", async () => {
+    const server = fakeServer({
+      [LOGOUT]: (c) =>
+        c.authorization === "Bearer t-baru"
+          ? new Response(null, { status: 204 })
+          : apiError(401, "token_expired"),
+      [REFRESH]: () => session("t-baru"),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await auth.logout()).toBe(true);
+    expect(server.count(LOGOUT)).toBe(2);
+    expect(auth.getState()).toEqual({ status: "anonymous" });
+  });
+
+  test("logout 401 unauthenticated tanpa refresh: sesi memang tidak ada, keluar tanpa memanggil refresh", async () => {
+    const server = fakeServer({
+      [LOGOUT]: () => apiError(401, "unauthenticated"),
+      [REFRESH]: () => session("x"),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await auth.logout()).toBe(true);
+    expect(server.count(REFRESH)).toBe(0);
+    expect(auth.getState()).toEqual({ status: "anonymous" });
+  });
+
   test("logout gagal (429, 500, 403, atau jaringan putus): TIDAK keluar, token dan keadaan tetap", async () => {
     const failures: Array<[string, () => Response | Promise<Response>]> = [
       [

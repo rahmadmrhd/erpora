@@ -182,6 +182,27 @@ describe("layar MFA: verifikasi", () => {
     await waitFor(() => expect(controller.getState()).toEqual({ status: "anonymous" }));
     expect(api.count(LOGOUT)).toBe(1);
   });
+
+  test("Keluar gagal (server 500): galat tampil, sesi tetap menunggu MFA, dan bisa dicoba lagi sampai berhasil (Minor-A)", async () => {
+    let n = 0;
+    const { api, controller } = mfaController({
+      [LOGOUT]: () => {
+        n++;
+        return n === 1 ? apiError(500, "internal_error") : new Response(null, { status: 204 });
+      },
+    });
+    await renderGate({ controller });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Keluar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Gagal keluar. Sesi Anda masih aktif; coba lagi.",
+    );
+    expect(controller.getState()).toEqual({ status: "mfa", mfaState: "verify_required" });
+    expect(controller.getAccessToken()).toBe("pra-mfa");
+    await user.click(screen.getByRole("button", { name: "Keluar" }));
+    await waitFor(() => expect(controller.getState()).toEqual({ status: "anonymous" }));
+    expect(api.count(LOGOUT)).toBe(2);
+  });
 });
 
 describe("layar MFA: pendaftaran (administrator)", () => {
@@ -208,6 +229,21 @@ describe("layar MFA: pendaftaran (administrator)", () => {
     });
     return { api, controller };
   }
+
+  test("Keluar gagal pada layar pendaftaran: galat tampil dan sesi tetap (Minor-A)", async () => {
+    const { api, controller } = enrollController({
+      ...enrollRoutes(() => json({ data: { codes } })),
+      [LOGOUT]: () => apiError(429, "rate_limited"),
+    });
+    await renderGate({ controller });
+    await screen.findByRole("img", { name: "Kode QR untuk aplikasi autentikator" });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Keluar" }));
+    expect(
+      await screen.findByText("Gagal keluar. Sesi Anda masih aktif; coba lagi."),
+    ).toBeInTheDocument();
+    expect(controller.getState()).toEqual({ status: "mfa", mfaState: "enroll_required" });
+    expect(api.count(LOGOUT)).toBe(1);
+  });
 
   test("memulai pendaftaran SEKALI, menampilkan QR sebagai <svg> React dan secret terkelompok untuk input manual", async () => {
     const { api, controller } = enrollController(enrollRoutes(() => json({ data: { codes } })));
@@ -466,6 +502,63 @@ describe("reset sandi: navigasi fragmen-saja (B-2)", () => {
     });
     expect(await screen.findByLabelText("Sandi baru")).toBeInTheDocument();
     expect(window.location.hash).toBe("");
+  });
+});
+
+describe("reset sandi: respons token lama (Minor-B)", () => {
+  test("respons submit token A yang tiba setelah hashchange membawa token B diabaikan: layar tetap form token B", async () => {
+    window.history.replaceState(null, "", "/reset-password#token=token-a");
+    let release: (r: Response) => void = () => {};
+    const slow = new Promise<Response>((r) => {
+      release = r;
+    });
+    const { api } = await renderGate({
+      path: "/reset-password",
+      routes: { [RESET]: () => slow },
+    });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.type(screen.getByLabelText("Ulangi sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.click(screen.getByRole("button", { name: "Simpan sandi baru" }));
+    await waitFor(() => expect(api.count(RESET)).toBe(1));
+
+    act(() => {
+      window.history.pushState(null, "", "/reset-password#token=token-b");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await waitFor(() => expect(window.location.hash).toBe(""));
+    // Respons token A tiba terlambat (sukses): tidak boleh menandai layar token B sebagai selesai.
+    await act(async () => {
+      release(new Response(null, { status: 204 }));
+      await slow;
+    });
+    expect(screen.queryByRole("heading", { name: "Sandi berhasil diubah" })).toBeNull();
+    expect(screen.getByLabelText("Sandi baru")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Simpan sandi baru" })).toBeEnabled();
+  });
+
+  test("respons galat token A yang terlambat tidak menampilkan galat atau penolakan untuk token B", async () => {
+    window.history.replaceState(null, "", "/reset-password#token=token-a");
+    let release: (r: Response) => void = () => {};
+    const slow = new Promise<Response>((r) => {
+      release = r;
+    });
+    const { api } = await renderGate({ path: "/reset-password", routes: { [RESET]: () => slow } });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.type(screen.getByLabelText("Ulangi sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.click(screen.getByRole("button", { name: "Simpan sandi baru" }));
+    await waitFor(() => expect(api.count(RESET)).toBe(1));
+    act(() => {
+      window.history.pushState(null, "", "/reset-password#token=token-b");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await act(async () => {
+      release(apiError(422, "validation_failed", [{ field: "token", code: "invalid_token" }]));
+      await slow;
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Minta tautan baru" })).toBeNull();
   });
 });
 

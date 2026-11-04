@@ -217,9 +217,22 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
     refresh,
     async logout() {
       if (token !== undefined) {
-        // Hanya 2xx atau 401 yang berarti sesi server sudah tidak ada. Selain itu (429 batas IP bersama, 5xx, jaringan)
-        // sesi server dan cookie refresh masih hidup: jangan menyatakan keluar.
-        const res = await authedFetch(url(LOGOUT_PATH), { method: "POST" }).catch(() => null);
+        // Tidak memakai authedFetch: 401 di sini harus dibaca per kode, bukan diselesaikan diam-diam oleh refresh.
+        const post = (bearer: string | undefined) =>
+          baseFetch(url(LOGOUT_PATH), withAuth({ method: "POST" }, bearer)).catch(() => null);
+        let res = await post(token);
+        if (res !== null && res.status === 401 && (await peekErrorCode(res)) === "token_expired") {
+          // Access token kedaluwarsa tidak membuktikan sesi server hilang. Hanya penolakan server atas cookie refresh
+          // ("rejected": sesi sudah anonymous) yang membuktikannya; refresh yang gagal karena 429/5xx/jaringan/timeout
+          // berarti sesi server dan cookie refresh mungkin masih hidup.
+          const outcome = await refresh();
+          if (outcome === "rejected") return true;
+          if (outcome === "error") return false;
+          res = await post(token); // refresh berhasil: ulangi sekali dengan token baru
+          if (res !== null && res.status === 401 && (await peekErrorCode(res)) === "token_expired")
+            return false;
+        }
+        // Berhasil hanya bila server mengakui (2xx) atau menjawab 401 selain token_expired (sesi memang tidak ada).
         if (res === null || (!res.ok && res.status !== 401)) return false;
       }
       endSession();

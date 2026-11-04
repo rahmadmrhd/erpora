@@ -236,7 +236,7 @@ Butir umum di atas berlaku untuk setiap PR. Status penegakan autentikasi dan ses
 - [ ] Otorisasi per objek dan per field (ASVS V8): **C2** (PRD-001 FR-110 sampai FR-119).
 - [ ] Audit log append-only untuk login, perubahan hak akses, dan pencabutan sesi: **C3** (PRD-001 FR-130). Tabel `login_attempts` dan log server bukan audit log.
 - [ ] OIDC/SSO, PAT, dan OAuth2 client credentials (ASVS V10): **C4** (PRD-001 FR-103 sampai FR-105).
-- [ ] Pemindaian log lintas autentikasi untuk memastikan tidak ada rahasia tercatat (NFR-103): test CLI (`core_cli_integration_test.go`, `tests/integration/core_cli_test.go`) memeriksa sandi tidak tercatat dan pemindaian manual log `serve` saat verifikasi browser C1.15 bersih; pemindai log untuk alur API auth penuh ditambahkan di putaran perbaikan C1.15.
+- [x] Pemindaian log lintas autentikasi untuk memastikan tidak ada rahasia tercatat (NFR-103): `internal/app/core_api_secretscan_integration_test.go` menangkap seluruh log selama alur auth API penuh (login, refresh, ubah sandi, logout, lupa/reset, enroll/verify MFA, recovery code) dan memastikan tidak ada sandi, JWT, refresh token, secret/kode TOTP, recovery code, atau token reset; ditambah test CLI (`core_cli_integration_test.go`, `tests/integration/core_cli_test.go`).
 
 ## 7. Status penegakan
 

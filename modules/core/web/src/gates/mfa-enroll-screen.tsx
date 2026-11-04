@@ -34,6 +34,7 @@ export function MfaEnrollScreen() {
   const { acceptSession, controller, logout } = useAuth();
   const [enrollment, setEnrollment] = useState<Enrollment | undefined>();
   const [startFailure, setStartFailure] = useState<AuthMessage[]>([]);
+  const [signOutFailure, setSignOutFailure] = useState<AuthMessage[]>([]);
   const [code, setCode] = useState("");
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [failure, setFailure] = useState<AuthMessage[]>([]);
@@ -90,6 +91,11 @@ export function MfaEnrollScreen() {
     await controller.refresh();
   }
 
+  async function onSignOut() {
+    // false = server tidak mengakui logout: sesi masih aktif, jadi beri tahu pengguna (bukan diam).
+    setSignOutFailure((await logout()) ? [] : [{ key: "auth.common.signOutFailed" }]);
+  }
+
   if (confirmed)
     return <RecoveryCodesScreen codes={confirmed.codes} onContinue={() => void onContinue()} />;
 
@@ -98,11 +104,12 @@ export function MfaEnrollScreen() {
       title={t("auth.mfa.enroll.title")}
       description={t("auth.mfa.enroll.description")}
       footer={
-        <Button type="button" variant="link" onClick={() => void logout()}>
+        <Button type="button" variant="link" onClick={() => void onSignOut()}>
           {t("auth.common.signOut")}
         </Button>
       }
     >
+      <ErrorAlert messages={signOutFailure} />
       <ErrorAlert messages={startFailure} />
       {startFailure.length > 0 ? (
         <Button type="button" variant="outline" onClick={() => void start()}>
