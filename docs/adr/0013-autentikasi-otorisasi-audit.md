@@ -17,7 +17,7 @@ Platform membutuhkan autentikasi pengguna (login lokal, kelak SSO OIDC), token A
 
 - **Access token:** JWT **EdDSA (Ed25519)**, umur **10 menit**, klaim `iss sub sid tid aud exp iat jti perm_rev amr scope`. Daftar permission **tidak** masuk JWT (di-resolve server, cache per `perm_rev`). Verifier hanya menerima `alg=EdDSA`, `kid` wajib dan dicari di keyring, ukuran maksimum 4 KB, leeway 30 detik; `alg: none`, HS256, `kid` tak dikenal, `iss`/`aud` salah, dan kunci `retired` ditolak 401 tanpa membedakan sebab ke klien (selain `token_expired`).
 - **Refresh token:** string acak opaque 32 byte (`crypto/rand`, base64url); hanya hash SHA-256 yang disimpan. **14 hari sliding, 90 hari absolut**, **rotasi** tiap pakai. Pemenang rotasi ditentukan atomik (`UPDATE ... SET used_at=now() WHERE id=$1 AND used_at IS NULL RETURNING`). **Deteksi reuse:** pemakaian token yang sudah terpakai mencabut seluruh *family* beserta sesinya dan mencatat event keamanan; refresh paralel dengan token sama menghasilkan tepat satu sukses. **Pengecualian kenaikan ke `otp` (3 Nov 2026, Q27, disetujui pemilik produk; §4):** token pra-MFA belum terpakai diganti secara atomik dan menjadi "tidak dikenal" (ditolak seragam, tanpa mencabut sesi); leluhur yang sudah terpakai tetap memicu deteksi reuse.
-- **Penyimpanan klien:** refresh token hanya di cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh`, ditambah pemeriksaan header `Origin` pada endpoint refresh. Access token hanya di **memori** klien (tidak pernah `localStorage`/`sessionStorage`/`document.cookie`); refresh single-flight di klien. Refresh token tidak pernah ada di body respons. Semua respons auth `Cache-Control: no-store`.
+- **Penyimpanan klien:** refresh token hanya di cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh`, ditambah pemeriksaan header `Origin` pada endpoint refresh. Access token hanya di **memori** klien (tidak pernah `localStorage`/`sessionStorage`/`document.cookie`); refresh single-flight di klien. Refresh token tidak pernah ada di body respons. Semua respons auth `Cache-Control: no-store`, termasuk respons buatan platform sebelum handler (401, 403 `mfa_required`, 429, tenant tak terselesaikan, panic): `httpserver.Router.Handle` membungkus route `RateLimited()` dengan lapisan terluar yang menetapkan header itu.
 
 ### 2. Revokasi
 
@@ -113,6 +113,14 @@ Disetujui pemilik produk pada 4 November 2026 ("sesuai rekomendasi") atas butir 
 3. **Retensi `login_attempts` 30 hari** lewat pekerja latar `serve` tiap jam (rinci di §5; operasi di `docs/operations/deployment.md` §3.4).
 4. **`locked` tidak mencabut sesi** yang ada; hanya menolak login baru (rinci di §5). Pencabutan sesi khusus `disabled`.
 5. **Reset sandi ditolak untuk akun `disabled`** di `forgot` dan `Complete` (rinci di §5).
+
+### 7c. Keputusan pemilik produk 4 November 2026 (PRD-001 Q31)
+
+Disetujui pemilik produk pada 4 November 2026 atas pertanyaan implementasi modul `core` (C1.11):
+
+1. **Masukan salah pada endpoint auth berautentikasi atau berbody dijawab 422 `validation_failed`** dengan `details[].code` `wrong_current_password`, `invalid_code`, atau `invalid_token`. Login gagal tetap 401 `invalid_credentials`; token atau sesi kedaluwarsa tetap 401 `token_expired` (bukan 419). Alasan: 401 memicu interceptor refresh/logout di klien, padahal request sudah terautentikasi atau token reset adalah data body.
+2. **`account_locked` = 403** (bukan 423).
+3. **`Idempotency-Key` pada POST auth modul `core` diterima tetapi tidak disimpan.** Alasan: me-replay respons berisi access token, recovery code, atau secret MFA tidak aman; operasi auth sudah sekali pakai lewat rotasi dan anti-replay.
 
 ## Konsekuensi
 

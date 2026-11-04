@@ -4,7 +4,8 @@ toolchain go1.27.3
 
 use (
 	.
-	./sdk
+	./modules/core
 	./modules/example
 	./modules/exampleaddon
+	./sdk
 )

@@ -1,0 +1,15 @@
+{
+  "password": {
+    "violation": {
+      "too_short": "Sandi terlalu pendek (minimal 12 karakter).",
+      "too_long": "Sandi terlalu panjang.",
+      "common": "Sandi terlalu umum dan mudah ditebak.",
+      "unknown": "Sandi tidak memenuhi kebijakan."
+    }
+  },
+  "detail": {
+    "wrong_current_password": "Sandi saat ini salah.",
+    "invalid_token": "Tautan tidak valid atau sudah tidak berlaku.",
+    "invalid_code": "Kode tidak valid."
+  }
+}

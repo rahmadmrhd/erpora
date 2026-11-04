@@ -6,3 +6,14 @@
 # Bootstrap (PRD-001 FR-106): hanya data pengguna sendiri dan daftar modul; sengaja tidak diblokir aturan mfa_required
 # (Q29 butir 2) karena UI membutuhkannya untuk layar enroll/verify MFA.
 GET /api/bootstrap
+#
+# Route auth modul core milik pengguna sendiri (PRD-001 Q29 butir 1, C1.11). Pengguna dan sesi selalu dari Principal di
+# context (tanpa parameter ID), jadi tidak ada titik masuk IDOR. Path-nya juga kunci daftar route yang boleh dipanggil
+# sesi menunggu MFA di platform (runtime/authroutes.go): logout, mfa/verify, mfa/recovery, mfa/enroll, mfa/confirm.
+POST /api/core/auth/logout
+POST /api/core/auth/password/change
+POST /api/core/auth/mfa/enroll
+POST /api/core/auth/mfa/confirm
+POST /api/core/auth/mfa/verify
+POST /api/core/auth/mfa/recovery
+POST /api/core/auth/mfa/recovery-codes

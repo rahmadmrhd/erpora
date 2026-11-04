@@ -3,6 +3,8 @@
 import {
   allowHighlyValid,
   classificationValid,
+  credentialResponseExceptions,
+  credentialResponseValid,
   highlyExceptions,
   noHighlyConfidentialInResponse,
   noSensitiveInUrl,
@@ -61,6 +63,8 @@ const rules: Record<string, RuleFn> = {
   erpSensitiveNeedsClassification: sensitiveNeedsClassification,
   erpAllowHighlyValid: allowHighlyValid,
   erpHighlyExceptions: highlyExceptions,
+  erpCredentialResponseValid: credentialResponseValid,
+  erpCredentialResponseExceptions: credentialResponseExceptions,
 };
 
 /** Fungsi Spectral kustom: nama -> (targetVal) => hasil. */

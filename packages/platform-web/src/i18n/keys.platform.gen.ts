@@ -25,12 +25,14 @@ declare module "./types" {
       "dock.label": {};
       "dock.loadError": {};
       "dock.more": { count: string | number };
+      "errors.account_locked": {};
       "errors.bad_request": {};
       "errors.business_rule_violated": {};
       "errors.conflict": {};
       "errors.field_forbidden": {};
       "errors.idempotency_key_reused": {};
       "errors.internal_error": {};
+      "errors.invalid_credentials": {};
       "errors.invalid_filter": {};
       "errors.invalid_i18n_override": {};
       "errors.invalid_sort": {};
@@ -43,6 +45,7 @@ declare module "./types" {
       "errors.not_found": {};
       "errors.not_implemented": {};
       "errors.not_ready": {};
+      "errors.password_policy_violation": {};
       "errors.permission_denied": {};
       "errors.rate_limited": {};
       "errors.request_in_progress": {};

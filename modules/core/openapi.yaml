@@ -1,0 +1,571 @@
+openapi: 3.1.0
+info:
+  title: ERPora erp.core
+  version: 0.1.0
+  description: >
+    Kontrak API modul Core (PRD-000 FR-23.1, PRD-001 FR-101/102/106/107). Pada C1.11 berisi endpoint autentikasi di
+    /api/core/auth: login, refresh, logout, reset sandi, dan MFA TOTP. Refresh token HANYA lewat cookie HttpOnly
+    (Secure, SameSite=Strict, Path=/api/core/auth/refresh), tidak pernah di body; semua respons auth membawa
+    Cache-Control no-store. Properti kredensial di respons 2xx (accessToken, secret, otpauthUri, codes) hanya sah lewat
+    penanda x-erp-credential-response pada properti, yang dibatasi allowlist linter (modul, operationId, properti).
+    Semua endpoint dibatasi laju per IP (429 rate_limited + Retry-After).
+servers:
+  - url: /
+paths:
+  /api/core/auth/login:
+    x-erp-singleton: true
+    post:
+      operationId: login
+      summary: 'Login dengan email dan sandi'
+      description: >-
+        Memverifikasi kredensial. Sukses mengembalikan access token (JWT, 10 menit) di body dan menulis refresh token
+        HANYA lewat cookie `erp_refresh` (HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh). `mfaState`
+        menunjukkan langkah MFA yang tersisa: `none` (akses penuh), `enroll_required` (administrator belum
+        mendaftarkan TOTP), atau `verify_required` (kode TOTP harus diverifikasi); token pada dua keadaan terakhir
+        hanya berlaku untuk route auth yang diizinkan (ADR-0013 section 4). Kegagalan tidak membedakan email tak
+        dikenal, sandi salah, akun terkunci, atau akun nonaktif (401 `invalid_credentials`). Dibatasi laju per IP dan
+        per email (429 `rate_limited`). Idempotency-Key diterima tetapi tidak pernah disimpan (respons memuat
+        kredensial).
+      x-erp-public: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example: { email: ani@example.test, password: kata-sandi-yang-panjang-2026 }
+      responses:
+        '200':
+          description: 'Login berhasil. Cookie refresh ditulis; respons tidak pernah memuat refresh token.'
+          headers:
+            Set-Cookie: { description: 'erp_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionEnvelope' }
+              example: { data: { accessToken: eyJhbGciOiJFZERTQSJ9.contoh.tanda-tangan, expiresIn: 600, mfaState: none } }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Kredensial salah (invalid_credentials, seragam).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Field tak dikenal atau tipe salah (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/refresh:
+    x-erp-singleton: true
+    post:
+      operationId: refreshSession
+      summary: 'Menukar refresh token (cookie) dengan access token baru'
+      description: >-
+        Refresh token dibaca dari cookie `erp_refresh`, bukan dari body. Header `Origin` wajib sama dengan origin URL
+        publik aplikasi (pemeriksaan CSRF; selain itu 403 `permission_denied`). Token dirotasi tiap pakai: cookie
+        ditulis ulang dengan token baru. Token tidak dikenal, kedaluwarsa, terpakai ulang, atau sesinya tercabut
+        dijawab 401 `unauthenticated` generik dan cookie dihapus; pemakaian ulang token lama mencabut seluruh family.
+        Idempotency-Key diterima tetapi tidak pernah disimpan.
+      x-erp-public: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: 'Token baru. Cookie refresh ditulis ulang; respons tidak pernah memuat refresh token.'
+          headers:
+            Set-Cookie: { description: 'erp_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionEnvelope' }
+              example: { data: { accessToken: eyJhbGciOiJFZERTQSJ9.contoh.tanda-tangan, expiresIn: 600, mfaState: none } }
+        '400':
+          description: 'Permintaan salah bentuk (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Refresh token tidak valid (unauthenticated); cookie dihapus.'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Origin tidak diizinkan (permission_denied).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Parameter tidak valid (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/logout:
+    x-erp-singleton: true
+    post:
+      operationId: logout
+      summary: 'Keluar: mencabut sesi Principal sendiri'
+      description: >-
+        Mencabut sesi milik Principal pada token dan menghapus cookie refresh. Tanpa parameter sesi atau pengguna:
+        hanya sesi sendiri yang dapat dicabut. Boleh dipanggil sesi yang menunggu MFA. Idempotency-Key diterima tetapi
+        tidak disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '204': { description: 'Sesi dicabut; cookie refresh dihapus.' }
+        '400':
+          description: 'Permintaan salah bentuk (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Parameter tidak valid (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/password/forgot:
+    x-erp-singleton: true
+    post:
+      operationId: forgotPassword
+      summary: 'Meminta tautan reset sandi lewat email'
+      description: >-
+        Selalu 204 untuk email yang bentuknya sah, tanpa membedakan akun ada, tidak ada, terkunci, atau nonaktif;
+        waktu respons seragam. Email (bila akun berhak) dikirim di latar dengan bahasa dari Accept-Language atau
+        preferensi akun. Dibatasi laju per IP dan per email (429 `rate_limited`). Idempotency-Key diterima tetapi
+        tidak disimpan.
+      x-erp-public: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotRequest' }
+            example: { email: ani@example.test }
+      responses:
+        '204': { description: 'Permintaan diterima (selalu, tanpa membedakan akun).' }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Field tak dikenal atau tipe salah (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/password/reset:
+    x-erp-singleton: true
+    post:
+      operationId: resetPassword
+      summary: 'Menyelesaikan reset sandi dengan token dari email'
+      description: >-
+        Token sekali pakai (berlaku 30 menit). Sukses mencabut SEMUA sesi pengguna dan membuka akun `locked`. Token
+        tidak dikenal, kedaluwarsa, sudah terpakai, atau milik akun nonaktif dijawab seragam 422 `validation_failed`
+        (`details[].code` = `invalid_token`). Sandi baru yang melanggar kebijakan: 422
+        `password_policy_violation` dengan kode aturan di `details[].code` (tautan tidak terpakai). Idempotency-Key
+        diterima tetapi tidak disimpan.
+      x-erp-public: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetRequest' }
+            example: { token: dG9rZW4tdGF1dGFuLWRhcmktZW1haWw, newPassword: kata-sandi-baru-yang-panjang-2026 }
+      responses:
+        '204': { description: 'Sandi diganti; semua sesi dicabut.' }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Token tidak valid (validation_failed) atau sandi melanggar kebijakan (password_policy_violation).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/password/change:
+    x-erp-singleton: true
+    post:
+      operationId: changePassword
+      summary: 'Mengganti sandi Principal sendiri'
+      description: >-
+        Memverifikasi sandi saat ini (dengan batas laju dan lockout yang sama dengan login), menyimpan sandi baru, dan
+        mencabut semua sesi LAIN (sesi ini tetap hidup). Hanya untuk Principal pada token. Sandi saat ini salah: 422
+        `validation_failed` (`details[].code` = `wrong_current_password`); sandi baru melanggar kebijakan: 422
+        `password_policy_violation`. Idempotency-Key diterima tetapi tidak disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeRequest' }
+            example: { currentPassword: kata-sandi-lama-2026, newPassword: kata-sandi-baru-yang-panjang-2026 }
+      responses:
+        '204': { description: 'Sandi diganti; sesi lain dicabut.' }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Aturan MFA belum terpenuhi (mfa_required) atau akun terkunci (account_locked).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Sandi saat ini salah (validation_failed) atau sandi baru melanggar kebijakan (password_policy_violation).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/mfa/enroll:
+    x-erp-singleton: true
+    post:
+      operationId: enrollMfa
+      summary: 'Memulai pendaftaran TOTP'
+      description: >-
+        Membuat faktor TOTP yang menunggu konfirmasi untuk Principal sendiri. `secret` (base32) dan `otpauthUri`
+        (untuk QR code) hanya ditampilkan sekali. Boleh dipanggil administrator yang belum punya faktor. Faktor yang
+        sudah aktif: 409 `conflict`. Idempotency-Key diterima tetapi tidak disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: 'Bahan pendaftaran TOTP (tampil sekali).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnrollmentEnvelope' }
+              example: { data: { secret: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP, otpauthUri: 'otpauth://totp/ERPora:ani@example.test?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=ERPora' } }
+        '400':
+          description: 'Permintaan salah bentuk (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Aturan MFA belum terpenuhi (mfa_required).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '409':
+          description: 'Faktor MFA sudah aktif (conflict).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Parameter tidak valid (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/mfa/confirm:
+    x-erp-singleton: true
+    post:
+      operationId: confirmMfa
+      summary: 'Mengonfirmasi pendaftaran TOTP dengan kode pertama'
+      description: >-
+        Mengaktifkan faktor, menaikkan sesi ke `otp`, dan MEROTASI refresh token (PRD-001 Q27): cookie `erp_refresh`
+        ditulis ulang dan token pra-MFA mati. Respons memuat 10 recovery code (tampil sekali) dan, bila penaikan sesi
+        berhasil, access token baru di `session`; klien tidak perlu memanggil refresh setelahnya. `session` tidak ada
+        bila penaikan gagal setelah faktor aktif: recovery code tetap diserahkan dan klien memakai `mfa/verify`. Kode
+        salah: 422 `validation_failed` (`details[].code` = `invalid_code`). Idempotency-Key diterima tetapi tidak
+        disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CodeRequest' }
+            example: { code: '123456' }
+      responses:
+        '200':
+          description: 'Faktor aktif; recovery code (tampil sekali) dan sesi otp. Cookie refresh ditulis ulang.'
+          headers:
+            Set-Cookie: { description: 'erp_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh (ditulis ulang bila sesi dinaikkan)', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfirmEnvelope' }
+              example: { data: { codes: [a1b2-c3d4-e5f6, g7h8-i9j0-k1l2], session: { accessToken: eyJhbGciOiJFZERTQSJ9.contoh.tanda-tangan, expiresIn: 600, mfaState: none } } }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Aturan MFA belum terpenuhi (mfa_required) atau akun terkunci (account_locked).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '409':
+          description: 'Tidak ada faktor yang menunggu konfirmasi (invalid_state).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Kode salah (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/mfa/verify:
+    x-erp-singleton: true
+    post:
+      operationId: verifyMfa
+      summary: 'Memverifikasi kode TOTP pada sesi yang menunggu MFA'
+      description: >-
+        Menaikkan sesi dari `pwd` ke `pwd+otp` dan merotasi refresh token (Q27): cookie `erp_refresh` ditulis ulang.
+        Hanya untuk Principal pada token. Kode salah: 422 `validation_failed` (`details[].code` = `invalid_code`,
+        seragam untuk semua sebab); dibatasi laju dan lockout seperti login. Idempotency-Key diterima tetapi tidak
+        disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CodeRequest' }
+            example: { code: '123456' }
+      responses:
+        '200':
+          description: 'Sesi otp. Cookie refresh ditulis ulang.'
+          headers:
+            Set-Cookie: { description: 'erp_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionEnvelope' }
+              example: { data: { accessToken: eyJhbGciOiJFZERTQSJ9.contoh.tanda-tangan, expiresIn: 600, mfaState: none } }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Akun terkunci (account_locked).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '409':
+          description: 'Faktor MFA belum didaftarkan (invalid_state).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Kode salah (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/mfa/recovery:
+    x-erp-singleton: true
+    post:
+      operationId: recoverMfa
+      summary: 'Memverifikasi recovery code pada sesi yang menunggu MFA'
+      description: >-
+        Sama dengan `mfa/verify` tetapi memakai recovery code sekali pakai sebagai pengganti kode TOTP. Menaikkan sesi
+        ke `otp` dan merotasi refresh token (Q27). Idempotency-Key diterima tetapi tidak disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CodeRequest' }
+            example: { code: a1b2-c3d4-e5f6 }
+      responses:
+        '200':
+          description: 'Sesi otp. Cookie refresh ditulis ulang.'
+          headers:
+            Set-Cookie: { description: 'erp_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh', schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionEnvelope' }
+              example: { data: { accessToken: eyJhbGciOiJFZERTQSJ9.contoh.tanda-tangan, expiresIn: 600, mfaState: none } }
+        '400':
+          description: 'Body bukan JSON yang sah (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Akun terkunci (account_locked).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '409':
+          description: 'Faktor MFA belum didaftarkan (invalid_state).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Recovery code salah atau sudah terpakai (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+  /api/core/auth/mfa/recovery-codes:
+    x-erp-singleton: true
+    post:
+      operationId: regenerateRecoveryCodes
+      summary: 'Membuat ulang recovery code'
+      description: >-
+        Menghanguskan recovery code lama dan membuat 10 yang baru (tampil sekali). Menuntut sesi yang sudah
+        terverifikasi MFA (amr memuat `otp`; selain itu 403 `mfa_required`). Idempotency-Key diterima tetapi tidak
+        disimpan.
+      x-erp-authenticated: true
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200':
+          description: 'Recovery code baru (tampil sekali).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecoveryCodesEnvelope' }
+              example: { data: { codes: [a1b2-c3d4-e5f6, g7h8-i9j0-k1l2] } }
+        '400':
+          description: 'Permintaan salah bentuk (bad_request).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '401':
+          description: 'Tanpa token atau token tidak valid (unauthenticated, token_expired).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '403':
+          description: 'Sesi belum terverifikasi MFA (mfa_required).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '409':
+          description: 'Faktor MFA belum didaftarkan (invalid_state).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '422':
+          description: 'Parameter tidak valid (validation_failed).'
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+        '429':
+          description: 'Dibatasi laju (rate_limited), dengan Retry-After dalam detik. Tidak membedakan sebab (IP, identitas sasaran, jeda lockout, pembatas hash).'
+          headers:
+            Retry-After: { description: 'Detik sampai boleh mencoba lagi (bilangan bulat, minimal 1).', schema: { type: integer, minimum: 1 } }
+          content: { application/json: { schema: { $ref: 'erp:common#/components/schemas/Error' } } }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: >-
+        UUID dari klien. Diterima tetapi TIDAK PERNAH disimpan pada endpoint auth modul core (PRD-001 Q31): me-replay
+        respons yang memuat access token, recovery code, atau secret MFA tidak aman, dan operasi auth sudah sekali
+        pakai lewat rotasi refresh token dan anti-replay.
+      schema: { type: string, format: uuid }
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, x-erp-classification: confidential }
+        password: { type: string, x-erp-classification: highly_confidential }
+    ForgotRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, x-erp-classification: confidential }
+    ResetRequest:
+      type: object
+      required: [token, newPassword]
+      additionalProperties: false
+      properties:
+        token: { type: string, description: 'Token sekali pakai dari tautan email.', x-erp-classification: highly_confidential }
+        newPassword: { type: string, x-erp-classification: highly_confidential }
+    ChangeRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      additionalProperties: false
+      properties:
+        currentPassword: { type: string, x-erp-classification: highly_confidential }
+        newPassword: { type: string, x-erp-classification: highly_confidential }
+    CodeRequest:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code: { type: string, description: 'Kode TOTP 6 digit atau recovery code.', x-erp-classification: highly_confidential }
+    MfaState:
+      type: string
+      enum: [none, enroll_required, verify_required]
+      description: >-
+        none: akses penuh. enroll_required: administrator belum mendaftarkan TOTP. verify_required: kode TOTP harus
+        diverifikasi.
+    Session:
+      type: object
+      required: [accessToken, expiresIn, mfaState]
+      description: Hasil login, refresh, atau verifikasi MFA. Tidak pernah memuat refresh token (hanya cookie).
+      properties:
+        accessToken:
+          type: string
+          description: JWT EdDSA berumur 10 menit; hanya disimpan di memori klien.
+          x-erp-classification: highly_confidential
+          x-erp-credential-response: true
+        expiresIn: { type: integer, description: Detik sampai access token kedaluwarsa. }
+        mfaState: { $ref: '#/components/schemas/MfaState' }
+    SessionEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Session' }
+    Enrollment:
+      type: object
+      required: [secret, otpauthUri]
+      properties:
+        secret:
+          type: string
+          description: Rahasia TOTP (base32), tampil sekali.
+          x-erp-classification: highly_confidential
+          x-erp-credential-response: true
+        otpauthUri:
+          type: string
+          description: URI otpauth untuk QR code; memuat secret, tampil sekali.
+          x-erp-classification: highly_confidential
+          x-erp-credential-response: true
+    EnrollmentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Enrollment' }
+    ConfirmResult:
+      type: object
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          description: 10 recovery code sekali pakai, tampil sekali.
+          items: { type: string }
+          x-erp-classification: highly_confidential
+          x-erp-credential-response: true
+        session:
+          $ref: '#/components/schemas/Session'
+    ConfirmEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/ConfirmResult' }
+    RecoveryCodes:
+      type: object
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          description: 10 recovery code baru, tampil sekali.
+          items: { type: string }
+          x-erp-classification: highly_confidential
+          x-erp-credential-response: true
+    RecoveryCodesEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/RecoveryCodes' }

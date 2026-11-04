@@ -179,6 +179,7 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
   - Kunci sama + body berbeda → `422 idempotency_key_reused`.
   - Permintaan pertama masih diproses → `409 request_in_progress`.
 - `operationId` di outbox (`offline-strategy.md` §4) dikirim sebagai `Idempotency-Key`.
+- **Pengecualian endpoint auth modul `core` (PRD-001 Q31):** `Idempotency-Key` diterima tetapi **tidak disimpan**, dan tidak ada replay respons. Alasan: me-replay respons berisi access token, recovery code, atau secret MFA tidak aman; operasi auth sudah sekali pakai lewat rotasi refresh token dan anti-replay. Kontrak tetap mendeklarasikan header (rule `erp-post-idempotency-key`) dengan deskripsi yang menyatakan hal ini.
 
 ### 7.3. Validasi
 
@@ -215,15 +216,18 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | 400 | `tenant_unresolved` | Tenant untuk request tidak dapat ditentukan oleh resolver |
 | 400 | `invalid_i18n_override` | Override istilah terjemahan ditolak (kunci tidak ada di katalog bawaan, sintaks ICU tidak valid, argumen berbeda, HTML, terlalu panjang); `details[].code` memerinci: `unknown_key`, `invalid_syntax`, `param_mismatch`, `html_not_allowed`, `too_long` (PRD-000 FR-25, tahap I5) |
 | 401 | `unauthenticated`, `token_expired` | Token tidak ada/tidak valid/kedaluwarsa |
+| 401 | `invalid_credentials` | Login gagal; seragam untuk email tak dikenal, sandi salah, dan akun nonaktif (modul `core`, PRD-001 FR-101) |
 | 403 | `permission_denied` | Tidak punya permission aksi |
 | 403 | `field_forbidden` | Membaca/memfilter/mengubah field terlarang |
+| 403 | `account_locked` | Akun terkunci karena kegagalan login berulang; tidak membedakan sebab lain agar tidak membocorkan keberadaan akun (modul `core`, PRD-001 FR-101) |
 | 403 | `mfa_required` | Endpoint mensyaratkan MFA (PRD-001 FR-107) |
 | 403 | `module_disabled` | Modul `installed`/`disabled` (PRD-000 FR-19.7) |
 | 404 | `not_found` | Record tidak ada **atau di luar scope user** |
 | 404 | `module_not_found` | Modul belum terpasang |
 | 409 | `invalid_state`, `request_in_progress`, `conflict` | Status dokumen / proses paralel / bentrok unik |
 | 412 | `version_mismatch` | `If-Match` tidak cocok |
-| 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak |
+| 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak. Termasuk masukan salah pada endpoint auth yang terautentikasi atau berbody (modul `core`, PRD-001 Q31): sandi saat ini salah (`details[].code` = `wrong_current_password`), kode TOTP/recovery salah (`invalid_code`), token reset tidak sah atau kedaluwarsa (`invalid_token`). **401 hanya untuk kredensial request itu sendiri** (token tidak ada/tidak valid/kedaluwarsa, atau login gagal `invalid_credentials`), agar klien tidak memicu refresh/logout karena masukan salah |
+| 422 | `password_policy_violation` | Sandi baru melanggar kebijakan (modul `core`); `details[].code` hanya memuat pelanggaran generik (`too_short`, `too_long`, `common`), tidak pernah daftar sandi/aturan internal |
 | 429 | `rate_limited` | Dengan header `Retry-After` berupa bilangan bulat detik (dibulatkan ke atas, minimal 1; `httpx.TooManyRequests`). Tidak membedakan sebab (batas IP, identitas sasaran, jeda lockout, pembatas hash) agar tidak membocorkan keberadaan akun (PRD-001 FR-101) |
 | 415 | `unsupported_media_type` | Endpoint yang mewajibkan `Content-Type: application/json` walau body kosong/`{}` (mutasi `/api/platform/modules`, Q32; mutasi `PUT`/`DELETE /api/platform/i18n/overrides/...`, Q34); body JSON biasa yang salah media type tetap `400 bad_request` dengan `details[].code = unsupported_media_type` (Q30) |
 | 500 | `internal_error` | Kesalahan server |

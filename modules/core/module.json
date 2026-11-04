@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "key": "erp.core",
+  "slug": "core",
+  "name": "Core",
+  "version": "0.1.0",
+  "required": true,
+  "publisher": { "id": "erp", "name": "ERPora" },
+  "trust": "builtin",
+  "compatibility": { "platform": "^0.1", "sdk": "^0.1" },
+  "dependencies": [
+    { "module": "platform.core", "version": "^0.1", "optional": false }
+  ],
+  "capabilities": [],
+  "migrations": { "strategy": "none" },
+  "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
+  "offline": { "mode": "online-only" }
+}

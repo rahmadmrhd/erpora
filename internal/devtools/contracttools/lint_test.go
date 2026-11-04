@@ -149,7 +149,7 @@ func TestLint_Fixtures(t *testing.T) {
 		{
 			name:  "joined_lowercase_sensitive_names_in_response",
 			edits: map[string][][2]string{ex: {{versionProp, "        apikey: { type: string }\n        privatekey: { type: string }\n        bankaccount: { type: string }\n        accesstoken: { type: string }\n        refreshtoken: { type: string }\n" + versionProp}}},
-			want:  []string{"erp-sensitive-needs-classification"}, msg: "highly_confidential",
+			want:  []string{"erp-credential-response-valid", "erp-sensitive-needs-classification"}, msg: "highly_confidential",
 		},
 		{
 			name:  "uppercase_sensitive_names_in_response",
@@ -229,7 +229,7 @@ func TestLint_Fixtures(t *testing.T) {
 		{
 			name:  "allow_highly_on_refresh_token",
 			edits: map[string][][2]string{ex: {{versionProp, "        refreshToken: { type: string, x-erp-classification: highly_confidential, x-erp-allow-highly-confidential: 'alasan' }\n" + versionProp}}},
-			want:  []string{"erp-allow-highly-confidential-valid"}, msg: "kredensial",
+			want:  []string{"erp-allow-highly-confidential-valid", "erp-credential-response-valid"}, msg: "kredensial",
 		},
 		{
 			name:  "allow_highly_on_hr_name_with_credential_token",

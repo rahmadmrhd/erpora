@@ -6,3 +6,10 @@ GET /api/platform/i18n/{locale}/{namespace}
 # JWKS (PRD-001 FR-102, ADR-0013 §3, K-C1.8): kunci PUBLIK penandatangan access token, didaftarkan platform langsung di
 # router (di luar /api/{slug}; bukan route registry, lihat app.DirectPublicRoutes). Tidak memuat material privat atau kunci retired.
 GET /.well-known/jwks.json
+# Autentikasi modul core (PRD-001 FR-101/102, ADR-0013, C1.11): route publik karena dipanggil sebelum ada Principal.
+# Semuanya dibatasi laju per IP (runtime.isAuthEndpoint), membawa Cache-Control: no-store, dan tidak membedakan sebab
+# kegagalan (anti-enumerasi). refresh berbasis cookie HttpOnly + pemeriksaan Origin; forgot selalu 204 kecuali 429.
+POST /api/core/auth/login
+POST /api/core/auth/refresh
+POST /api/core/auth/password/forgot
+POST /api/core/auth/password/reset

@@ -111,6 +111,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // otelhttp -> localeEarly -> recover -> requestScope -> tenantContext -> localeContext -> IPLimit (hanya RateLimited)
 // -> Authenticate (kecuali Public) -> PrincipalLimit (RateLimited non-Public) -> h.
 // recover berada di dalam span otelhttp agar panic tercatat pada span aktif (lihat recoverMW).
+// Route RateLimited (endpoint auth) dibungkus lapisan terluar yang menandai SEMUA responsnya Cache-Control: no-store
+// (ADR-0013 §1), termasuk respons buatan platform sebelum handler (tenant tak terselesaikan, 401, 429, panic).
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	var cfg routeConfig
 	for _, o := range opts {
@@ -143,10 +145,22 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 		// Hanya W3C trace context yang diekstrak; baggage inbound tidak dipercaya.
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 	)
+	if cfg.rateLimited {
+		h = noStoreAuth(h)
+	}
 	r.mux.Handle(pattern, h)
 	if hasMethod(pattern) {
 		r.probe.Handle(pattern, http.NotFoundHandler())
 	}
+}
+
+// noStoreAuth menetapkan Cache-Control: no-store sebelum respons apa pun ditulis, sehingga setiap respons route
+// auth (sukses maupun galat, dari platform maupun modul) tidak boleh disimpan cache (ADR-0013 §1).
+func noStoreAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // hasMethod: pattern berbentuk "METHOD /path".

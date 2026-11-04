@@ -177,14 +177,19 @@ func TestAssemble_CrossProcessChangeVisibleViaWatch(t *testing.T) {
 	}
 }
 
-func TestMigrateUp_EnsureRequiredNoRequiredModules(t *testing.T) {
+// core adalah satu-satunya modul required (C1.11): EnsureRequired memasangnya (idempoten pada pemanggilan kedua).
+func TestMigrateUp_EnsureRequiredInstallsCore(t *testing.T) {
 	ctx, a, _, db := setupAssembly(t)
 	res, err := a.Lifecycle.EnsureRequired(ctx, a.Tenant, "system:migrate")
-	if err != nil || len(res) != 0 {
+	if err != nil || len(res) != 2 || res[0].Module != "erp.core" || res[0].Op != "install" || res[1].Op != "enable" || res[1].Status != "succeeded" {
 		t.Fatalf("EnsureRequired = %+v, %v", res, err)
 	}
 	var n int64
-	if err := db.Raw("SELECT count(*) FROM module_installations").Scan(&n).Error; err != nil || n != 0 {
+	if err := db.Raw("SELECT count(*) FROM module_installations").Scan(&n).Error; err != nil || n != 1 {
 		t.Errorf("module_installations = %d (%v)", n, err)
+	}
+	again, err := a.Lifecycle.EnsureRequired(ctx, a.Tenant, "system:migrate")
+	if err != nil || len(again) == 0 || again[len(again)-1].Status != "noop" {
+		t.Fatalf("EnsureRequired kedua = %+v, %v", again, err)
 	}
 }

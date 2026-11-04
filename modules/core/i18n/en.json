@@ -1,0 +1,15 @@
+{
+  "password": {
+    "violation": {
+      "too_short": "Password is too short (at least 12 characters).",
+      "too_long": "Password is too long.",
+      "common": "Password is too common and easy to guess.",
+      "unknown": "Password does not meet the policy."
+    }
+  },
+  "detail": {
+    "wrong_current_password": "The current password is incorrect.",
+    "invalid_token": "The link is invalid or no longer valid.",
+    "invalid_code": "The code is invalid."
+  }
+}

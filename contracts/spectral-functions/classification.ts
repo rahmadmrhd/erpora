@@ -4,9 +4,11 @@ import {
   asArr,
   asObj,
   asStr,
+  ctx,
   currentDoc,
   follow,
   type Obj,
+  type Operation,
   operations,
   type PathSeg,
   parametersOf,
@@ -258,7 +260,13 @@ function findHighly(
   seen.add(o);
   // Anotasi dan keyword yang bersanding dengan $ref (OpenAPI 3.1) dihitung pada node itu sendiri; follow() hanya
   // mengembalikan node tujuan dan membuang sibling-nya.
-  if (o["x-erp-classification"] === "highly_confidential" && !hasAllowReason(o))
+  // Properti kredensial berpenanda x-erp-credential-response tidak dihitung di sini; keabsahannya (allowlist) diperiksa
+  // erp-credential-response-valid, sehingga penanda di luar allowlist tetap ERROR.
+  if (
+    o["x-erp-classification"] === "highly_confidential" &&
+    !hasAllowReason(o) &&
+    o["x-erp-credential-response"] !== true
+  )
     return trail.join(".") || "(skema)";
   for (const kw of SCHEMA_MAPS) {
     for (const [k, v] of Object.entries(asObj(o[kw]) ?? {})) {
@@ -368,6 +376,147 @@ export function sensitiveNeedsClassification(root: unknown): Result[] {
     if (o && typeof o.name === "string" && typeof o.in === "string" && !("properties" in o)) {
       checkSensitive(o.name, o, path, "Parameter", out, paramClasses(root, o));
     }
+  }
+  return out;
+}
+
+// --- Penanda kredensial pada respons (K-C1.4; PRD-000 Q42 butir 4; PRD-001 Q16, Q27) ---
+
+/** Penanda pada PROPERTI respons 2xx: satu-satunya jalan properti kredensial boleh ada di respons. */
+export const CRED_RESP = "x-erp-credential-response";
+
+/**
+ * Allowlist (modul, operationId, properti). Penanda hanya sah bila ketiganya terdaftar di sini; menambah entri berarti
+ * meminta persetujuan reviewer keamanan (ada di kode, bukan di kontrak modul). Modul `core`: accessToken pada login,
+ * refresh, verifikasi MFA (TOTP dan recovery code) dan konfirmasi MFA (sesi otp baru, Q27); secret/otpauthUri pada
+ * enroll MFA; codes (recovery code, tampil sekali; FR-107) pada konfirmasi MFA dan regenerate recovery codes. Refresh
+ * token TIDAK pernah ada di sini: hanya cookie.
+ */
+const CREDENTIAL_ALLOWLIST: Record<string, Record<string, string[]>> = {
+  core: {
+    login: ["accessToken"],
+    refreshSession: ["accessToken"],
+    verifyMfa: ["accessToken"],
+    recoverMfa: ["accessToken"],
+    enrollMfa: ["secret", "otpauthUri"],
+    confirmMfa: ["codes", "accessToken"],
+    regenerateRecoveryCodes: ["codes"],
+  },
+  platform: {},
+};
+
+function credentialModule(): string {
+  const c = ctx();
+  return c.target === "platform" ? "platform" : c.slug;
+}
+
+/** Properti respons 2xx dan konteks lain (requestBody, parameter, respons non-2xx) untuk satu operasi. */
+function opContexts(
+  root: unknown,
+  op: Operation,
+): { allowed: Map<Obj, Set<string>>; other: Map<Obj, Set<string>> } {
+  const allowed = new Map<Obj, Set<string>>();
+  const other = new Map<Obj, Set<string>>();
+  for (const [code, resp] of Object.entries(asObj(op.node.responses) ?? {})) {
+    const r = follow(root, resp);
+    const content = r ? asObj(r.node)?.content : undefined;
+    collectMediaProps(root, content, r?.doc ?? "", /^2/.test(code) ? allowed : other);
+  }
+  const rb = follow(root, op.node.requestBody);
+  if (rb) collectMediaProps(root, asObj(rb.node)?.content, rb.doc, other);
+  for (const p of parametersOf(root, op)) {
+    collectProps(root, p.schema, "", new Set(), other);
+    collectMediaProps(root, p.content, "", other);
+  }
+  return { allowed, other };
+}
+
+const isRefreshName = (name: string): boolean =>
+  nameTokens(name)[0] === "refresh" || name.toLowerCase().startsWith("refresh");
+
+/**
+ * erp-credential-response-valid: x-erp-credential-response: true hanya pada properti respons 2xx yang (modul,
+ * operationId, properti)-nya ada di allowlist, bersama x-erp-classification: highly_confidential. ERROR di luar itu:
+ * tingkat operasi saja, requestBody, parameter, respons non-2xx, skema akar, atau nilai selain true. Properti refresh*
+ * di body respons 2xx SELALU ERROR (refresh token hanya cookie), dengan atau tanpa penanda.
+ */
+export function credentialResponseValid(root: unknown): Result[] {
+  const out: Result[] = [];
+  const mod = credentialModule();
+  const ops = operations(currentDoc(root));
+  const perOp = ops.map((op) => ({ op, ...opContexts(root, op) }));
+  const reachedOther = new Set<Obj>();
+  for (const p of perOp) for (const k of p.other.keys()) reachedOther.add(k);
+
+  for (const p of perOp) {
+    for (const [, names] of p.allowed) {
+      for (const name of names) {
+        if (isRefreshName(name)) {
+          out.push({
+            message: `Properti "${name}" pada respons ${p.op.method.toUpperCase()} ${p.op.path} dilarang: refresh token hanya boleh lewat cookie HttpOnly, tidak pernah di body (ADR-0013 §1, PRD-001 Q16)`,
+            path: [...p.op.at, "responses"],
+          });
+        }
+      }
+    }
+  }
+
+  for (const [path, node] of walkDoc(root)) {
+    const o = asObj(node);
+    if (!o || !(CRED_RESP in o)) continue;
+    const at = [...path, CRED_RESP];
+    if (o[CRED_RESP] !== true) {
+      out.push({
+        message: `${CRED_RESP} hanya boleh bernilai true (PRD-000 Q42 butir 4)`,
+        path: at,
+      });
+      continue;
+    }
+    if (o["x-erp-classification"] !== "highly_confidential") {
+      out.push({
+        message: `${CRED_RESP} wajib menyertai x-erp-classification: highly_confidential pada properti yang sama (klasifikasi tidak turun; route tetap no-store) (PRD-000 Q42 butir 4)`,
+        path: at,
+      });
+    }
+    const reaching = perOp.filter((p) => p.allowed.has(o));
+    if (reaching.length === 0 || reachedOther.has(o)) {
+      const opLevel = "responses" in o || "operationId" in o;
+      out.push({
+        message: opLevel
+          ? `${CRED_RESP} pada tingkat operasi saja tidak cukup: pasang pada PROPERTI respons 2xx yang terdaftar di allowlist (modul, operationId, properti) (PRD-000 Q42 butir 4)`
+          : `${CRED_RESP} hanya sah pada properti skema respons 2xx (bukan di requestBody, parameter, respons non-2xx, atau skema akar) (PRD-000 Q42 butir 4)`,
+        path: at,
+      });
+      continue;
+    }
+    for (const p of reaching) {
+      const opId = asStr(p.op.node.operationId) ?? "";
+      for (const name of p.allowed.get(o) ?? []) {
+        if (isRefreshName(name)) continue; // sudah dilaporkan di atas
+        if (!(CREDENTIAL_ALLOWLIST[mod]?.[opId] ?? []).includes(name)) {
+          out.push({
+            message: `${CRED_RESP} pada properti "${name}" operasi "${opId}" (modul "${mod}") tidak terdaftar di allowlist linter (modul, operationId, properti); menambah entri membutuhkan persetujuan reviewer keamanan (PRD-000 Q42 butir 4, K-C1.4)`,
+            path: at,
+          });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** erp-credential-response-exception (INFO): setiap operasi yang mengembalikan kredensial, untuk ditinjau reviewer. */
+export function credentialResponseExceptions(root: unknown): Result[] {
+  const out: Result[] = [];
+  for (const op of operations(currentDoc(root))) {
+    const { allowed } = opContexts(root, op);
+    const names: string[] = [];
+    for (const [o, ns] of allowed) if (o[CRED_RESP] === true) names.push(...ns);
+    if (names.length === 0) continue;
+    out.push({
+      message: `${op.method.toUpperCase()} ${op.path} (${asStr(op.node.operationId) ?? "?"}) mengembalikan kredensial di respons: ${[...new Set(names)].sort().join(", ")} (tinjau di code review; PRD-000 Q42 butir 4)`,
+      path: [...op.at, "responses"],
+    });
   }
   return out;
 }
