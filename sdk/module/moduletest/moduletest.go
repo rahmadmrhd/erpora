@@ -6,6 +6,7 @@ package moduletest
 import (
 	"net/http"
 
+	"erpora/sdk/authz"
 	"erpora/sdk/module"
 )
 
@@ -21,6 +22,7 @@ type Route struct {
 type Recorder struct {
 	Routes   []Route
 	Commands []module.Command
+	Scopes   []authz.ScopeProvider
 }
 
 var _ module.Registrar = (*Recorder)(nil)
@@ -56,3 +58,6 @@ func (r *Recorder) Permission(method, path string) string {
 	rt, _ := r.Route(method, path)
 	return rt.Permission
 }
+
+// Scope merekam scope kustom yang didaftarkan modul.
+func (r *Recorder) Scope(p authz.ScopeProvider) { r.Scopes = append(r.Scopes, p) }

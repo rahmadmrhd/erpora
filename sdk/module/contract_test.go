@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"erpora/sdk/authz"
 	"erpora/sdk/module"
 )
 
@@ -28,6 +29,7 @@ func (*fakeRegistrar) Handle(method, path, permission string, h http.Handler, op
 }
 func (*fakeRegistrar) Public(method, path string, h http.Handler, opts ...module.RouteOption) {}
 func (r *fakeRegistrar) Command(c module.Command)                                             { r.commands = append(r.commands, c) }
+func (*fakeRegistrar) Scope(authz.ScopeProvider)                                              {}
 
 var (
 	_ module.Module          = fakeModule{}

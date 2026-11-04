@@ -17,10 +17,18 @@ type Manifest struct {
 	Required      bool          `json:"required,omitempty"`
 	Compatibility Compatibility `json:"compatibility"`
 	Dependencies  []Dependency  `json:"dependencies"`
-	Capabilities  []string      `json:"capabilities"`
-	Provides      []string      `json:"provides,omitempty"`
-	Migrations    Migrations    `json:"migrations"`
-	Offline       Offline       `json:"offline"`
+	// Capabilities dipertahankan demi kompatibilitas (schema_version tetap "1"). Himpunan permission modul
+	// diturunkan dari Resources (Permissions()); entri yang ditulis di sini wajib bagian dari himpunan turunan itu
+	// (PRD-001 FR-110).
+	Capabilities []string `json:"capabilities"`
+	Provides     []string `json:"provides,omitempty"`
+	// Resources, ScopeDimensions, dan DefaultRoles adalah deklarasi otorisasi PRD-001 FR-110 (aditif; manifest
+	// lama tanpa ketiganya tetap terurai).
+	Resources       []Resource       `json:"resources,omitempty"`
+	ScopeDimensions []ScopeDimension `json:"scope_dimensions,omitempty"`
+	DefaultRoles    []DefaultRole    `json:"default_roles,omitempty"`
+	Migrations      Migrations       `json:"migrations"`
+	Offline         Offline          `json:"offline"`
 	// I18n menyatakan bahasa katalog terjemahan modul; nil = modul tanpa namespace i18n.
 	I18n *I18n `json:"i18n,omitempty"`
 	// Desk menyatakan Desk modul (Q40 butir 10-13): label, ikon, dan menu yang dibaca server untuk daftar Desk
