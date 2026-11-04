@@ -105,7 +105,7 @@ Setiap koneksi keluar yang tujuannya dipengaruhi data (webhook, OIDC discovery, 
 
 ### 3.5. Autentikasi & sesi (`27002:5.17`, `8.5`; OWASP A07, API2)
 
-Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Administrator, JWT berumur pendek + refresh berotasi dengan deteksi reuse, pencabutan instan, OIDC dengan PKCE/state/nonce, PAT ber-hash dengan prefix. Tambahan:
+Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Administrator, JWT berumur pendek + refresh berotasi dengan deteksi reuse, pencabutan sesi (seketika di instance yang memprosesnya; instance/proses lain paling lama ±1 menit lewat muat ulang daftar tercabut, PRD-001 Q32 butir 2), OIDC dengan PKCE/state/nonce, PAT ber-hash dengan prefix. Tambahan:
 
 - **Open redirect**: parameter `returnTo`/`redirect_uri` hanya menerima path relatif same-origin atau URL dari allowlist.
 - Pesan login tidak membedakan "user tidak ada" dan "password salah"; respons waktu dibuat seragam.
@@ -198,6 +198,46 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 - [ ] Aksi baru tercatat di audit log.
 - [ ] Rate limit untuk endpoint mahal atau sensitif.
 
+Butir umum di atas berlaku untuk setiap PR. Status penegakan autentikasi dan sesi per milestone C1 (ASVS 5.0.0 bab V6 Authentication, V7 Session Management, V9 Self-contained Tokens, dan V3 untuk penyimpanan token di browser) dicantumkan di bawah. Nomor requirement ASVS tidak dirujuk satu per satu; pemetaan per kategori ada di PRD-001 NFR-101.
+
+**Autentikasi (V6)**
+
+- [x] Sandi minimal 12 karakter (dihitung dalam rune setelah NFKC), maksimal 1024 byte pada masukan mentah, dan tidak boleh ada di daftar sandi umum. Sandi dinormalisasi NFKC sebelum di-hash dan diverifikasi. (`internal/platform/identity/password/policy.go`, `hash.go`)
+- [x] Sandi di-hash argon2id dengan parameter bawaan OWASP (m=19456 KiB, t=2, p=1); parameter dapat diatur lewat `ERP_ARGON2_*` dengan batas bawah. Pembatas konkurensi hash (`guard/hashgate.go`) membatasi pemakaian memori serentak.
+- [x] Login gagal menjawab `invalid_credentials` (401) yang seragam untuk email tak dikenal, sandi salah, akun `locked`, dan akun nonaktif. Waktu respons dibuat seragam dengan lantai 200 ms dan hash tiruan (`password.NewDummy`). (`guard/authenticator.go`, `identity/service.go`)
+- [x] Lockout per pasangan (akun, IP): jeda bertingkat mulai kegagalan ke-5 (30 detik, berlipat, maksimum 15 menit); blokir pasangan 1 jam pada kegagalan ke-20; status `locked` hanya bila ada ≥50 kegagalan lintas ≥5 IP dalam 1 jam. Buka kunci lewat reset sandi atau `core:unlock`. (`guard/lockout.go`; `guard/lockout_test.go`)
+- [x] Rate limit per IP dan per principal pada endpoint auth; respons `429 rate_limited` dengan `Retry-After`. (`guard/limiter.go`, `httpserver/server.go`)
+- [x] MFA TOTP (RFC 6238) dengan anti-replay lewat `last_used_step`, dan recovery code sekali pakai yang disimpan sebagai SHA-256 terikat pengguna. (`mfa/totp.go`, `mfa/recovery.go`, `store/mfa.go`)
+- [x] MFA wajib untuk role `administrator`: login mengembalikan `mfaState` `enroll_required` atau `verify_required`, dan operasi administratif menuntut sesi ber-`otp` (`identity/admin.go`). Pengguna non-admin dengan faktor aktif tetap diminta verifikasi (FR-107). (`identity/mfastate.go`, `mfa/service.go`)
+- [x] Reset sandi: tautan sekali pakai berlaku 30 menit, hanya hash SHA-256 yang disimpan, `forgot` menjawab seragam, dan tautan milik akun nonaktif ditolak seperti token tidak sah. Reset mencabut seluruh sesi pengguna. (`reset/service.go`, `store/resets.go`)
+- [x] Ganti sandi mencabut seluruh sesi lain dan mempertahankan sesi yang sedang dipakai. (`store/resets.go` `ChangePassword`)
+- [x] Respons login, refresh, dan MFA diberi `Cache-Control: no-store` (`httpserver/server.go`). Refresh token tidak pernah masuk body JSON (`json:"-"`).
+- [ ] Re-autentikasi untuk aksi berisiko tinggi (ASVS Level 3 terpilih, NFR-101): **belum**, menyusul bersama modul keuangan dan HR.
+
+**Sesi (V7)**
+
+- [x] Access token JWT berumur 10 menit (`token/keys.go` `AccessTokenTTL`). Refresh token opak 32 byte dari `crypto/rand`, hanya hash SHA-256 yang disimpan. (`session/service.go`)
+- [x] Refresh berotasi. Pemakaian ulang token lama mencabut family dan sesi (`refresh_reuse`). Dua refresh serentak dengan token yang sama menghasilkan tepat satu rotasi sukses. (`session/service.go`; `session/session_test.go`)
+- [x] Umur sesi: sliding 14 hari dan absolut 90 hari. (`session/service.go`; `TestSlidingExpiry14Days`, `TestAbsoluteLifetime90DaysEnforced`)
+- [x] Cookie refresh `HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh`. Refresh dengan header `Origin` hilang atau tidak diizinkan ditolak 403. (`modules/core/internal/presentation/http/cookie.go`, `session/origin.go`)
+- [x] Logout mencabut sesi aktif. `Admin.LogoutAllDevices` mencabut seluruh sesi pengguna. `core:reset-mfa` mencabut sesi pengguna yang bersangkutan. (`identity/service.go`, `identity/admin.go`)
+- [x] Pencabutan dipatuhi lintas instance: setiap instance memuat ulang daftar sesi tercabut paling lama tiap 1 menit dan menerima notifikasi `ChannelSessionRevoked`. Notifikasi yang hilang tidak membuat sesi tercabut berlaku selamanya karena muat ulang berkala. (`session/revocation.go`; PRD-001 Q32 butir 2)
+- [x] Status `locked` tidak mencabut sesi yang sudah ada (PRD-001 Q30 butir 4). Pembaruan sesi menolak pengguna yang tidak aktif (`ErrUserNotActive`). (`session/service.go`)
+- [ ] Penonaktifan akun mencabut seluruh sesinya (`OnUserDisabled`, alasan `user_disabled`): hook sudah ada, tetapi belum ada jalur penonaktifan akun di C1 yang memanggilnya. Menyusul bersama operasi pengguna di C2/C3.
+- [x] Access token hanya di memori klien. Refresh token hanya di cookie HttpOnly. Tidak ada `localStorage`, `sessionStorage`, `document.cookie`, atau IndexedDB untuk token (V3). (`packages/platform-web/src/auth/controller.ts`)
+
+**Token (V9)**
+
+- [x] Verifikasi JWT hanya algoritma EdDSA (Ed25519). `alg: none` dan HS256 dengan kunci publik sebagai rahasia ditolak. `kid` hanya dicocokkan ke daftar kunci dan tidak pernah menjadi path atau SQL. `iss` dan `aud` diperiksa, leeway 30 detik, dan kunci berstatus `pending` atau `retired` ditolak. (`token/jwt.go`; `token/jwt_test.go`: `TestVerifyRejectsNoneAlg`, `TestVerifyRejectsHS256WithPublicKeyAsSecret`, `TestVerifyRejectsKIDWithPathOrSQL`, `TestVerifyRejectsRetiredKey`)
+- [x] Rotasi kunci dengan tahap `pending`, `active`, `retiring`, `retired` lewat `core:rotate-keys`. JWKS dipublikasikan di `/.well-known/jwks.json` tanpa kunci privat. (`token/keys.go`, `token/jwks.go`, `internal/app/identity.go`)
+
+**Belum ditegakkan (menyusul milestone berikutnya)**
+
+- [ ] Otorisasi per objek dan per field (ASVS V8): **C2** (PRD-001 FR-110 sampai FR-119).
+- [ ] Audit log append-only untuk login, perubahan hak akses, dan pencabutan sesi: **C3** (PRD-001 FR-130). Tabel `login_attempts` dan log server bukan audit log.
+- [ ] OIDC/SSO, PAT, dan OAuth2 client credentials (ASVS V10): **C4** (PRD-001 FR-103 sampai FR-105).
+- [ ] Pemindaian log lintas autentikasi untuk memastikan tidak ada rahasia tercatat (NFR-103): test CLI (`core_cli_integration_test.go`, `tests/integration/core_cli_test.go`) memeriksa sandi tidak tercatat dan pemindaian manual log `serve` saat verifikasi browser C1.15 bersih; pemindai log untuk alur API auth penuh ditambahkan di putaran perbaikan C1.15.
+
 ## 7. Status penegakan
 
 | Kontrol | Status |
@@ -205,7 +245,12 @@ Diatur PRD-001 FR-101–FR-108: argon2id, lockout & rate limit, MFA wajib Admini
 | Arch test D1–D11, header keamanan, request ID, DSN redaction, secret scan | **M1** (sedang dibangun) |
 | Route permission allowlist, kontrak ↔ route, linter kontrak | **M2d ✅** (PRD-000 FR-23) |
 | Timeout query database per request (`statement_timeout`) | **M2c ✅** (PRD-000 Q26, Q30) |
-| Authz helper, test IDOR, analyzer authz, MFA, audit | **PRD-001** (ADR-0013 Accepted 2 Nov 2026; implementasi C1 menyusul, status per kontrol diperbarui di C1.15) |
+| Autentikasi lokal (argon2id, kebijakan sandi, lockout, rate limit 429), MFA TOTP dan recovery code, MFA wajib administrator, reset sandi, sesi dan refresh berotasi, JWT EdDSA dan JWKS, rotasi kunci, pemisahan `identity.Service`/`Admin` | **C1 ✅** (implementasi; PRD-001 FR-101, FR-102, FR-106, FR-107; ADR-0013 Accepted 2 Nov 2026. Gerbang C1.15 Step 1 dan review akhir belum dijalankan) |
+| Pengiriman email (`sdk/mail`, driver `smtp` dan `log`; driver `log` di produksi tidak mencatat isi, tautan, atau token) | **C1 ✅** (PRD-001 FR-108; `ERP_SMTP_*` sementara sampai Settings di C3) |
+| Settings platform minimal `platform.public_url` (dipakai tautan reset dan pemeriksaan `Origin`) | **C1 ✅** (PRD-001 Q24; `internal/platform/settings`, tanpa UI) |
+| Authorization (helper `authz`, test IDOR, analyzer authz) | **C2** (PRD-001 FR-110 sampai FR-119; menyusul) |
+| Audit append-only (login, perubahan hak akses, pencabutan sesi) | **C3** (PRD-001 FR-130 sampai FR-132; menyusul) |
+| OIDC/SSO, PAT, OAuth2 client credentials | **C4** (PRD-001 FR-103 sampai FR-105; menyusul) |
 | SBOM, `SECURITY.md`, gosec | **M1** (PRD-000 FR-24.1) |
 | `sdk/egress` (anti-SSRF) + arch test `EGRESS` | **M2c ✅** (PRD-000 FR-24.2) |
 | `httpx.DecodeJSON` + arch test `DECODE` | **M2c ✅** |

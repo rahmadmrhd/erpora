@@ -428,7 +428,7 @@ IDOR dicegah di **setiap titik masuk** yang menerima ID objek, bukan hanya di en
 
 | Milestone | Cakupan | Exit gate |
 | --- | --- | --- |
-| **C1 — Identity lokal** | FR-101, FR-102, FR-106, FR-107, FR-108, modul `core` (`required`), `erpora core:create-admin`, `core:unlock` | Login/logout/refresh/reset end-to-end; MFA wajib Administrator berjalan; stub authN PRD-000 diganti; ASVS checklist sesi lolos |
+| **C1 — Identity lokal** (implementasi selesai 4 Nov 2026; verifikasi browser end-to-end lolos; menunggu putaran perbaikan review akhir dan merge PR) | FR-101, FR-102, FR-106, FR-107, FR-108, modul `core` (`required`), `erpora core:create-admin`, `core:unlock` | Login/logout/refresh/reset end-to-end; MFA wajib Administrator berjalan; stub authN PRD-000 diganti; ASVS checklist sesi lolos |
 | **C2 — Authorization** | FR-110–FR-119 | Semua tabel uji scope & field lulus (termasuk hierarki unit organisasi); matriks & penjelas akses di UI; modul `example` memakai resource, scope kustom, dan field group |
 | **C3 — Settings & Audit** | FR-120 (termasuk preferensi user), FR-130–FR-132 | Settings modul `example` diatur dari UI; semua event wajib tercatat; audit append-only terbukti |
 | **C4 — Integrasi** | FR-103, FR-104, FR-105 | SSO Google + Keycloak (test container) berjalan; PAT & client credentials dipakai oleh skrip integrasi di CI |

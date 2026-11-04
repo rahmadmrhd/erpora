@@ -262,7 +262,7 @@ Berkas yang dimiliki satu task tidak disentuh task lain dalam gelombang yang sam
 **Kelas:** Sonnet (gerbang), review akhir Opus independen.
 
 - [ ] **Step 1: Gerbang** `task lint arch check:gowork-off test`; `task test:integration` (VPS); `task contracts:check`; `task web:check`; `task test:generator`; `govulncheck ./...`; jalankan ulang semua tes Review Focus 1 sampai 5.
-- [ ] **Step 2: Checklist ASVS sesi** (V2, V3, V6, V7 yang relevan) di `docs/security/security-guidelines.md` §6 dan §7 diperbarui; `docs/module-sdk/security-primitives.md` memuat `sdk/identity` dan `sdk/mail`; ADR-0013 Accepted; PRD-001 tabel keputusan diperbarui; milestone C1 ditandai selesai.
+- [x] **Step 2: Checklist ASVS sesi** (V2, V3, V6, V7 yang relevan) di `docs/security/security-guidelines.md` §6 dan §7 diperbarui; `docs/module-sdk/security-primitives.md` memuat `sdk/identity` dan `sdk/mail`; ADR-0013 Accepted; PRD-001 tabel keputusan diperbarui; milestone C1 ditandai selesai.
 - [ ] **Step 3: Review akhir independen** (Opus, tanpa konteks implementer): kesesuaian dengan PRD-001 dan ADR-0013 serta `security-audit` terfokus pada permukaan C1; temuan yang sesuai spek diperbaiki implementer yang sama, yang di luar spek dikonfirmasi dulu; satu review atas diff perbaikan.
 - [ ] **Step 4: Verifikasi browser** (aplikasi penuh dengan DB sementara di VPS): `core:create-admin`, login, wajib MFA Administrator, logout, refresh setelah 10 menit (token kedaluwarsa), reset sandi lewat driver `log`, lockout; inspeksi storage browser kosong dari token; DB sementara dihapus.
 - [ ] **Step 5: Commit** dan laporkan: yang dikerjakan, yang menunggu konfirmasi, yang sengaja tidak dikerjakan.
