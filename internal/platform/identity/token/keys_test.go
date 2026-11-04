@@ -525,7 +525,10 @@ func TestConcurrentKeyringUse(t *testing.T) {
 					errs <- err
 					return
 				}
-				if _, err := e.verifier.Verify(tok); err != nil {
+				// Jam tiruan maju 3 x JWKSMaxAge (> umur access token) selama tes; goroutine yang tertunda (mis. -race)
+				// dapat memverifikasi token yang diterbitkan sebelum dua kemajuan jam, sehingga kedaluwarsa itu sah.
+				// Tes ini menguji keamanan konkurensi keyring (kid/tanda tangan), bukan masa berlaku.
+				if _, err := e.verifier.Verify(tok); err != nil && Reason(err) != ReasonExpired {
 					errs <- fmt.Errorf("verify: %w (%s)", err, Reason(err))
 					return
 				}
