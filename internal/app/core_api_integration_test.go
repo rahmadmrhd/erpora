@@ -449,8 +449,10 @@ func TestCoreAPI_IDOR_OwnPrincipalOnly(t *testing.T) {
 	e.remember(pwA, pwB)
 
 	// Body dengan userId/sessionId: kolom asing ditolak 422 (change/confirm); logout dan enroll tidak membaca body
-	// dan hanya bertindak atas Principal pemanggil. Tiap percobaan memakai sesi A baru.
+	// dan hanya bertindak atas Principal pemanggil. Satu sesi A dipakai bersama, kecuali /logout yang mencabut sesinya
+	// sendiri: login per percobaan akan melampaui batas laju login per email (10 sekaligus) di CI yang cepat.
 	hostile := `{"userId":"` + ub.ID + `","sessionId":"x","currentPassword":"` + pwA + `","newPassword":"kata-sandi-lain-2026","code":"123456"}`
+	shared := e.mustLogin(ua.Email, pwA)
 	for path, want := range map[string]int{
 		"/password/change":    http.StatusUnprocessableEntity,
 		"/mfa/confirm":        http.StatusUnprocessableEntity,
@@ -460,7 +462,10 @@ func TestCoreAPI_IDOR_OwnPrincipalOnly(t *testing.T) {
 		"/mfa/recovery-codes": http.StatusForbidden, // token pra-MFA ditolak platform (mfa_required), bukan 500
 		"/logout":             http.StatusNoContent,
 	} {
-		l := e.mustLogin(ua.Email, pwA)
+		l := shared
+		if path == "/logout" {
+			l = e.mustLogin(ua.Email, pwA)
+		}
 		if r := e.apiCall(path, hostile, l.AccessToken, ""); r.Code != want {
 			t.Errorf("%s dengan userId di body = %d %s, want %d", path, r.Code, r.Body.String(), want)
 		}
