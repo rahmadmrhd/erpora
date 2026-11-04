@@ -80,17 +80,22 @@ func (s *Store) UpsertPendingMFAFactor(ctx context.Context, t tenancy.TenantID, 
 
 // ConfirmMFAFactor mengonfirmasi faktor pending secara bersyarat atomik (confirmed_at IS NULL) dan menetapkan
 // last_used_step = step kode konfirmasi, sehingga kode pendaftaran tidak dapat dipakai ulang untuk verifikasi.
-// false bila tidak ada faktor pending (belum ada, sudah terkonfirmasi, atau bukan anggota tenant t).
-func (s *Store) ConfirmMFAFactor(ctx context.Context, t tenancy.TenantID, userID string, step int64, at time.Time) (bool, error) {
+// expectedSealed adalah secret_sealed faktor yang dimuat dan kodenya sudah diverifikasi pemanggil: UPDATE hanya
+// berlaku bila secret_sealed masih sama (compare-and-set), sehingga pendaftaran ulang serentak (UpsertPendingMFAFactor
+// mengganti secret pending) tidak dapat membuat faktor aktif dengan secret yang belum dibuktikan pemiliknya.
+// false bila tidak ada faktor pending yang cocok (belum ada, sudah terkonfirmasi, secret sudah diganti, atau bukan
+// anggota tenant t).
+func (s *Store) ConfirmMFAFactor(ctx context.Context, t tenancy.TenantID, userID string, expectedSealed []byte, step int64, at time.Time) (bool, error) {
 	uid, ok := parseID(userID)
 	if !ok {
 		return false, nil
 	}
-	if step < 0 {
+	if step < 0 || len(expectedSealed) == 0 || len(expectedSealed) > 1024 {
 		return false, ErrInvalidArgument
 	}
 	n, err := exec(s.db(ctx), `UPDATE user_mfa_factors SET confirmed_at = ?, last_used_step = ?
-		WHERE user_id = ? AND type = 'totp' AND confirmed_at IS NULL AND `+memberExists("user_mfa_factors.user_id"), at.UTC(), step, uid, tid(t))
+		WHERE user_id = ? AND type = 'totp' AND confirmed_at IS NULL AND secret_sealed = ?::bytea AND `+memberExists("user_mfa_factors.user_id"),
+		at.UTC(), step, uid, expectedSealed, tid(t))
 	if err != nil {
 		return false, wrap("konfirmasi faktor MFA", err)
 	}

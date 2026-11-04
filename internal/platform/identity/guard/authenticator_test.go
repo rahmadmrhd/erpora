@@ -233,8 +233,8 @@ func TestAuthenticatorSuccessAndRehash(t *testing.T) {
 	// Hash tersimpan berparameter lama: sandi benar, NeedsRehash true.
 	old, _ := (&password.Hasher{Params: password.Params{MemoryKiB: 8192, Time: 2, Parallelism: 1}}).Hash(goodPassword)
 	h.fs.addUser("old@example.com", old, store.UserActive)
-	if out := h.login("old@example.com", goodPassword, "198.51.100.2"); out.Kind != Success || !out.NeedsRehash {
-		t.Fatalf("outcome = %+v, want sukses + NeedsRehash", out)
+	if out := h.login("old@example.com", goodPassword, "198.51.100.2"); out.Kind != Success || !out.NeedsRehash || out.RehashFrom != old || out.User.PasswordHash != "" {
+		t.Fatalf("outcome = %+v, want sukses + NeedsRehash + RehashFrom = hash lama (PasswordHash user kosong)", out)
 	}
 }
 

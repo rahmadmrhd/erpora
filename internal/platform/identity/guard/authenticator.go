@@ -74,6 +74,10 @@ type Outcome struct {
 	User store.User
 	// NeedsRehash (Success): hash tersimpan berparameter lama; pemanggil menyimpan hash baru lewat HashGate.Hash.
 	NeedsRehash bool
+	// RehashFrom (Success + NeedsRehash): PHC lama yang baru diverifikasi. Pemanggil menyimpan hash baru HANYA bila hash
+	// tersimpan masih sama (Store.RehashPassword, compare-and-set) agar tidak menimpa sandi yang diganti serentak.
+	// Jangan dicatat ke log.
+	RehashFrom string
 	// RetryAfter terisi pada RateLimited.
 	RetryAfter time.Duration
 	// Reason: sebab internal (lihat Reason).
@@ -285,8 +289,12 @@ func (a *Authenticator) Verify(ctx context.Context, in LoginInput) (Outcome, err
 
 	if ok && usable {
 		release() // sandi benar bukan kegagalan; sukses penuh dicatat pemanggil lewat RegisterSuccess (setelah MFA bila ada)
-		user.PasswordHash = ""
-		return Outcome{Kind: Success, User: user, NeedsRehash: rehash}, nil
+		out := Outcome{Kind: Success, User: user, NeedsRehash: rehash}
+		if rehash {
+			out.RehashFrom = user.PasswordHash
+		}
+		out.User.PasswordHash = ""
+		return out, nil
 	}
 
 	out := Outcome{Kind: InvalidCredentials, Reason: reason}

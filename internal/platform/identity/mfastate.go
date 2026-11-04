@@ -54,6 +54,7 @@ type MFAStateReader struct {
 	now func() time.Time
 
 	mu    sync.Mutex
+	gen   uint64 // naik pada tiap Invalidate; pembacaan yang tertinggal tidak boleh menulis cache (pola settings.Service)
 	cache map[mfaKey]mfaEntry
 }
 
@@ -84,6 +85,7 @@ func (r *MFAStateReader) Status(ctx context.Context, userID string) (MFAStatus, 
 		r.mu.Unlock()
 		return e.st, nil
 	}
+	gen := r.gen // dicatat sebelum membaca store: Invalidate di tengah pembacaan membatalkan penulisan cache
 	r.mu.Unlock()
 
 	var st MFAStatus
@@ -102,10 +104,12 @@ func (r *MFAStateReader) Status(ctx context.Context, userID string) (MFAStatus, 
 	st.EnrollmentRequired = admin
 
 	r.mu.Lock()
-	if len(r.cache) >= maxMFAStateEntries {
-		clear(r.cache)
+	if r.gen == gen {
+		if len(r.cache) >= maxMFAStateEntries {
+			clear(r.cache)
+		}
+		r.cache[k] = mfaEntry{st: st, expires: now.Add(r.ttl)}
 	}
-	r.cache[k] = mfaEntry{st: st, expires: now.Add(r.ttl)}
 	r.mu.Unlock()
 	return st, nil
 }
@@ -114,6 +118,7 @@ func (r *MFAStateReader) Status(ctx context.Context, userID string) (MFAStatus, 
 // MFA direset, atau role berubah agar instance ini segera melihat keadaan baru.
 func (r *MFAStateReader) Invalidate(t tenancy.TenantID, userID string) {
 	r.mu.Lock()
+	r.gen++
 	delete(r.cache, mfaKey{t, userID})
 	r.mu.Unlock()
 }

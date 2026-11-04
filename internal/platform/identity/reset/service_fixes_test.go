@@ -19,7 +19,7 @@ func TestRequestUnsendableAddressKeepsExistingLink(t *testing.T) {
 	h.st.mu.Lock()
 	h.st.resets["old"] = &store.PasswordReset{ID: "old", UserID: u.ID, TokenHash: make([]byte, 32), CreatedAt: h.clk.Now(), ExpiresAt: h.clk.Now().Add(reset.TokenTTL)}
 	h.st.mu.Unlock()
-	invalidations, inserts := h.st.callCount("InvalidatePasswordResets"), h.st.callCount("InsertPasswordReset")
+	issued := h.st.callCount("IssuePasswordReset")
 
 	if err := h.request(ipCtx("198.51.100.7"), badEmail, ""); err != nil {
 		t.Fatalf("dari luar harus seragam: %v", err)
@@ -27,7 +27,7 @@ func TestRequestUnsendableAddressKeepsExistingLink(t *testing.T) {
 	if n := len(h.sender.messages()); n != 0 {
 		t.Fatalf("surat terkirim ke alamat tak sah: %d", n)
 	}
-	if h.st.callCount("InvalidatePasswordResets") != invalidations || h.st.callCount("InsertPasswordReset") != inserts {
+	if h.st.callCount("IssuePasswordReset") != issued {
 		t.Fatal("tautan lama dibatalkan/tautan baru disimpan padahal alamat tak dapat dikirimi")
 	}
 	h.st.mu.Lock()

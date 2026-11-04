@@ -33,7 +33,8 @@
 //   - Authenticator.Verify mengembalikan Success, InvalidCredentials (401 seragam), atau RateLimited (429 + Retry-After).
 //     Reason hanya untuk log keamanan. Galat (bukan Outcome) berarti kegagalan infrastruktur.
 //   - Success belum mencatat sukses: panggil RegisterSuccess HANYA setelah autentikasi selesai penuh (setelah MFA bila
-//     akun berfaktor aktif), karena sukses mereset hitungan pasangan. Hash dengan NeedsRehash disimpan ulang lewat
+//     akun berfaktor aktif), karena sukses mereset hitungan pasangan. Hash dengan NeedsRehash disimpan ulang (bersyarat pada
+//     Outcome.RehashFrom lewat Store.RehashPassword, agar tidak menimpa reset sandi serentak) lewat
 //     HashGate.Hash.
 //   - Pemeriksa guess-limit lain (MFA, C1.9) memanggil Lockout.Reserve sebelum memverifikasi kode: bila PairBlocked atau
 //     AccountLocked ditolak tanpa memverifikasi dan tanpa mencatat; selain itu percobaan sudah tercatat sebagai kegagalan

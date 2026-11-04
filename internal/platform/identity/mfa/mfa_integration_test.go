@@ -228,3 +228,59 @@ func TestMFAWithRealStore(t *testing.T) {
 		}
 	})
 }
+
+// confirmHookStore menjalankan hook tepat sebelum ConfirmMFAFactor (setelah faktor dimuat dan kodenya diverifikasi).
+type confirmHookStore struct {
+	*store.Store
+	before func()
+}
+
+func (h *confirmHookStore) ConfirmMFAFactor(ctx context.Context, t tenancy.TenantID, userID string, sealed []byte, step int64, at time.Time) (bool, error) {
+	if h.before != nil {
+		f := h.before
+		h.before = nil
+		f()
+	}
+	return h.Store.ConfirmMFAFactor(ctx, t, userID, sealed, step, at)
+}
+
+// M2: pendaftaran ulang (secret B) tepat di antara verifikasi kode (secret A) dan penetapan konfirmasi tidak boleh
+// membuat faktor aktif dengan secret B yang tak pernah dibuktikan pemiliknya (CAS pada secret_sealed).
+func TestIntegrationConfirmBoundToVerifiedSecretAgainstConcurrentBegin(t *testing.T) {
+	_, st, _, seal := setup(t)
+	hook := &confirmHookStore{Store: st}
+	svc, err := mfa.New(mfa.Deps{Store: hook, Sealer: seal, Lockout: noLockout{}, Issuer: "ERPora"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := newUser(t, st, "race@example.test")
+	ctx := ctxFor(tenantA)
+
+	infoA, err := svc.BeginEnrollment(ctx, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secA, _ := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(infoA.Secret)
+	var infoB mfa.EnrollmentInfo
+	hook.before = func() {
+		var berr error
+		if infoB, berr = svc.BeginEnrollment(ctx, u.ID); berr != nil {
+			t.Error(berr)
+		}
+	}
+	if _, err := svc.ConfirmEnrollment(ctx, u.ID, mfa.TOTP{}.Code(secA, time.Now())); !errors.Is(err, mfa.ErrInvalidCode) {
+		t.Fatalf("konfirmasi atas secret yang sudah diganti = %v, want ErrInvalidCode", err)
+	}
+	f, err := st.GetMFAFactor(context.Background(), tenantA, u.ID)
+	if err != nil || f.ConfirmedAt != nil {
+		t.Fatalf("faktor tidak boleh aktif: %+v %v", f, err)
+	}
+	if n, _ := st.CountUnusedRecoveryCodes(context.Background(), tenantA, u.ID); n != 0 {
+		t.Fatalf("recovery code terbit: %d", n)
+	}
+	// secret terbaru (B) tetap dapat dikonfirmasi dengan kodenya sendiri
+	secB, _ := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(infoB.Secret)
+	if _, err := svc.ConfirmEnrollment(ctx, u.ID, mfa.TOTP{}.Code(secB, time.Now())); err != nil {
+		t.Fatalf("konfirmasi secret terbaru: %v", err)
+	}
+}

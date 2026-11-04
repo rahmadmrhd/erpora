@@ -31,6 +31,7 @@
 //	GetMembership(ctx, t, userID) (Membership, error)
 //	AddMembership(ctx, t, userID, status) (created bool, error)
 //	SetPasswordHash(ctx, t, userID, hash) error
+//	RehashPassword(ctx, t, userID, oldHash, newHash) (bool, error) // CAS pada password_hash (rehash login)
 //	TouchLastLogin(ctx, t, userID, at) error
 //	SetUserStatus(ctx, t, userID, status) error             // active|disabled
 //	LockUser(ctx, t, userID, at) (bool, error)              // bersyarat: hanya dari active
@@ -84,7 +85,7 @@
 //
 //	GetMFAFactor(ctx, t, userID) (MFAFactor, error)
 //	UpsertPendingMFAFactor(ctx, t, userID, secretSealed, at) (bool, error)  // false bila sudah terkonfirmasi
-//	ConfirmMFAFactor(ctx, t, userID, step, at) (bool, error)        // set last_used_step = step konfirmasi
+//	ConfirmMFAFactor(ctx, t, userID, sealed, step, at) (bool, error) // CAS pada secret_sealed yang diverifikasi; set last_used_step
 //	AdvanceMFAStep(ctx, t, userID, step) (bool, error)              // true hanya bila step > last_used_step
 //	ResetMFA(ctx, t, userID) error                                  // hapus faktor + recovery code
 //	ReplaceRecoveryCodes(ctx, t, userID, hashes, at) error          // atomik; hash 32 byte unik
@@ -94,6 +95,7 @@
 // Reset dan ganti sandi:
 //
 //	InsertPasswordReset(ctx, t, PasswordReset) error
+//	IssuePasswordReset(ctx, t, PasswordReset, at) error             // batalkan tautan lama + simpan baru, satu transaksi (kunci advisory per pengguna)
 //	FindPasswordResetByHash(ctx, t, hash) (PasswordReset, error)
 //	ConsumePasswordReset(ctx, t, id, at) (bool, error)              // used_at IS NULL dan expires_at > at
 //	InvalidatePasswordResets(ctx, t, userID, at) (int64, error)     // batalkan tautan lama sebelum menerbitkan yang baru

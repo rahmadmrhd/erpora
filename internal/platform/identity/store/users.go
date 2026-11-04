@@ -197,6 +197,24 @@ func (s *Store) SetPasswordHash(ctx context.Context, t tenancy.TenantID, userID,
 	return nil
 }
 
+// RehashPassword menyimpan hash dengan parameter terbaru setelah login, HANYA bila password_hash masih sama dengan
+// oldHash (compare-and-set): reset/ganti sandi yang selesai di antara verifikasi dan rehash tidak boleh ditimpa hash
+// turunan sandi lama. false (tanpa galat) bila hash sudah berubah atau pengguna bukan anggota tenant t.
+func (s *Store) RehashPassword(ctx context.Context, t tenancy.TenantID, userID, oldHash, newHash string) (bool, error) {
+	uid, ok := parseID(userID)
+	if !ok {
+		return false, nil
+	}
+	if oldHash == "" || newHash == "" || len(oldHash) > 512 || len(newHash) > 512 {
+		return false, ErrInvalidArgument
+	}
+	n, err := exec(s.db(ctx), `UPDATE users SET password_hash = ?, updated_at = now() WHERE id = ? AND password_hash = ? AND `+memberExists("users.id"), newHash, uid, oldHash, tid(t))
+	if err != nil {
+		return false, wrap("hash ulang sandi", err)
+	}
+	return n == 1, nil
+}
+
 // TouchLastLogin mencatat waktu login berhasil terakhir.
 func (s *Store) TouchLastLogin(ctx context.Context, t tenancy.TenantID, userID string, at time.Time) error {
 	uid, ok := parseID(userID)

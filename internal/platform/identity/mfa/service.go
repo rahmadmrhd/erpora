@@ -97,7 +97,7 @@ type Store interface {
 	GetUser(ctx context.Context, t tenancy.TenantID, id string) (store.User, error)
 	GetMFAFactor(ctx context.Context, t tenancy.TenantID, userID string) (store.MFAFactor, error)
 	UpsertPendingMFAFactor(ctx context.Context, t tenancy.TenantID, userID string, secretSealed []byte, at time.Time) (bool, error)
-	ConfirmMFAFactor(ctx context.Context, t tenancy.TenantID, userID string, step int64, at time.Time) (bool, error)
+	ConfirmMFAFactor(ctx context.Context, t tenancy.TenantID, userID string, expectedSealed []byte, step int64, at time.Time) (bool, error)
 	AdvanceMFAStep(ctx context.Context, t tenancy.TenantID, userID string, step int64) (bool, error)
 	ResetMFA(ctx context.Context, t tenancy.TenantID, userID string) error
 	ReplaceRecoveryCodes(ctx context.Context, t tenancy.TenantID, userID string, hashes [][]byte, at time.Time) error
@@ -285,7 +285,7 @@ func (s *Service) ConfirmEnrollment(ctx context.Context, userID, code string) ([
 	defer clear(secret)
 	step, ok := s.totp.Verify(secret, code, s.d.Now(), f.LastUsedStep)
 	if ok {
-		ok, err = s.d.Store.ConfirmMFAFactor(ctx, t, userID, step, s.d.Now())
+		ok, err = s.d.Store.ConfirmMFAFactor(ctx, t, userID, f.SecretSealed, step, s.d.Now())
 		if err != nil {
 			return nil, fmt.Errorf("mfa: konfirmasi faktor: %w", err)
 		}

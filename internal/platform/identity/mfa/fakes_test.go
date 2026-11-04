@@ -32,6 +32,8 @@ type fakeStore struct {
 	hashes  map[string][][]byte                  // user id -> set hash terakhir (inspeksi)
 
 	failReplace bool
+	// beforeConfirm (opsional) dipanggil di awal ConfirmMFAFactor sebelum mengunci.
+	beforeConfirm func()
 }
 
 func newFakeStore() *fakeStore {
@@ -95,11 +97,14 @@ func (f *fakeStore) UpsertPendingMFAFactor(_ context.Context, t tenancy.TenantID
 	return true, nil
 }
 
-func (f *fakeStore) ConfirmMFAFactor(_ context.Context, t tenancy.TenantID, id string, step int64, at time.Time) (bool, error) {
+func (f *fakeStore) ConfirmMFAFactor(_ context.Context, t tenancy.TenantID, id string, expectedSealed []byte, step int64, at time.Time) (bool, error) {
+	if f.beforeConfirm != nil { // uji balapan: sisipkan perubahan pending di antara muat faktor dan konfirmasi
+		f.beforeConfirm()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	fa, ok := f.factors[id]
-	if !ok || !f.member(t, id) || fa.ConfirmedAt != nil {
+	if !ok || !f.member(t, id) || fa.ConfirmedAt != nil || !bytes.Equal(fa.SecretSealed, expectedSealed) {
 		return false, nil
 	}
 	fa.ConfirmedAt = &at

@@ -107,7 +107,7 @@ func (s *service) Login(ctx context.Context, in sdkidentity.LoginInput) (sdkiden
 	}
 	u := out.User
 	if out.NeedsRehash {
-		s.rehash(ctx, t, u.ID, in.Password)
+		s.rehash(ctx, t, u.ID, in.Password, out.RehashFrom)
 	}
 	sess, rt, err := s.d.Sessions.Start(ctx, session.StartInput{
 		UserID: u.ID, ClientKind: store.ClientWeb, AuthMethod: string(sdkidentity.AuthMethodPassword),
@@ -136,11 +136,16 @@ func (s *service) Login(ctx context.Context, in sdkidentity.LoginInput) (sdkiden
 	return res, nil
 }
 
-// rehash menyimpan hash dengan parameter terbaru setelah sandi terverifikasi. Kegagalan hanya dicatat: login sah.
-func (s *service) rehash(ctx context.Context, t tenancy.TenantID, userID, plain string) {
+// rehash menyimpan hash dengan parameter terbaru setelah sandi terverifikasi, HANYA bila hash tersimpan masih oldPHC
+// (compare-and-set): sandi yang diganti serentak oleh reset/ganti sandi tidak tertimpa; hash sudah berubah = rehash
+// dilewati tanpa galat. Kegagalan hanya dicatat: login sah.
+func (s *service) rehash(ctx context.Context, t tenancy.TenantID, userID, plain, oldPHC string) {
+	if oldPHC == "" {
+		return
+	}
 	phc, err := s.d.Gate.Hash(ctx, s.d.Hasher, plain)
 	if err == nil {
-		err = s.d.Store.SetPasswordHash(ctx, t, userID, phc)
+		_, err = s.d.Store.RehashPassword(ctx, t, userID, oldPHC, phc)
 	}
 	if err != nil {
 		s.log.WarnContext(ctx, "identity: hash ulang sandi gagal; login tetap berhasil", "user_id", userID, "error", err.Error())

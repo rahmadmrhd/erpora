@@ -450,10 +450,13 @@ func TestCoreAPI_IDOR_OwnPrincipalOnly(t *testing.T) {
 	// dan hanya bertindak atas Principal pemanggil. Tiap percobaan memakai sesi A baru.
 	hostile := `{"userId":"` + ub.ID + `","sessionId":"x","currentPassword":"` + pwA + `","newPassword":"kata-sandi-lain-2026","code":"123456"}`
 	for path, want := range map[string]int{
-		"/password/change": http.StatusUnprocessableEntity,
-		"/mfa/confirm":     http.StatusUnprocessableEntity,
-		"/mfa/enroll":      http.StatusOK,
-		"/logout":          http.StatusNoContent,
+		"/password/change":    http.StatusUnprocessableEntity,
+		"/mfa/confirm":        http.StatusUnprocessableEntity,
+		"/mfa/enroll":         http.StatusOK,
+		"/mfa/verify":         http.StatusUnprocessableEntity,
+		"/mfa/recovery":       http.StatusUnprocessableEntity,
+		"/mfa/recovery-codes": http.StatusForbidden, // token pra-MFA ditolak platform (mfa_required), bukan 500
+		"/logout":             http.StatusNoContent,
 	} {
 		l := e.mustLogin(ua.Email, pwA)
 		if r := e.apiCall(path, hostile, l.AccessToken, ""); r.Code != want {
@@ -598,4 +601,154 @@ func TestCoreAPI_PlatformErrorsAreNoStore(t *testing.T) {
 		t.Fatalf("change dari sesi enroll_required = %d %s", r.Code, r.Body.String())
 	}
 	assertNoStore(t, "403 sesi menunggu MFA", r)
+}
+
+// IDOR MFA (M7): pengguna A tidak dapat menyentuh faktor atau recovery code B lewat /mfa/verify, /mfa/recovery,
+// /mfa/recovery-codes, baik dengan userId/sessionId milik B di body (422, kolom asing) maupun dengan body berbentuk
+// sah yang memuat kode milik B (kode B diverifikasi terhadap faktor A, yang tidak ada: 4xx, bukan 500).
+func TestCoreAPI_IDOR_MFAEndpointsCannotTouchOtherUser(t *testing.T) {
+	e := newCoreEnv(t)
+	ua := e.createUser("a-mfa@example.test", pwA)
+	ub := e.createUser("b-mfa@example.test", pwB)
+	e.remember(pwA, pwB)
+
+	// B mendaftarkan dan mengonfirmasi MFA (faktor aktif + 10 recovery code).
+	lb := e.mustLogin(ub.Email, pwB)
+	en := e.apiCall("/mfa/enroll", "", lb.AccessToken, "")
+	if en.Code != http.StatusOK {
+		t.Fatalf("enroll B = %d %s", en.Code, en.Body.String())
+	}
+	secretB32, _ := en.data(t)["secret"].(string)
+	e.remember(secretB32)
+	secretB := decodeSecret(t, secretB32)
+	cf := e.apiCall("/mfa/confirm", jsonBody("code", e.code(secretB, 0)), lb.AccessToken, "")
+	if cf.Code != http.StatusOK {
+		t.Fatalf("confirm B = %d %s", cf.Code, cf.Body.String())
+	}
+	codesB, _ := cf.data(t)["codes"].([]any)
+	if len(codesB) != 10 {
+		t.Fatalf("recovery code B = %d", len(codesB))
+	}
+	for _, c := range codesB {
+		e.remember(c.(string))
+	}
+	sessB, _ := cf.data(t)["session"].(map[string]any)
+	otpB, _ := sessB["accessToken"].(string)
+	e.remember(otpB)
+
+	st, tn := e.a.Identity.Store, e.a.Tenant
+	factorBefore, err := st.GetMFAFactor(e.ctx, tn, ub.ID)
+	if err != nil || factorBefore.ConfirmedAt == nil {
+		t.Fatalf("faktor B: %+v %v", factorBefore, err)
+	}
+	unusedBefore, _ := st.CountUnusedRecoveryCodes(e.ctx, tn, ub.ID)
+
+	// A juga mendaftarkan MFA sehingga /mfa/recovery-codes sampai ke handler (token otp), bukan berhenti di gerbang
+	// mfa_required; sesi A berikutnya verify_required sehingga /mfa/verify dan /mfa/recovery pun sampai ke handler.
+	laEnroll := e.mustLogin(ua.Email, pwA)
+	enA := e.apiCall("/mfa/enroll", "", laEnroll.AccessToken, "")
+	if enA.Code != http.StatusOK {
+		t.Fatalf("enroll A = %d %s", enA.Code, enA.Body.String())
+	}
+	secretA32, _ := enA.data(t)["secret"].(string)
+	e.remember(secretA32)
+	cfA := e.apiCall("/mfa/confirm", jsonBody("code", e.code(decodeSecret(t, secretA32), -30*time.Second)), laEnroll.AccessToken, "")
+	if cfA.Code != http.StatusOK {
+		t.Fatalf("confirm A = %d %s", cfA.Code, cfA.Body.String())
+	}
+	sessA, _ := cfA.data(t)["session"].(map[string]any)
+	otpA, _ := sessA["accessToken"].(string)
+	e.remember(otpA)
+	for _, c := range cfA.data(t)["codes"].([]any) {
+		e.remember(c.(string))
+	}
+	la := e.mustLogin(ua.Email, pwA) // verify_required
+	hostile := `{"userId":"` + ub.ID + `","sessionId":"x","code":"123456"}`
+	validShapeB := jsonBody("code", codesB[0].(string)) // recovery code sah, tetapi milik B
+	totpB := jsonBody("code", e.code(secretB, 30*time.Second))
+	for _, tc := range []struct{ name, path, body string }{
+		{"verify userId di body", "/mfa/verify", hostile},
+		{"recovery userId di body", "/mfa/recovery", hostile},
+		{"verify kode TOTP milik B", "/mfa/verify", totpB},
+		{"recovery code milik B", "/mfa/recovery", validShapeB},
+	} {
+		r := e.apiCall(tc.path, tc.body, la.AccessToken, "")
+		if r.Code < 400 || r.Code >= 500 {
+			t.Errorf("%s = %d %s, want 4xx (bukan 2xx/5xx)", tc.name, r.Code, r.Body.String())
+		}
+	}
+	// regenerasi recovery code oleh A (token otp) dengan userId B di body: yang diregenerasi hanya milik A.
+	if r := e.apiCall("/mfa/recovery-codes", hostile, otpA, ""); r.Code != http.StatusOK {
+		t.Errorf("recovery-codes A dengan userId B di body = %d %s, want 200 (hanya kode A)", r.Code, r.Body.String())
+	} else {
+		for _, c := range r.data(t)["codes"].([]any) {
+			e.remember(c.(string))
+		}
+	}
+
+	// Faktor B tidak berubah (step tidak maju), recovery code B tak terpakai, B tidak tercabut sesinya.
+	factorAfter, err := st.GetMFAFactor(e.ctx, tn, ub.ID)
+	if err != nil || factorAfter.LastUsedStep != factorBefore.LastUsedStep || factorAfter.ConfirmedAt == nil {
+		t.Fatalf("faktor B berubah: sebelum %+v sesudah %+v %v", factorBefore, factorAfter, err)
+	}
+	if n, _ := st.CountUnusedRecoveryCodes(e.ctx, tn, ub.ID); n != unusedBefore {
+		t.Fatalf("recovery code B terpakai: %d -> %d", unusedBefore, n)
+	}
+	if e.status(otpB) != http.StatusOK {
+		t.Fatalf("sesi B tidak boleh terpengaruh: %d", e.status(otpB))
+	}
+	// Recovery code B masih sah untuk B sendiri (login ulang -> verify_required -> recovery).
+	l2 := e.mustLogin(ub.Email, pwB)
+	if l2.MFAState != sdkidentity.MFAVerifyRequired {
+		t.Fatalf("login ulang B = %s", l2.MFAState)
+	}
+	if r := e.apiCall("/mfa/recovery", jsonBody("code", codesB[0].(string)), l2.AccessToken, ""); r.Code != http.StatusOK {
+		t.Fatalf("recovery code B untuk B sendiri = %d %s", r.Code, r.Body.String())
+	}
+}
+
+// ADR-0013 §4 (M1): refresh dibatasi per family (identitas sasaran) selain per IP. Rotasi beruntun pada satu family
+// melewati burst -> 429 rate_limited + Retry-After tanpa menghanguskan token terakhir; family lain tidak terpengaruh;
+// refresh normal (di bawah burst) tetap berhasil.
+func TestCoreAPI_RefreshRateLimitedPerFamily(t *testing.T) {
+	e := newCoreEnv(t)
+	ua := e.createUser("fam-a@example.test", pwA)
+	ub := e.createUser("fam-b@example.test", pwB)
+	e.remember(pwA, pwB)
+	la := e.mustLogin(ua.Email, pwA)
+	lb := e.mustLogin(ub.Email, pwB)
+
+	cookie := la.RefreshToken
+	var limited coreResp
+	ok := 0
+	for i := 0; i < 20; i++ { // batas IP (burst 30) tidak tercapai; yang berlaku batas family (burst 10)
+		r := e.apiCall("/refresh", "", "", cookie)
+		if r.Code == http.StatusTooManyRequests {
+			limited = r
+			break
+		}
+		if r.Code != http.StatusOK {
+			t.Fatalf("refresh ke-%d = %d %s", i+1, r.Code, r.Body.String())
+		}
+		cookie = assertRefreshCookie(t, "refresh", r)
+		e.remember(cookie)
+		ok++
+	}
+	if limited.ResponseRecorder == nil {
+		t.Fatal("refresh beruntun pada satu family tidak pernah 429")
+	}
+	if ok < 5 {
+		t.Fatalf("refresh normal harus tetap berhasil di bawah burst, hanya %d", ok)
+	}
+	assertNoStore(t, "429 refresh family", limited)
+	if c := limited.refreshCookie(); c != nil {
+		t.Fatalf("429 tidak boleh menyentuh cookie refresh (klien tidak boleh ter-logout oleh batas laju): %+v", c)
+	}
+	if limited.errCode(t) != "rate_limited" || limited.Header().Get("Retry-After") == "" {
+		t.Fatalf("429 = %s retry-after=%q", limited.Body.String(), limited.Header().Get("Retry-After"))
+	}
+	// token terakhir tidak terpakai oleh penolakan batas laju (bukan reuse): family B sama sekali tak terpengaruh.
+	if r := e.apiCall("/refresh", "", "", lb.RefreshToken); r.Code != http.StatusOK {
+		t.Fatalf("family lain = %d %s", r.Code, r.Body.String())
+	}
 }

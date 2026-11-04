@@ -725,3 +725,36 @@ func TestNewValidatesDeps(t *testing.T) {
 		}
 	}
 }
+
+// Balapan Begin vs Confirm: pendaftaran pending diganti (secret B) di antara pemuatan faktor (secret A, kode A
+// terverifikasi) dan penetapan konfirmasi. Konfirmasi terikat CAS pada secret yang diverifikasi, jadi faktor tidak
+// aktif dengan secret B yang tak pernah dibuktikan pemiliknya.
+func TestConfirmEnrollmentBoundToVerifiedSecret(t *testing.T) {
+	e := newEnv(t)
+	infoA, _ := e.svc.BeginEnrollment(e.ctx, userA)
+	secA := secretBytes(t, infoA)
+	codeA := TOTP{}.Code(secA, e.clk.Now())
+	var infoB EnrollmentInfo
+	e.st.beforeConfirm = func() {
+		e.st.beforeConfirm = nil
+		var err error
+		if infoB, err = e.svc.BeginEnrollment(e.ctx, userA); err != nil {
+			t.Error(err)
+		}
+	}
+	codes, err := e.svc.ConfirmEnrollment(e.ctx, userA, codeA)
+	if !errors.Is(err, ErrInvalidCode) || codes != nil {
+		t.Fatalf("konfirmasi dengan secret yang sudah diganti harus ErrInvalidCode, dapat %v, %v", codes, err)
+	}
+	f, ok := e.st.factor(userA)
+	if !ok || f.ConfirmedAt != nil {
+		t.Fatalf("faktor tidak boleh aktif: %+v", f)
+	}
+	if n := e.st.unusedCodes(userA); n != 0 {
+		t.Errorf("recovery code tak boleh terbit: %d", n)
+	}
+	// pendaftaran terbaru (secret B) tetap dapat dikonfirmasi dengan kode B
+	if _, err := e.svc.ConfirmEnrollment(e.ctx, userA, TOTP{}.Code(secretBytes(t, infoB), e.clk.Now())); err != nil {
+		t.Fatalf("konfirmasi secret terbaru: %v", err)
+	}
+}

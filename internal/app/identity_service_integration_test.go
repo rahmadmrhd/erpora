@@ -230,8 +230,29 @@ func (e *svcEnv) refresh(raw string) (sdkidentity.LoginResult, error) {
 
 var totp mfa.TOTP
 
+// totpStepMargin adalah sisa waktu minimum sebelum batas langkah TOTP yang dibutuhkan agar sebuah kode dapat dihasilkan
+// dan diverifikasi tanpa batas langkah terlewati di antaranya.
+const totpStepMargin = 10 * time.Second
+
+// stepSafeNow mengembalikan waktu saat ini yang dijamin masih berada di langkah TOTP yang sama selama totpStepMargin
+// ke depan; bila sisa langkah lebih pendek, tidur sampai langkah berikutnya mulai. Tanpa ini kode berusia satu langkah
+// (offset -30 detik, dipakai agar kode konfirmasi tidak menghalangi verifikasi berikutnya) menjadi di luar jendela
+// verifikasi (langkah t-1..t+1) bila batas langkah terlewati antara pembuatan kode dan verifikasinya, sehingga uji
+// sesekali gagal dengan "kode MFA tidak valid" (flake pada suite penuh yang berat).
+func stepSafeNow() time.Time {
+	for {
+		now := time.Now()
+		period := time.Duration(mfa.Period) * time.Second
+		remain := period - time.Duration(now.UnixNano()%int64(period))
+		if remain > totpStepMargin {
+			return now
+		}
+		time.Sleep(remain + 50*time.Millisecond)
+	}
+}
+
 func (e *svcEnv) code(secret []byte, offset time.Duration) string {
-	return totp.Code(secret, time.Now().Add(offset))
+	return totp.Code(secret, stepSafeNow().Add(offset))
 }
 
 func decodeSecret(t *testing.T, b32 string) []byte {

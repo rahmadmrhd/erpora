@@ -475,3 +475,15 @@ func (s *fakeStore) CountUserSessions(_ context.Context, _ tenancy.TenantID, use
 }
 
 var errBoom = errors.New("boom: detail internal rahasia")
+
+// RehashPassword meniru store.RehashPassword: menulis hanya bila hash tersimpan masih oldHash (compare-and-set).
+func (s *fakeStore) RehashPassword(_ context.Context, _ tenancy.TenantID, userID, oldHash, newHash string) (bool, error) {
+	u, ok := s.users[userID]
+	if !ok || u.PasswordHash != oldHash {
+		return false, nil
+	}
+	s.hashSet[userID] = newHash
+	u.PasswordHash = newHash
+	s.users[userID] = u
+	return true, nil
+}

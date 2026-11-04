@@ -70,7 +70,7 @@ func (e *idEnv) enrollFactor(userID string) {
 	if ok, err := st.UpsertPendingMFAFactor(e.ctx, e.a.Tenant, userID, sealed, time.Now()); err != nil || !ok {
 		e.t.Fatalf("UpsertPendingMFAFactor = %v, %v", ok, err)
 	}
-	if ok, err := st.ConfirmMFAFactor(e.ctx, e.a.Tenant, userID, 1, time.Now()); err != nil || !ok {
+	if ok, err := st.ConfirmMFAFactor(e.ctx, e.a.Tenant, userID, sealed, 1, time.Now()); err != nil || !ok {
 		e.t.Fatalf("ConfirmMFAFactor = %v, %v", ok, err)
 	}
 }

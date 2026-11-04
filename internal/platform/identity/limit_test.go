@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -181,4 +182,64 @@ func TestMFAStateReader(t *testing.T) {
 			t.Fatalf("tenant berbeda harus membaca ulang, reads = %d", fs.reads)
 		}
 	})
+}
+
+// gateMFAStore menahan HasRole (setelah GetMFAFactor dibaca) sampai dilepas, untuk meniru Invalidate yang terjadi di
+// tengah pembacaan Status.
+type gateMFAStore struct {
+	mu       sync.Mutex
+	factor   store.MFAFactor
+	reached  chan struct{}
+	release  chan struct{}
+	blockOne bool
+}
+
+func (g *gateMFAStore) GetMFAFactor(context.Context, tenancy.TenantID, string) (store.MFAFactor, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.factor, nil
+}
+
+func (g *gateMFAStore) HasRole(context.Context, tenancy.TenantID, string, string) (bool, error) {
+	g.mu.Lock()
+	block := g.blockOne
+	g.blockOne = false
+	g.mu.Unlock()
+	if block {
+		close(g.reached)
+		<-g.release
+	}
+	return false, nil
+}
+
+func (g *gateMFAStore) setFactor(f store.MFAFactor) {
+	g.mu.Lock()
+	g.factor = f
+	g.mu.Unlock()
+}
+
+// Invalidate yang terjadi saat pembacaan sedang berjalan tidak boleh ditimpa hasil basi: pembacaan lama (sebelum
+// Invalidate) tidak boleh menulis cache; Status berikutnya harus membaca ulang dari store (pola gen seperti settings).
+func TestMFAStateReader_InvalidateDuringReadDoesNotCacheStale(t *testing.T) {
+	ctx := tenancy.WithTenant(context.Background(), testTenant)
+	gs := &gateMFAStore{reached: make(chan struct{}), release: make(chan struct{}), blockOne: true}
+	r, _ := NewMFAStateReader(gs, time.Hour, nil)
+
+	done := make(chan MFAStatus, 1)
+	go func() {
+		st, _ := r.Status(ctx, "u1") // membaca faktor pending/kosong lalu tertahan di HasRole
+		done <- st
+	}()
+	<-gs.reached
+	confirmed := time.Now()
+	gs.setFactor(store.MFAFactor{ConfirmedAt: &confirmed}) // konfirmasi MFA terjadi di tengah pembacaan
+	r.Invalidate(testTenant, "u1")
+	close(gs.release)
+	if st := <-done; st.FactorActive {
+		t.Log("pembacaan yang sedang berjalan boleh mengembalikan hasil lama untuk permintaannya sendiri")
+	}
+	st, err := r.Status(ctx, "u1")
+	if err != nil || !st.FactorActive {
+		t.Fatalf("setelah Invalidate Status harus membaca ulang dan melihat faktor aktif, dapat %+v, %v", st, err)
+	}
 }

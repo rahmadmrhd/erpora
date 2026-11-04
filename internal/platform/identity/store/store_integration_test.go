@@ -214,6 +214,22 @@ func TestUsers(t *testing.T) {
 		if err := s.SetPasswordHash(ctx, tenantA, u.ID, "$new"); err != nil {
 			t.Fatal(err)
 		}
+		// RehashPassword adalah CAS: hanya menulis bila hash tersimpan masih oldHash (rehash login vs reset serentak)
+		if ok, err := s.RehashPassword(ctx, tenantA, u.ID, "$stale", "$rehash"); err != nil || ok {
+			t.Fatalf("RehashPassword dengan hash lama basi = %v, %v, want false", ok, err)
+		}
+		if ok, err := s.RehashPassword(ctx, tenantB, u.ID, "$new", "$rehash"); err != nil || ok {
+			t.Fatalf("RehashPassword lintas tenant = %v, %v, want false", ok, err)
+		}
+		if got, _ := s.GetUser(ctx, tenantA, u.ID); got.PasswordHash != "$new" {
+			t.Fatalf("hash tertimpa oleh rehash basi: %q", got.PasswordHash)
+		}
+		if ok, err := s.RehashPassword(ctx, tenantA, u.ID, "$new", "$new2"); err != nil || !ok {
+			t.Fatalf("RehashPassword cocok = %v, %v", ok, err)
+		}
+		if err := s.SetPasswordHash(ctx, tenantA, u.ID, "$new"); err != nil {
+			t.Fatal(err)
+		}
 		at := now()
 		if err := s.TouchLastLogin(ctx, tenantA, u.ID, at); err != nil {
 			t.Fatal(err)
@@ -754,8 +770,17 @@ func TestMFA(t *testing.T) {
 		if ok, err := s.AdvanceMFAStep(ctx, tenantA, u.ID, 5); err != nil || ok {
 			t.Fatalf("AdvanceMFAStep pada faktor belum terkonfirmasi = %v, %v, want false", ok, err)
 		}
+		// CAS: secret yang diverifikasi sudah diganti (pending lama) -> tidak terkonfirmasi
+		if ok, err := s.ConfirmMFAFactor(ctx, tenantA, u.ID, secret, 1000, now()); err != nil || ok {
+			t.Fatalf("konfirmasi dengan secret basi = %v, %v, want false", ok, err)
+		}
+		if f, _ = s.GetMFAFactor(ctx, tenantA, u.ID); f.ConfirmedAt != nil {
+			t.Fatal("faktor tidak boleh terkonfirmasi oleh secret basi")
+		}
 		// konfirmasi serentak: tepat satu; last_used_step = step konfirmasi (kode pendaftaran tak dapat dipakai ulang)
-		wins, errs := race(8, func(int) (bool, error) { return s.ConfirmMFAFactor(ctx, tenantA, u.ID, 1000, now()) })
+		wins, errs := race(8, func(int) (bool, error) {
+			return s.ConfirmMFAFactor(ctx, tenantA, u.ID, []byte("secret-2"), 1000, now())
+		})
 		if wins != 1 || len(errs) != 0 {
 			t.Fatalf("konfirmasi serentak: wins=%d errs=%v", wins, errs)
 		}
@@ -909,6 +934,41 @@ func TestPasswordResets(t *testing.T) {
 		}
 		if ok, _ := s.ConsumePasswordReset(ctx, tenantA, old.ID, now()); ok {
 			t.Error("tautan lama masih berlaku")
+		}
+	})
+
+	t.Run("IssuePasswordReset serentak: tepat satu tautan aktif", func(t *testing.T) {
+		const n = 12
+		ids := make([]string, n)
+		wins, errs := race(n, func(i int) (bool, error) {
+			r := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash(byte(100 + i)), CreatedAt: now(), ExpiresAt: now().Add(30 * time.Minute)}
+			ids[i] = r.ID
+			return true, s.IssuePasswordReset(ctx, tenantA, r, now())
+		})
+		if wins != n || len(errs) != 0 {
+			t.Fatalf("IssuePasswordReset serentak: wins=%d errs=%v", wins, errs)
+		}
+		active := 0
+		for _, id := range ids {
+			if ok, err := s.ConsumePasswordReset(ctx, tenantA, id, now()); err != nil {
+				t.Fatal(err)
+			} else if ok {
+				active++
+			}
+		}
+		if active != 1 {
+			t.Fatalf("tautan aktif = %d, want tepat 1", active)
+		}
+	})
+
+	t.Run("IssuePasswordReset bukan anggota: ErrNotFound tanpa membatalkan tautan lama", func(t *testing.T) {
+		keep := mk(5, 30*time.Minute)
+		r := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash(6), CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
+		if err := s.IssuePasswordReset(ctx, tenantB, r, now()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("lintas tenant: err = %v, want ErrNotFound", err)
+		}
+		if f, _ := s.FindPasswordResetByHash(ctx, tenantA, keep.TokenHash); f.UsedAt != nil {
+			t.Error("tautan lama dibatalkan oleh penerbitan yang gagal")
 		}
 	})
 

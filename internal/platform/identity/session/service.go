@@ -19,6 +19,9 @@
 // Rotate memeriksa header Origin lebih dulu (cek CSRF cookie refresh): hilang atau lintas-origin
 // ditolak (ErrOriginNotAllowed) tanpa menyentuh token.
 //
+// Setelah token dikenal, Rotate membatasi laju per family (Config.RefreshLimiter, kunci guard.TargetKey("refresh", ...);
+// ADR-0013 §4): melebihi batas mengembalikan *guard.RateLimitedError (429 + Retry-After) tanpa menyentuh token.
+//
 // # Revokasi
 //
 // Service menulis pencabutan ke DB lebih dulu, lalu menambahkannya ke RevocationList lokal dan menyiarkan sinyal
@@ -56,6 +59,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"erpora/internal/platform/identity/guard"
 	"erpora/internal/platform/identity/store"
 	"erpora/internal/platform/identity/token"
 	"erpora/internal/platform/tenancy"
@@ -93,6 +97,9 @@ var (
 	// kedaluwarsa, terpakai/reuse, kalah balapan, sesi tercabut, pengguna tidak aktif); handler memetakannya ke
 	// 401 tanpa membedakan sebab.
 	ErrInvalidRefresh = errors.New("session: refresh token tidak valid")
+	// ErrRefreshRateLimited adalah Cause pada *guard.RateLimitedError untuk batas laju refresh per family; jangan
+	// dibandingkan langsung, gunakan guard.AsRateLimited.
+	ErrRefreshRateLimited = errors.New("session: batas refresh per family tercapai")
 	// ErrOriginNotAllowed berarti header Origin hilang atau tidak diizinkan pada permintaan refresh.
 	ErrOriginNotAllowed = errors.New("session: origin tidak diizinkan")
 	// ErrSessionNotFound berarti sesi tidak ada, milik tenant lain, atau milik pengguna lain (404).
@@ -157,18 +164,23 @@ type Config struct {
 	Notifier token.Notifier
 	// Origin memeriksa header Origin pada Rotate (wajib; lihat NewOriginChecker).
 	Origin OriginChecker
-	Now    func() time.Time
-	Log    *slog.Logger
+	// RefreshLimiter membatasi laju Rotate per family (ADR-0013 §4: identitas sasaran endpoint refresh publik; kunci
+	// guard.TargetKey("refresh", tenant, family)). Nil = bawaan guard.DefaultTargetLimiterConfig. Diperiksa SETELAH token
+	// dikenal dan SEBELUM rotasi; penolakan tidak mengonsumsi token dan tidak mencabut sesi.
+	RefreshLimiter *guard.PrincipalLimiter
+	Now            func() time.Time
+	Log            *slog.Logger
 }
 
 // Service mengelola sesi, refresh token, dan revokasi. Aman dipakai serentak.
 type Service struct {
-	st     Store
-	list   *RevocationList
-	notify token.Notifier
-	origin OriginChecker
-	now    func() time.Time
-	log    *slog.Logger
+	st      Store
+	list    *RevocationList
+	notify  token.Notifier
+	origin  OriginChecker
+	refresh *guard.PrincipalLimiter
+	now     func() time.Time
+	log     *slog.Logger
 }
 
 // New membuat Service.
@@ -176,9 +188,16 @@ func New(cfg Config) (*Service, error) {
 	if cfg.Store == nil || cfg.Revocations == nil || cfg.Origin == nil {
 		return nil, errors.New("session: Store, Revocations, dan Origin wajib")
 	}
-	s := &Service{st: cfg.Store, list: cfg.Revocations, notify: cfg.Notifier, origin: cfg.Origin, now: cfg.Now, log: cfg.Log}
+	s := &Service{st: cfg.Store, list: cfg.Revocations, notify: cfg.Notifier, origin: cfg.Origin, refresh: cfg.RefreshLimiter, now: cfg.Now, log: cfg.Log}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	if s.refresh == nil {
+		l, err := guard.NewPrincipalLimiter(guard.DefaultTargetLimiterConfig())
+		if err != nil {
+			return nil, wrap("pembatas refresh", err)
+		}
+		s.refresh = l
 	}
 	if s.log == nil {
 		s.log = slog.Default()
@@ -364,6 +383,11 @@ func (s *Service) Rotate(ctx context.Context, rawRefresh, origin string) (Sessio
 	}
 	if err != nil {
 		return Session{}, RefreshToken{}, wrap("muat refresh token", err)
+	}
+	// Batas laju per family (ADR-0013 §4): hanya untuk token dikenal, sebelum reuse/rotasi (tak ada tulisan DB bagi
+	// pembanjir). Penolakan: 429 + Retry-After via *guard.RateLimitedError; token tidak terpakai.
+	if ok, retry := s.refresh.Allow(guard.TargetKey("refresh", t, tok.FamilyID)); !ok {
+		return Session{}, RefreshToken{}, &guard.RateLimitedError{RetryAfter: retry, Cause: ErrRefreshRateLimited}
 	}
 	if tok.UsedAt != nil {
 		return Session{}, RefreshToken{}, s.reuse(ctx, t, tok, "used_token", now)

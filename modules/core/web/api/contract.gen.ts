@@ -213,7 +213,7 @@ export type paths = {
     put?: never;
     /**
      * Menukar refresh token (cookie) dengan access token baru
-     * @description Refresh token dibaca dari cookie `erp_refresh`, bukan dari body. Header `Origin` wajib sama dengan origin URL publik aplikasi (pemeriksaan CSRF; selain itu 403 `permission_denied`). Token dirotasi tiap pakai: cookie ditulis ulang dengan token baru. Token tidak dikenal, kedaluwarsa, terpakai ulang, atau sesinya tercabut dijawab 401 `unauthenticated` generik dan cookie dihapus; pemakaian ulang token lama mencabut seluruh family. Idempotency-Key diterima tetapi tidak pernah disimpan.
+     * @description Refresh token dibaca dari cookie `erp_refresh`, bukan dari body. Header `Origin` wajib sama dengan origin URL publik aplikasi (pemeriksaan CSRF; selain itu 403 `permission_denied`). Token dirotasi tiap pakai: cookie ditulis ulang dengan token baru. Token tidak dikenal, kedaluwarsa, terpakai ulang, atau sesinya tercabut dijawab 401 `unauthenticated` generik dan cookie dihapus; pemakaian ulang token lama mencabut seluruh family. Dibatasi laju per IP dan per family refresh token (429 `rate_limited` + Retry-After; cookie TIDAK dihapus dan token tidak terpakai pada 429, sehingga klien dapat mencoba lagi setelah jeda). Idempotency-Key diterima tetapi tidak pernah disimpan.
      */
     post: operations["refreshSession"];
     delete?: never;

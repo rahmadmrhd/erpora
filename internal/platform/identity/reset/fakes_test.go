@@ -135,27 +135,18 @@ func (f *fakeStore) GetPreferences(_ context.Context, _ tenancy.TenantID, userID
 	return f.prefs[userID], nil
 }
 
-func (f *fakeStore) InvalidatePasswordResets(_ context.Context, _ tenancy.TenantID, userID string, at time.Time) (int64, error) {
+func (f *fakeStore) IssuePasswordReset(_ context.Context, _ tenancy.TenantID, r store.PasswordReset, at time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.call("InvalidatePasswordResets")
-	var n int64
-	for _, r := range f.resets {
-		if r.UserID == userID && r.UsedAt == nil {
-			a := at
-			r.UsedAt = &a
-			n++
-		}
-	}
-	return n, nil
-}
-
-func (f *fakeStore) InsertPasswordReset(_ context.Context, _ tenancy.TenantID, r store.PasswordReset) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.call("InsertPasswordReset")
+	f.call("IssuePasswordReset")
 	if len(r.TokenHash) != 32 {
 		return store.ErrInvalidArgument
+	}
+	for _, old := range f.resets {
+		if old.UserID == r.UserID && old.UsedAt == nil {
+			a := at
+			old.UsedAt = &a
+		}
 	}
 	cp := r
 	cp.TokenHash = append([]byte(nil), r.TokenHash...)

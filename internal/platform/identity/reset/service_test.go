@@ -83,7 +83,7 @@ func TestRequestUnknownAndDisabledSendNothingButSucceed(t *testing.T) {
 	if n := len(h.sender.messages()); n != 0 {
 		t.Errorf("surat = %d, want 0", n)
 	}
-	if h.st.callCount("InsertPasswordReset") != 0 {
+	if h.st.callCount("IssuePasswordReset") != 0 {
 		t.Error("tautan dibuat untuk akun tak dikenal/nonaktif")
 	}
 }
@@ -406,7 +406,7 @@ func TestRequestWithBadOrMissingPublicURLSendsNothingAndAnswersUniformly(t *test
 		if n := len(h.sender.messages()); n != 0 {
 			t.Errorf("%s: surat = %d, want 0", c.name, n)
 		}
-		if h.st.callCount("InsertPasswordReset") != 0 {
+		if h.st.callCount("IssuePasswordReset") != 0 {
 			t.Errorf("%s: tautan disimpan padahal tidak dapat dikirim", c.name)
 		}
 		out := h.logs.String()

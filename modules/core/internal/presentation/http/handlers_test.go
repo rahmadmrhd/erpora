@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -548,4 +549,29 @@ func TestNoStoreWrapperOnPanicFreePaths(t *testing.T) {
 	rec := httptest.NewRecorder()
 	NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusTeapot) })).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	assertNoStore(t, rec)
+}
+
+// identity.ErrNotFound (keanggotaan/sesi principal hilang walau token masih berlaku) dijawab 401 unauthenticated pada
+// setiap endpoint auth berprincipal, bukan 500 internal_error.
+func TestPrincipalNotFoundIsUnauthenticatedNot500(t *testing.T) {
+	endpoints := map[string]struct {
+		handler func(*Handlers) http.HandlerFunc
+		body    string
+	}{
+		"change":         {func(h *Handlers) http.HandlerFunc { return h.ChangePassword }, `{"currentPassword":"lama-lama-2026","newPassword":"baru-baru-baru-2026"}`},
+		"mfa/enroll":     {func(h *Handlers) http.HandlerFunc { return h.EnrollMFA }, ``},
+		"mfa/confirm":    {func(h *Handlers) http.HandlerFunc { return h.ConfirmMFA }, `{"code":"123456"}`},
+		"mfa/verify":     {func(h *Handlers) http.HandlerFunc { return h.VerifyMFA }, `{"code":"123456"}`},
+		"mfa/recovery":   {func(h *Handlers) http.HandlerFunc { return h.RecoverMFA }, `{"code":"abcd-efgh-ijkl"}`},
+		"recovery-codes": {func(h *Handlers) http.HandlerFunc { return h.RegenerateRecoveryCodes }, ``},
+	}
+	for name, e := range endpoints {
+		t.Run(name, func(t *testing.T) {
+			rec := call(t, &fakeService{err: fmt.Errorf("membungkus: %w", identity.ErrNotFound)}, e.handler, "POST", e.body, nil)
+			if code, _ := errCode(t, rec); rec.Code != 401 || code != "unauthenticated" {
+				t.Fatalf("%d %s, want 401 unauthenticated", rec.Code, rec.Body)
+			}
+			assertNoStore(t, rec)
+		})
+	}
 }

@@ -74,8 +74,8 @@ type Store interface {
 	FindUserByEmail(ctx context.Context, t tenancy.TenantID, email string) (store.User, error)
 	GetUser(ctx context.Context, t tenancy.TenantID, userID string) (store.User, error)
 	GetPreferences(ctx context.Context, t tenancy.TenantID, userID string) (store.Preferences, error)
-	InvalidatePasswordResets(ctx context.Context, t tenancy.TenantID, userID string, at time.Time) (int64, error)
-	InsertPasswordReset(ctx context.Context, t tenancy.TenantID, r store.PasswordReset) error
+	// IssuePasswordReset membatalkan tautan lama dan menyimpan yang baru dalam satu transaksi yang diserialkan per pengguna.
+	IssuePasswordReset(ctx context.Context, t tenancy.TenantID, r store.PasswordReset, at time.Time) error
 	FindPasswordResetByHash(ctx context.Context, t tenancy.TenantID, hash []byte) (store.PasswordReset, error)
 	ResetPassword(ctx context.Context, t tenancy.TenantID, resetID, newHash string, at time.Time) (store.ResetResult, bool, error)
 }
@@ -382,14 +382,11 @@ func (s *Service) process(ctx context.Context, t tenancy.TenantID, email, locale
 		s.log.WarnContext(ctx, "reset: alamat email akun tidak dapat dikirimi; tautan tidak diterbitkan dan tautan lama dipertahankan", "user_id", u.ID, "error", err)
 		return
 	}
-	// Batalkan tautan lama LEBIH DULU, baru sisipkan yang baru (urutan terbalik akan membatalkan tautan baru).
-	if _, err := s.st.InvalidatePasswordResets(ctx, t, u.ID, now); err != nil {
-		s.log.ErrorContext(ctx, "reset: gagal membatalkan tautan lama", "user_id", u.ID, "error", err)
-		return
-	}
+	// Pembatalan tautan lama dan penyimpanan yang baru satu transaksi, diserialkan per pengguna: forgot serentak untuk
+	// akun yang sama tidak dapat menyisakan dua tautan berlaku.
 	rec := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash[:], CreatedAt: now, ExpiresAt: now.Add(TokenTTL)}
-	if err := s.st.InsertPasswordReset(ctx, t, rec); err != nil {
-		s.log.ErrorContext(ctx, "reset: gagal menyimpan tautan", "user_id", u.ID, "error", err)
+	if err := s.st.IssuePasswordReset(ctx, t, rec, now); err != nil {
+		s.log.ErrorContext(ctx, "reset: gagal menerbitkan tautan", "user_id", u.ID, "error", err)
 		return
 	}
 	if err := s.sender.Send(ctx, msg); err != nil {

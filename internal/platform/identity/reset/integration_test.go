@@ -308,3 +308,62 @@ func TestIntegrationDisabledOwnerCannotCompleteReset(t *testing.T) {
 		t.Fatalf("setelah diaktifkan lagi: %v", err)
 	}
 }
+
+// M5: N permintaan forgot serentak untuk email yang sama tidak boleh menyisakan lebih dari satu tautan berlaku
+// (pembatalan tautan lama + penyimpanan tautan baru satu transaksi yang diserialkan per pengguna).
+func TestIntegrationConcurrentForgotLeavesExactlyOneActiveLink(t *testing.T) {
+	e := newIntEnv(t)
+	e.addUser(t, "budi@example.org")
+	gate, err := guard.NewHashGate(2, 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	emailLim, _ := guard.NewPrincipalLimiter(guard.LimiterConfig{Burst: 1000, Every: time.Millisecond})
+	ipLim, _ := guard.NewIPLimiter(guard.LimiterConfig{Burst: 1000, Every: time.Millisecond})
+	svc, err := reset.New(reset.Config{
+		Store: e.st, Sessions: e.sess, Gate: gate, Sender: e.sender, PublicURL: &fakeURL{url: baseURL}, Argon2: testParams,
+		Email: emailLim, IP: ipLim, MaxInFlight: 64,
+		Now: e.clk.Now, Sleep: func(context.Context, time.Duration) error { return nil }, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 10
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := svc.Request(ipCtx("198.51.100."+string(rune('1'+i))), "budi@example.org", ""); err != nil {
+				t.Errorf("Request: %v", err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	svc.Wait()
+	msgs := e.sender.messages()
+	if len(msgs) != n {
+		t.Fatalf("surat = %d, want %d", len(msgs), n)
+	}
+	active := 0
+	for _, m := range msgs {
+		tok, err := base64.RawURLEncoding.DecodeString(tokenFrom(t, m))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(tok)
+		rec, err := e.st.FindPasswordResetByHash(tctx(), testTenant, sum[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rec.UsedAt == nil {
+			active++
+		}
+	}
+	if active != 1 {
+		t.Fatalf("tautan aktif = %d, want tepat 1", active)
+	}
+}

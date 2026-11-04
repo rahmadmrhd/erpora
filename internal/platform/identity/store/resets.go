@@ -52,6 +52,52 @@ func (s *Store) InsertPasswordReset(ctx context.Context, t tenancy.TenantID, r P
 	return nil
 }
 
+// advisoryClassPasswordReset adalah kelas kunci advisory (argumen pertama dua-int) untuk serialisasi penerbitan tautan
+// reset per (tenant, pengguna); kelas tersendiri agar tidak bertabrakan dengan kunci advisory lain.
+const advisoryClassPasswordReset int32 = 0x52535450 // "RSTP"
+
+// IssuePasswordReset menerbitkan tautan reset baru dan membatalkan semua tautan lama yang belum terpakai milik
+// pengguna dalam SATU transaksi yang diserialkan per (tenant, pengguna) lewat kunci advisory transaksional: dua
+// permintaan forgot serentak untuk akun yang sama berjalan bergantian, sehingga tepat satu tautan (yang terakhir
+// diterbitkan) tetap berlaku. at adalah waktu pembatalan tautan lama. ErrNotFound bila pengguna bukan anggota tenant t
+// (transaksi di-rollback: tautan lama tidak dibatalkan).
+func (s *Store) IssuePasswordReset(ctx context.Context, t tenancy.TenantID, r PasswordReset, at time.Time) error {
+	id, ok1 := parseID(r.ID)
+	uid, ok2 := parseID(r.UserID)
+	if !ok1 || !ok2 || len(r.TokenHash) != 32 || r.ExpiresAt.IsZero() {
+		return ErrInvalidArgument
+	}
+	created := r.CreatedAt
+	if created.IsZero() {
+		created = nowUTC()
+	}
+	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		if _, err := exec(tx, `SELECT pg_advisory_xact_lock(?::int, hashtext(?))`, advisoryClassPasswordReset, t.String()+"|"+uid.String()); err != nil {
+			return err
+		}
+		if _, err := exec(tx, `UPDATE password_resets SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND used_at IS NULL`, at.UTC(), tid(t), uid); err != nil {
+			return err
+		}
+		n, err := exec(tx, `INSERT INTO password_resets (id, tenant_id, user_id, token_hash, created_at, expires_at)
+			SELECT ?::uuid, m.tenant_id, m.user_id, ?::bytea, ?::timestamptz, ?::timestamptz FROM tenant_memberships m
+			WHERE m.tenant_id = ? AND m.user_id = ?`, id, r.TokenHash, created.UTC(), r.ExpiresAt.UTC(), tid(t), uid)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+	if errors.Is(err, ErrNotFound) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return wrap("terbitkan reset sandi", err)
+	}
+	return nil
+}
+
 // FindPasswordResetByHash memuat tautan reset menurut hash token pada tenant t; ErrNotFound bila tidak dikenal.
 func (s *Store) FindPasswordResetByHash(ctx context.Context, t tenancy.TenantID, hash []byte) (PasswordReset, error) {
 	if len(hash) != 32 {

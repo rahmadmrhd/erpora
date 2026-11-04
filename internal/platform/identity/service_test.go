@@ -145,12 +145,29 @@ func TestLogin_RehashAndInactiveMembership(t *testing.T) {
 	e := newFakeEnv()
 	out := successOutcome(userA)
 	out.NeedsRehash = true
+	out.RehashFrom = "phc-lama"
+	e.store.users[userA] = store.User{ID: userA, PasswordHash: "phc-lama"}
 	e.login.out = out
 	if _, err := e.service().Login(tenantCtx(), sdkidentity.LoginInput{Email: "a@example.test", Password: "sandi-lama-123"}); err != nil {
 		t.Fatal(err)
 	}
 	if e.store.hashSet[userA] != "h:sandi-lama-123" {
 		t.Errorf("hash ulang = %q", e.store.hashSet[userA])
+	}
+
+	// M3: sandi diganti serentak (reset/ganti sandi) di antara verifikasi dan rehash: hash baru TIDAK boleh ditimpa
+	// hash lama, dan login tetap berhasil tanpa galat.
+	e = newFakeEnv()
+	e.login.out = out
+	e.store.users[userA] = store.User{ID: userA, PasswordHash: "phc-hasil-reset"}
+	if _, err := e.service().Login(tenantCtx(), sdkidentity.LoginInput{Email: "a@example.test", Password: "sandi-lama-123"}); err != nil {
+		t.Fatalf("rehash yang dilewati tidak boleh menggagalkan login: %v", err)
+	}
+	if got := e.store.users[userA].PasswordHash; got != "phc-hasil-reset" {
+		t.Errorf("hash hasil reset tertimpa rehash: %q", got)
+	}
+	if _, written := e.store.hashSet[userA]; written {
+		t.Error("rehash tidak boleh menulis bila hash tersimpan sudah berubah")
 	}
 
 	e = newFakeEnv()

@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"erpora/internal/platform/identity/guard"
 	"erpora/internal/platform/identity/session"
 	"erpora/internal/platform/identity/store"
 	"erpora/internal/platform/tenancy"
@@ -65,7 +66,10 @@ func (w *world) instance() *instance {
 	list := session.NewRevocationList(session.RevocationConfig{Loader: w.be, Now: w.clock.Now, Log: log})
 	origins, err := session.NewOriginChecker([]string{goodOrigin})
 	must(w.t, err)
-	svc, err := session.New(session.Config{Store: w.be, Revocations: list, Notifier: w.notifier, Origin: origins, Now: w.clock.Now, Log: log})
+	// suite menguji logika rotasi, bukan batas laju: bucket longgar (batas laju: TestRotateRateLimitedPerFamily)
+	lim, err := guard.NewPrincipalLimiter(guard.LimiterConfig{Burst: 1000, Every: time.Millisecond})
+	must(w.t, err)
+	svc, err := session.New(session.Config{Store: w.be, Revocations: list, Notifier: w.notifier, Origin: origins, Now: w.clock.Now, Log: log, RefreshLimiter: lim})
 	must(w.t, err)
 	return &instance{svc: svc, list: list}
 }

@@ -97,6 +97,8 @@ type Store interface {
 	CreateUser(ctx context.Context, t tenancy.TenantID, in store.NewUser) (store.User, error)
 	SetUserStatus(ctx context.Context, t tenancy.TenantID, userID, status string) error
 	SetPasswordHash(ctx context.Context, t tenancy.TenantID, userID, hash string) error
+	// RehashPassword menyimpan hash baru hanya bila password_hash masih oldHash (CAS); false = sandi sudah berubah.
+	RehashPassword(ctx context.Context, t tenancy.TenantID, userID, oldHash, newHash string) (bool, error)
 	ChangePassword(ctx context.Context, t tenancy.TenantID, userID, newHash, exceptSessionID string, at time.Time) ([]string, error)
 	TouchLastLogin(ctx context.Context, t tenancy.TenantID, userID string, at time.Time) error
 	GrantRole(ctx context.Context, t tenancy.TenantID, userID, roleKey string, at time.Time) (bool, error)

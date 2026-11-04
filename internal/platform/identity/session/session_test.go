@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"erpora/internal/platform/identity/guard"
 	"erpora/internal/platform/identity/session"
 	"erpora/internal/platform/identity/store"
 	"erpora/internal/platform/tenancy"
@@ -379,3 +380,59 @@ func TestRotateLosingToUpgradeDoesNotRevokeSession(t *testing.T) {
 		t.Fatal("sesi tidak boleh dicabut: ini bukan reuse")
 	}
 }
+
+// ADR-0013 §4: batas laju per identitas sasaran (family) pada refresh. Token dikenal lebih dulu, lalu bucket family
+// diperiksa SEBELUM rotasi; token yang ditolak batas laju tidak terpakai (bukan reuse).
+func TestRotateRateLimitedPerFamily(t *testing.T) {
+	w := newFakeWorld(t)
+	limiter, err := guard.NewPrincipalLimiter(guard.LimiterConfig{Burst: 2, Every: time.Hour})
+	must(t, err)
+	log := slog.New(slog.NewTextHandler(w.logs, nil))
+	list := session.NewRevocationList(session.RevocationConfig{Loader: w.be, Now: w.clock.Now, Log: log})
+	origins, err := session.NewOriginChecker([]string{goodOrigin})
+	must(t, err)
+	svc, err := session.New(session.Config{Store: w.be, Revocations: list, Notifier: w.notifier, Origin: origins,
+		Now: w.clock.Now, Log: log, RefreshLimiter: limiter})
+	must(t, err)
+	in := &instance{svc: svc, list: list}
+
+	user := w.be.NewUser(t, w.ctx)
+	_, cur := w.start(in, user)
+	other := w.be.NewUser(t, w.ctx)
+	_, otherTok := w.start(in, other)
+
+	for i := 0; i < 2; i++ { // refresh normal: dalam burst tetap berhasil
+		w.clock.Advance(time.Minute)
+		_, next, err := svc.Rotate(w.ctx, cur.Value, goodOrigin)
+		if err != nil {
+			t.Fatalf("rotasi ke-%d harus berhasil: %v", i+1, err)
+		}
+		cur = next
+	}
+	w.clock.Advance(time.Minute)
+	_, _, err = svc.Rotate(w.ctx, cur.Value, goodOrigin)
+	retry, ok := guard.AsRateLimited(err)
+	if !ok || retry <= 0 {
+		t.Fatalf("melebihi batas family harus *guard.RateLimitedError dengan Retry-After > 0, dapat %v", err)
+	}
+	if errors.Is(err, session.ErrInvalidRefresh) {
+		t.Fatalf("batas laju bukan ErrInvalidRefresh: %v", err)
+	}
+	// token yang ditolak batas laju tidak terpakai: sesi dan family tetap hidup (bukan reuse)
+	if row := w.tokenRow(cur.Value); row.UsedAt != nil {
+		t.Fatal("token yang ditolak batas laju tidak boleh ditandai terpakai")
+	}
+	if w.sessionRow(row0(t, w, cur.Value)).RevokedAt != nil {
+		t.Fatal("batas laju tidak boleh mencabut sesi")
+	}
+	// family lain tidak terpengaruh (kunci per family)
+	if _, _, err := svc.Rotate(w.ctx, otherTok.Value, goodOrigin); err != nil {
+		t.Fatalf("family lain tidak boleh ikut dibatasi: %v", err)
+	}
+	// token tak dikenal tidak mengonsumsi bucket mana pun dan tetap ErrInvalidRefresh seragam
+	if _, _, err := svc.Rotate(w.ctx, randomRaw(t), goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) {
+		t.Fatalf("token tak dikenal harus ErrInvalidRefresh, dapat %v", err)
+	}
+}
+
+func row0(t *testing.T, w *world, raw string) string { t.Helper(); return w.tokenRow(raw).SessionID }
