@@ -83,7 +83,7 @@ func TestCoreCLI_ReleaseBinaryCreateAdminThenLoginViaAPI(t *testing.T) {
 
 	resp, body := postJSON(t, base+"/api/core/auth/login", `{"email":"admin.biner@example.test","password":"`+cliPassword+`"}`)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("login = %d %s\nstderr:\n%s", resp.StatusCode, body, p.stderr)
+		t.Fatalf("login = %d %s\n%s", resp.StatusCode, body, p.logs(t))
 	}
 	var lr struct {
 		Data struct {

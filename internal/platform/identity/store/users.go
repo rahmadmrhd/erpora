@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -318,21 +319,43 @@ func (s *Store) UpsertPreferences(ctx context.Context, t tenancy.TenantID, userI
 // emailLockTimeout membatasi lama menunggu WithEmailLock; pemegang yang macet tidak boleh menahan run lain tanpa batas.
 const emailLockTimeout = "30s"
 
+// emailLockFnTimeout membatasi fn bila ctx pemanggil tanpa deadline. Isi fn yang wajar (mis. alur CreateAdmin) hanya
+// beberapa pernyataan SQL di control dan tenant DB (hash sandi dihitung di luar kunci), jauh di bawah satu detik;
+// 30 detik sengaja sama dengan emailLockTimeout supaya pemegang yang macet tidak menahan penunggu lebih lama
+// daripada batas tunggu penunggu itu sendiri. Deadline pemanggil yang lebih ketat tetap dipakai.
+const emailLockFnTimeout = 30 * time.Second
+
 // WithEmailLock menjalankan fn selama memegang advisory lock transaksi PostgreSQL untuk email ternormalisasi, sehingga
 // dua alur yang menyentuh email yang sama (mis. dua `core:create-admin` serentak) berjalan bergantian, bukan saling
 // menyisip. users.email unik secara GLOBAL (lintas tenant), jadi kuncinya hanya berasal dari email: kunci per
 // (tenant, email) tidak akan menyerialkan dua tenant yang berebut email yang sama.
 //
 // Lock dipegang oleh satu transaksi khusus di control DB selama fn berjalan; fn memakai koneksi lain (store ini)
-// dan tidak berada di dalam transaksi itu. Lock dilepas otomatis saat transaksi berakhir (commit, rollback, atau
+// dan tidak berada di dalam transaksi itu, jadi pool control DB WAJIB berisi minimal 2 koneksi per pemanggil serentak
+// (satu untuk lock, satu untuk fn); pool yang dibatasi lebih kecil dari jumlah pemanggil serentak dapat menemui
+// kebuntuan sampai lock_timeout/deadline. Lock dilepas otomatis saat transaksi berakhir (commit, rollback, atau
 // koneksi putus), jadi tidak ada lock yatim. Menunggu lebih dari emailLockTimeout gagal (lock_timeout).
-// Galat dari fn dikembalikan apa adanya. Email kosong: ErrInvalidArgument.
+//
+// Transaksi hanya menahan lock; tidak ada yang perlu di-commit. Karena itu galat fn dikembalikan apa adanya, dan bila
+// fn sukses tetapi commit gagal (Ctrl+C, idle_in_transaction_session_timeout, koneksi putus) hasilnya tetap nil:
+// efek fn sudah terjadi dan melaporkan gagal menyesatkan; kejadian dicatat sebagai peringatan (tanpa data pribadi).
+// Konsekuensinya serialisasi bersifat best-effort bila server memutus koneksi pemegang di tengah fn: lock lepas lebih
+// awal dan run lain dapat masuk sebelum fn selesai. Bila ctx pemanggil tanpa deadline, fn dijalankan dengan
+// batas emailLockFnTimeout. Email kosong: ErrInvalidArgument.
 func (s *Store) WithEmailLock(ctx context.Context, email string, fn func(ctx context.Context) error) error {
 	email = NormalizeEmail(email)
 	if email == "" {
 		return ErrInvalidArgument
 	}
-	var fnErr error
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, emailLockFnTimeout)
+		defer cancel()
+	}
+	var (
+		ran   bool
+		fnErr error
+	)
 	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		if _, err := exec(tx, "SET LOCAL lock_timeout = '"+emailLockTimeout+"'"); err != nil {
 			return err
@@ -341,11 +364,17 @@ func (s *Store) WithEmailLock(ctx context.Context, email string, fn func(ctx con
 		if _, err := exec(tx, "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "erpora:identity:email:"+email); err != nil {
 			return err
 		}
+		ran = true
 		fnErr = fn(ctx)
 		return nil // commit: hanya untuk melepas lock
 	})
-	if err != nil {
-		return wrap("kunci email", err)
+	switch {
+	case !ran:
+		return wrap("kunci email", err) // lock tidak pernah didapat: fn tidak berjalan
+	case fnErr != nil:
+		return fnErr
+	case err != nil:
+		slog.WarnContext(ctx, "identity: transaksi kunci email berakhir dengan galat setelah operasi sukses; serialisasi mungkin lepas lebih awal", "error", err)
 	}
-	return fnErr
+	return nil
 }

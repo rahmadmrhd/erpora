@@ -1454,3 +1454,60 @@ func TestWithEmailLock_SerializesSameEmailOnly(t *testing.T) {
 		t.Fatalf("email kosong: %v", err)
 	}
 }
+
+// Minor-A: transaksi kunci hanya menahan lock. Bila commit-nya gagal (koneksi pemegang diputus server) padahal fn
+// sukses, efek fn sudah terjadi, jadi galat tidak boleh dikembalikan (operator akan mengira operasi gagal).
+func TestWithEmailLock_FnSucceedsButLockConnectionDropped_ReturnsNil(t *testing.T) {
+	db, s := setup(t)
+	ran := false
+	err := s.WithEmailLock(ctx, "putus@example.test", func(context.Context) error {
+		// Putus koneksi pemegang lock (satu-satunya pemegang advisory lock di database uji ini).
+		if err := db.Exec(`SELECT pg_terminate_backend(l.pid) FROM pg_locks l
+			WHERE l.locktype = 'advisory' AND l.granted AND l.pid <> pg_backend_pid()
+			  AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())`).Error; err != nil {
+			return err
+		}
+		time.Sleep(300 * time.Millisecond) // beri waktu server menutup koneksi
+		ran = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WithEmailLock = %v, want nil (fn sukses; kegagalan commit hanya melepas lock)", err)
+	}
+	if !ran {
+		t.Fatal("fn tidak berjalan")
+	}
+	// Lock tidak yatim: pemanggilan berikutnya tidak menunggu.
+	if err := s.WithEmailLock(ctx, "putus@example.test", func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Minor-B: tanpa deadline dari pemanggil, fn tetap berbatas waktu; deadline pemanggil yang lebih ketat dihormati.
+func TestWithEmailLock_BoundsFnContext(t *testing.T) {
+	_, s := setup(t)
+	var got time.Time
+	var ok bool
+	if err := s.WithEmailLock(context.Background(), "batas@example.test", func(c context.Context) error {
+		got, ok = c.Deadline()
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !ok || time.Until(got) <= 0 || time.Until(got) > 31*time.Second {
+		t.Fatalf("deadline fn = %v (ok=%v), want <= 30s dari sekarang", got, ok)
+	}
+
+	short, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	want, _ := short.Deadline()
+	if err := s.WithEmailLock(short, "batas@example.test", func(c context.Context) error {
+		got, ok = c.Deadline()
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !ok || !got.Equal(want) {
+		t.Fatalf("deadline pemanggil harus dipertahankan: got %v want %v", got, want)
+	}
+}

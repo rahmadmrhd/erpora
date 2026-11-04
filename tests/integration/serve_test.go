@@ -129,9 +129,30 @@ func (p *proc) waitExit(t *testing.T, d time.Duration) error {
 		p.done <- err
 		return err
 	case <-time.After(d):
-		t.Fatalf("proses tidak keluar dalam %v; stderr:\n%s", d, p.stderr)
+		t.Fatalf("proses tidak keluar dalam %v; stderr:\n%s", d, p.logs(t))
 		return nil
 	}
+}
+
+// logs mengembalikan stderr proses untuk pesan kegagalan. Selagi proses masih berjalan, cmd.Wait belum menutup
+// penyalinan stdout/stderr ke buffer, jadi membaca p.stderr langsung adalah data race (laporan menyesatkan di
+// -race). Karena itu proses dihentikan dulu dan ditunggu keluar; hasilnya dikembalikan ke kanal done seperti
+// waitExit sehingga Cleanup dan waitExit berikutnya tetap bekerja. Hanya untuk jalur kegagalan: proses mati.
+func (p *proc) logs(t *testing.T) string {
+	t.Helper()
+	select {
+	case err := <-p.done:
+		p.done <- err
+	default:
+		_ = p.cmd.Process.Kill()
+		select {
+		case err := <-p.done:
+			p.done <- err
+		case <-time.After(10 * time.Second):
+			return "(proses tidak berhenti setelah Kill; log tidak dibaca agar tidak race)"
+		}
+	}
+	return "stdout:\n" + p.stdout.String() + "\nstderr:\n" + p.stderr.String()
 }
 
 // getWith melakukan GET dengan header tertentu dan mengembalikan respons + body.
