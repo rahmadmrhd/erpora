@@ -68,7 +68,8 @@ export interface UseAuth {
   state: AuthState;
   /** Dipanggil layar auth setelah login, verifikasi MFA, atau konfirmasi MFA berhasil. */
   acceptSession(session: AuthSessionPayload): void;
-  logout(): Promise<void>;
+  /** true = keluar; false = server tidak mengakui, sesi lokal dipertahankan (lihat `AuthController.logout`). */
+  logout(): Promise<boolean>;
   controller: AuthController;
 }
 

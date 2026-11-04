@@ -9,11 +9,12 @@ import { readResetToken, scrubResetToken } from "./reset-token";
 /**
  * Reset sandi dari tautan email. Token dibaca dari fragmen URL (pembacaan murni saat render) lalu fragmen dihapus dari
  * URL oleh efek (idempoten, aman di StrictMode); token hanya hidup di state komponen ini. Tanpa token: pesan tautan
- * tidak lengkap dan tautan minta ulang.
+ * tidak lengkap dan tautan minta ulang. Membuka tautan reset lain di tab yang sama hanya mengubah fragmen (tanpa
+ * memuat ulang halaman): `hashchange` mengambil token baru, menghapusnya dari URL, dan mereset form ke token itu.
  */
 export function ResetScreen() {
   const t = useCoreT();
-  const [token] = useState(() => readResetToken(window.location.hash));
+  const [token, setToken] = useState(() => readResetToken(window.location.hash));
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
@@ -24,6 +25,21 @@ export function ResetScreen() {
 
   useEffect(() => {
     scrubResetToken();
+    const onHashChange = () => {
+      const fresh = readResetToken(window.location.hash);
+      if (fresh === null) return; // fragmen lain: token yang sedang dipakai tidak diubah
+      scrubResetToken();
+      setToken(fresh);
+      // Isian, galat, dan penolakan milik token sebelumnya tidak berlaku lagi untuk token baru.
+      setPassword("");
+      setConfirm("");
+      setErrors({});
+      setFailure([]);
+      setTokenRejected(false);
+      setDone(false);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   async function onSubmit(e: FormEvent) {

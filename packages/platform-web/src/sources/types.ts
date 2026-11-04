@@ -43,5 +43,6 @@ export interface CurrentUserSource {
   get(signal?: AbortSignal): Promise<CurrentUser | null>;
   /** Path internal halaman akun; `null` bila tidak tersedia. */
   manageAccountPath?(): string | null;
+  /** Resolve = sudah keluar. Reject = gagal keluar dan sesi tetap aktif (pemanggil menampilkan galat dengan opsi coba lagi). */
   signOut?(): Promise<void>;
 }

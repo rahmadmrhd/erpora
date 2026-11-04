@@ -223,15 +223,30 @@ describe("boot dan MFA", () => {
     expect(auth.getState()).toEqual({ status: "mfa", mfaState: "verify_required" });
   });
 
-  test("403 mfa_required tanpa informasi lebih lanjut menjadi verify_required", async () => {
+  test("403 mfa_required tetapi refresh melaporkan mfaState none: ikuti server, keadaan tetap authenticated, 403 dikembalikan apa adanya", async () => {
     const server = fakeServer({
       [PROTECTED]: () => apiError(403, "mfa_required"),
       [REFRESH]: () => session("t2", "none"),
     });
     const auth = createAuthController({ fetch: server.fetch });
     auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
-    await auth.fetch(PROTECTED);
-    expect(auth.getState()).toEqual({ status: "mfa", mfaState: "verify_required" });
+    const res = await auth.fetch(PROTECTED);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("mfa_required");
+    expect(auth.getState()).toEqual({ status: "authenticated" });
+    expect(auth.getAccessToken()).toBe("t2");
+  });
+
+  test("403 mfa_required dengan refresh gagal (5xx): keadaan tidak berubah dan 403 dikembalikan", async () => {
+    const server = fakeServer({
+      [PROTECTED]: () => apiError(403, "mfa_required"),
+      [REFRESH]: () => apiError(500, "internal_error"),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    const res = await auth.fetch(PROTECTED);
+    expect(res.status).toBe(403);
+    expect(auth.getState()).toEqual({ status: "authenticated" });
   });
 
   test("403 selain mfa_required tidak mengubah keadaan", async () => {
@@ -244,11 +259,11 @@ describe("boot dan MFA", () => {
 });
 
 describe("logout dan keadaan", () => {
-  test("logout memanggil POST logout dengan Bearer lalu membuang token", async () => {
+  test("logout 204: server mengakui, hasil true, token dibuang, keadaan anonymous", async () => {
     const server = fakeServer({ [LOGOUT]: () => new Response(null, { status: 204 }) });
     const auth = createAuthController({ fetch: server.fetch });
     auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
-    await auth.logout();
+    expect(await auth.logout()).toBe(true);
     expect(server.calls).toHaveLength(1);
     expect(server.calls[0]).toMatchObject({
       path: LOGOUT,
@@ -259,15 +274,59 @@ describe("logout dan keadaan", () => {
     expect(auth.getState()).toEqual({ status: "anonymous" });
   });
 
-  test("logout tetap mengakhiri sesi lokal walau permintaan gagal", async () => {
-    const auth = createAuthController({
-      fetch: (async () => {
-        throw new TypeError("network");
-      }) as unknown as typeof fetch,
-    });
+  test("logout 401: sesi memang sudah tidak ada di server, dianggap keluar", async () => {
+    const server = fakeServer({ [LOGOUT]: () => apiError(401, "unauthenticated") });
+    const auth = createAuthController({ fetch: server.fetch });
     auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
-    await auth.logout();
+    expect(await auth.logout()).toBe(true);
+    expect(auth.getAccessToken()).toBeUndefined();
     expect(auth.getState()).toEqual({ status: "anonymous" });
+  });
+
+  test("logout gagal (429, 500, 403, atau jaringan putus): TIDAK keluar, token dan keadaan tetap", async () => {
+    const failures: Array<[string, () => Response | Promise<Response>]> = [
+      [
+        "429",
+        () => json({ error: { code: "rate_limited", message: "x" } }, 429, { "Retry-After": "30" }),
+      ],
+      ["500", () => apiError(500, "internal_error")],
+      ["503", () => new Response("down", { status: 503 })],
+      ["403", () => apiError(403, "permission_denied")],
+      [
+        "jaringan putus",
+        () => {
+          throw new TypeError("network");
+        },
+      ],
+    ];
+    for (const [name, handler] of failures) {
+      const server = fakeServer({ [LOGOUT]: handler });
+      const auth = createAuthController({ fetch: server.fetch });
+      auth.acceptSession({ accessToken: "t-" + name, expiresIn: 600, mfaState: "none" });
+      expect(await auth.logout(), name).toBe(false);
+      expect(auth.getAccessToken(), name).toBe("t-" + name);
+      expect(auth.getState(), name).toEqual({ status: "authenticated" });
+    }
+  });
+
+  test("logout gagal lalu dicoba lagi dan berhasil: baru keluar", async () => {
+    const server = fakeServer({
+      [LOGOUT]: (_c, n) =>
+        n === 1 ? apiError(500, "internal_error") : new Response(null, { status: 204 }),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await auth.logout()).toBe(false);
+    expect(auth.getState()).toEqual({ status: "authenticated" });
+    expect(await auth.logout()).toBe(true);
+    expect(auth.getState()).toEqual({ status: "anonymous" });
+  });
+
+  test("logout tanpa token tidak memanggil jaringan dan berhasil (tidak ada sesi lokal untuk dipertahankan)", async () => {
+    const server = fakeServer({ [LOGOUT]: () => apiError(500, "internal_error") });
+    const auth = createAuthController({ fetch: server.fetch, initial: "anonymous" });
+    expect(await auth.logout()).toBe(true);
+    expect(server.calls).toHaveLength(0);
   });
 
   test("snapshot stabil: refresh berulang pada keadaan sama tidak membuat objek keadaan baru", async () => {
@@ -288,5 +347,43 @@ describe("logout dan keadaan", () => {
     auth.skipBoot();
     expect(auth.getState()).toEqual({ status: "anonymous" });
     expect(server.calls).toHaveLength(0);
+  });
+});
+
+describe("refresh berbatas waktu (kunci Web Locks tidak boleh tertahan)", () => {
+  /** fetch yang tidak pernah selesai kecuali `signal` dibatalkan. */
+  const hanging = ((_input: RequestInfo | URL, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () =>
+        reject(new DOMException("dibatalkan", "AbortError")),
+      );
+    })) as typeof fetch;
+
+  test("request refresh membawa AbortSignal; timeout dianggap error (sesi tidak berakhir) dan tidak menahan refresh berikutnya", async () => {
+    let signalSeen = false;
+    let n = 0;
+    const fetchFn = ((input: RequestInfo | URL, init?: RequestInit) => {
+      n++;
+      if (n === 1) {
+        signalSeen = init?.signal instanceof AbortSignal;
+        return hanging(input, init);
+      }
+      return Promise.resolve(session("t-setelah-timeout"));
+    }) as typeof fetch;
+    const auth = createAuthController({ fetch: fetchFn, refreshTimeoutMs: 20 });
+    auth.acceptSession({ accessToken: "lama", expiresIn: 600, mfaState: "none" });
+    expect(await auth.refresh()).toBe("error");
+    expect(signalSeen).toBe(true);
+    expect(auth.getState()).toEqual({ status: "authenticated" });
+    expect(auth.getAccessToken()).toBe("lama");
+    // single-flight dilepas: refresh berikutnya berjalan dan berhasil.
+    expect(await auth.refresh()).toBe("ok");
+    expect(auth.getAccessToken()).toBe("t-setelah-timeout");
+  });
+
+  test("boot dengan refresh menggantung berakhir sebagai anonymous setelah timeout", async () => {
+    const auth = createAuthController({ fetch: hanging, refreshTimeoutMs: 20 });
+    await auth.boot();
+    expect(auth.getState()).toEqual({ status: "anonymous" });
   });
 });

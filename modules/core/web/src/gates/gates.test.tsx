@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createAuthController } from "@erpora/platform-web";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiError, fakeApi, json, renderGate, sessionBody } from "../testing";
 
@@ -395,6 +395,112 @@ describe("reset sandi", () => {
       ),
     );
     expect(screen.getByRole("link", { name: "Minta tautan baru" })).toBeInTheDocument();
+  });
+});
+
+describe("reset sandi: navigasi fragmen-saja (B-2)", () => {
+  test("hashchange dengan token baru: token di form berganti, fragmen dihapus dari URL, isian dan galat direset", async () => {
+    window.history.replaceState(null, "", "/reset-password#token=token-lama");
+    let call = 0;
+    const { api } = await renderGate({
+      path: "/reset-password",
+      routes: {
+        [RESET]: () => {
+          call++;
+          return call === 1
+            ? apiError(422, "validation_failed", [{ field: "token", code: "invalid_token" }])
+            : new Response(null, { status: 204 });
+        },
+      },
+    });
+    expect(window.location.hash).toBe("");
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.type(screen.getByLabelText("Ulangi sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.click(screen.getByRole("button", { name: "Simpan sandi baru" }));
+    await screen.findByRole("alert"); // token lama ditolak
+    expect(api.calls[0]).toMatchObject({ body: { token: "token-lama" } });
+
+    // Pengguna membuka tautan reset yang lebih baru di tab yang sama: hanya fragmen berubah (tanpa reload).
+    act(() => {
+      window.history.pushState(null, "", "/reset-password#token=token-baru");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await waitFor(() => expect(window.location.hash).toBe(""));
+    expect(window.location.href).not.toContain("token-baru");
+    expect(screen.queryByRole("alert")).toBeNull(); // galat token lama hilang
+    expect(screen.getByLabelText("Sandi baru")).toHaveValue(""); // isian direset
+
+    await user.type(screen.getByLabelText("Sandi baru"), "sandi-lain-yang-panjang-2026");
+    await user.type(screen.getByLabelText("Ulangi sandi baru"), "sandi-lain-yang-panjang-2026");
+    await user.click(screen.getByRole("button", { name: "Simpan sandi baru" }));
+    await screen.findByRole("heading", { name: "Sandi berhasil diubah" });
+    expect(api.calls[1]).toMatchObject({ body: { token: "token-baru" } });
+  });
+
+  test("hashchange tanpa token baru tidak mengubah token yang sedang dipakai", async () => {
+    window.history.replaceState(null, "", "/reset-password#token=token-lama");
+    const { api } = await renderGate({
+      path: "/reset-password",
+      routes: { [RESET]: () => new Response(null, { status: 204 }) },
+    });
+    act(() => {
+      window.history.pushState(null, "", "/reset-password#bagian-lain");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.type(screen.getByLabelText("Ulangi sandi baru"), "sandi-baru-yang-panjang-2026");
+    await user.click(screen.getByRole("button", { name: "Simpan sandi baru" }));
+    await screen.findByRole("heading", { name: "Sandi berhasil diubah" });
+    expect(api.calls[0]).toMatchObject({ body: { token: "token-lama" } });
+  });
+
+  test("tanpa token awal lalu tautan baru tiba lewat hashchange: form muncul dengan token itu", async () => {
+    window.history.replaceState(null, "", "/reset-password");
+    await renderGate({ path: "/reset-password" });
+    expect(screen.getByRole("link", { name: "Minta tautan baru" })).toBeInTheDocument();
+    act(() => {
+      window.history.pushState(null, "", "/reset-password#token=dari-hashchange");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(await screen.findByLabelText("Sandi baru")).toBeInTheDocument();
+    expect(window.location.hash).toBe("");
+  });
+});
+
+describe("judul tab gerbang (B-1)", () => {
+  test("setiap layar menetapkan judulnya sendiri lewat i18n, menimpa judul halaman sebelumnya", async () => {
+    document.title = "Dashboard - ERPora";
+    const first = await renderGate();
+    expect(document.title).toBe("Masuk - ERPora");
+    first.unmount();
+
+    document.title = "Dashboard - ERPora";
+    window.history.replaceState(null, "", "/forgot-password");
+    const second = await renderGate({ path: "/forgot-password" });
+    expect(document.title).toBe("Lupa sandi - ERPora");
+    second.unmount();
+
+    document.title = "Dashboard - ERPora";
+    window.history.replaceState(null, "", "/reset-password#token=abc");
+    const third = await renderGate({ path: "/reset-password" });
+    expect(document.title).toBe("Atur ulang sandi - ERPora");
+    third.unmount();
+  });
+
+  test("layar MFA dan bahasa Inggris", async () => {
+    document.title = "Dashboard - ERPora";
+    const controller = createAuthController({ initial: "anonymous" });
+    controller.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "verify_required" });
+    const mfa = await renderGate({ controller });
+    expect(document.title).toBe("Verifikasi dua langkah - ERPora");
+    mfa.unmount();
+
+    localStorage.setItem("erpora.locale", "en");
+    document.title = "Dashboard - ERPora";
+    await renderGate();
+    expect(document.title).toBe("Sign in - ERPora");
   });
 });
 

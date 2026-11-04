@@ -13,7 +13,7 @@ import {
   Label,
   resolveIcon,
 } from "@erpora/ui";
-import { type ComponentProps, type ReactNode, useId, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useId, useState } from "react";
 import "../i18n/keys.gen";
 import type { AuthMessage } from "./errors";
 
@@ -42,6 +42,12 @@ export function AuthLayout({
   footer?: ReactNode;
 }) {
   const t = useCoreT();
+  const brand = t("auth.brand");
+  // Gerbang dirender tanpa shell, sehingga tak ada yang menyinkronkan judul tab: tanpa ini judul halaman shell
+  // sebelumnya ("Dashboard - ERPora") terbawa ke layar login/lupa/reset. Format sama dengan shell: "<judul> - <aplikasi>".
+  useEffect(() => {
+    document.title = `${title} - ${brand}`;
+  }, [title, brand]);
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-4">
       <p className="text-2xl font-semibold tracking-tight">{t("auth.brand")}</p>

@@ -260,6 +260,7 @@ declare module "./types" {
       "user.reload": {};
       "user.settings": {};
       "user.signOut": {};
+      "user.signOutFailed": {};
       "user.unavailable": {};
     };
     ui: {

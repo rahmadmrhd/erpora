@@ -103,6 +103,7 @@
     "manageAccount": "Manage Account",
     "changePassword": "Change password",
     "signOut": "Sign Out",
+    "signOutFailed": "Could not sign out. Your session is still active; try again.",
     "unavailable": "Not available in this version",
     "settings": "Settings",
     "reload": "Reload"

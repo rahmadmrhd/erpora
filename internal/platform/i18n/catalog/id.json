@@ -103,6 +103,7 @@
     "manageAccount": "Kelola Akun",
     "changePassword": "Ubah sandi",
     "signOut": "Keluar",
+    "signOutFailed": "Gagal keluar. Sesi Anda masih aktif; coba lagi.",
     "unavailable": "Belum tersedia di versi ini",
     "settings": "Pengaturan",
     "reload": "Muat ulang"

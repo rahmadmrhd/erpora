@@ -28,6 +28,8 @@ export interface AuthControllerOptions {
   baseUrl?: string;
   /** Keadaan awal: `booting` (bawaan; menunggu `boot()`) atau `anonymous` (tanpa refresh senyap). */
   initial?: "booting" | "anonymous";
+  /** Batas waktu request refresh (ms); bawaan 15000. Melewatinya dianggap "error" agar kunci Web Locks tidak tertahan. */
+  refreshTimeoutMs?: number;
 }
 
 export interface AuthController {
@@ -46,8 +48,12 @@ export interface AuthController {
   skipBoot(): void;
   /** Tukar cookie refresh dengan access token baru (single-flight). */
   refresh(): Promise<RefreshOutcome>;
-  /** POST logout (bila ada token), lalu mengakhiri sesi lokal apa pun hasilnya. */
-  logout(): Promise<void>;
+  /**
+   * POST logout. true = keluar: server menjawab 2xx, atau 401 (sesi memang sudah tidak ada), atau tidak ada token;
+   * sesi lokal berakhir. false = server tidak mengakui (429, 5xx, 403, jaringan putus): sesi lokal DIPERTAHANKAN
+   * agar UI tidak menyatakan keluar padahal sesi server dan cookie refresh masih hidup (komputer bersama).
+   */
+  logout(): Promise<boolean>;
   /** Membuang token dan beralih ke `anonymous`. */
   endSession(): void;
 }
@@ -55,6 +61,7 @@ export interface AuthController {
 const REFRESH_PATH = "/api/core/auth/refresh";
 const LOGOUT_PATH = "/api/core/auth/logout";
 const LOCK_NAME = "erpora-auth-refresh";
+const REFRESH_TIMEOUT_MS = 15_000;
 
 const ANONYMOUS: AuthState = { status: "anonymous" };
 const BOOTING: AuthState = { status: "booting" };
@@ -126,12 +133,16 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
   };
 
   async function doRefresh(): Promise<RefreshOutcome> {
+    // Berjalan di dalam Web Lock: tanpa batas waktu, refresh yang menggantung menahan kunci semua tab.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), options.refreshTimeoutMs ?? REFRESH_TIMEOUT_MS);
     try {
       const res = await baseFetch(url(REFRESH_PATH), {
         method: "POST",
         headers: { Accept: "application/json" },
         // Satu-satunya permintaan yang membawa cookie refresh secara eksplisit (Q33 butir 3).
         credentials: "include",
+        signal: abort.signal,
       });
       if (res.status === 401 || res.status === 403) {
         endSession();
@@ -143,7 +154,9 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
       acceptSession(body.data);
       return "ok";
     } catch {
-      return "error";
+      return "error"; // jaringan, timeout (abort), atau badan tidak terbaca
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -171,9 +184,9 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
         return baseFetch(input, withAuth(init, token));
       }
     } else if (code === "mfa_required" && state.status === "authenticated") {
-      // Keadaan sebenarnya diambil dari refresh (server tahu enroll/verify); bawaan verify_required.
+      // Keadaan sebenarnya HANYA dari refresh (server tahu none/enroll/verify; acceptSession memasangnya). Bila server
+      // tetap menjawab none atau refresh gagal, keadaan tidak diubah dan 403 asli dikembalikan ke pemanggil.
       await refresh();
-      if (state.status === "authenticated") setState(MFA_VERIFY);
     }
     return res;
   };
@@ -203,10 +216,14 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
     },
     refresh,
     async logout() {
-      // Sesi lokal tetap berakhir apa pun hasilnya; cookie refresh yang tersisa dicabut server saat kedaluwarsa.
-      if (token !== undefined)
-        await authedFetch(url(LOGOUT_PATH), { method: "POST" }).catch(() => {});
+      if (token !== undefined) {
+        // Hanya 2xx atau 401 yang berarti sesi server sudah tidak ada. Selain itu (429 batas IP bersama, 5xx, jaringan)
+        // sesi server dan cookie refresh masih hidup: jangan menyatakan keluar.
+        const res = await authedFetch(url(LOGOUT_PATH), { method: "POST" }).catch(() => null);
+        if (res === null || (!res.ok && res.status !== 401)) return false;
+      }
       endSession();
+      return true;
     },
     endSession,
   };

@@ -183,10 +183,56 @@ describe("sesi berakhir dan keluar", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Masuk" }, { timeout: 8000 }),
     ).toBeInTheDocument();
+    // B-1: judul tab milik layar login, bukan judul halaman shell sebelumnya.
+    expect(document.title).toBe("Masuk - ERPora");
     expect(calls).toContain(LOGOUT);
     expect(auth.getAccessToken()).toBeUndefined();
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
     expect(window.location.search).toBe("");
     expect(app.queryClient.getQueryCache().getAll()).toHaveLength(0);
   }, 30_000);
+
+  test("Keluar gagal (server 500 atau 429): sesi tetap, tetap di aplikasi, galat tampil, token dan cache utuh (I-1)", async () => {
+    for (const failure of [
+      () => apiError(500, "internal_error"),
+      () =>
+        new Response(JSON.stringify({ error: { code: "rate_limited", message: "x" } }), {
+          status: 429,
+          headers: { "Content-Type": "application/json", "Retry-After": "30" },
+        }),
+    ]) {
+      window.history.replaceState(null, "", "/");
+      const { auth, calls } = authWith({ [REFRESH]: () => session("t"), [LOGOUT]: failure });
+      const app = renderApp({
+        auth,
+        bootstrap: { user: { id: "u1", email: "ani@example.test", displayName: "Ani" } },
+      });
+      await screen.findByRole("main");
+      const user = userEvent.setup();
+      const trigger = (
+        await screen.findAllByRole("button", { name: "Menu akun Ani" }, { timeout: 8000 })
+      )[0] as HTMLElement;
+      trigger.focus();
+      await user.keyboard("{Enter}");
+      const out = await screen.findByRole("menuitem", { name: "Keluar" }, { timeout: 8000 });
+      out.focus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(calls).toContain(LOGOUT), { timeout: 8000 });
+      expect(
+        await screen.findByText(
+          "Gagal keluar. Sesi Anda masih aktif; coba lagi.",
+          {},
+          { timeout: 8000 },
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(auth.getAccessToken()).toBe("t"));
+      expect(auth.getState()).toEqual({ status: "authenticated" });
+      expect(window.location.pathname).toBe("/");
+      expect(screen.queryByRole("heading", { level: 1, name: "Masuk" })).toBeNull();
+      expect(app.queryClient.getQueryCache().getAll().length).toBeGreaterThan(0);
+      app.unmount();
+      (await import("@erpora/ui/toaster")).toast.dismiss();
+    }
+  }, 40_000);
 });

@@ -27,7 +27,10 @@ export const PUBLIC_GATE_PATHS: ReadonlySet<string> = new Set([
 
 const SignOutContext = createContext<() => Promise<void>>(() => Promise.resolve());
 
-/** Keluar dari menu pengguna: mengakhiri sesi lalu membuka `/login` bersih (tanpa `returnTo`). */
+/**
+ * Keluar dari menu pengguna: mengakhiri sesi lalu membuka `/login` bersih (tanpa `returnTo`). Menolak (reject) bila server
+ * tidak mengakui logout; sesi lokal tetap aktif.
+ */
 export function useSignOut(): () => Promise<void> {
   return useContext(SignOutContext);
 }
@@ -47,7 +50,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     // Dibaca dan dihapus oleh efek di bawah saat keadaan berubah ke anonymous (urutan dengan lanjutan await tak pasti).
     explicitSignOut.current = true;
-    await logout();
+    const signedOut = await logout();
+    if (!signedOut) {
+      // Server tidak mengakui logout: sesi tetap aktif (komputer bersama tidak boleh tampak sudah keluar). Menu pengguna
+      // menampilkan galat dengan opsi coba lagi.
+      explicitSignOut.current = false;
+      throw new Error("signout_failed");
+    }
   }, [logout]);
 
   const returnTo = safeReturnTo(new URLSearchParams(location.search).get("returnTo"));
