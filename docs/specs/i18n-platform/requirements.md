@@ -192,7 +192,7 @@ Platform ERPora membutuhkan satu sistem terjemahan yang dipakai backend (Go) dan
 5. THE CLI SHALL menyediakan `erpora i18n:override set|list|rm` sebagai antarmuka utama (seperti `erpora modules`), dengan konfirmasi untuk penghapusan.
 6. WHEN override berubah, THE revisi namespace SHALL naik sehingga `ETag` katalog berubah dan frontend memuat ulang tanpa reload halaman.
 7. THE setiap perubahan override SHALL dicatat ke audit (log terstruktur sampai audit writer PRD-001 tersedia).
-8. THE endpoint mutasi SHALL memakai pengamanan sementara yang sama dengan FR-20.2 (aktif hanya bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true`) sampai PRD-001 menyediakan authz sungguhan; di luar itu `404`.
+8. **Direvisi 4 Nov 2026 (K-C2.4, disetujui pemilik produk; PRD-001 Q39, PRD-000 Q44): flag dipensiunkan di PRD-001 C2 (task C2.12), mutasi dijaga permission + `module.RequireMFA()`; sampai C2.12 selesai perilaku di bawah tetap berlaku.** THE endpoint mutasi SHALL memakai pengamanan sementara yang sama dengan FR-20.2 (aktif hanya bila `ERP_ENV=development` atau `ERP_MODULES_ADMIN_API=true`) sampai PRD-001 menyediakan authz sungguhan; di luar itu `404`.
 9. THE override SHALL tidak menimpa pesan galat yang kodenya menjadi kontrak: `code` tetap stabil; hanya `message` yang berubah.
 10. THE API dan CLI SHALL masuk spec ini; UI manajemen istilah dikerjakan di blok lain (diputuskan 29 Okt 2026).
 

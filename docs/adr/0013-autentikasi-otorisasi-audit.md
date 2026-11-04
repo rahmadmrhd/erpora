@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Tanggal:** 2 November 2026
-- **Penyetuju:** pemilik produk, untuk keputusan K-C1.1 sampai K-C1.9 (sesuai rekomendasi, 2 November 2026) dan keputusan 3 November 2026 (PRD-001 Q16, bagian 7a). Butir §8 adalah temuan review independen yang diterapkan sesuai spek, bukan keputusan pemilik produk.
-- **Rujukan:** PRD-001 (Q10, Q14, Q15, Q16), PRD-000 (Q42), `docs/security/security-guidelines.md` §2, §3.4 sampai §3.6, §3.10, §3.12, `docs/architecture/api-guidelines.md` §8, §12, rencana `docs/superpowers/plans/2026-11-02-c1-identity-lokal.md`.
+- **Penyetuju:** pemilik produk, untuk keputusan K-C1.1 sampai K-C1.9 (sesuai rekomendasi, 2 November 2026), keputusan 3 November 2026 (PRD-001 Q16, bagian 7a), dan keputusan K-C2.1 sampai K-C2.8 (sesuai rekomendasi, 4 November 2026; §10, PRD-001 Q36 sampai Q43). Butir §8 adalah temuan review independen yang diterapkan sesuai spek, bukan keputusan pemilik produk.
+- **Rujukan:** PRD-001 (Q10, Q14, Q15, Q16, Q35 sampai Q43), PRD-000 (Q42, Q44), `docs/security/security-guidelines.md` §2, §3.4 sampai §3.6, §3.10, §3.12, `docs/architecture/api-guidelines.md` §8, §12, rencana `docs/superpowers/plans/2026-11-02-c1-identity-lokal.md`.
 
 > Catatan penomoran: berkas ini dahulu dirujuk sebagai "ADR-013"; rujukan lama sama dengan ADR-0013.
 
@@ -82,9 +82,9 @@ Seluruhnya **disetujui oleh pemilik produk pada 2 November 2026 sesuai rekomenda
 | K-C1.4 | Linter kontrak diperluas aditif: penanda `x-erp-credential-response: true` untuk respons login/refresh pada modul `core`/`platform` terdaftar allowlist; refresh token tidak pernah di body; dicatat di security-guidelines §2 (granularitas dirinci pada bagian 7a butir 3) | `accessToken` harus ada di respons; larangan kredensial tetap berlaku di tempat lain |
 | K-C1.5 | `Invocation.In io.Reader` (aditif) dan prompt tersembunyi (`x/term`) atau stdin; tanpa flag `--password` | Sandi lewat flag bocor ke riwayat shell dan daftar proses |
 | K-C1.6 | SMTP lewat env sementara `ERP_MAIL_DRIVER`, `ERP_SMTP_*` (`ERP_SMTP_PASSWORD` disamarkan); pindah ke Settings platform di C3 tanpa mengubah `sdk/mail`. Penyesuaian 3 Nov 2026 (PRD-001 Q20 sampai Q23): `serve` di production gagal start bila `ERP_MAIL_DRIVER` tidak diisi (`log` sah hanya bila eksplisit); URL publik untuk tautan email berasal dari settings platform, bukan env; tautan reset berbentuk `<url-publik>/reset-password#token=<token>`; layanan reset mengirim email di latar terbatas (driver mail tetap sinkron) | Settings (C3) belum ada |
-| K-C1.7 | `internal/platform/identity/store` masuk allowlist GORM D3b (`authorization/store` kelak C2); PRD-000 Q42 | GORM terkurung di satu paket, seperti `modules/store` |
+| K-C1.7 | `internal/platform/identity/store` masuk allowlist GORM D3b (`authorization/store` ditambahkan di C2.0, 4 Nov 2026, PRD-001 Q35; `sdk/authz` lewat K-C2.7, PRD-000 Q44); PRD-000 Q42 | GORM terkurung di satu paket, seperti `modules/store` |
 | K-C1.8 | `/.well-known/jwks.json` (kelak `/oauth/token`) didaftarkan platform di luar `/api/{slug}` | Modul tidak dapat mendaftarkan rute di luar slugnya |
-| K-C1.9 | `ERP_AUTHZ_STUB` dan `ERP_MODULES_ADMIN_API` dipertahankan sampai C2; C1 hanya mengganti authN dan aktor audit | Gerbang mutasi admin bergantung authz penuh |
+| K-C1.9 | `ERP_AUTHZ_STUB` dan `ERP_MODULES_ADMIN_API` dipertahankan sampai C2; C1 hanya mengganti authN dan aktor audit. **Direvisi 4 Nov 2026 (K-C2.4, disetujui pemilik produk, PRD-001 Q39): `ERP_MODULES_ADMIN_API` dipensiunkan di C2 (§10.8); K-C1.9 sendiri hanya menyebut "sampai C2", yang berbenturan dengan PRD-000 FR-20.2 ("sampai PRD Identity & Authorization selesai", yaitu C4), dan butir FR-20.2 itu yang direvisi** | Gerbang mutasi admin bergantung authz penuh |
 
 ### 7a. Keputusan pemilik produk 3 November 2026 (PRD-001 Q16)
 
@@ -160,3 +160,66 @@ Diambil implementer C1.1 saat membangun `crypto` dan `config`, lalu ditanyakan k
 | KeyIDOf | Id kunci segel diturunkan dari material: `KeyIDOf` = byte pertama SHA-256(material); tabrakan id (peluang 1/256) antara kunci aktif dan lama ditolak di `config` dan `NewSealer`, dengan pesan agar kunci diganti | Id tetap cocok saat kunci pindah dari `ERP_SECRET_KEY` ke `ERP_SECRET_KEY_PREVIOUS` tanpa konfigurasi id terpisah; hash searah tidak membocorkan material |
 | doctor | `erpora doctor` melaporkan **FAIL** bila `ERP_SECRET_KEY` kosong, walau kehadiran tidak diwajibkan untuk `migrate`/`inspect`/dll. | Kunci kosong berarti `serve` tidak akan berjalan; lebih baik ketahuan saat diagnosis |
 | Config parsial | `config.Load` mengembalikan Config parsial bersama galat kunci; hanya `doctor` yang memakainya, pemanggil lain wajib berhenti (§3) | `doctor` tetap dapat memeriksa komponen lain |
+
+## 10. Otorisasi (PRD-001 C2)
+
+Mekanisme mesin otorisasi tiga lapis (aksi, record/scope, field) yang menggantikan stub PRD-000. Butir 10.1 sampai 10.6 dan 10.8 adalah **keputusan implementer sesuai PRD** (PRD-001 Q35, 4 November 2026; bukan keputusan pemilik produk). Butir yang diberi label K-C2.x **disetujui pemilik produk pada 4 November 2026 sesuai rekomendasi** (PRD-001 Q36 sampai Q43, PRD-000 Q44). Rencana: `docs/superpowers/plans/2026-11-04-c2-authorization.md`.
+
+### 10.1 Model hak dan evaluasi
+
+- **Union per baris, tanpa deny.** Hak efektif adalah gabungan semua baris `role_permissions` semua role pengguna (ditambah role sistem `authenticated`, berlaku implisit untuk setiap principal manusia tanpa baris `user_roles`). Sebuah aksi pada record diizinkan bila **ada satu baris yang memuat aksi itu dan scope-nya cocok**; scope baris lain (mis. baris `read` ber-scope `all`) **tidak pernah meminjamkan** cakupannya ke aksi lain. Contoh: role A `read`+`all` dan role B `update`+`owner` tidak menghasilkan `update` atas semua record. Dalam satu baris kondisi scope digabung **AND**; antarbaris dan antarrole **OR** (FR-111).
+- **Token scope** (tersimpan `jsonb`, larik tidak kosong; `all` eksplisit): `all`; `owner` (`owner_field = principal.user_id`, default `created_by`, nilai `NULL` tidak pernah cocok); `assigned:<dimensi>` (`scope_fields[dimensi]` anggota nilai penugasan pengguna; **tidak ada penugasan = FALSE**, bukan klausa yang dilewati); `custom:<key>` (`ScopeProvider` modul). Untuk `create`, scope diperiksa terhadap data yang akan dibuat.
+- **Field group** per role dan resource: `none`/`read`/`write`; grup `default` mengikuti aksi; field tak tercantum masuk grup `default`. Nama field dari DTO camelCase dinormalisasi ke snake_case (`authz.CanonicalField`) sebelum dicocokkan dengan grup manifest. Field `none` dihapus dari respons; tulis ke field tanpa `write` dan filter/sort pada field `none` dijawab 403 `field_forbidden` dengan daftar field.
+- **Gagal tertutup** (NFR-106): galat evaluasi, cache rusak, scope tersimpan tidak sah atau kosong, `ScopeProvider` yang galat atau panic (di-`recover`, dicatat, ditolak), nilai record tidak terbaca atau field scope tidak ada pada record, principal tidak ada, dan engine tidak ada di context semuanya menolak (`Filter` menghasilkan `WHERE false`; `Check` tanpa principal menjawab `ErrNotFound` agar implementasi kontrak yang dipanggil tanpa principal menjawab "tidak ditemukan", FR-119).
+- Nama kolom pada klausa `Filter` hanya berasal dari manifest tervalidasi (`^[a-z][a-z0-9_]*$`), tidak pernah dari input; nilai penugasan selalu parameter terikat.
+- `Administrator` (role sistem): semua izin untuk resource modul berstatus `enabled`, termasuk modul baru; matriksnya tidak dapat diubah; administrator aktif terakhir tidak dapat dicabut atau dinonaktifkan (serialisasi lewat kunci advisory transaksi). Baris matriks modul yang di-disable tetap tersimpan tetapi tidak berlaku.
+
+### 10.2 Penempatan dan dependency inversion
+
+Mesin ada di `internal/platform/authorization` (katalog resource dari registry, kompilasi hak, evaluasi scope, field access, cache, revisi) dengan GORM terkurung di `internal/platform/authorization/store` (allowlist D3b, K-C1.7). Modul memakai `sdk/authz` (`Require`, `Filter`, `Check`, `Fields`, `MaskFields`, `CheckWrite`, `ScopeProvider`, `Admin`), yang mendelegasikan ke `Engine` di context; `authz.WithEngine`/`WithAdmin` hanya dipanggil platform (aturan `IDENT` diperluas di C2.7) dan `authz.AdminFrom` hanya `modules/core`, sejalan dengan pola `identity.Admin` (§7a butir 5). `sdk/authz` masuk allowlist D3b (**K-C2.7**, PRD-000 Q44) karena tanda tangan FR-115 `Filter(...) func(*gorm.DB) *gorm.DB`. Tabel otorisasi milik platform di database tenant tanpa `tenant_id` (PRD-001 Q18), termasuk `org_units` (D-C2.1).
+
+### 10.3 Cache dan revisi
+
+- Hak efektif dikompilasi per `(tenantID, userID, permission_revision, revisi snapshot modul)` dan disimpan di cache LRU berbatas (bawaan 10.000 entri) berisi grant terkompilasi; kunci memuat pengguna dan tenant sehingga cache tidak bocor lintas pengguna atau tenant. Sasaran: `Require` ≤ 20 µs p99 pada cache hit (NFR-102, benchmark).
+- `authz_state.permission_revision` naik **dalam transaksi yang sama** dengan setiap perubahan role, matriks, field access, `user_roles`, penugasan scope, unit organisasi, dan sinkronisasi `default_roles` (install/upgrade modul, pemberian role `administrator` oleh `core:create-admin`). Penyebaran antar instance lewat `StateNotifier` (kanal `authz.revision_changed`) ditambah muat ulang berkala 1 menit (pola `session.RevocationList`, §2); notifikasi yang hilang paling lama basi satu interval muat ulang.
+- **Server tidak pernah memakai klaim JWT `perm_rev` untuk keputusan** (§"Alternatif yang ditolak": permission di JWT); klaim hanya informasi bagi klien. Perubahan role terlihat tanpa login ulang.
+
+### 10.4 Pemberitahuan revisi ke klien (K-C2.8)
+
+Setiap respons request yang lolos `Authenticate` (termasuk 403/404/422 setelah autentikasi; tidak pada route `Public()` dan 401) membawa header **`X-Erp-Perm-Rev`** (bilangan bulat desimal ≥ 1; api-guidelines §12, aditif). Klien memuat ulang `GET /api/bootstrap` (single-flight) bila nilainya lebih besar dari `permRev` tersimpan dan membersihkan cache query terkait; nilai tidak sah diabaikan. Bootstrap memuat `permRev` (kini > 0), `permissions` (daftar datar aksi yang dimiliki, termasuk yang bersyarat), dan properti aditif `access` per resource (`actions`, `conditional`, `fields`). ETag bootstrap berubah saat revisi naik. Hanya UX: backend tetap memeriksa tiap request.
+
+### 10.5 Hak sistem dan log `authz.system_call`
+
+`authz.AsSystem(ctx, reason)` memberi izin penuh dan hanya sah dari paket `internal/application` modul dengan `reason` konstanta string tidak kosong (analyzer `ASYS`, C2.7). **Sebelum audit C3**, setiap pemakaian dicatat log terstruktur **`authz.system_call`** (principal asli dan `reason`, tanpa nilai record); C3 memindahkannya ke `audit_log` (`actor` = principal asli, `metadata.system_reason`, FR-119 butir 2 dan FR-130). Aturan hak sistem `identity.Admin` (`cli:core:` saja, §7b butir 1) tidak berubah; hanya operasi administrasi baru modul `core` (daftar pengguna, sesi, role) memakai `authz.Require("core.*")` (PRD-001 Q35 D-C2.13).
+
+### 10.6 Pencegahan eskalasi hak (K-C2.6)
+
+Hanya pemegang role `administrator` yang dapat memberi atau mencabut role `administrator`. Pengguna lain hanya dapat memberi role, dan menulis baris matriks serta akses grup field, yang tidak melampaui hak efektifnya sendiri; pelanggaran dijawab 422 `business_rule_violated` dengan `details[].code = privilege_escalation`. Alasan: pemegang `core.user.update` tidak boleh menjadikan dirinya administrator. Role bawaan modul yang diubah admin ditandai `customized` dan tidak ditimpa saat upgrade (FR-113).
+
+### 10.7 Sumber nilai dimensi scope (K-C2.3)
+
+Modul pemilik dimensi mendaftarkan `authz.DimensionSource{Key, Search, Labels}` lewat `Registrar`; implementasinya menegakkan otorisasi terhadap principal admin seperti kontrak. `core` memanggilnya lewat `authz.Admin.DimensionValues`. Dimensi `core.org_unit` (unit organisasi, FR-118, dengan penugasan "beserta turunan" lewat `path` materialized) disediakan platform. Alasan: `core` tidak dapat bergantung pada semua modul (D1, D8), sehingga frasa FR-111 "lookup lewat `contract/`" diganti.
+
+### 10.8 Pensiun stub dan flag sementara
+
+- **`ERP_AUTHZ_STUB`** dan `NewStubFieldMasker` dihapus di C2.5; bila env masih diset, `serve` mencatat WARN sekali ("diabaikan sejak C2") dan tidak gagal (mesin selalu gagal tertutup).
+- **`ERP_MODULES_ADMIN_API` dipensiunkan di C2.12 (K-C2.4, merevisi K-C1.9 pada tabel §7):** mutasi modul dan override i18n dijaga `platform.modules.manage`/`platform.i18n.manage` ditambah `module.RequireMFA()`; flag diabaikan dengan WARN; `features.modulesAdminApi` tetap ada di kontrak dan selalu `true`.
+
+### 10.9 Keputusan pemilik produk K-C2.1 sampai K-C2.8 (4 November 2026)
+
+Seluruhnya **disetujui pemilik produk pada 4 November 2026 sesuai rekomendasi** (opsi pertama tiap butir); pencatatan formal dan alasan di PRD-001 Q36 sampai Q43 dan PRD-000 Q44:
+
+| # | Keputusan | Rujukan |
+| --- | --- | --- |
+| K-C2.1 | `example.notes.read` diganti `example.note.read`; capability lain yang berbentuk `<resource>.<aksi>` dideklarasikan sebagai resource apa adanya (butir K35 resource-metadata direvisi) | PRD-001 Q36 |
+| K-C2.2 | `POST /api/core/users` serta `disable`/`enable` (permission `core.user.create`, `core.user.update`); disable mencabut semua sesi | PRD-001 Q37 |
+| K-C2.3 | `authz.DimensionSource` lewat `Registrar` (§10.7) | PRD-001 Q38 |
+| K-C2.4 | `ERP_MODULES_ADMIN_API` dipensiunkan di C2 (§10.8) | PRD-001 Q39, PRD-000 Q44 |
+| K-C2.5 | `label` manifest adalah kunci i18n namespace modul | PRD-001 Q40 |
+| K-C2.6 | Aturan eskalasi `privilege_escalation` (§10.6) | PRD-001 Q41 |
+| K-C2.7 | `sdk/authz` masuk allowlist D3b | PRD-001 Q42, PRD-000 Q44 |
+| K-C2.8 | Header `X-Erp-Perm-Rev` (§10.4) | PRD-001 Q43 |
+
+### 10.10 Catatan terbuka (keputusan koordinator sebelum C2.3 dan C2.4)
+
+**Impor GORM oleh paket mesin.** Antarmuka `authz.Engine` (rencana C2.3) menyertakan `Filter(...) func(*gorm.DB) *gorm.DB`, sehingga paket `internal/platform/authorization` (mesin, **bukan** `store`) juga harus mengimpor `gorm.io/gorm` (dan `gorm.io/gorm/clause` untuk klausa owner/assigned), padahal D3b hanya mengizinkan `authorization/store` (K-C1.7) dan `sdk/authz` (K-C2.7). Persetujuan K-C2.7 tidak mencakup paket mesin. Opsi: (a) **rekomendasi; tetap dalam spek (D3b dan tanda tangan publik FR-115 tidak berubah; hanya antarmuka internal `authz.Engine` rencana C2.3 yang berubah), sehingga cukup diputuskan koordinator:** pindahkan penerjemahan ke GORM seluruhnya ke `sdk/authz` (yang sudah disetujui): `Engine.Filter` mengembalikan deskripsi netral (`authz.RowFilter`: cabang OR berisi kondisi AND, tanpa tipe GORM) dan `authz.Filter` di `sdk/authz` yang menerapkannya ke `*gorm.DB`; mesin tidak mengimpor GORM; (b) tambahkan `internal/platform/authorization` ke allowlist D3b (**hanya opsi ini yang memerlukan persetujuan pemilik produk**, ditambah pembaruan empat tempat). Sampai diputuskan, allowlist yang berlaku hanya `authorization/store` dan `sdk/authz`; keputusan harus tuntas sebelum C2.3 dan C2.4 dimulai (tidak memblokir C2.0).

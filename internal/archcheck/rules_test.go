@@ -88,11 +88,13 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 		example + "/internal/infrastructure/persistence",
 		root + "/internal/platform/database",
 		root + "/internal/platform/modules/store",
-		root + "/internal/platform/i18n/store",     // PRD-000 Q35 D-1
-		root + "/internal/platform/desks/store",    // revisi M3a, design.md section 6 (timpaan Desk, hanya baca)
-		root + "/internal/platform/identity/store", // PRD-000 Q42, ADR-0013 (identitas lokal, control DB)
-		root + "/internal/platform/settings/store", // PRD-001 Q20 (subset Settings platform di C1, tenant DB)
+		root + "/internal/platform/i18n/store",          // PRD-000 Q35 D-1
+		root + "/internal/platform/desks/store",         // revisi M3a, design.md section 6 (timpaan Desk, hanya baca)
+		root + "/internal/platform/identity/store",      // PRD-000 Q42, ADR-0013 (identitas lokal, control DB)
+		root + "/internal/platform/settings/store",      // PRD-001 Q20 (subset Settings platform di C1, tenant DB)
+		root + "/internal/platform/authorization/store", // PRD-001 Q35 (K-C1.7), tabel otorisasi tenant
 		sdk + "/data",
+		sdk + "/authz", // PRD-000 Q44 (K-C2.7): tanda tangan authz.Filter(...) func(*gorm.DB) *gorm.DB
 	} {
 		assertNone(t, Check(repoWith(pkg(ok, "gorm.io/gorm"))), "D3b")
 	}
@@ -102,13 +104,14 @@ func TestD3b_GormOutsideAllowedPackages(t *testing.T) {
 	// paket desks lain (bukan store) tetap tidak boleh memakai GORM
 	assertViolation(t, Check(repoWith(pkg(root+"/internal/platform/desks", "gorm.io/gorm"))), "D3b")
 	// paket identity lain (password, token, session, guard, mfa, reset, root) tetap tidak boleh memakai GORM;
-	// authorization/store belum ada dan baru masuk allowlist bersama C2
+	// sdk lain (selain data dan authz) juga tidak
 	for _, bad := range []string{
 		root + "/internal/platform/identity",
 		root + "/internal/platform/identity/password",
 		root + "/internal/platform/identity/token",
 		root + "/internal/platform/identity/session",
-		root + "/internal/platform/authorization/store",
+		sdk + "/module",
+		sdk + "/identity",
 	} {
 		assertViolation(t, Check(repoWith(pkg(bad, "gorm.io/gorm"))), "D3b")
 	}

@@ -314,6 +314,7 @@ cancelled | rejected ──amend──▶ (dokumen baru, status draft, amendedFr
 | `traceparent` | Request | Propagasi trace OTel (PRD-000 FR-17) |
 | `X-Request-Id` | Respons | Selalu ada (PRD-000 NFR-07) |
 | `ETag` | Respons | Versi record |
+| `X-Erp-Perm-Rev` | Respons | Revisi hak akses (`permission_revision`, bilangan bulat desimal ≥ 1) pada **setiap** respons request yang lolos `Authenticate` (termasuk 403/404/422 setelah autentikasi); tidak ada pada route `Public()` dan pada 401. Klien (hanya UX) memuat ulang `GET /api/bootstrap` bila nilainya lebih besar dari `permRev` tersimpan, agar perubahan role terlihat tanpa login ulang (PRD-001 FR-114, FR-117, Q43). Bukan masukan keputusan otorisasi (server selalu memakai revisi terkininya sendiri) dan tidak memuat data sensitif; aditif (keputusan pemilik produk 4 Nov 2026) |
 | `Location` | Respons | Pada `201`/`202` |
 | `Retry-After` | Respons | Pada `429`/`503` |
 | `Deprecation`, `Sunset` | Respons | Endpoint yang akan dihapus (§14) |

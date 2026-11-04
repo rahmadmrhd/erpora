@@ -14,6 +14,7 @@
 
 - **C1 ditutup lebih dulu:** C1.15 Step 3 (review akhir independen + review atas diff perbaikan), Step 4 (verifikasi browser), dan butir M3(b) yang menunggu pemilik produk. Task C2.0 (dokumen) boleh berjalan paralel; kode C2 dimulai setelah C1 di-merge.
 - **Butir konfirmasi K-C2.7 (allowlist `sdk/authz`) dijawab sebelum C2.0/C2.3; K-C2.1 (permission warisan) dan K-C2.5 (label) sebelum C2.1; K-C2.8 (header revisi) sebelum C2.5;** K-C2.2 sampai K-C2.4 dan K-C2.6 sebelum Wave 3. Daftar ada di akhir dokumen.
+- **Catatan terbuka sebelum C2.3/C2.4 (temuan C2.0, ADR-0013 §10.10):** `authz.Engine.Filter` bertipe `func(*gorm.DB) *gorm.DB` membuat paket mesin `internal/platform/authorization` ikut mengimpor GORM, padahal D3b hanya mengizinkan `authorization/store` dan `sdk/authz`. Rekomendasi (dalam spek, cukup keputusan koordinator): penerjemahan ke GORM seluruhnya di `sdk/authz` (`Engine.Filter` mengembalikan deskripsi netral `authz.RowFilter`). Alternatif yang butuh persetujuan pemilik produk: tambahkan `internal/platform/authorization` ke allowlist D3b.
 
 ## Global Constraints
 
@@ -86,9 +87,9 @@ Berkas yang dimiliki satu task tidak disentuh task lain dalam gelombang yang sam
 
 **Interfaces:** Produces: daftar D3b identik di empat tempat (ditegakkan `TestD3bAllowlistDocsMatchRules`); Q35 berisi "keputusan yang saya ambil" (bagian akhir dokumen ini) sebagai keputusan implementer dan jawaban K-C2.x pemilik produk dengan tanggal absolut.
 
-- [ ] **Step 1: Test.** Tambah kasus `internal/platform/authorization/store` dan `sdk/authz` pada tes allowlist; jalankan `go test ./internal/archcheck/... ./tests/architecture/...`, harapkan gagal.
-- [ ] **Step 2:** perbarui empat tempat sekaligus; tes hijau; `task lint arch`.
-- [ ] **Step 3:** tulis ADR-0013 §10 (mesin, union per baris, cache dan revisi, mekanisme revisi klien menurut K-C2.8, log `authz.system_call` sementara sebelum audit C3, pensiun stub) dan Q35; catat jawaban K-C2.x saat diterima (ubah juga butir spek yang bertentangan, tutup pertanyaan terbuka).
+- [x] **Step 1: Test.** Tambah kasus `internal/platform/authorization/store` dan `sdk/authz` pada tes allowlist; jalankan `go test ./internal/archcheck/... ./tests/architecture/...`, harapkan gagal.
+- [x] **Step 2:** perbarui empat tempat sekaligus; tes hijau; `task lint arch` (4 Nov 2026: `go test ./internal/archcheck/... ./tests/architecture/...` hijau, `golangci-lint run ./internal/archcheck/...` 0 isu; `task lint` penuh dijalankan koordinator di gerbang)
+- [x] **Step 3:** tulis ADR-0013 §10 (mesin, union per baris, cache dan revisi, mekanisme revisi klien menurut K-C2.8, log `authz.system_call` sementara sebelum audit C3, pensiun stub) dan Q35; catat jawaban K-C2.x saat diterima (ubah juga butir spek yang bertentangan, tutup pertanyaan terbuka).
 - [ ] **Step 4: Commit** `docs(core): keputusan C2 dan allowlist D3b authorization/store, sdk/authz`.
 
 ### Task C2.1: Deklarasi manifest `resources`, dimensi, role bawaan (FR-110)
@@ -418,7 +419,7 @@ Kode galat baru dalam katalog api-guidelines §8 bila diperlukan: `last_administ
 | D-C2.4 | Bootstrap: `permissions` diisi daftar datar, ringkasan per resource di properti aditif `access` | FR-117, api-guidelines §14.1 |
 | D-C2.5 | Sebelum audit C3, pemakaian `AsSystem` dicatat log terstruktur `authz.system_call` (principal asli + reason); C3 memindahkannya ke `audit_log` | FR-119 butir 2, FR-130 milik C3 |
 | D-C2.6 | Penjelas akses untuk record tertentu memakai pemuat nilai scope opsional yang didaftarkan modul pemilik (hanya kolom `owner_field`/`scope_fields`); tanpa pemuat, penjelas menjawab per lapis tanpa evaluasi record | FR-114 butir 4, D2 (platform tidak mengimpor modul) |
-| D-C2.7 | `internal/platform/authorization/store` masuk allowlist D3b (sudah disetujui sebagai K-C1.7); `sdk/authz` menunggu K-C2.7 | K-C1.7, PRD-001 Q15 |
+| D-C2.7 | `internal/platform/authorization/store` masuk allowlist D3b (sudah disetujui sebagai K-C1.7); `sdk/authz` disetujui lewat K-C2.7 (4 Nov 2026, PRD-000 Q44); keduanya sudah di `rules.go` (C2.0) | K-C1.7, PRD-001 Q15, Q42 |
 | D-C2.13 | Operasi `identity.Admin` yang ada (`CreateAdmin`, `ResetMFA`, `UnlockAccount`, `LogoutAllDevices`, `RotateSigningKeys`) **tetap** memakai aturan administrator ber-MFA atau hak sistem `cli:core:` (Q30 butir 1, tidak dilonggarkan); hanya operasi baru C2.11 (`ListUsers`, `GetUser`, `ListSessions`, `RevokeSession`) memakai `authz.Require("core.user.*")` | Q30 butir 1, FR-114 |
 | D-C2.8 | Mode penugasan FR-118 disimpan sebagai kolom aditif `user_scope_assignments.include_descendants` | FR-118 (dua mode), §4 aditif |
 | D-C2.9 | Kode `scope` tersimpan sebagai larik token PRD (`all`, `owner`, `assigned:<dim>`, `custom:<key>`), `all` eksplisit | FR-111; mencegah gagal terbuka pada larik kosong |

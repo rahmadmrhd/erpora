@@ -25,7 +25,9 @@ var GormAllowedPaths = []string{
 	"internal/platform/desks/store",
 	"internal/platform/identity/store",
 	"internal/platform/settings/store",
+	"internal/platform/authorization/store",
 	"sdk/data",
+	"sdk/authz",
 }
 
 func gormAllowedPath(rp string) bool {

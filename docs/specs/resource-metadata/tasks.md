@@ -427,7 +427,7 @@ Disetujui dan dicatat di requirements (K25 sampai K34), design (D-39 sampai D-46
 5. `lockWhen` hanya pada resource dokumen konkret (K29).
 6. Nama status baku `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done` (K30; `need_approval` diganti `pending_approval`, dapat dibatalkan); pemicu `BEFORE TRUNCATE` (K31); `Down` pembalik expand hanya-development (K32).
 7. `transaction-data-standards.md` §1 dan §2 serta `roadmap-and-risks.md` diselaraskan ke K23 (K33); `posted` dipetakan ke `accepted`.
-8. Kunci resource selalu tunggal; tabel dan URL jamak turunan `naming.Plural`; capability tulis-tangan `example.notes.read` tidak diganti (K35; uji `TestResourceKeyMappingRule`).
+8. Kunci resource selalu tunggal; tabel dan URL jamak turunan `naming.Plural`; capability tulis-tangan `example.notes.read` **diganti** menjadi `example.note.read` di PRD-001 C2.1 (K35 direvisi 4 Nov 2026, disetujui pemilik produk, PRD-001 Q36; uji `TestResourceKeyMappingRule`).
 9. Modul tanpa tag rilis dikecualikan dari syarat `deprecated`/`removeAfter`/MAJOR (K34).
 
 ### Persetujuan lanjutan (2 Nov 2026)
