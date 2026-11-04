@@ -104,7 +104,7 @@ func moduleViews(reg *registry.Registry) []moduleView {
 func permissionViews(reg *registry.Registry) []permissionView {
 	views := []permissionView{}
 	for _, e := range reg.Entries() {
-		caps := slices.Clone(e.Manifest.Capabilities)
+		caps := slices.Clone(e.Manifest.Permissions())
 		slices.Sort(caps)
 		for _, c := range caps {
 			views = append(views, permissionView{Module: e.Manifest.Key, Permission: c})

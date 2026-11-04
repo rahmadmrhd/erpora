@@ -19,7 +19,7 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 
 | Ekstensi | Dipakai pada | Arti |
 | --- | --- | --- |
-| `x-erp-permission` | operasi | Permission `<slug>.<resource>.<action>` (platform: `platform.<resource>.<action>`); harus ada di `capabilities` manifest |
+| `x-erp-permission` | operasi | Permission `<slug>.<resource>.<action>` (platform: `platform.<resource>.<action>`); harus berupa permission turunan `resources` manifest (`<resource>.<aksi>`) |
 | `x-erp-public` | operasi | Route tanpa permission (`Registrar.Public`) |
 | `x-erp-authenticated` | operasi | Route yang cukup dengan login, tanpa permission tertentu (PRD-001 Q29, disetujui pemilik produk 3 Nov 2026): `Registrar.Handle(method, path, "", h, module.Authenticated())` pada modul, atau route platform langsung di router (`GET /api/bootstrap`). Tanpa `x-erp-permission` dan tanpa 403 permission, tetapi 401 wajib didokumentasikan; Principal dan aturan MFA tetap berlaku. Test kesesuaian memeriksa route non-publik tanpa permission ↔ penanda ini, dan route berpenanda ini wajib masuk `tests/security/authenticated_routes.txt` |
 | `x-erp-classification` | properti, parameter | `public`, `internal`, `confidential`, `highly_confidential` (security-guidelines §2). Tanpa anotasi dianggap `internal` |
@@ -79,7 +79,7 @@ aman terhadap siklus) dan diambil yang tertinggi; properti tanpa anotasi diangga
 
 - `internal/app/contract_conformance_test.go`: `TestContracts_RoutesMatchOperations` (method, path penuh, `x-erp-permission`, `x-erp-public`; `platform.core` dicocokkan lewat kesetaraan dispatch karena route gabungan `{key}/{sub}`, Q29), `TestContracts_PermissionsDeclaredInManifest`, `TestContracts_ClassificationMatchesRoute`, `TestContracts_ErpRefsOnlyToDependencies`, `TestContracts_EveryEntryHasContract`.
 - `internal/app/contract_response_integration_test.go`: respons nyata modul referensi divalidasi terhadap skema kontraknya.
-- Menambah `Handle` tanpa operasi (atau sebaliknya) menggagalkan test di atas; `make:handler` menjaga ketiganya (route, capability, operasi) sinkron.
+- Menambah `Handle` tanpa operasi (atau sebaliknya) menggagalkan test di atas; `make:handler` menjaga ketiganya (route, resource/aksi, operasi) sinkron.
 
 ## 6. `contracts:generate` dan `--check`
 

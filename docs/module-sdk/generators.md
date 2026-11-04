@@ -25,7 +25,7 @@ Semua command dijalankan dari dalam repo (`task erpora -- make:... ` atau binary
 | `make:entity <module> <Name>` | Entity + test di `internal/domain` |
 | `make:usecase <module> <Name> [--query]` | Use case (command atau query) + test di `internal/application` |
 | `make:repository <module> <Name>` | Port repository, model GORM, implementasi, mapping, dan test mapping |
-| `make:handler <module> <Name> --route "METHOD /path" --permission <cap>` | Handler + test (endpoint ber-ID disertai kerangka test IDOR), route di `module.go`, capability di `module.json`, dan operasi + skema di `openapi.yaml` |
+| `make:handler <module> <Name> --route "METHOD /path" --permission <cap>` | Handler + test (endpoint ber-ID disertai kerangka test IDOR), route di `module.go`, resource/aksi di `module.json` (permission harus turunan `resources`; aksi standar ditambahkan otomatis, aksi kustom dideklarasikan manual; resource baru beserta label katalog i18n ikut dibuat), dan operasi + skema di `openapi.yaml` |
 | `make:contract <module> <Name>` | Interface + DTO di `contract/` (tanpa impor `internal/`) |
 | `make:command <module> <name>` | Command CLI modul (`<slug>:<name>`) dan pendaftarannya di `module.go` |
 
@@ -104,7 +104,7 @@ Aturan penanda untuk command tulis lain pada binary dev (`serve`, `migrate up`, 
 
 ## 7. `module:check` dan `doctor`
 
-- `module:check [name]`: per modul (atau satu modul: direktori, slug, atau key) memeriksa manifest (`SCHEMA`: JSON Schema + SemVer + constraint), `require` go.mod ↔ `dependencies` manifest dan impor (`D8`), versi go/toolchain seragam (`GOVERSION`), dan awalan capability = slug (`CAPABILITY_PREFIX`). Mencetak `<module> <rule> <detail>`; exit 1 bila ada temuan, `OK` bila bersih.
+- `module:check [name]`: per modul (atau satu modul: direktori, slug, atau key) memeriksa manifest (`SCHEMA`: JSON Schema + SemVer + constraint), `require` go.mod ↔ `dependencies` manifest dan impor (`D8`), versi go/toolchain seragam (`GOVERSION`), deklarasi otorisasi manifest (kunci resource berawalan slug, aksi standar, grup field default, dimensi scope, role bawaan; `SCHEMA`, kode `invalid_resource` dan sejenisnya, fungsi yang sama dengan registry), label otorisasi ada di katalog bahasa dasar, dan awalan capability = slug (`CAPABILITY_PREFIX`). Mencetak `<module> <rule> <detail>`; exit 1 bila ada temuan, `OK` bila bersih.
 - `doctor`: tabel `NAMA STATUS DETAIL` untuk go (≥ toolchain di go.mod), bun (= `packageManager`), task (≥ 3.54.0), docker (hanya untuk `task db:up` dan test integrasi: `warn`), PostgreSQL (`ERP_DATABASE_URL`; password tidak pernah dicetak), `ERP_SECRET_KEY` (temuan tersendiri: `fail` bila kosong atau format salah karena `serve` akan gagal; nilai tidak pernah dicetak), dan `.env`. Exit 1 hanya bila ada `fail`.
 - `secret:generate`: mencetak satu baris nilai `ERP_SECRET_KEY` baru (32 byte acak `crypto/rand`, base64 standar, setara `openssl rand -base64 32`); tidak menyimpan apa pun dan tidak membaca konfigurasi. Jalankan sekali per lingkungan.
 

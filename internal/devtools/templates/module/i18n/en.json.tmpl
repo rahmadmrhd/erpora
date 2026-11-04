@@ -11,7 +11,14 @@
       "description": "Example page of the [[.Title]] module. Replace it with your own page."
     }
   },
-[[end]]  "errors": {
+[[end]]  "resource": {
+    "items": "Items"[[if .Metadata]],
+    "item": "Item"[[end]]
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
+  "errors": {
     "bad_request": "The list parameter is invalid."
   }
 }

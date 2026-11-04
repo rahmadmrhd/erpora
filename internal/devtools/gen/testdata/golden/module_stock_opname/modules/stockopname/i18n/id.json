@@ -11,6 +11,12 @@
       "description": "Halaman contoh modul Stock Opname. Ganti dengan halaman Anda."
     }
   },
+  "resource": {
+    "items": "Item"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
   "errors": {
     "bad_request": "Parameter daftar tidak valid."
   }

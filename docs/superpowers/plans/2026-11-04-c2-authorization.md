@@ -14,7 +14,7 @@
 
 - **C1 ditutup lebih dulu:** C1.15 Step 3 (review akhir independen + review atas diff perbaikan), Step 4 (verifikasi browser), dan butir M3(b) yang menunggu pemilik produk. Task C2.0 (dokumen) boleh berjalan paralel; kode C2 dimulai setelah C1 di-merge.
 - **Butir konfirmasi K-C2.7 (allowlist `sdk/authz`) dijawab sebelum C2.0/C2.3; K-C2.1 (permission warisan) dan K-C2.5 (label) sebelum C2.1; K-C2.8 (header revisi) sebelum C2.5;** K-C2.2 sampai K-C2.4 dan K-C2.6 sebelum Wave 3. Daftar ada di akhir dokumen.
-- **Catatan terbuka sebelum C2.3/C2.4 (temuan C2.0, ADR-0013 §10.10):** `authz.Engine.Filter` bertipe `func(*gorm.DB) *gorm.DB` membuat paket mesin `internal/platform/authorization` ikut mengimpor GORM, padahal D3b hanya mengizinkan `authorization/store` dan `sdk/authz`. Rekomendasi (dalam spek, cukup keputusan koordinator): penerjemahan ke GORM seluruhnya di `sdk/authz` (`Engine.Filter` mengembalikan deskripsi netral `authz.RowFilter`). Alternatif yang butuh persetujuan pemilik produk: tambahkan `internal/platform/authorization` ke allowlist D3b.
+- **Diputuskan 5 Nov 2026 (keputusan koordinator dalam spek; temuan C2.0, ADR-0013 §10.10):** `authz.Engine` TIDAK mengembalikan `func(*gorm.DB) *gorm.DB` (itu akan membuat paket mesin `internal/platform/authorization` mengimpor GORM, padahal D3b hanya mengizinkan `authorization/store` dan `sdk/authz`). `Engine.Filter` mengembalikan deskripsi netral `authz.RowFilter` (cabang OR berisi kondisi AND, tanpa tipe GORM); fungsi publik `authz.Filter` di `sdk/authz` menerjemahkannya ke GORM. Tanda tangan publik FR-115 tidak berubah dan allowlist D3b tidak berubah. Rincian antarmuka ada di Task C2.3 (C2.4 wajib mengikutinya).
 
 ## Global Constraints
 
@@ -133,10 +133,10 @@ type RoleFieldAccess struct { Resource, FieldGroup, Access string }
 
 - Aturan validasi (galat registry dan `module:check` memakai fungsi yang sama, kode galat baru `invalid_resource`): kunci resource berawalan `<slug>.`, unik lintas modul; aksi ⊂ aksi standar FR-110; aksi kustom `^[a-z_]+$`, tidak bentrok aksi standar, label wajib; tepat satu grup `default`; satu field paling banyak di satu grup; `scope_fields` hanya merujuk dimensi terdaftar (milik modul sendiri, `core.org_unit`, atau dependensi manifest); nama field `^[a-z][a-z0-9_]*$`; `default_roles[].key` berawalan `<slug>.`, baris merujuk resource modul sendiri dengan scope token sah; setiap `Registrar.Handle(..., permission)` (selain `module.Authenticated()`) wajib = `<resource>.<aksi>` terdeklarasi (menggantikan cek `capabilities`); `capabilities` diturunkan otomatis (perlakuan capability warisan mengikuti jawaban K-C2.1); menu Desk `permission` wajib ada di himpunan turunan.
 
-- [ ] **Step 1: Test** AC FR-110: `TestManifestRejectsCustomActionClash`, `TestManifestRejectsUnknownScopeDimension`, `TestManifestRejectsResourceWithoutDefaultGroup`, `TestManifestRejectsTwoDefaultGroups`, `TestManifestRejectsFieldInTwoGroups`, `TestRouteMustReferenceDeclaredResourceAction`, `TestCapabilitiesDerivedFromResources`, `TestScopeFieldsMayReferenceDependencyDimension` (dimensi modul non-dependensi ditolak), `TestDefaultRoleRowValidated`; `modcheck` memberi galat yang sama untuk berkas `module.json` yang sama (tes paritas); manifest tanpa `resources` lama tetap valid (aditif).
-- [ ] **Step 2:** jalankan `go test ./sdk/module/... ./internal/platform/modules/... ./internal/devtools/modcheck/...`, harapkan gagal.
-- [ ] **Step 3:** implementasi; pesan galat menyebut modul, path JSON, dan nilai.
-- [ ] **Step 4:** hijau; `task erpora -- module:check`; `task contracts:check`. **Step 5: Commit** `feat(platform): deklarasi resource, dimensi scope, dan role bawaan di manifest`.
+- [x] **Step 1: Test** AC FR-110: `TestManifestRejectsCustomActionClash`, `TestManifestRejectsUnknownScopeDimension`, `TestManifestRejectsResourceWithoutDefaultGroup`, `TestManifestRejectsTwoDefaultGroups`, `TestManifestRejectsFieldInTwoGroups`, `TestRouteMustReferenceDeclaredResourceAction`, `TestCapabilitiesDerivedFromResources`, `TestScopeFieldsMayReferenceDependencyDimension` (dimensi modul non-dependensi ditolak), `TestDefaultRoleRowValidated`; `modcheck` memberi galat yang sama untuk berkas `module.json` yang sama (tes paritas); manifest tanpa `resources` lama tetap valid (aditif).
+- [x] **Step 2:** jalankan `go test ./sdk/module/... ./internal/platform/modules/... ./internal/devtools/modcheck/...`, harapkan gagal.
+- [x] **Step 3:** implementasi; pesan galat menyebut modul, path JSON, dan nilai.
+- [x] **Step 4:** hijau; `task erpora -- module:check`; `task contracts:check` (5 Nov 2026: `task lint`, `module:check`, `contracts:check`, `metadata:check`, `metadata:generate:check`, `i18n:check`, `web:check` hijau; `go test ./internal/... ./cmd/... ./tests/...` hijau; integrasi DB terarah (`internal/app` 3 tes, `lifecycle`, `runtime`, `desks`) hijau; `task test:generator` belum dijalankan). **Step 5: Commit** `feat(platform): deklarasi resource, dimensi scope, dan role bawaan di manifest`.
 
 ### Task C2.2: Migrasi tenant dan `authorization/store`
 
@@ -157,9 +157,9 @@ type RoleFieldAccess struct { Resource, FieldGroup, Access string }
 
 - `store.Store`: `Revision(ctx) (int64, error)`; `BumpRevision(tx) (int64, error)` (`UPDATE ... SET permission_revision = permission_revision + 1 RETURNING`); `LoadUserGrants(ctx, userID) (Grants, error)` (role, baris, field access, penugasan; satu kueri per tabel); metode tulis per entitas untuk C2.10 yang **selalu** memanggil `BumpRevision` pada transaksi yang sama (nama ditetapkan task ini di `doc.go`).
 
-- [ ] **Step 1: Test integrasi** (`pgtest`, tag `integration`): migrasi naik/turun bersih; CHECK menolak `scope = '[]'`, `access = 'all'`; `BumpRevision` dua transaksi serentak menghasilkan dua nilai berbeda; setiap metode tulis menaikkan revisi tepat satu kali dan rollback tidak menaikkannya; `TestCreateAdminGrantBumpsRevision` (pemberian `administrator` oleh store identitas); tanpa `AutoMigrate`.
-- [ ] **Step 2:** jalankan lewat tunnel VPS (`ERP_TEST_DATABASE_URL=postgres://erp:erp@127.0.0.1:15432/postgres?sslmode=disable GOFLAGS=-p=2 go test -tags integration ./internal/platform/authorization/store/...`), harapkan gagal.
-- [ ] **Step 3:** implementasi (struct `row` + `TableName()` seperti `desks/store`). **Step 4:** hijau. **Step 5: Commit** `feat(authz): skema otorisasi tenant dan store`.
+- [x] **Step 1: Test integrasi** (`pgtest`, tag `integration`): migrasi naik/turun bersih; CHECK menolak `scope = '[]'`, `access = 'all'`; `BumpRevision` dua transaksi serentak menghasilkan dua nilai berbeda; setiap metode tulis menaikkan revisi tepat satu kali dan rollback tidak menaikkannya; `TestCreateAdminGrantBumpsRevision` (pemberian `administrator` oleh store identitas); tanpa `AutoMigrate`.
+- [x] **Step 2:** jalankan lewat tunnel VPS (`ERP_TEST_DATABASE_URL=postgres://erp:erp@127.0.0.1:15432/postgres?sslmode=disable GOFLAGS=-p=2 go test -tags integration ./internal/platform/authorization/store/...`), harapkan gagal.
+- [x] **Step 3:** implementasi (struct `row` + `TableName()` seperti `desks/store`; 5 Nov 2026: store memakai SQL mentah + struct pemindai seperti `identity/store`/`settings/store`, tanpa `TableName()` karena tidak ada model GORM). **Step 4:** hijau (5 Nov 2026: `./internal/platform/authorization/...`, `./internal/platform/identity/store/...`, `./internal/platform/migrate/...`, `./internal/app/` (TestCreateAdminGrantBumpsRevision dan tes CreateAdmin), `./internal/archcheck/...` hijau; `golangci-lint` terarah 0 isu). **Step 5: Commit** `feat(authz): skema otorisasi tenant dan store`.
 
 ### Task C2.3: `sdk/authz` penuh, `Registrar.Scope`, pemetaan galat
 
@@ -200,15 +200,45 @@ type ScopeProvider struct {
     Filter func(ctx context.Context, db *gorm.DB) *gorm.DB
     Match  func(ctx context.Context, rec Record) (bool, error)
 }
-// Engine diimplementasi platform (C2.4); fungsi paket di atas hanya mendelegasikan ke Engine di context.
+// Engine diimplementasi platform (C2.4); fungsi paket di atas hanya mendelegasikan ke Engine di context
+// (setelah memastikan ada principal atau hak sistem, dan dengan recover: galat atau panic mesin = tolak).
+// PAKET MESIN TIDAK MENGIMPOR GORM (keputusan 5 Nov 2026): Filter mengembalikan deskripsi netral.
 type Engine interface {
     Require(ctx context.Context, permission string) error
-    Filter(ctx context.Context, resource, action string) func(*gorm.DB) *gorm.DB
+    Filter(ctx context.Context, resource, action string) (RowFilter, error) // galat = tolak (WHERE false)
     Check(ctx context.Context, permission string, rec Record) error
     Fields(ctx context.Context, resource string) FieldAccess
     MaskFields(ctx context.Context, resource string, fields map[string]any) map[string]any // = FieldMasker
     CheckWrite(ctx context.Context, resource string, changedFields []string) error
 }
+
+// Deskripsi scope netral (scope.go); nilai nol selalu berarti TOLAK, akses penuh harus eksplisit.
+type RowFilter struct{ Branches []RowBranch }          // cabang digabung OR (union per baris matriks); kosong = tolak semua
+type RowBranch struct{ Conditions []RowCondition }    // kondisi digabung AND; cabang tanpa kondisi = tidak sah (FALSE)
+type RowCondition struct {                             // bangun lewat AllRows/OwnerIs/AssignedIn/CustomScope
+    Kind     ConditionKind                             // CondAll | CondOwner | CondAssigned | CondCustom (nol = tidak sah)
+    Column   string                                    // owner_field / scope_fields[dimensi] dari manifest, divalidasi ^[a-z][a-z0-9_]*$
+    Values   []string                                  // owner: [userID]; assigned: nilai penugasan (kosong = FALSE)
+    Provider ScopeProvider                             // custom
+}
+func AllRows() RowCondition                            // scope `all`
+func OwnerIs(column, userID string) RowCondition       // userID kosong = FALSE
+func AssignedIn(column string, values []string) RowCondition // values kosong = FALSE (bukan "dilewati")
+func CustomScope(p ScopeProvider) RowCondition
+// Pemetaan untuk C2.4: baris matriks yang memuat aksi -> satu RowBranch; token scope -> `all`=AllRows(),
+// `owner`=OwnerIs(owner_field, principal.UserID), `assigned:<dim>`=AssignedIn(scope_fields[dim], nilai penugasan),
+// `custom:<key>`=CustomScope(provider terdaftar). Token/dimensi/provider tak dikenal, scope tersimpan rusak/kosong,
+// atau galat membaca penugasan: JANGAN kirim cabang itu (atau kembalikan galat); jangan pernah mengirim cabang
+// kosong. Administrator/hak sistem: RowFilter{[{[AllRows()]}]}. Mesin boleh membawa nilai ScopeProvider apa adanya
+// (tipe itu menyebut gorm tetapi paket mesin tidak mengimpor gorm.io, sehingga D3b tidak terlanggar).
+
+// Pembantu bersama (dipakai authztest dan WAJIB dipakai mesin C2.4 agar pencocokan nama hanya di satu tempat):
+type FieldAccessSpec struct{ Resource string; Groups map[string]Access; FieldGroups map[string]string; DefaultGroup string }
+func NewFieldAccess(spec FieldAccessSpec) FieldAccess           // Field(): CanonicalField; nama tak dikenal ("") = none, BUKAN grup default
+func ApplyMask(fa FieldAccess, fields map[string]any) map[string]any   // implementasi Engine.MaskFields
+func CheckWriteAccess(fa FieldAccess, resource string, changed []string) error // implementasi Engine.CheckWrite
+func (ScopeProvider) Validate(slug string) error                // dipakai registry (invalid_scope_provider)
+var ErrUnsupportedRecord error                                  // Check menerima selain Record/map[string]any
 func WithEngine(ctx context.Context, e Engine) context.Context // HANYA platform (aturan IDENT, C2.7)
 // Admin: deklarasi antarmuka di task ini, daftar metode persis = Interfaces C2.10 (didefinisikan dan diimplementasi C2.10).
 func WithAdmin(ctx context.Context, a Admin) context.Context; func AdminFrom(ctx context.Context) (Admin, bool)
@@ -218,8 +248,9 @@ func WithAdmin(ctx context.Context, a Admin) context.Context; func AdminFrom(ctx
 
 `Registrar.Scope(p authz.ScopeProvider)` (registry menolak key tanpa awalan slug atau duplikat: `invalid_scope_provider`). `httpx.WriteAuthzError(w, r, err) bool` memetakan galat di atas (respons 404 tidak membedakan tidak ada vs di luar scope). Tanpa `Engine` di context semua fungsi gagal tertutup (`Filter` → `WHERE false`, `Fields` → semua `none`, `MaskFields` → `{}` seperti sekarang). `authz.AsSystem` tetap; `Engine` memperlakukannya sebagai izin penuh dan mencatat `authz.system_call` (C2.4).
 
-- [ ] **Step 1: Test** `TestNoEngineFailsClosed` (keenam fungsi), `TestCanonicalFieldParityWithNaming` (korpus `metadatatools/naming`, termasuk `address2Line`), `TestMaskFieldsCamelCaseMatchesSnakeGroup` (dengan `authztest`), `TestCheckWriteCamelCase`, `TestReadableRejectsNoneForFilterAndSort`, `TestCheckRejectsUnsupportedRecordType`, `TestWriteAuthzErrorMapping` (404/403/403 `field_forbidden` + `details`), `TestRegistrarScopeValidated`; arsitektur: `sdk/authz` hanya mengimpor stdlib dan `gorm.io/gorm`.
-- [ ] **Step 2:** gagal. **Step 3:** implementasi (fungsi paket mendelegasikan ke `Engine` dari context). **Step 4:** hijau; `task arch`. **Step 5: Commit** `feat(sdk): authz Require, Filter, Check, Fields, CheckWrite, dan Registrar.Scope`.
+- [x] **Step 1: Test** `TestNoEngineFailsClosed` (keenam fungsi), `TestCanonicalFieldParityWithNaming` (korpus `metadatatools/naming`, termasuk `address2Line`), `TestMaskFieldsCamelCaseMatchesSnakeGroup` (dengan `authztest`), `TestCheckWriteCamelCase`, `TestReadableRejectsNoneForFilterAndSort`, `TestCheckRejectsUnsupportedRecordType`, `TestWriteAuthzErrorMapping` (404/403/403 `field_forbidden` + `details`), `TestRegistrarScopeValidated`; arsitektur: `sdk/authz` hanya mengimpor stdlib dan `gorm.io/gorm`.
+- [x] **Step 2-4:** gagal, implementasi (fungsi paket mendelegasikan ke `Engine` dari context), hijau; `task arch` (5 Nov 2026: `go test ./sdk/... `, lint, `go test ./internal/archcheck/... ./tests/architecture/...` hijau).
+- [ ] **Step 5: Commit** `feat(sdk): authz Require, Filter, Check, Fields, CheckWrite, dan Registrar.Scope`.
 
 ### Task C2.4: Mesin otorisasi, cache, dan revisi
 
@@ -231,7 +262,7 @@ func WithAdmin(ctx context.Context, a Admin) context.Context; func AdminFrom(ctx
 - Consumes: `registry.Resources()`, `ScopeProvider` terdaftar, `store.Store`, `runtime.Snapshot` (status modul), `identity.FromContext`, `authz.SystemReason`.
 - Produces: `authorization.New(Deps) (*Engine, error)`; `*Engine` memenuhi `authz.Engine`, `runtime.Authorizer` (`Allow`) untuk `TypedAuthorizer`, dan `authz.FieldMasker`; `(*Engine).Summary(ctx) (Summary, error)` untuk bootstrap (aksi per resource, penanda `conditional`, akses per grup); `(*Engine).Revision(ctx) int64`; `revision.Watch(ctx, notifier, interval)` (kanal `authz.revision_changed` + muat ulang berkala 1 menit, pola `session.RevocationList`).
 - Kunci cache: `(tenantID, userID, permission_revision, revisi snapshot modul)`; LRU berbatas (default 10.000 entri); entri berisi grant terkompilasi (`map[permission][]compiledRow`, field access per resource).
-- Evaluasi `Filter`: OR atas baris yang memuat aksi; per baris AND kondisi: `owner` → `clause.Eq{Column{Table: CurrentTable, Name: owner_field}, userID}`; `assigned` → `IN` nilai (FALSE bila kosong; `core.org_unit` dengan `include_descendants` diperluas lewat `path` dari C2.10, sampai saat itu tanpa turunan); `custom` → `ScopeProvider.Filter`; `all` → TRUE. Nama kolom dari manifest tervalidasi, tidak pernah dari input.
+- Evaluasi `Filter` (`(*Engine).Filter(ctx, resource, action) (authz.RowFilter, error)`, **tanpa GORM**; paket mesin tidak mengimpor `gorm.io`, penerjemahan ke klausa `WHERE` berparameter dilakukan `authz.Filter` di `sdk/authz`, C2.3): satu `authz.RowBranch` per baris matriks yang memuat aksi (OR); per baris kondisi digabung AND: `owner` → `authz.OwnerIs(owner_field, userID)`; `assigned` → `authz.AssignedIn(scope_fields[dim], nilai)` (nilai kosong tetap dikirim kosong = FALSE; `core.org_unit` dengan `include_descendants` diperluas lewat `path` dari C2.10 menjadi daftar nilai, sampai saat itu tanpa turunan); `custom` → `authz.CustomScope(provider)`; `all` → `authz.AllRows()`. Scope tersimpan rusak/kosong, token atau dimensi atau provider tak dikenal, dan galat baca penugasan: cabang itu tidak dikirim (atau galat dikembalikan); `RowFilter` tanpa cabang = tolak semua; jangan pernah mengirim `RowBranch` tanpa kondisi. Administrator dan hak sistem: `RowFilter{Branches: [{Conditions: [AllRows()]}]}`. Nama kolom dari manifest tervalidasi, tidak pernah dari input. `Fields`/`MaskFields`/`CheckWrite` memakai `authz.NewFieldAccess`, `authz.ApplyMask`, dan `authz.CheckWriteAccess` (pencocokan camelCase terhadap snake_case hanya di satu tempat; nama tak dikenal = `none`).
 - Administrator: izin penuh untuk resource modul berstatus enabled; `authenticated` digabung untuk setiap principal manusia.
 
 - [ ] **Step 1: Test** tabel uji AC FR-111 (unit + integrasi PostgreSQL): owner saja; assigned saja; owner AND assigned; dua role scope berbeda (union); scope kustom; `create` di luar scope ditolak; tanpa assignment tidak melihat apa pun; FR-112: grup `none` dihapus, `read` menolak tulis, grup default mengikuti aksi; Review Focus 1, 3, 5: `TestScopeEmptyAssignmentIsFalse`, `TestScopeInvalidStoredJSONDenies`, `TestCustomScopePanicDenies`, `TestOwnerNullNeverMatches`, `TestCheckRecordMissingScopeFieldDenies`, `TestNoPrincipalDenies`, `TestUnionDoesNotCrossCombineScopes`, `TestCacheKeyIncludesUserAndTenant`, `TestRevisionBumpInvalidatesWithoutRelogin`, `TestJWTPermRevClaimIgnored`, `TestDisabledModuleRowsIgnored`, `TestRevisionVisibleToOtherInstanceViaNotifierAndPoll`; `TestAdministratorAllowsNewModuleResources`; `TestAsSystemAllowsAndLogsSystemCall` (log memuat principal asli dan reason, tanpa nilai record); `TestFilterSQLParameterized` (nilai assignment `x' OR 1=1` tetap parameter); `BenchmarkRequireCacheHit` (p99 ≤ 20 µs, diukur lewat `testing.B` + persentil sampel).

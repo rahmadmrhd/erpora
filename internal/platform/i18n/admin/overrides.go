@@ -21,9 +21,17 @@ import (
 	"erpora/sdk/module"
 )
 
-// Capabilities adalah capability milik platform.core untuk override istilah (ditambahkan ke daftar capability
-// platform di composition root).
-var Capabilities = []string{PermRead, PermManage}
+// Resources adalah resource milik platform.core untuk override istilah (PRD-001 FR-110); aksi "manage" adalah aksi
+// kustom. Ditambahkan ke resource platform di composition root.
+var Resources = []module.Resource{{
+	Key: "platform.i18n", Label: "resource.i18n",
+	Actions:       []string{"read"},
+	CustomActions: []module.CustomAction{{Key: "manage", Label: "action.manage"}},
+	FieldGroups:   []module.FieldGroup{{Key: "general", Label: "fieldGroup.general", Classification: "internal", Default: true}},
+}}
+
+// Capabilities adalah permission turunan Resources (PermRead, PermManage).
+var Capabilities = module.PermissionsOf(Resources)
 
 // Permission API override.
 const (

@@ -55,7 +55,7 @@ func (m *Module) OpenAPI() []byte { return openAPI }
 func (m *Module) Register(r module.Registrar) error {
 	r.Handle(http.MethodGet, "/items", "stock-opname.items.read", http.HandlerFunc(m.handlers.ListItems),
 		module.Classify(module.ClassInternal))
-	r.Handle(http.MethodGet, "/stock-counts", "stock-opname.stock-counts.read", httpapi.ListStockCounts(), module.Classify(module.ClassInternal))
+	r.Handle(http.MethodGet, "/stock-counts", "stock-opname.stock_counts.read", httpapi.ListStockCounts(), module.Classify(module.ClassInternal))
 	// erp:generated:routes
 	r.Command(module.Command{
 		Name:  "recount",

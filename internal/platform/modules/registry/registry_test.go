@@ -9,6 +9,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"erpora/internal/platform/modules/modtest"
 	"erpora/sdk/module"
 )
 
@@ -65,6 +66,7 @@ func newFake(s manifestSpec, register func(r module.Registrar) error) fakeModule
 		"compatibility": map[string]string{"platform": "^0.1", "sdk": "^0.1"},
 		"dependencies":  s.deps,
 		"capabilities":  s.caps,
+		"resources":     modtest.Resources(s.caps...),
 		"migrations":    map[string]string{"strategy": s.strategy},
 		"offline":       map[string]string{"mode": "online-only"},
 	}

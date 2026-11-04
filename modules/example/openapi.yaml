@@ -37,7 +37,7 @@ paths:
       operationId: listExampleNotes
       summary: Daftar notes
       description: Pagination halaman (api-guidelines section 6). page atau pageSize di luar rentang menghasilkan 400 bad_request.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { $ref: 'erp:common#/components/parameters/Page' }
         - { $ref: 'erp:common#/components/parameters/PageSize' }

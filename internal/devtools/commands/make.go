@@ -53,9 +53,9 @@ func newMakeHandler() *cobra.Command {
 	var route, permission string
 	cmd := &cobra.Command{
 		Use:   "make:handler <module> <Name> --route \"METHOD /path\" --permission <slug.resource.action>",
-		Short: "Buat endpoint: handler + test IDOR, route, capability, dan operasi OpenAPI sekaligus",
+		Short: "Buat endpoint: handler + test IDOR, route, resource/aksi manifest, dan operasi OpenAPI sekaligus",
 		Long: "Membuat handler (internal/presentation/http/<name>.go) beserta test (endpoint ber-ID selalu disertai kerangka test IDOR),\n" +
-			"mendaftarkan route di module.go (Classify + MaxBodyBytes), menambah capability di module.json, dan operasi serta skema di openapi.yaml.\n" +
+			"mendaftarkan route di module.go (Classify + MaxBodyBytes), memastikan permission turunan resources module.json (aksi standar atau resource baru ditambahkan; aksi kustom dideklarasikan manual), dan membuat operasi serta skema di openapi.yaml.\n" +
 			"Bentuk route: GET|POST /<koleksi>, GET|PATCH|DELETE /<koleksi>/{id}, POST /<koleksi>/{id}/<aksi>. PUT ditolak (api-guidelines section 3).",
 		GroupID: GroupMake,
 		Args:    cobra.ExactArgs(2),
@@ -69,7 +69,7 @@ func newMakeHandler() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&route, "route", "", "\"METHOD /path\" relatif modul, mis. \"GET /items/{id}\"")
-	cmd.Flags().StringVar(&permission, "permission", "", "permission <slug>.<resource>.<action> (ditambahkan ke capabilities)")
+	cmd.Flags().StringVar(&permission, "permission", "", "permission <slug>.<resource>.<action> (harus turunan resources module.json; resource/aksi standar baru ditambahkan otomatis)")
 	f.bind(cmd)
 	return cmd
 }
@@ -105,7 +105,7 @@ func newMakeModule() *cobra.Command {
 		Long: "Membuat modules/<dir> (Go module sendiri) lengkap dengan manifest, kontrak OpenAPI, empat lapisan, migrasi, dan test, lalu\n" +
 			"mendaftarkannya di go.work, go.mod, dan internal/app/modules.go. <name> adalah slug kebab-case (mis. stock-opname); direktori dan package\n" +
 			"memakai slug tanpa tanda hubung (stockopname). --frontend juga membuat modules/<dir>/web (@erpora/module-<dir>) dan mendaftarkannya di web/.\n" +
-			"--metadata menambah kerangka metadata resource (metadata/item.resource.yaml, capability <slug>.item.read) lalu membangkitkan keluarannya\n" +
+			"--metadata menambah kerangka metadata resource (metadata/item.resource.yaml, resource <slug>.item) lalu membangkitkan keluarannya\n" +
 			"(metadata:generate) sehingga metadata:check dan metadata:generate --check langsung hijau.",
 		GroupID: GroupMake,
 		Args:    cobra.ExactArgs(1),

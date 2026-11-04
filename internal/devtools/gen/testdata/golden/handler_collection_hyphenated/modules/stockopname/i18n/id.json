@@ -1,0 +1,12 @@
+{
+  "resource": {
+    "items": "Item",
+    "stock_counts": "Stock counts"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
+  "errors": {
+    "bad_request": "Parameter daftar tidak valid."
+  }
+}

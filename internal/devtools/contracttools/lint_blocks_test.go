@@ -8,7 +8,7 @@ const nestedPathBlock = `  /api/example/notes/{id}/lines/{lineId}/taxes:
       operationId: listExampleNoteLineTaxes
       summary: Pajak baris
       description: Terlalu bersarang.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
         - { name: lineId, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
@@ -31,7 +31,7 @@ const otherPrefixBlock = `  /api/other/things:
       operationId: listOtherThings
       summary: Milik modul lain
       description: Path di luar /api/example/.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { $ref: 'erp:common#/components/parameters/Page' }
         - { $ref: 'erp:common#/components/parameters/PageSize' }
@@ -89,7 +89,7 @@ const patchBlock = `  /api/example/notes/{id}:
       operationId: patchExampleNote
       summary: Ubah note
       description: Tanpa If-Match.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
       requestBody:

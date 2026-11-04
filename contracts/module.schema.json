@@ -152,37 +152,18 @@
     "license": { "type": "string", "description": "Marketplace: lisensi modul." },
     "resources": {
       "type": "array",
-      "description": "PRD-001 FR-110: resource dan aksi permission modul. Hanya field_groups[].classification yang divalidasi (security-guidelines §2); isi lain diperketat kemudian.",
-      "items": {
-        "type": "object",
-        "additionalProperties": true,
-        "properties": {
-          "field_groups": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": true,
-              "required": ["key"],
-              "properties": {
-                "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-                "fields": { "type": "array", "items": { "type": "string" } },
-                "classification": {
-                  "enum": ["public", "internal", "confidential", "highly_confidential"],
-                  "description": "Klasifikasi data field group (security-guidelines §2, PRD-001 FR-110)."
-                }
-              }
-            }
-          }
-        }
-      }
+      "description": "PRD-001 FR-110: resource dan aksi permission modul. Permission diturunkan sebagai <key>.<aksi>; label berupa kunci i18n (Q40). Aturan lintas-field (aksi standar, grup default, dimensi) diperiksa registry dan module:check.",
+      "items": { "$ref": "#/$defs/resource" }
     },
     "scope_dimensions": {
       "type": "array",
-      "description": "PRD-001 FR-110: dimensi scope modul. Isi diperketat kemudian."
+      "description": "PRD-001 FR-110: dimensi scope modul (mis. gudang).",
+      "items": { "$ref": "#/$defs/scopeDimension" }
     },
     "default_roles": {
       "type": "array",
-      "description": "PRD-001 FR-110: role bawaan modul. Isi diperketat kemudian."
+      "description": "PRD-001 FR-110, FR-113: role bawaan modul beserta matriks awalnya.",
+      "items": { "$ref": "#/$defs/defaultRole" }
     },
     "settings": {
       "type": "object",
@@ -190,6 +171,123 @@
     }
   },
   "$defs": {
+    "resourceKey": {
+      "type": "string",
+      "description": "Kunci resource, dimensi, atau role: <slug>.<nama_snake> (awalan slug diperiksa registry).",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9_]*$"
+    },
+    "fieldName": {
+      "type": "string",
+      "description": "Nama field resource (snake_case).",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "actionKey": {
+      "type": "string",
+      "description": "Kunci aksi: aksi standar PRD-001 FR-110 atau aksi kustom ^[a-z_]+$ (keanggotaan diperiksa registry).",
+      "pattern": "^[a-z_]+$"
+    },
+    "scopeToken": {
+      "type": "string",
+      "description": "Kondisi scope: all, owner, assigned:<dimensi>, atau custom:<key> (PRD-001 FR-111).",
+      "pattern": "^(all|owner|assigned:[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9_]*|custom:[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*)$"
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "actions", "field_groups"],
+      "properties": {
+        "key": { "$ref": "#/$defs/resourceKey" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "actions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/actionKey" } },
+        "custom_actions": { "type": "array", "items": { "$ref": "#/$defs/customAction" } },
+        "owner_field": { "$ref": "#/$defs/fieldName" },
+        "scope_fields": {
+          "type": "object",
+          "description": "Dimensi scope (kunci dimensi) menuju nama field resource.",
+          "propertyNames": { "$ref": "#/$defs/resourceKey" },
+          "additionalProperties": { "$ref": "#/$defs/fieldName" }
+        },
+        "field_groups": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fieldGroup" } },
+        "audit": {
+          "type": "object",
+          "description": "PRD-001 FR-131: hanya disimpan.",
+          "additionalProperties": false,
+          "properties": { "data_changes": { "type": "boolean" } }
+        }
+      }
+    },
+    "customAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label"],
+      "properties": {
+        "key": { "$ref": "#/$defs/actionKey" },
+        "label": { "$ref": "#/$defs/messageKey" }
+      }
+    },
+    "fieldGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/fieldName" } },
+        "classification": {
+          "enum": ["public", "internal", "confidential", "highly_confidential"],
+          "description": "Klasifikasi data field group (security-guidelines §2, PRD-001 FR-110)."
+        },
+        "default": { "type": "boolean" },
+        "sensitive": { "type": "boolean", "description": "PRD-001 FR-131: hanya disimpan." }
+      }
+    },
+    "scopeDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label"],
+      "properties": {
+        "key": { "$ref": "#/$defs/resourceKey" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "source": { "$ref": "#/$defs/resourceKey", "description": "Sumber nilai dimensi untuk pemilih penugasan (K-C2.3); kosong = key." }
+      }
+    },
+    "defaultRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "permissions"],
+      "properties": {
+        "key": { "$ref": "#/$defs/resourceKey" },
+        "label": { "$ref": "#/$defs/messageKey" },
+        "permissions": { "type": "array", "items": { "$ref": "#/$defs/roleRow" } },
+        "field_access": { "type": "array", "items": { "$ref": "#/$defs/roleFieldAccess" } }
+      }
+    },
+    "roleRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource", "actions", "scope"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/resourceKey" },
+        "actions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/actionKey" } },
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Daftar kondisi digabung AND; daftar kosong tidak sah (PRD-001 FR-111).",
+          "items": { "$ref": "#/$defs/scopeToken" }
+        }
+      }
+    },
+    "roleFieldAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource", "field_group", "access"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/resourceKey" },
+        "field_group": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "access": { "enum": ["none", "read", "write"] }
+      }
+    },
     "messageKey": {
       "type": "string",
       "description": "Kunci i18n bertitik pada katalog namespace modul (mis. nav.notes).",

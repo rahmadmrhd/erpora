@@ -353,6 +353,17 @@
       "description": "Terjadi kesalahan saat memuat Desk. Coba lagi."
     }
   },
+  "resource": {
+    "modules": "Modul",
+    "i18n": "Istilah (i18n)",
+    "desks": "Desk"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
+  "action": {
+    "manage": "Kelola"
+  },
   "todo": {
     "title": "ToDo",
     "description": "Daftar tugas akan hadir pada pembaruan berikutnya."

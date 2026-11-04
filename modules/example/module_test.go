@@ -25,7 +25,7 @@ var (
 // (modul tidak boleh mengimpor paket platform).
 func TestOpenAPI_Embedded(t *testing.T) {
 	doc := string(New().OpenAPI())
-	for _, want := range []string{"openapi: 3.1.0", "/api/example/ping", "/api/example/notes", "x-erp-permission: example.ping.read", "x-erp-permission: example.notes.read"} {
+	for _, want := range []string{"openapi: 3.1.0", "/api/example/ping", "/api/example/notes", "x-erp-permission: example.ping.read", "x-erp-permission: example.note.read"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("openapi.yaml tidak memuat %q", want)
 		}
@@ -65,7 +65,7 @@ func TestRegister_RoutesAndCommand(t *testing.T) {
 	if err := New().Register(r); err != nil {
 		t.Fatal(err)
 	}
-	if r.Permission("GET", "/ping") != "example.ping.read" || r.Permission("GET", "/notes") != "example.notes.read" {
+	if r.Permission("GET", "/ping") != "example.ping.read" || r.Permission("GET", "/notes") != "example.note.read" {
 		t.Errorf("routes = %+v", r.Routes)
 	}
 	if len(r.Commands) != 1 || r.Commands[0].Name != "recount" || r.Commands[0].Run == nil {

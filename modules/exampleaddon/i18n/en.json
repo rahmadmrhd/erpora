@@ -5,6 +5,12 @@
   "nav": {
     "summary": "Summary"
   },
+  "resource": {
+    "summary": "Summary"
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
   "page": {
     "summary": {
       "title": "Summary",

@@ -53,8 +53,6 @@ const (
 
 	CodeDuplicateSlug        = "duplicate_slug"
 	CodeReservedSlug         = "reserved_slug"
-	CodeDuplicateCapability  = "duplicate_capability"
-	CodeCapabilityPrefix     = "capability_prefix"
 	CodePermissionMissing    = "permission_missing"
 	CodePermissionUndeclared = "permission_undeclared"
 	CodeInvalidRoute         = "invalid_route"

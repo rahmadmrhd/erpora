@@ -203,8 +203,8 @@ func newEnv(t *testing.T, authz runtime.Authorizer, mutationsEnabled bool) *env 
 	api.Bind(svc)
 	rg, err := registry.Build(registry.Options{
 		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
-		PlatformCapabilities: Capabilities,
-		Platform:             api.Register,
+		PlatformResources: Resources,
+		Platform:          api.Register,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -26,8 +26,17 @@ import (
 	"erpora/sdk/module"
 )
 
-// Capabilities adalah capability milik platform.core untuk manajemen modul.
-var Capabilities = []string{"platform.modules.read", "platform.modules.manage"}
+// Resources adalah resource milik platform.core untuk manajemen modul (PRD-001 FR-110); aksi "manage" adalah aksi
+// kustom. Didaftarkan di composition root lewat registry.Options.PlatformResources.
+var Resources = []module.Resource{{
+	Key: "platform.modules", Label: "resource.modules",
+	Actions:       []string{"read"},
+	CustomActions: []module.CustomAction{{Key: "manage", Label: "action.manage"}},
+	FieldGroups:   []module.FieldGroup{{Key: "general", Label: "fieldGroup.general", Classification: "internal", Default: true}},
+}}
+
+// Capabilities adalah permission turunan Resources (platform.modules.read, platform.modules.manage).
+var Capabilities = module.PermissionsOf(Resources)
 
 // SyncWait adalah batas tunggu aksi mutasi sebelum API membalas 202 + Location (keputusan 7).
 const SyncWait = 30 * time.Second

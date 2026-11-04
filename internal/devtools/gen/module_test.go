@@ -329,8 +329,14 @@ func TestMakeModule_WithoutFrontendHasNoDeskAndNoOrphanI18nKeys(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw), &cat); err != nil {
 			t.Fatalf("katalog %s bukan JSON valid: %v\n%s", loc, err, raw)
 		}
-		if len(cat) != 1 || cat["errors"] == nil {
-			t.Errorf("katalog %s harus hanya memuat errors (kunci desk/nav/page yatim): %v", loc, cat)
+		// Tanpa frontend: tidak ada desk/nav/page (kunci yatim); resource/fieldGroup dipakai label resources manifest (FR-110).
+		for k := range cat {
+			if k != "errors" && k != "resource" && k != "fieldGroup" {
+				t.Errorf("katalog %s memuat kunci yatim %q (hanya errors, resource, fieldGroup): %v", loc, k, cat)
+			}
+		}
+		if cat["errors"] == nil || cat["resource"] == nil || cat["fieldGroup"] == nil {
+			t.Errorf("katalog %s harus memuat errors, resource, dan fieldGroup: %v", loc, cat)
 		}
 	}
 	for _, path := range opPaths(plan.Ops) {
@@ -374,16 +380,16 @@ func TestMakeModule_MetadataSkeleton(t *testing.T) {
 			t.Errorf("metadata tidak memuat %q:\n%s", want, meta)
 		}
 	}
-	if !strings.Contains(withMeta["modules/inventory/module.json"], `"inventory.items.read", "inventory.item.read"`) {
-		t.Error("module.json harus menambah capability inventory.item.read (awalan kunci resource metadata)")
+	if !strings.Contains(withMeta["modules/inventory/module.json"], `"key": "inventory.item",`) {
+		t.Error("module.json harus menambah resource inventory.item (awalan kunci resource metadata)")
 	}
 	if !strings.Contains(withMeta["modules/inventory/openapi.yaml"], "    Item:\n      type: object\n      x-erp-generated: true\n") {
 		t.Error("skema Item harus bertanda x-erp-generated agar digantikan pembangkit")
 	}
-	// Selain tiga berkas itu, semua keluaran identik dengan tanpa flag.
+	// Selain berkas itu (module.json, openapi.yaml, README.md, katalog i18n), semua keluaran identik dengan tanpa flag.
 	for p, c := range plain {
-		if strings.HasSuffix(p, "/module.json") || strings.HasSuffix(p, "/openapi.yaml") || strings.HasSuffix(p, "/README.md") {
-			continue
+		if strings.HasSuffix(p, "/module.json") || strings.HasSuffix(p, "/openapi.yaml") || strings.HasSuffix(p, "/README.md") || strings.Contains(p, "/i18n/") {
+			continue // katalog i18n memuat label resource.item bila --metadata
 		}
 		if withMeta[p] != c {
 			t.Errorf("%s berubah oleh --metadata", p)

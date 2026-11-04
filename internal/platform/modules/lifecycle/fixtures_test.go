@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"erpora/internal/platform/modules/modtest"
 	"erpora/internal/platform/modules/registry"
 	"erpora/sdk/module"
 )
@@ -106,6 +107,7 @@ func newFx(rec *fxRec, s fxSpec) *fxModule {
 		"compatibility": map[string]string{"platform": s.platformC, "sdk": "^0.1"},
 		"dependencies":  deps,
 		"capabilities":  []string{s.slug + ".items.read"},
+		"resources":     modtest.Resources(s.slug + ".items.read"),
 		"migrations":    map[string]string{"strategy": strategy},
 		"offline":       map[string]string{"mode": "online-only"},
 	}

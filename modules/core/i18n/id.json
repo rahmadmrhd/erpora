@@ -5,6 +5,17 @@
   "nav": {
     "change_password": "Ubah sandi"
   },
+  "resource": {
+    "user": "Pengguna",
+    "role": "Role",
+    "org_unit": "Unit organisasi"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
+  "dimension": {
+    "org_unit": "Unit organisasi"
+  },
   "password": {
     "violation": {
       "too_short": "Sandi terlalu pendek (minimal 12 karakter).",

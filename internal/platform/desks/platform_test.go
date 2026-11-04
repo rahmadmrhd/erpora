@@ -4,10 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	i18nadmin "erpora/internal/platform/i18n/admin"
 	"erpora/internal/platform/i18n/catalog"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/registry"
 	sdki18n "erpora/sdk/i18n"
+	"erpora/sdk/module"
 )
 
 // Label Desk platform harus ada di katalog namespace "platform" untuk semua bahasa (registry tidak memeriksa
@@ -64,5 +66,38 @@ func TestPlatformDesk_ShapeAndPermissions(t *testing.T) {
 	e, _ := reg.Entry(registry.PlatformKey)
 	if e.Manifest.Desk == nil || !strings.HasPrefix(e.Manifest.Desk.Label, "desk.") {
 		t.Errorf("Desk platform tidak terpasang di registry: %+v", e.Manifest.Desk)
+	}
+}
+
+// Label resource platform (PRD-001 FR-110, K-C2.5) harus ada di katalog namespace "platform" untuk semua bahasa:
+// registry tidak memeriksa label platform, sehingga test ini menggantikannya (dikonsumsi UI hak akses C2.14).
+func TestPlatformResources_LabelsExistInPlatformCatalog(t *testing.T) {
+	var keys []string
+	for _, rs := range [][]module.Resource{admin.Resources, i18nadmin.Resources, Resources} {
+		for _, r := range rs {
+			keys = append(keys, r.Label)
+			for _, c := range r.CustomActions {
+				keys = append(keys, c.Label)
+			}
+			for _, g := range r.FieldGroups {
+				keys = append(keys, g.Label)
+			}
+		}
+	}
+	for _, loc := range []string{"id", "en"} {
+		f, err := catalog.FS().Open(loc + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		flat, issues := sdki18n.ParseCatalog(f, sdki18n.DefaultLimits())
+		_ = f.Close()
+		if len(issues) > 0 {
+			t.Fatalf("katalog platform %s: %v", loc, issues)
+		}
+		for _, k := range keys {
+			if _, ok := flat[k]; !ok {
+				t.Errorf("label resource platform %q tidak ada di katalog platform (%s)", k, loc)
+			}
+		}
 	}
 }

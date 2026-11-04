@@ -97,7 +97,7 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 		t.Fatal("make:module yang ditolak mengubah pohon file")
 	}
 
-	// 4. Modul bernama dengan tanda hubung, lalu satu handler tambahan (route + kontrak + capability).
+	// 4. Modul bernama dengan tanda hubung, lalu satu handler tambahan (route + kontrak + aksi resource).
 	run(t, repo, env, bin, "make:module", "stock-opname")
 	run(t, repo, env, bin, "make:handler", "inventory", "Approve",
 		"--route", "POST /items/{id}/approve", "--permission", "inventory.items.approve")

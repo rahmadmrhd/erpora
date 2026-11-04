@@ -12,6 +12,29 @@
     { "module": "platform.core", "version": "^0.1", "optional": false }
   ],
   "capabilities": [],
+  "resources": [
+    {
+      "key": "core.user",
+      "label": "resource.user",
+      "actions": ["read", "create", "update"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "confidential", "default": true }]
+    },
+    {
+      "key": "core.role",
+      "label": "resource.role",
+      "actions": ["read", "create", "update", "delete"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    },
+    {
+      "key": "core.org_unit",
+      "label": "resource.org_unit",
+      "actions": ["read", "create", "update", "delete"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }
+  ],
+  "scope_dimensions": [
+    { "key": "core.org_unit", "label": "dimension.org_unit", "source": "core.org_unit" }
+  ],
   "migrations": { "strategy": "none" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" },

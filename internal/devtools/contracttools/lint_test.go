@@ -71,7 +71,7 @@ func TestLint_Fixtures(t *testing.T) {
 		},
 		{
 			name:  "missing_permission",
-			edits: map[string][][2]string{ex: {{"      x-erp-permission: example.notes.read\n", ""}}},
+			edits: map[string][][2]string{ex: {{"      x-erp-permission: example.note.read\n", ""}}},
 			want:  []string{"erp-operation-permission"}, msg: "api-guidelines §1",
 		},
 		{
@@ -448,7 +448,7 @@ const postBlock = `    post:
       operationId: createExampleNote
       summary: Buat note
       description: Buat note.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       requestBody:
         required: true
         content:

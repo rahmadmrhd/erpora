@@ -24,8 +24,8 @@ type ModuleOptions struct {
 	Name, Publisher string   // Publisher default "acme"
 	Frontend        bool     // buat modules/<dir>/web (@erpora/module-<dir>)
 	Depends         []string // key modul, mis. "acme.example"; platform.core selalu ditambahkan
-	// Metadata menambah kerangka metadata resource (modules/<dir>/metadata/item.resource.yaml, capability
-	// <slug>.item.read, skema Item bertanda x-erp-generated) dan langkah Post yang membangkitkan keluarannya.
+	// Metadata menambah kerangka metadata resource (modules/<dir>/metadata/item.resource.yaml, resource
+	// <slug>.item di resources manifest, skema Item bertanda x-erp-generated) dan langkah Post yang membangkitkan keluarannya.
 	Metadata bool
 	// MetadataGenerate menjalankan pembangkit metadata untuk satu direktori modul (dipasang oleh command make:module,
 	// karena paket gen tidak boleh mengimpor pembangkit). Wajib bila Metadata true.

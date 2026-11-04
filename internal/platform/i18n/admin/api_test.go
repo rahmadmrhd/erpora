@@ -13,6 +13,7 @@ import (
 
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/tenancy"
+	"erpora/sdk/authz"
 	"erpora/sdk/module"
 )
 
@@ -39,7 +40,8 @@ func (r *recorder) Public(method, path string, h http.Handler, _ ...module.Route
 	r.routes[method+" "+path] = h
 	r.public[method+" "+path] = true
 }
-func (r *recorder) Command(module.Command) {}
+func (r *recorder) Command(module.Command)    {}
+func (r *recorder) Scope(authz.ScopeProvider) {}
 
 func newMux(t *testing.T, active func(tenancy.TenantID, string) bool, bind bool) (*http.ServeMux, *API) {
 	t.Helper()

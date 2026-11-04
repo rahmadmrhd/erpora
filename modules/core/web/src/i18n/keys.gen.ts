@@ -80,11 +80,16 @@ declare module "@erpora/platform-web" {
       "detail.invalid_code": {};
       "detail.invalid_token": {};
       "detail.wrong_current_password": {};
+      "dimension.org_unit": {};
+      "fieldGroup.general": {};
       "nav.change_password": {};
       "password.violation.common": {};
       "password.violation.too_long": {};
       "password.violation.too_short": {};
       "password.violation.unknown": {};
+      "resource.org_unit": {};
+      "resource.role": {};
+      "resource.user": {};
     };
   }
 }

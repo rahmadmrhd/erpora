@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"erpora/internal/platform/modules/modtest"
 	"erpora/sdk/module"
 )
 
@@ -99,7 +100,7 @@ paths:
 	}
 	build := func(hist, op string) *Registry {
 		opts := testOpts()
-		opts.PlatformCapabilities = []string{"platform.modules.read"}
+		opts.PlatformResources = modtest.Resources("platform.modules.read")
 		opts.PlatformContract = contract(hist, op)
 		opts.Platform = func(r module.Registrar) error {
 			r.Handle("GET", "/modules/{key}/{sub}", "platform.modules.read", okHandler)

@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -129,6 +130,12 @@ func ParseManifest(raw []byte) (Manifest, error) {
 			mr := ManifestResource{Key: r.Key, Actions: r.Actions, OwnerField: r.OwnerField, ScopeFields: r.ScopeFields}
 			for _, c := range r.CustomActions {
 				mr.CustomActions = append(mr.CustomActions, c.Key)
+			}
+			// Permission diturunkan otomatis dari resource x aksi (PRD-001 FR-110).
+			for _, act := range append(slices.Clone(r.Actions), mr.CustomActions...) {
+				if perm := r.Key + "." + act; !slices.Contains(m.Capabilities, perm) {
+					m.Capabilities = append(m.Capabilities, perm)
+				}
 			}
 			for _, g := range r.FieldGroups {
 				mr.FieldGroups = append(mr.FieldGroups, ManifestGroup{Key: g.Key, Default: g.Default, Classification: g.Classification, Fields: g.Fields})

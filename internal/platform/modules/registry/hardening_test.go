@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"erpora/internal/platform/modules/modtest"
 	"erpora/sdk/module"
 )
 
@@ -79,7 +80,7 @@ func TestBuild_PlatformRoutesRequireDeclaredCapability(t *testing.T) {
 	_, err := Build(opts)
 	expect(t, problemsOf(t, err), "permission_undeclared", PlatformKey)
 
-	opts.PlatformCapabilities = []string{"platform.modules.read"}
+	opts.PlatformResources = modtest.Resources("platform.modules.read")
 	reg, err := Build(opts)
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +89,8 @@ func TestBuild_PlatformRoutesRequireDeclaredCapability(t *testing.T) {
 	if len(rs) != 1 || rs[0].Pattern != "/api/platform/modules" || rs[0].Module != PlatformKey {
 		t.Fatalf("routes = %+v", rs)
 	}
-	if got := reg.Capabilities(); len(got) != 1 || got[0] != "platform.modules.read" {
-		t.Errorf("Capabilities = %v", got)
+	if got := reg.Permissions(); len(got) != 1 || got[0] != "platform.modules.read" {
+		t.Errorf("Permissions = %v", got)
 	}
 }
 
@@ -111,20 +112,26 @@ func TestRouteConflict_IndependentOfPanicText(t *testing.T) {
 	}
 }
 
-// Minor 2: capability platform tunduk pada aturan prefix dan keunikan lintas modul.
-func TestBuild_PlatformCapabilityRules(t *testing.T) {
+// Resource platform tunduk pada aturan yang sama dengan modul: awalan slug, keunikan lintas modul, grup default.
+func TestBuild_PlatformResourceRules(t *testing.T) {
 	opts := testOpts()
-	opts.PlatformCapabilities = []string{"example.x.read"}
+	opts.PlatformResources = modtest.Resources("example.x.read")
 	_, err := Build(opts)
-	expect(t, problemsOf(t, err), "capability_prefix", PlatformKey)
+	p := expect(t, problemsOf(t, err), "invalid_resource", PlatformKey)
+	if !strings.Contains(p.Message, "platform.") {
+		t.Errorf("Message harus menyebut awalan platform.: %q", p.Message)
+	}
 
-	_, err = Build(opts, newFake(spec("acme.example", "example", "example.x.read"), nil))
-	ps := problemsOf(t, err)
-	expect(t, ps, "capability_prefix", PlatformKey)
-	expect(t, ps, "duplicate_capability", "acme.example")
+	opts.PlatformResources = modtest.Resources("platform.modules.read")
+	opts.PlatformResources[0].FieldGroups[0].Default = false
+	_, err = Build(opts)
+	p = expect(t, problemsOf(t, err), "invalid_resource", PlatformKey)
+	if !strings.Contains(p.Message, "grup default") {
+		t.Errorf("resource platform tanpa grup default harus ditolak: %q", p.Message)
+	}
 
-	opts.PlatformCapabilities = []string{"platform.modules.read"}
+	opts.PlatformResources = modtest.Resources("platform.modules.read")
 	if _, err := Build(opts); err != nil {
-		t.Fatalf("capability platform valid ditolak: %v", err)
+		t.Fatalf("resource platform valid ditolak: %v", err)
 	}
 }

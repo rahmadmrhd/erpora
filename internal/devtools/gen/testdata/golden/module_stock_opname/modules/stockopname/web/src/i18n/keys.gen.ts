@@ -6,9 +6,11 @@ declare module "@erpora/platform-web" {
     "stock-opname": {
       "desk.title": {};
       "errors.bad_request": {};
+      "fieldGroup.general": {};
       "nav.items": {};
       "page.items.description": {};
       "page.items.title": {};
+      "resource.items": {};
     };
   }
 }

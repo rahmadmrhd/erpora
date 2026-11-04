@@ -11,7 +11,15 @@
     { "module": "platform.core", "version": "^0.1", "optional": false },
     { "module": "acme.example", "version": "^1.0", "optional": false }
   ],
-  "capabilities": ["example-addon.summary.read"],
+  "capabilities": [],
+  "resources": [
+    {
+      "key": "example-addon.summary",
+      "label": "resource.summary",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }
+  ],
   "migrations": { "strategy": "none" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" },

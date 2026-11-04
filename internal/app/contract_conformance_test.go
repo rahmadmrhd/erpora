@@ -31,7 +31,7 @@ func buildConformance(t *testing.T) (*registry.Registry, apicontract.Conformance
 	docOf := map[string]string{}
 	caps := map[string][]string{}
 	for _, e := range reg.Entries() {
-		caps[e.Manifest.Key] = e.Manifest.Capabilities
+		caps[e.Manifest.Key] = e.Manifest.Permissions()
 		if e.Contract == nil {
 			continue
 		}

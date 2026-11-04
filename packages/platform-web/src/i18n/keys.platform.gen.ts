@@ -4,6 +4,7 @@ export {};
 declare module "./types" {
   interface I18nCatalogs {
     platform: {
+      "action.manage": {};
       "app.name": {};
       "breadcrumb.home": {};
       "breadcrumb.pathDescription": {};
@@ -56,6 +57,7 @@ declare module "./types" {
       "errors.unsupported_media_type": {};
       "errors.validation_failed": {};
       "errors.version_mismatch": {};
+      "fieldGroup.general": {};
       "fixedItems.search": {};
       "fixedItems.todo": {};
       "logoMenu.about": {};
@@ -217,6 +219,9 @@ declare module "./types" {
       "palette.title": {};
       "panel.loadError": {};
       "panel.noDesk": {};
+      "resource.desks": {};
+      "resource.i18n": {};
+      "resource.modules": {};
       "routeError.description": {};
       "routeError.requestId": { requestId: string | number };
       "routeError.title": {};

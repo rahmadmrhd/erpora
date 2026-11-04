@@ -15,6 +15,7 @@ import (
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/identity"
 	"erpora/internal/platform/identity/guard"
+	"erpora/internal/platform/modules/modtest"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/tenancy"
 	sdkidentity "erpora/sdk/identity"
@@ -29,6 +30,7 @@ func coreManifest() module.Manifest {
 		"compatibility": map[string]string{"platform": "^0.1", "sdk": "^0.1"},
 		"dependencies":  []map[string]any{{"module": registry.PlatformKey, "version": "^0.1", "optional": false}},
 		"capabilities":  []string{"core.users.read"},
+		"resources":     modtest.Resources("core.users.read"),
 		"migrations":    map[string]string{"strategy": "none"},
 		"offline":       map[string]string{"mode": "online-only"},
 	}
@@ -41,7 +43,7 @@ func coreManifest() module.Manifest {
 func TestMount_RateLimitsCoreAuthRoutes(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	reg, err := registry.Build(registry.Options{
-		PlatformVersion: "0.1.0", SDKVersion: "0.1.0", PlatformCapabilities: []string{"platform.modules.read"},
+		PlatformVersion: "0.1.0", SDKVersion: "0.1.0", PlatformResources: modtest.Resources("platform.modules.read"),
 		Platform: func(r module.Registrar) error { return nil },
 	}, fakeModule{m: coreManifest(), register: func(r module.Registrar) error {
 		r.Public("POST", "/auth/login", ok)

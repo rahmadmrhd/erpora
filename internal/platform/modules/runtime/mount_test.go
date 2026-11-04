@@ -18,6 +18,7 @@ import (
 	"erpora/internal/platform/authorization"
 	"erpora/internal/platform/database"
 	"erpora/internal/platform/httpserver"
+	"erpora/internal/platform/modules/modtest"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
@@ -43,6 +44,7 @@ func notesManifest() module.Manifest {
 		"compatibility": map[string]string{"platform": "^0.1", "sdk": "^0.1"},
 		"dependencies":  []map[string]any{{"module": registry.PlatformKey, "version": "^0.1", "optional": false}},
 		"capabilities":  []string{"notes.items.read"},
+		"resources":     modtest.Resources("notes.items.read"),
 		"migrations":    map[string]string{"strategy": "none"},
 		"offline":       map[string]string{"mode": "online-only"},
 	}
@@ -81,7 +83,7 @@ func newFixtureLog(t *testing.T, authz Authorizer, order *[]string, nilLogger bo
 	hits := 0
 	reg, err := registry.Build(registry.Options{
 		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
-		PlatformCapabilities: []string{"platform.modules.read"},
+		PlatformResources: modtest.Resources("platform.modules.read"),
 		Platform: func(r module.Registrar) error {
 			r.Handle("GET", "/modules", "platform.modules.read", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				hits++

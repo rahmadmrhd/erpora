@@ -55,7 +55,7 @@ func (m *Module) Manifest() module.Manifest { return m.manifest }
 // Register mendaftarkan route dan command.
 func (m *Module) Register(r module.Registrar) error {
 	r.Handle(http.MethodGet, "/ping", "example.ping.read", http.HandlerFunc(m.handlers.Ping))
-	r.Handle(http.MethodGet, "/notes", "example.notes.read", http.HandlerFunc(m.handlers.ListNotes))
+	r.Handle(http.MethodGet, "/notes", "example.note.read", http.HandlerFunc(m.handlers.ListNotes))
 	// erp:generated:routes
 	r.Command(module.Command{
 		Name:  "recount",

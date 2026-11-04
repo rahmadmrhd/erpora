@@ -10,10 +10,15 @@
   "dependencies": [
     { "module": "platform.core", "version": "^0.1", "optional": false }
   ],
-  "capabilities": ["example.read"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
   "offline": { "mode": "online-only" },
   "resources": [
-    { "key": "x.note", "field_groups": [{ "key": "general", "fields": ["title"], "classification": "secret" }] }
+    {
+      "key": "example.note",
+      "label": "resource.note",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "fields": ["title"], "classification": "secret", "default": true }]
+    }
   ]
 }

@@ -83,12 +83,12 @@ func TestRegister_RoutesAndCommand(t *testing.T) {
 		t.Errorf("routes = %+v", r.Routes)
 	}
 	caps := map[string]bool{}
-	for _, c := range New().Manifest().Capabilities {
+	for _, c := range New().Manifest().Permissions() {
 		caps[c] = true
 	}
 	for _, rt := range r.Routes {
 		if !rt.Public && !caps[rt.Permission] {
-			t.Errorf("permission %q tidak ada di capabilities manifest", rt.Permission)
+			t.Errorf("permission %q bukan permission turunan resources manifest", rt.Permission)
 		}
 	}
 	// Command tambahan dari `erpora make:command` boleh bertambah; yang wajib ada hanya recount, dan semuanya punya Run.

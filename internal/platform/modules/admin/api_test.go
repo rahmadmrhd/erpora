@@ -154,7 +154,7 @@ func setup(t *testing.T, authz runtime.Authorizer, opts ...runtime.MountOption) 
 	be := newFakeBE()
 	api.Bind(be)
 	reg, err := registry.Build(registry.Options{
-		PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformCapabilities: Capabilities,
+		PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformResources: Resources,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func TestAction_UnknownOperationAndNotBound(t *testing.T) {
 	}
 
 	api := New() // belum di-bind
-	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformCapabilities: Capabilities})
+	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformResources: Resources})
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	router := httpserver.NewRouter(httpserver.Deps{Logger: log,
 		Resolver:  resolverFunc(func(*http.Request) (tenancy.TenantID, error) { return testTenant, nil }),
@@ -636,7 +636,7 @@ func TestMutationGate_Production404(t *testing.T) {
 func TestIsMutation_OnlyActionRoute(t *testing.T) {
 	f := setup(t, allow{})
 	_ = f
-	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: New().Register, PlatformCapabilities: Capabilities})
+	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: New().Register, PlatformResources: Resources})
 	n := 0
 	for _, rt := range reg.Routes() {
 		if IsMutation(rt) {

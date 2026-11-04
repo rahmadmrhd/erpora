@@ -1,10 +1,16 @@
 package modcheck
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"erpora/internal/platform/modules/modtest"
+	"erpora/internal/platform/modules/registry"
+	"erpora/sdk/module"
 )
 
 func TestCheck_RepositoryClean(t *testing.T) {
@@ -41,6 +47,23 @@ type fixture struct {
 	alphaCapabilities string // isi array JSON, default "alpha.items.read"
 	betaDeclaresDep   bool
 	alphaGo           string // direktif go, default 1.27
+	alphaResources    string // array JSON resources alpha; kosong = diturunkan dari capabilities
+}
+
+// fixtureResources membangun array JSON resources dari isi array capabilities ("a.b.read", ...): satu resource
+// per <slug>.<resource>, sehingga fixture lolos aturan FR-110 (permission turunan resource x aksi).
+func fixtureResources(caps string) string {
+	var perms []string
+	for _, c := range strings.Split(caps, ",") {
+		if c = strings.Trim(strings.TrimSpace(c), `"`); c != "" {
+			perms = append(perms, c)
+		}
+	}
+	b, err := json.Marshal(modtest.Resources(perms...))
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 func (f fixture) build(t *testing.T) string {
@@ -55,8 +78,12 @@ func (f fixture) build(t *testing.T) string {
 		f.alphaGo = "1.27"
 	}
 	root := t.TempDir()
+	alphaRes := f.alphaResources
+	if alphaRes == "" {
+		alphaRes = fixtureResources(f.alphaCapabilities)
+	}
 	write(t, root, "go.work", "go 1.27\n\ntoolchain go1.27.3\n\nuse (\n\t./modules/alpha\n\t./modules/beta\n)\n")
-	manifest := func(key, slug, version, caps, deps string) string {
+	manifest := func(key, slug, version, caps, deps, res string) string {
 		return `{
   "schema_version": "1",
   "key": "` + key + `",
@@ -70,6 +97,7 @@ func (f fixture) build(t *testing.T) string {
     { "module": "platform.core", "version": "^0.1", "optional": false }` + deps + `
   ],
   "capabilities": [` + caps + `],
+  "resources": ` + res + `,
   "migrations": { "strategy": "none" },
   "offline": { "mode": "online-only" }
 }
@@ -77,7 +105,7 @@ func (f fixture) build(t *testing.T) string {
 	}
 	write(t, root, "modules/alpha/go.mod", "module erpora/modules/alpha\n\ngo "+f.alphaGo+"\n\ntoolchain go1.27.3\n")
 	write(t, root, "modules/alpha/a.go", "package alpha\n")
-	write(t, root, "modules/alpha/module.json", manifest("acme.alpha", "alpha", f.alphaVersion, f.alphaCapabilities, ""))
+	write(t, root, "modules/alpha/module.json", manifest("acme.alpha", "alpha", f.alphaVersion, f.alphaCapabilities, "", alphaRes))
 	deps := ""
 	if f.betaDeclaresDep {
 		deps = `,
@@ -85,7 +113,7 @@ func (f fixture) build(t *testing.T) string {
 	}
 	write(t, root, "modules/beta/go.mod", "module erpora/modules/beta\n\ngo 1.27\n\ntoolchain go1.27.3\n\nrequire erpora/modules/alpha v0.0.0\n")
 	write(t, root, "modules/beta/b.go", "package beta\n")
-	write(t, root, "modules/beta/module.json", manifest("acme.beta", "beta", "1.0.0", `"beta.items.read"`, deps))
+	write(t, root, "modules/beta/module.json", manifest("acme.beta", "beta", "1.0.0", `"beta.items.read"`, deps, fixtureResources(`"beta.items.read"`)))
 	return root
 }
 
@@ -163,7 +191,7 @@ func i18nFixture(t *testing.T, i18nManifest string, files ...string) string {
 		write(t, root, "modules/alpha/module.json", s)
 	}
 	for _, f := range files {
-		write(t, root, "modules/alpha/i18n/"+f, `{}`)
+		write(t, root, "modules/alpha/i18n/"+f, `{"resource":{"items":"Item"},"fieldGroup":{"general":"Umum"}}`)
 	}
 	return root
 }
@@ -251,7 +279,7 @@ func deskFixture(t *testing.T, withWeb bool, deskJSON, catalog string) string {
 }
 
 const (
-	deskCatalog   = `{"desk":{"title":"Alpha"},"nav":{"items":"Item"}}`
+	deskCatalog   = `{"desk":{"title":"Alpha"},"nav":{"items":"Item"},"resource":{"items":"Item"},"fieldGroup":{"general":"Umum"}}`
 	deskValidJSON = `{"label":"desk.title","icon":"file-text","menus":[{"id":"items","label":"nav.items","to":"/items","permission":"alpha.items.read"}]}`
 )
 
@@ -333,11 +361,14 @@ func metadataFixture(t *testing.T, pricingFields string, nameGroup string) strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := `"offline": { "mode": "online-only" },
-  "resources": [{"key":"alpha.item","actions":["read"],"field_groups":[
-    {"key":"general","default":true},
-    {"key":"pricing","classification":"confidential"` + pricingFields + `}]}]`
-	write(t, root, "modules/alpha/module.json", strings.Replace(string(b), `"offline": { "mode": "online-only" }`, res, 1))
+	base := fixtureResources(`"alpha.items.read"`)
+	res := `[` + strings.TrimSuffix(strings.TrimPrefix(base, "["), "]") + `,{"key":"alpha.item","label":"resource.item","actions":["read"],"field_groups":[
+    {"key":"general","label":"fieldGroup.general","default":true},
+    {"key":"pricing","label":"fieldGroup.pricing","classification":"confidential"` + pricingFields + `}]}]`
+	if !strings.Contains(string(b), base) {
+		t.Fatalf("resources dasar tidak ditemukan di manifest alpha")
+	}
+	write(t, root, "modules/alpha/module.json", strings.Replace(string(b), base, res, 1))
 	write(t, root, "modules/alpha/metadata/item.resource.yaml", `schemaVersion: "1"
 kind: resource
 key: alpha.item
@@ -371,3 +402,81 @@ func TestCheck_MetadataFieldGroups(t *testing.T) {
 		t.Fatalf("got = %+v err=%v", got, err)
 	}
 }
+
+// fakeModule membungkus manifest hasil baca module.json agar dapat dimasukkan ke registry.Build.
+type fakeModule struct{ m module.Manifest }
+
+func (f fakeModule) Manifest() module.Manifest       { return f.m }
+func (fakeModule) Register(r module.Registrar) error { return nil }
+
+// Paritas FR-110: module:check dan registry.Build memberi temuan otorisasi yang sama (kode dan JSON pointer) untuk
+// module.json yang sama, karena keduanya memakai manifest.ValidateAuthorization.
+func TestCheck_AuthorizationParityWithRegistry(t *testing.T) {
+	t.Setenv("GOWORK", "")
+	grp := `"field_groups":[{"key":"general","label":"fieldGroup.general","default":true}]`
+	tests := map[string]fixture{
+		"aksi kustom bentrok": {alphaCapabilities: `"alpha.items.read"`, betaDeclaresDep: true, alphaResources: `[{"key":"alpha.items","label":"resource.items","actions":["read"],
+			"custom_actions":[{"key":"approve","label":"action.approve"}],` + grp + `}]`},
+		"dimensi tak terdaftar": {betaDeclaresDep: true, alphaResources: `[{"key":"alpha.items","label":"resource.items","actions":["read"],
+			"scope_fields":{"alpha.zone":"zone_id"},` + grp + `}]`},
+		"tanpa grup default": {betaDeclaresDep: true, alphaResources: `[{"key":"alpha.items","label":"resource.items","actions":["read"],
+			"field_groups":[{"key":"general","label":"fieldGroup.general"}]}]`},
+		"capability tanpa resource": {alphaCapabilities: `"alpha.items.read"`, betaDeclaresDep: true, alphaResources: `[]`},
+	}
+	for name, fx := range tests {
+		t.Run(name, func(t *testing.T) {
+			root := fx.build(t)
+			got, err := Check(root, "alpha")
+			if err != nil {
+				t.Fatal(err)
+			}
+			authz := map[string]bool{}
+			for _, f := range got {
+				if f.Rule != RuleSchema {
+					continue
+				}
+				for _, code := range authzCodes {
+					if strings.HasSuffix(f.Detail, "("+code+")") {
+						field, _, _ := strings.Cut(f.Detail, ": ")
+						authz[field+"|"+code] = true
+					}
+				}
+			}
+			if len(authz) == 0 {
+				t.Fatalf("module:check harus melaporkan pelanggaran otorisasi: %+v", got)
+			}
+
+			raw, err := os.ReadFile(filepath.Join(root, "modules", "alpha", "module.json")) //nolint:gosec // path uji
+			if err != nil {
+				t.Fatal(err)
+			}
+			mf, err := module.ParseManifest(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, berr := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0"}, fakeModule{m: mf})
+			var re *registry.Error
+			if !errors.As(berr, &re) {
+				t.Fatalf("registry.Build harus menolak: %v", berr)
+			}
+			regSet := map[string]bool{}
+			for _, p := range re.Problems {
+				for _, code := range authzCodes {
+					if p.Code == code {
+						regSet[p.Field+"|"+code] = true
+					}
+				}
+			}
+			if len(regSet) != len(authz) {
+				t.Fatalf("temuan berbeda: module:check=%v registry=%v", authz, regSet)
+			}
+			for k := range authz {
+				if !regSet[k] {
+					t.Errorf("temuan %s hanya ada di module:check (registry=%v)", k, regSet)
+				}
+			}
+		})
+	}
+}
+
+var authzCodes = []string{"invalid_resource", "invalid_scope_dimension", "invalid_default_role", "capability_not_derived"}

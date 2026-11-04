@@ -80,7 +80,7 @@ Contoh properti `desk` di `modules/example/module.json` (sumber menu, dibaca ser
   "label": "desk.title",
   "icon": "file-text",
   "menus": [
-    { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+    { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.note.read" }
   ]
 }
 ```
@@ -88,7 +88,7 @@ Contoh properti `desk` di `modules/example/module.json` (sumber menu, dibaca ser
 - `label` dan `menus[].label` adalah kunci i18n di namespace modul; `icon` memakai nama dari `iconRegistry`.
 - `menus` berisi item atau grup satu tingkat (grup tidak boleh bersarang, anak grup minimal satu).
 - `to` relatif terhadap base route modul (`/notes` menjadi `/example/notes`). Tanpa skema, host, `//`, query, atau fragmen. **Tidak boleh `/`**: indeks adalah Dashboard shell.
-- Setiap item memuat tepat satu dari `permission` atau `access` (PRD-000 Q43). `permission` harus salah satu `capabilities` modul; item disembunyikan bila pengguna tidak memilikinya. `"access": "authenticated"` menggantikan `permission` untuk item yang terlihat bagi semua pengguna yang login (server menyaringnya dari Principal, bukan dari permission); keduanya sekaligus atau tak satu pun ditolak.
+- Setiap item memuat tepat satu dari `permission` atau `access` (PRD-000 Q43). `permission` harus salah satu permission turunan `resources` modul (`<resource>.<aksi>`); item disembunyikan bila pengguna tidak memilikinya. `"access": "authenticated"` menggantikan `permission` untuk item yang terlihat bagi semua pengguna yang login (server menyaringnya dari Principal, bukan dari permission); keduanya sekaligus atau tak satu pun ditolak.
 - `dashboard` (opsional) hanya mengisi `label` dan `icon` item Dashboard bawaan. Dashboard sendiri dibangkitkan platform di `/<slug>`, tidak dideklarasikan sebagai menu.
 
 Registry di shell (`@erpora/platform-web`, `registry/`) mencocokkan modul dengan bootstrap berdasarkan `key`:

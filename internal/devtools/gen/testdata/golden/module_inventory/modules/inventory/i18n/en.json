@@ -11,6 +11,12 @@
       "description": "Example page of the Inventory module. Replace it with your own page."
     }
   },
+  "resource": {
+    "items": "Items"
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
   "errors": {
     "bad_request": "The list parameter is invalid."
   }

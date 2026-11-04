@@ -20,6 +20,22 @@ export type DeskItem = DeskPermissionItem | DeskAccessItem;
  * Id menu, unik dalam satu Desk (item, grup, dan anak grup).
  */
 export type DeskMenuId = string;
+/**
+ * Kunci resource, dimensi, atau role: <slug>.<nama_snake> (awalan slug diperiksa registry).
+ */
+export type ResourceKey = string;
+/**
+ * Kunci aksi: aksi standar PRD-001 FR-110 atau aksi kustom ^[a-z_]+$ (keanggotaan diperiksa registry).
+ */
+export type ActionKey = string;
+/**
+ * Nama field resource (snake_case).
+ */
+export type FieldName = string;
+/**
+ * Kondisi scope: all, owner, assigned:<dimensi>, atau custom:<key> (PRD-001 FR-111).
+ */
+export type ScopeToken = string;
 
 export interface ModuleManifest {
   schema_version: "1";
@@ -104,28 +120,17 @@ export interface ModuleManifest {
    */
   license?: string;
   /**
-   * PRD-001 FR-110: resource dan aksi permission modul. Hanya field_groups[].classification yang divalidasi (security-guidelines §2); isi lain diperketat kemudian.
+   * PRD-001 FR-110: resource dan aksi permission modul. Permission diturunkan sebagai <key>.<aksi>; label berupa kunci i18n (Q40). Aturan lintas-field (aksi standar, grup default, dimensi) diperiksa registry dan module:check.
    */
-  resources?: {
-    field_groups?: {
-      key: string;
-      fields?: string[];
-      /**
-       * Klasifikasi data field group (security-guidelines §2, PRD-001 FR-110).
-       */
-      classification?: "public" | "internal" | "confidential" | "highly_confidential";
-      [k: string]: unknown;
-    }[];
-    [k: string]: unknown;
-  }[];
+  resources?: Resource[];
   /**
-   * PRD-001 FR-110: dimensi scope modul. Isi diperketat kemudian.
+   * PRD-001 FR-110: dimensi scope modul (mis. gudang).
    */
-  scope_dimensions?: unknown[];
+  scope_dimensions?: ScopeDimension[];
   /**
-   * PRD-001 FR-110: role bawaan modul. Isi diperketat kemudian.
+   * PRD-001 FR-110, FR-113: role bawaan modul beserta matriks awalnya.
    */
-  default_roles?: unknown[];
+  default_roles?: DefaultRole[];
   /**
    * PRD-001 FR-120: definisi setting modul. Isi diperketat kemudian.
    */
@@ -166,4 +171,77 @@ export interface DeskGroup {
    * @maxItems 100
    */
   children: [DeskItem, ...DeskItem[]];
+}
+export interface Resource {
+  key: ResourceKey;
+  label: MessageKey;
+  actions: ActionKey[];
+  custom_actions?: CustomAction[];
+  owner_field?: FieldName;
+  /**
+   * Dimensi scope (kunci dimensi) menuju nama field resource.
+   */
+  scope_fields?: {
+    [k: string]: FieldName;
+  };
+  /**
+   * @minItems 1
+   */
+  field_groups: [FieldGroup, ...FieldGroup[]];
+  /**
+   * PRD-001 FR-131: hanya disimpan.
+   */
+  audit?: {
+    data_changes?: boolean;
+  };
+}
+export interface CustomAction {
+  key: ActionKey;
+  label: MessageKey;
+}
+export interface FieldGroup {
+  key: string;
+  label: MessageKey;
+  fields?: FieldName[];
+  /**
+   * Klasifikasi data field group (security-guidelines §2, PRD-001 FR-110).
+   */
+  classification?: "public" | "internal" | "confidential" | "highly_confidential";
+  default?: boolean;
+  /**
+   * PRD-001 FR-131: hanya disimpan.
+   */
+  sensitive?: boolean;
+}
+export interface ScopeDimension {
+  key: ResourceKey;
+  label: MessageKey;
+  /**
+   * Kunci resource, dimensi, atau role: <slug>.<nama_snake> (awalan slug diperiksa registry).
+   */
+  source?: string;
+}
+export interface DefaultRole {
+  key: ResourceKey;
+  label: MessageKey;
+  permissions: RoleRow[];
+  field_access?: RoleFieldAccess[];
+}
+export interface RoleRow {
+  resource: ResourceKey;
+  /**
+   * @minItems 1
+   */
+  actions: [ActionKey, ...ActionKey[]];
+  /**
+   * Daftar kondisi digabung AND; daftar kosong tidak sah (PRD-001 FR-111).
+   *
+   * @minItems 1
+   */
+  scope: [ScopeToken, ...ScopeToken[]];
+}
+export interface RoleFieldAccess {
+  resource: ResourceKey;
+  field_group: string;
+  access: "none" | "read" | "write";
 }

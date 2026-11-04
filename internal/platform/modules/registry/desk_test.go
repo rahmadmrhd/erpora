@@ -6,12 +6,13 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"erpora/internal/platform/modules/modtest"
 	"erpora/sdk/module"
 )
 
 // deskFS adalah katalog id.json yang memuat kunci label yang dipakai test.
 func deskFS() fstest.MapFS {
-	return fstest.MapFS{"id.json": {Data: []byte(`{"desk":{"title":"Catatan","dashboard":"Beranda"},"nav":{"notes":"Catatan","archive":"Arsip","group":"Grup"}}`)}}
+	return fstest.MapFS{"id.json": {Data: []byte(`{"desk":{"title":"Catatan","dashboard":"Beranda"},"nav":{"notes":"Catatan","archive":"Arsip","group":"Grup"},"resource":{"items":"Barang"},"fieldGroup":{"general":"Umum"},"action":{"write":"Tulis"}}`)}}
 }
 
 func deskItem(id, to, perm string) map[string]any {
@@ -145,7 +146,7 @@ func TestCheckDesk_NilDeskNoProblems(t *testing.T) {
 
 func TestBuild_PlatformDeskValidated(t *testing.T) {
 	opts := testOpts()
-	opts.PlatformCapabilities = []string{"platform.modules.read"}
+	opts.PlatformResources = modtest.Resources("platform.modules.read")
 	opts.PlatformDesk = &module.Desk{Label: "desk.title", Icon: "layers", Menus: []module.DeskMenu{
 		{ID: "modules", Label: "desk.modules", To: "/modules", Permission: "platform.modules.read"},
 	}}

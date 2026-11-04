@@ -11,6 +11,7 @@ import (
 
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/tenancy"
+	"erpora/sdk/authz"
 	"erpora/sdk/module"
 )
 
@@ -36,7 +37,8 @@ func (r *recorder) Public(method, path string, h http.Handler, _ ...module.Route
 	k := method + " " + path
 	r.handlers[k], r.public[k] = h, true
 }
-func (r *recorder) Command(module.Command) {}
+func (r *recorder) Command(module.Command)    {}
+func (r *recorder) Scope(authz.ScopeProvider) {}
 
 type fakeBackend struct {
 	view View

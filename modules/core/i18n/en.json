@@ -5,6 +5,17 @@
   "nav": {
     "change_password": "Change password"
   },
+  "resource": {
+    "user": "User",
+    "role": "Role",
+    "org_unit": "Organization unit"
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
+  "dimension": {
+    "org_unit": "Organization unit"
+  },
   "password": {
     "violation": {
       "too_short": "Password is too short (at least 12 characters).",

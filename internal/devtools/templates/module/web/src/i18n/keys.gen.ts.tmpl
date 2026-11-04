@@ -6,9 +6,12 @@ declare module "@erpora/platform-web" {
     [[.NSKey]]: {
       "desk.title": {};
       "errors.bad_request": {};
+      "fieldGroup.general": {};
       "nav.items": {};
       "page.items.description": {};
       "page.items.title": {};
+[[if .Metadata]]      "resource.item": {};
+[[end]]      "resource.items": {};
     };
   }
 }

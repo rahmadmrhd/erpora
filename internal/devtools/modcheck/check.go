@@ -60,6 +60,14 @@ func Check(root, only string) ([]Finding, error) {
 		m, perr := module.ParseManifest(data)
 		entries = append(entries, entry{dir: filepath.Base(filepath.Dir(f)), manifest: m, parseErr: perr})
 	}
+	// peers adalah manifest semua modul di repo (sebelum penyaringan only): keunikan kunci resource/dimensi dan
+	// dimensi dependensi diperiksa terhadapnya, sama seperti registry.
+	peers := make([]module.Manifest, 0, len(entries))
+	for _, e := range entries {
+		if e.parseErr == nil {
+			peers = append(peers, e.manifest)
+		}
+	}
 	if only != "" {
 		var picked []entry
 		for _, e := range entries {
@@ -80,9 +88,10 @@ func Check(root, only string) ([]Finding, error) {
 	reg := loadLocaleRegistry(root)
 	var out []Finding
 	for _, e := range entries {
-		out = append(out, manifestFindings(e)...)
+		out = append(out, manifestFindings(e, peers)...)
 		out = append(out, i18nFindings(root, e, reg)...)
 		out = append(out, deskFindings(root, e)...)
+		out = append(out, authzLabelFindings(root, e)...)
 	}
 	out = append(out, metadataFindings(root, entries)...)
 
@@ -122,7 +131,7 @@ func label(e entry) string {
 	return e.dir
 }
 
-func manifestFindings(e entry) []Finding {
+func manifestFindings(e entry, peers []module.Manifest) []Finding {
 	if e.parseErr != nil {
 		return []Finding{{Module: label(e), Rule: RuleSchema, Detail: "module.json: " + e.parseErr.Error()}}
 	}
@@ -133,6 +142,10 @@ func manifestFindings(e entry) []Finding {
 			field = "/"
 		}
 		out = append(out, Finding{Module: label(e), Rule: RuleSchema, Detail: fmt.Sprintf("%s: %s (%s)", field, p.Message, p.Code)})
+	}
+	// Aturan otorisasi manifest (PRD-001 FR-110): fungsi yang sama dipakai registry saat Build.
+	for _, p := range manifest.ValidateAuthorization(e.manifest, peers) {
+		out = append(out, Finding{Module: label(e), Rule: RuleSchema, Detail: fmt.Sprintf("%s: %s (%s)", p.Field, p.Message, p.Code)})
 	}
 	prefix := e.manifest.Slug + "."
 	for _, c := range e.manifest.Capabilities {
@@ -217,6 +230,23 @@ func deskFindings(root string, e entry) []Finding {
 	var out []Finding
 	for _, p := range registry.CheckDesk(e.manifest, catalogs) {
 		out = append(out, f("modules/%s/module.json %s: %s (%s)", e.dir, p.Field, p.Message, p.Code))
+	}
+	return out
+}
+
+// authzLabelFindings memeriksa bahwa label resource, aksi kustom, grup field, dimensi, dan role bawaan ada di katalog
+// bahasa dasar modul (registry.CheckAuthorizationLabels; K-C2.5). Modul tanpa direktori i18n/ dilewati.
+func authzLabelFindings(root string, e entry) []Finding {
+	if e.parseErr != nil {
+		return nil
+	}
+	dir := filepath.Join(root, "modules", e.dir, "i18n")
+	if !dirExists(dir) {
+		return nil
+	}
+	var out []Finding
+	for _, p := range registry.CheckAuthorizationLabels(e.manifest, os.DirFS(dir)) {
+		out = append(out, Finding{Module: label(e), Rule: RuleSchema, Detail: fmt.Sprintf("modules/%s/module.json %s: %s (%s)", e.dir, p.Field, p.Message, p.Code)})
 	}
 	return out
 }

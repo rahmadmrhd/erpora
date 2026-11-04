@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"erpora/sdk/authz"
 	"erpora/sdk/module"
 )
 
@@ -11,10 +12,11 @@ import (
 type recorder struct {
 	key      string
 	slug     string
-	caps     map[string]bool // capability yang dideklarasikan manifest (atau Options.PlatformCapabilities)
+	caps     map[string]bool // permission turunan resource x aksi manifest (atau Options.PlatformResources)
 	routes   []RouteInfo
 	cmds     []CommandInfo
 	cmdNames map[string]bool
+	scopes   []authz.ScopeProvider // scope kustom sah (Registrar.Scope; scope.go)
 	problems []Problem
 }
 
@@ -59,7 +61,7 @@ func (r *recorder) Handle(method, path, permission string, h http.Handler, opts 
 		r.problem(CodeInvalidRouteOption, "route %s %s: Authenticated hanya untuk route tanpa permission (permission %q diberikan)", method, path, permission)
 		valid = false
 	case !r.caps[permission]:
-		r.problem(CodePermissionUndeclared, "permission %q pada route %s %s tidak ada di capabilities manifest", permission, method, path)
+		r.problem(CodePermissionUndeclared, "permission %q pada route %s %s bukan <resource>.<aksi> yang dideklarasikan di resources manifest (PRD-001 FR-110)", permission, method, path)
 		valid = false
 	}
 	if !valid {

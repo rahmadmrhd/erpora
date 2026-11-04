@@ -37,7 +37,7 @@ func TestMakeHandler_Golden(t *testing.T) {
 	}{
 		{"handler_get_item", "inventory", HandlerOptions{Module: "inventory", Name: "GetItem", Route: "GET /items/{id}", Permission: "inventory.items.read"}},
 		{"handler_post_action", "inventory", HandlerOptions{Module: "inventory", Name: "ApproveItem", Route: "POST /items/{id}/approve", Permission: "inventory.items.approve"}},
-		{"handler_collection_hyphenated", "stock-opname", HandlerOptions{Module: "stock-opname", Name: "ListStockCounts", Route: "GET /stock-counts", Permission: "stock-opname.stock-counts.read"}},
+		{"handler_collection_hyphenated", "stock-opname", HandlerOptions{Module: "stock-opname", Name: "ListStockCounts", Route: "GET /stock-counts", Permission: "stock-opname.stock_counts.read"}},
 	}
 	for _, c := range cases {
 		t.Run(c.golden, func(t *testing.T) {
@@ -302,7 +302,7 @@ func main() {
 }
 `
 
-// Hasil make:handler harus sesuai kontrak: route terdaftar, openapi.yaml, dan capabilities module.json (FR-23.2).
+// Hasil make:handler harus sesuai kontrak: route terdaftar, openapi.yaml, dan resources module.json (FR-23.2).
 func TestMakeHandler_ResultConforms(t *testing.T) {
 	if testing.Short() {
 		t.Skip("menjalankan program Go; dilewati pada -short")

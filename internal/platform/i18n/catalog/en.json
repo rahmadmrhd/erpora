@@ -353,6 +353,17 @@
       "description": "An error occurred while loading Desks. Try again."
     }
   },
+  "resource": {
+    "modules": "Modules",
+    "i18n": "Terminology (i18n)",
+    "desks": "Desks"
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
+  "action": {
+    "manage": "Manage"
+  },
   "todo": {
     "title": "ToDo",
     "description": "The task list will arrive in a later update."

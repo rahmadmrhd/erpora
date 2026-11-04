@@ -510,8 +510,9 @@ func TestCheckGoPackage(t *testing.T) {
 
 // TestResourceKeyMappingRule mengunci aturan pemetaan satu kunci resource ke semua bentuk turunannya (K35,
 // 2 Nov 2026): kunci selalu tunggal; identitas (kunci manifest dan prefiks permission) tunggal snake_case,
-// sedangkan tabel dan segmen URL jamak. Capability tulis-tangan jamak seperti example.notes.read milik modul
-// example (sebelum metadata) bukan bagian aturan ini.
+// sedangkan tabel dan segmen URL jamak. Capability tulis-tangan jamak peninggalan modul example
+// (example.notes.read, sebelum metadata) sudah diganti example.note.read di PRD-001 C2.1 (Q36, 4 Nov 2026) dan
+// bukan bagian aturan ini.
 func TestResourceKeyMappingRule(t *testing.T) {
 	cases := []struct {
 		key, manifest, table, url string
