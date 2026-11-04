@@ -311,6 +311,44 @@ describe("logout dan keadaan", () => {
     }
   });
 
+  test("logout 401 token_expired + refresh 403 (Origin ditolak): cookie belum diperiksa server, TIDAK keluar, token tetap (Minor-D)", async () => {
+    const server = fakeServer({
+      [LOGOUT]: () => apiError(401, "token_expired"),
+      [REFRESH]: () => apiError(403, "origin_not_allowed"),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await auth.logout()).toBe(false);
+    expect(auth.getAccessToken()).toBe("t");
+    expect(auth.getState()).toEqual({ status: "authenticated" });
+  });
+
+  test("refresh: 401 = rejected (cookie ditolak, sesi berakhir); 403 = error (tidak berarti cookie tidak berlaku, sesi tidak berakhir)", async () => {
+    const a = createAuthController({
+      fetch: fakeServer({ [REFRESH]: () => apiError(401, "unauthenticated") }).fetch,
+    });
+    a.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await a.refresh()).toBe("rejected");
+    expect(a.getState()).toEqual({ status: "anonymous" });
+
+    const b = createAuthController({
+      fetch: fakeServer({ [REFRESH]: () => apiError(403, "origin_not_allowed") }).fetch,
+    });
+    b.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    expect(await b.refresh()).toBe("error");
+    expect(b.getState()).toEqual({ status: "authenticated" });
+    expect(b.getAccessToken()).toBe("t");
+  });
+
+  test("boot dengan refresh 403 (Origin ditolak): tidak masuk aplikasi (anonymous, tanpa token)", async () => {
+    const auth = createAuthController({
+      fetch: fakeServer({ [REFRESH]: () => apiError(403, "origin_not_allowed") }).fetch,
+    });
+    await auth.boot();
+    expect(auth.getState()).toEqual({ status: "anonymous" });
+    expect(auth.getAccessToken()).toBeUndefined();
+  });
+
   test("logout 401 token_expired + refresh timeout: tidak keluar", async () => {
     const calls: string[] = [];
     const fetchFn = ((input: RequestInfo | URL, init?: RequestInit) => {

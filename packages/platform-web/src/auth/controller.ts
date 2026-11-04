@@ -144,7 +144,10 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
         credentials: "include",
         signal: abort.signal,
       });
-      if (res.status === 401 || res.status === 403) {
+      // Hanya 401 membuktikan server menolak cookie refresh. 403 (mis. Origin ditolak, ADR-0013 §1) terjadi SEBELUM cookie
+      // diperiksa: sesi server mungkin masih hidup, jadi diperlakukan sebagai "error" (sesi lokal tidak diakhiri; saat
+      // boot tetap tidak masuk aplikasi, dan logout tidak dianggap berhasil).
+      if (res.status === 401) {
         endSession();
         return "rejected";
       }

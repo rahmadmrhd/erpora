@@ -3,18 +3,25 @@
 package app
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"erpora/sdk/httpx"
 )
 
 // PRD-001 NFR-103: tidak ada rahasia (sandi, token akses, refresh token, secret TOTP, kode TOTP, recovery code, token
 // reset) yang tercatat di log. Tes ini menjalankan SELURUH alur auth lewat HTTP (login gagal dan sukses, refresh lewat
 // cookie, ubah sandi, logout, forgot dan reset, enroll dan confirm MFA, verify TOTP, recovery code) sambil menangkap
-// SEMUA keluaran slog stack (newBufLogger tingkat Debug, dipakai assemble untuk seluruh komponen platform, modul, dan
-// pekerja latar), lalu memindainya. Pengirim surat adalah penangkap (captureMail), bukan driver log: tautan reset
+// SEMUA keluaran slog: logger stack (newBufLogger tingkat Debug, dipakai assemble untuk seluruh komponen platform,
+// modul, dan pekerja latar) DAN slog.Default() (di production serve memanggil slog.SetDefault(log), sehingga
+// sdk/httpx.RespondError, modul yang memakai slog.*Context paket, dan komponen yang jatuh ke slog.Default() saat
+// logger-nya nil menulis ke log server yang sama). Keduanya diarahkan ke SATU penampung, lalu dipindai. Pengirim surat adalah penangkap (captureMail), bukan driver log: tautan reset
 // memang tujuan driver log, sehingga yang diuji di sini adalah bahwa token reset tidak bocor lewat jalur LAIN.
 
 // secretProbe adalah satu nilai rahasia yang dicari di log.
@@ -26,28 +33,40 @@ type secretProbe struct {
 	word bool
 }
 
-// secretProbes mengumpulkan nilai rahasia yang muncul selama alur.
-type secretProbes struct{ list []secretProbe }
+// secretProbes mengumpulkan nilai rahasia yang muncul selama alur. Nilai KOSONG menggagalkan tes: bila nama field
+// respons berubah, probe tidak boleh hilang diam-diam (pemindaian tanpa probe selalu lolos).
+type secretProbes struct {
+	t    *testing.T
+	list []secretProbe
+}
 
 func (p *secretProbes) add(kind string, values ...string) {
+	p.t.Helper()
 	for _, v := range values {
-		if v != "" {
-			p.list = append(p.list, secretProbe{kind: kind, value: v})
+		if v == "" {
+			p.t.Fatalf("probe rahasia %q kosong: nilai yang diharapkan tidak ada pada respons (nama field berubah?)", kind)
 		}
+		p.list = append(p.list, secretProbe{kind: kind, value: v})
 	}
 }
 
 func (p *secretProbes) addCode(kind string, values ...string) {
+	p.t.Helper()
 	for _, v := range values {
-		if v != "" {
-			p.list = append(p.list, secretProbe{kind: kind, value: v, word: true})
+		if v == "" {
+			p.t.Fatalf("probe rahasia %q kosong", kind)
 		}
+		p.list = append(p.list, secretProbe{kind: kind, value: v, word: true})
 	}
 }
 
 // addRecovery mendaftarkan recovery code dalam bentuk tampilan (XXXX-XXXX-XXXX-XXXX) dan ternormalisasi (16 karakter
 // tanpa tanda hubung), huruf besar dan kecil.
 func (p *secretProbes) addRecovery(codes ...string) {
+	p.t.Helper()
+	if len(codes) == 0 {
+		p.t.Fatal("recovery code kosong: nilai yang diharapkan tidak ada pada respons")
+	}
 	for _, c := range codes {
 		norm := strings.ReplaceAll(c, "-", "")
 		p.add("recovery code (tampilan)", c, strings.ToLower(c))
@@ -94,7 +113,7 @@ func mask(v string) string {
 
 // Kontrol: pemindai benar-benar menangkap kebocoran dan tidak berisik (bukti bahwa tes alur di bawah berarti).
 func TestSecretScanner_DetectsLeaksAndStaysQuiet(t *testing.T) {
-	var p secretProbes
+	p := secretProbes{t: t}
 	p.add("sandi", "kata-sandi-rahasia-2026")
 	p.addCode("kode TOTP", "483920")
 	p.addRecovery("ABCD-EFGH-IJKL-MNOP")
@@ -121,7 +140,15 @@ func TestSecretScanner_DetectsLeaksAndStaysQuiet(t *testing.T) {
 
 func TestCoreAPI_NoSecretsInLogs_FullAuthFlow(t *testing.T) {
 	e := newCoreEnv(t)
-	var probes secretProbes
+	probes := secretProbes{t: t}
+
+	// slog.Default() ke penampung yang SAMA dengan logger stack (handler identik). Tes ini tidak boleh memakai t.Parallel: default
+	// slog adalah state proses. Tidak ada tes lain di paket ini yang memakai t.Parallel; pekerja latar dari tes
+	// sebelumnya sudah berhenti (context dibatalkan di Cleanup) dan, kalaupun masih menulis, hanya menambah baris
+	// tanpa rahasia milik tes ini. Dipulihkan lewat Cleanup (berjalan sebelum assertNoSecretsInLogs milik newSvcEnv).
+	prev := slog.Default()
+	slog.SetDefault(newBufLogger(e.logs))
+	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	// ---- Pengguna biasa: login gagal, login sukses, refresh lewat cookie, ubah sandi, logout ----
 	const (
@@ -247,6 +274,9 @@ func TestCoreAPI_NoSecretsInLogs_FullAuthFlow(t *testing.T) {
 	for _, c := range cd["codes"].([]any) {
 		codes = append(codes, c.(string))
 	}
+	if len(codes) != 10 {
+		t.Fatalf("recovery code confirm = %d, want 10", len(codes))
+	}
 	probes.addRecovery(codes...)
 	sess, _ := cd["session"].(map[string]any)
 	otpToken, _ := sess["accessToken"].(string)
@@ -284,6 +314,9 @@ func TestCoreAPI_NoSecretsInLogs_FullAuthFlow(t *testing.T) {
 	for _, c := range rg.data(t)["codes"].([]any) {
 		codes2 = append(codes2, c.(string))
 	}
+	if len(codes2) != 10 {
+		t.Fatalf("recovery code regenerasi = %d, want 10", len(codes2))
+	}
 	probes.addRecovery(codes2...)
 	for i, form := range []func(string) string{
 		func(c string) string { return c },
@@ -309,6 +342,21 @@ func TestCoreAPI_NoSecretsInLogs_FullAuthFlow(t *testing.T) {
 	log := e.logs.String()
 	if strings.TrimSpace(log) == "" {
 		t.Fatal("log kosong: penangkap tidak terpasang pada stack (pemindaian tidak bermakna)")
+	}
+	// Penanda positif: kedua jalur tertangkap. (1) logger stack: peristiwa keamanan yang pasti ditulis identity.Service
+	// pada login gagal. (2) slog.Default(): RespondError mencatat galat tak terduga lewat slog.ErrorContext paket
+	// (alur normal tidak memicunya, jadi dipicu langsung dengan galat berpenanda).
+	rec := httptest.NewRecorder()
+	httpx.RespondError(rec, httptest.NewRequest(http.MethodPost, authBase+"/login", nil), errors.New("penanda-jalur-slog-default"))
+	log = e.logs.String()
+	for _, marker := range []string{
+		`event=identity.login_failed`,   // jalur logger stack
+		`msg="unhandled handler error"`, // jalur slog.Default() (sdk/httpx)
+		`penanda-jalur-slog-default`,
+	} {
+		if !strings.Contains(log, marker) {
+			t.Fatalf("penanda %s tidak ada di log: salah satu jalur slog tidak tertangkap (pemindaian bermakna?)", marker)
+		}
 	}
 	if leaks := scanLog(log, probes.list); len(leaks) > 0 {
 		t.Fatalf("NFR-103: %d rahasia bocor ke log:\n  %s", len(leaks), strings.Join(leaks, "\n  "))
