@@ -94,11 +94,9 @@
 //
 // Reset dan ganti sandi:
 //
-//	InsertPasswordReset(ctx, t, PasswordReset) error
 //	IssuePasswordReset(ctx, t, PasswordReset, at) error             // batalkan tautan lama + simpan baru, satu transaksi (kunci advisory per pengguna)
 //	FindPasswordResetByHash(ctx, t, hash) (PasswordReset, error)
 //	ConsumePasswordReset(ctx, t, id, at) (bool, error)              // used_at IS NULL dan expires_at > at
-//	InvalidatePasswordResets(ctx, t, userID, at) (int64, error)     // batalkan tautan lama sebelum menerbitkan yang baru
 //	ResetPassword(ctx, t, resetID, newHash, at) (ResetResult, bool, error)
 //	  // atomik: pakai tautan, ganti sandi, buka locked, batalkan tautan lain, cabut SEMUA sesi, hapus login_attempts.
 //	ChangePassword(ctx, t, userID, newHash, exceptSessionID, at) ([]string, error)

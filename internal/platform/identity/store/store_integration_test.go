@@ -892,11 +892,11 @@ func TestMFA(t *testing.T) {
 }
 
 func TestPasswordResets(t *testing.T) {
-	_, s := setup(t)
+	db, s := setup(t)
 	u := newUser(t, s, tenantA, "reset@example.com")
 	mk := func(b byte, ttl time.Duration) store.PasswordReset {
 		r := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash(b), CreatedAt: now(), ExpiresAt: now().Add(ttl)}
-		if err := s.InsertPasswordReset(ctx, tenantA, r); err != nil {
+		if err := s.IssuePasswordReset(ctx, tenantA, r, r.CreatedAt); err != nil {
 			t.Fatal(err)
 		}
 		return r
@@ -929,11 +929,12 @@ func TestPasswordResets(t *testing.T) {
 
 	t.Run("permintaan baru membatalkan tautan lama", func(t *testing.T) {
 		old := mk(3, 30*time.Minute)
-		if n, err := s.InvalidatePasswordResets(ctx, tenantA, u.ID, now()); err != nil || n < 1 {
-			t.Fatalf("InvalidatePasswordResets = %d, %v", n, err)
-		}
+		newer := mk(9, 30*time.Minute) // mk memakai IssuePasswordReset: tautan lama dibatalkan atomik
 		if ok, _ := s.ConsumePasswordReset(ctx, tenantA, old.ID, now()); ok {
 			t.Error("tautan lama masih berlaku")
+		}
+		if ok, err := s.ConsumePasswordReset(ctx, tenantA, newer.ID, now()); err != nil || !ok {
+			t.Errorf("tautan baru harus berlaku: %v, %v", ok, err)
 		}
 	})
 
@@ -961,14 +962,32 @@ func TestPasswordResets(t *testing.T) {
 		}
 	})
 
-	t.Run("IssuePasswordReset bukan anggota: ErrNotFound tanpa membatalkan tautan lama", func(t *testing.T) {
-		keep := mk(5, 30*time.Minute)
-		r := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash(6), CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
-		if err := s.IssuePasswordReset(ctx, tenantB, r, now()); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("lintas tenant: err = %v, want ErrNotFound", err)
+	t.Run("IssuePasswordReset keanggotaan hilang: ErrNotFound dan rollback tautan lama", func(t *testing.T) {
+		// Pengguna di tenant yang SAMA: UPDATE pembatalan benar-benar mengenai tautan lama, lalu INSERT tak menemukan
+		// keanggotaan (dihapus setelah tautan lama dibuat) sehingga seluruh transaksi harus di-rollback.
+		u2 := newUser(t, s, tenantA, "gone@example.com")
+		old := store.PasswordReset{ID: uuid.NewString(), UserID: u2.ID, TokenHash: hash(7), CreatedAt: now(), ExpiresAt: now().Add(30 * time.Minute)}
+		if err := s.IssuePasswordReset(ctx, tenantA, old, now()); err != nil {
+			t.Fatal(err)
 		}
-		if f, _ := s.FindPasswordResetByHash(ctx, tenantA, keep.TokenHash); f.UsedAt != nil {
-			t.Error("tautan lama dibatalkan oleh penerbitan yang gagal")
+		// FK password_resets -> tenant_memberships melarang menghapus keanggotaan yang masih punya tautan, jadi jalur ini
+		// hanya dapat dicapai bila FK dicabut. Database uji bersifat sementara; FK dicabut agar rollback dapat diuji.
+		if err := db.Exec(`ALTER TABLE password_resets DROP CONSTRAINT password_resets_tenant_id_user_id_fkey`).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec(`DELETE FROM tenant_memberships WHERE tenant_id = ? AND user_id = ?`, tenantA.String(), u2.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		r := store.PasswordReset{ID: uuid.NewString(), UserID: u2.ID, TokenHash: hash(8), CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
+		if err := s.IssuePasswordReset(ctx, tenantA, r, now()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("keanggotaan hilang: err = %v, want ErrNotFound", err)
+		}
+		var stillActive int
+		if err := db.Raw(`SELECT count(*) FROM password_resets WHERE id = ? AND used_at IS NULL`, old.ID).Scan(&stillActive).Error; err != nil {
+			t.Fatal(err)
+		}
+		if stillActive != 1 {
+			t.Error("tautan lama dibatalkan walau penerbitan gagal: transaksi tidak di-rollback")
 		}
 	})
 
@@ -992,7 +1011,7 @@ func TestPasswordResets(t *testing.T) {
 		}
 		_ = s.RecordLoginAttempt(ctx, tenantA, v.ID, "198.51.100.9", store.AttemptPassword, false, at)
 		r := store.PasswordReset{ID: uuid.NewString(), UserID: v.ID, TokenHash: hash(77), CreatedAt: at, ExpiresAt: at.Add(30 * time.Minute)}
-		if err := s.InsertPasswordReset(ctx, tenantA, r); err != nil {
+		if err := s.IssuePasswordReset(ctx, tenantA, r, r.CreatedAt); err != nil {
 			t.Fatal(err)
 		}
 		type res struct {
@@ -1037,7 +1056,7 @@ func TestPasswordResets(t *testing.T) {
 		}
 		// tenant lain tidak dapat mereset
 		r2 := store.PasswordReset{ID: uuid.NewString(), UserID: v.ID, TokenHash: hash(78), CreatedAt: at, ExpiresAt: at.Add(time.Hour)}
-		if err := s.InsertPasswordReset(ctx, tenantA, r2); err != nil {
+		if err := s.IssuePasswordReset(ctx, tenantA, r2, r2.CreatedAt); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok, err := s.ResetPassword(ctx, tenantB, r2.ID, "$evil", at); err != nil || ok {
@@ -1395,7 +1414,7 @@ func TestResetPasswordRaceWithDisable(t *testing.T) {
 	sess, _ := newSession(t, s, tenantA, u.ID)
 	at := now()
 	r := store.PasswordReset{ID: uuid.NewString(), UserID: u.ID, TokenHash: hash(91), CreatedAt: at, ExpiresAt: at.Add(30 * time.Minute)}
-	if err := s.InsertPasswordReset(ctx, tenantA, r); err != nil {
+	if err := s.IssuePasswordReset(ctx, tenantA, r, r.CreatedAt); err != nil {
 		t.Fatal(err)
 	}
 	before, err := s.GetUser(ctx, tenantA, u.ID)

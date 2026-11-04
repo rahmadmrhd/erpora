@@ -40,10 +40,7 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, CodePasswordPolicyViolation, "Sandi baru tidak memenuhi kebijakan.", details)
 	case errors.Is(err, identity.ErrInvalidCredentials):
 		httpx.WriteError(w, r, http.StatusUnauthorized, CodeInvalidCredentials, "Email atau sandi salah.", nil)
-	// ErrNotFound pada endpoint auth berprincipal berarti pengguna/keanggotaan/sesi principal sudah tidak ada walau token
-	// masih berlaku (mis. keanggotaan dicabut): sesi tak lagi berlaku -> 401, bukan 500 (tidak ada sumber daya lain yang
-	// dapat "tidak ditemukan" pada modul ini sehingga 404 tidak bermakna).
-	case errors.Is(err, identity.ErrUnauthenticated), errors.Is(err, identity.ErrInvalidRefresh), errors.Is(err, identity.ErrNotFound):
+	case errors.Is(err, identity.ErrUnauthenticated), errors.Is(err, identity.ErrInvalidRefresh):
 		httpx.WriteError(w, r, http.StatusUnauthorized, "unauthenticated", "Autentikasi diperlukan.", nil)
 	case errors.Is(err, identity.ErrOriginNotAllowed), errors.Is(err, identity.ErrForbidden):
 		httpx.WriteError(w, r, http.StatusForbidden, "permission_denied", "Anda tidak memiliki izin untuk aksi ini.", nil)

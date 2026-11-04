@@ -29,29 +29,6 @@ type resetRow struct {
 
 func (resetRow) TableName() string { return "password_resets" }
 
-// InsertPasswordReset menyimpan tautan reset (hash token 32 byte). ErrNotFound bila pengguna bukan anggota tenant t.
-func (s *Store) InsertPasswordReset(ctx context.Context, t tenancy.TenantID, r PasswordReset) error {
-	id, ok1 := parseID(r.ID)
-	uid, ok2 := parseID(r.UserID)
-	if !ok1 || !ok2 || len(r.TokenHash) != 32 || r.ExpiresAt.IsZero() {
-		return ErrInvalidArgument
-	}
-	created := r.CreatedAt
-	if created.IsZero() {
-		created = nowUTC()
-	}
-	n, err := exec(s.db(ctx), `INSERT INTO password_resets (id, tenant_id, user_id, token_hash, created_at, expires_at)
-		SELECT ?::uuid, m.tenant_id, m.user_id, ?::bytea, ?::timestamptz, ?::timestamptz FROM tenant_memberships m
-		WHERE m.tenant_id = ? AND m.user_id = ?`, id, r.TokenHash, created.UTC(), r.ExpiresAt.UTC(), tid(t), uid)
-	if err != nil {
-		return wrap("simpan reset sandi", err)
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // advisoryClassPasswordReset adalah kelas kunci advisory (argumen pertama dua-int) untuk serialisasi penerbitan tautan
 // reset per (tenant, pengguna); kelas tersendiri agar tidak bertabrakan dengan kunci advisory lain.
 const advisoryClassPasswordReset int32 = 0x52535450 // "RSTP"
@@ -131,20 +108,6 @@ func (s *Store) ConsumePasswordReset(ctx context.Context, t tenancy.TenantID, id
 		return false, wrap("pakai reset sandi", err)
 	}
 	return n == 1, nil
-}
-
-// InvalidatePasswordResets membatalkan semua tautan reset yang belum terpakai milik pengguna (dipanggil sebelum
-// menerbitkan tautan baru agar hanya tautan terbaru yang berlaku) dan mengembalikan jumlahnya.
-func (s *Store) InvalidatePasswordResets(ctx context.Context, t tenancy.TenantID, userID string, at time.Time) (int64, error) {
-	uid, ok := parseID(userID)
-	if !ok {
-		return 0, nil
-	}
-	n, err := exec(s.db(ctx), `UPDATE password_resets SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND used_at IS NULL`, at.UTC(), tid(t), uid)
-	if err != nil {
-		return 0, wrap("batalkan reset sandi", err)
-	}
-	return n, nil
 }
 
 // ResetPassword menyelesaikan reset sandi dalam satu transaksi atomik: memakai tautan (bersyarat used_at IS NULL

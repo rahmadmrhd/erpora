@@ -235,9 +235,7 @@ func TestMFAStateReader_InvalidateDuringReadDoesNotCacheStale(t *testing.T) {
 	gs.setFactor(store.MFAFactor{ConfirmedAt: &confirmed}) // konfirmasi MFA terjadi di tengah pembacaan
 	r.Invalidate(testTenant, "u1")
 	close(gs.release)
-	if st := <-done; st.FactorActive {
-		t.Log("pembacaan yang sedang berjalan boleh mengembalikan hasil lama untuk permintaannya sendiri")
-	}
+	<-done // hasil pembacaan yang tertinggal untuk permintaannya sendiri tidak diperiksa
 	st, err := r.Status(ctx, "u1")
 	if err != nil || !st.FactorActive {
 		t.Fatalf("setelah Invalidate Status harus membaca ulang dan melihat faktor aktif, dapat %+v, %v", st, err)

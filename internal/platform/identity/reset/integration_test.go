@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -336,7 +337,7 @@ func TestIntegrationConcurrentForgotLeavesExactlyOneActiveLink(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			if err := svc.Request(ipCtx("198.51.100."+string(rune('1'+i))), "budi@example.org", ""); err != nil {
+			if err := svc.Request(ipCtx(fmt.Sprintf("198.51.100.%d", i+1)), "budi@example.org", ""); err != nil {
 				t.Errorf("Request: %v", err)
 			}
 		}()

@@ -551,9 +551,9 @@ func TestNoStoreWrapperOnPanicFreePaths(t *testing.T) {
 	assertNoStore(t, rec)
 }
 
-// identity.ErrNotFound (keanggotaan/sesi principal hilang walau token masih berlaku) dijawab 401 unauthenticated pada
-// setiap endpoint auth berprincipal, bukan 500 internal_error.
-func TestPrincipalNotFoundIsUnauthenticatedNot500(t *testing.T) {
+// Principal tanpa keanggotaan dijawab 401 unauthenticated (service identity menerjemahkan not-found principal menjadi
+// ErrUnauthenticated), sedangkan identity.ErrNotFound milik operasi lain TIDAK dipetakan global ke 401.
+func TestPrincipalGoneIsUnauthenticatedButOtherNotFoundIsNot401(t *testing.T) {
 	endpoints := map[string]struct {
 		handler func(*Handlers) http.HandlerFunc
 		body    string
@@ -567,11 +567,15 @@ func TestPrincipalNotFoundIsUnauthenticatedNot500(t *testing.T) {
 	}
 	for name, e := range endpoints {
 		t.Run(name, func(t *testing.T) {
-			rec := call(t, &fakeService{err: fmt.Errorf("membungkus: %w", identity.ErrNotFound)}, e.handler, "POST", e.body, nil)
+			rec := call(t, &fakeService{err: fmt.Errorf("membungkus: %w", identity.ErrUnauthenticated)}, e.handler, "POST", e.body, nil)
 			if code, _ := errCode(t, rec); rec.Code != 401 || code != "unauthenticated" {
-				t.Fatalf("%d %s, want 401 unauthenticated", rec.Code, rec.Body)
+				t.Fatalf("unauthenticated: %d %s", rec.Code, rec.Body)
 			}
 			assertNoStore(t, rec)
+			rec = call(t, &fakeService{err: fmt.Errorf("membungkus: %w", identity.ErrNotFound)}, e.handler, "POST", e.body, nil)
+			if rec.Code == 401 {
+				t.Fatalf("ErrNotFound lain tidak boleh menjadi 401: %d %s", rec.Code, rec.Body)
+			}
 		})
 	}
 }

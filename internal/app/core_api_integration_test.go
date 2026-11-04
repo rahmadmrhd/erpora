@@ -3,6 +3,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -747,8 +749,26 @@ func TestCoreAPI_RefreshRateLimitedPerFamily(t *testing.T) {
 	if limited.errCode(t) != "rate_limited" || limited.Header().Get("Retry-After") == "" {
 		t.Fatalf("429 = %s retry-after=%q", limited.Body.String(), limited.Header().Get("Retry-After"))
 	}
-	// token terakhir tidak terpakai oleh penolakan batas laju (bukan reuse): family B sama sekali tak terpengaruh.
+	// token yang ditolak batas laju TIDAK ditandai terpakai (bukan reuse) dan sesinya tetap hidup.
+	raw, derr := base64.RawURLEncoding.DecodeString(cookie)
+	if derr != nil {
+		t.Fatal(derr)
+	}
+	sum := sha256.Sum256(raw)
+	row, ferr := e.a.Identity.Store.FindRefreshTokenByHash(e.ctx, e.a.Tenant, sum[:])
+	if ferr != nil || row.UsedAt != nil {
+		t.Fatalf("token yang ditolak batas laju: %+v err=%v, want tidak terpakai", row, ferr)
+	}
+	if sessRow, serr := e.a.Identity.Store.GetSession(e.ctx, e.a.Tenant, row.SessionID); serr != nil || sessRow.RevokedAt != nil {
+		t.Fatalf("sesi tidak boleh tercabut oleh batas laju: %+v %v", sessRow, serr)
+	}
+	// family B sama sekali tak terpengaruh.
 	if r := e.apiCall("/refresh", "", "", lb.RefreshToken); r.Code != http.StatusOK {
 		t.Fatalf("family lain = %d %s", r.Code, r.Body.String())
+	}
+	// setelah bucket terisi ulang (1 token per 6 detik) token yang tadi ditolak masih dapat dirotasi.
+	time.Sleep(7 * time.Second)
+	if r := e.apiCall("/refresh", "", "", cookie); r.Code != http.StatusOK {
+		t.Fatalf("rotasi setelah isi ulang = %d %s", r.Code, r.Body.String())
 	}
 }

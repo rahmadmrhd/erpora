@@ -555,3 +555,31 @@ func TestSecretsNeverLogged(t *testing.T) {
 		}
 	}
 }
+
+// Principal tanpa keanggotaan/pengguna (token masih berlaku): metode terikat Principal menjawab ErrUnauthenticated
+// (sesi tak lagi berlaku), bukan ErrNotFound. ErrNotFound tetap milik operasi lain (mis. Admin pada sasaran tak dikenal).
+func TestPrincipalBound_NotFoundBecomesUnauthenticated(t *testing.T) {
+	ctx := httpx.WithClientIP(principalCtx(userA, sessA, "pwd"), "203.0.113.9")
+	check := func(t *testing.T, err error) {
+		t.Helper()
+		if !errors.Is(err, sdkidentity.ErrUnauthenticated) || errors.Is(err, sdkidentity.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrUnauthenticated (bukan ErrNotFound)", err)
+		}
+	}
+	t.Run("ChangePassword", func(t *testing.T) {
+		e := newFakeEnv() // userA tidak ada di store
+		check(t, e.service().ChangePassword(ctx, sdkidentity.ChangeInput{CurrentPassword: "sandi-lama-panjang", NewPassword: "kata-sandi-baru-yang-panjang-2026"}))
+	})
+	t.Run("ConfirmMFA", func(t *testing.T) {
+		e := newFakeEnv()
+		e.mfa.confirmErr = store.ErrNotFound
+		_, err := e.service().ConfirmMFA(ctx, sdkidentity.ConfirmMFAInput{Code: "123456"})
+		check(t, err)
+	})
+	t.Run("VerifyMFA", func(t *testing.T) {
+		e := newFakeEnv()
+		e.mfa.verifyErr = store.ErrNotFound
+		_, err := e.service().VerifyMFA(ctx, sdkidentity.VerifyInput{Code: "123456"})
+		check(t, err)
+	})
+}

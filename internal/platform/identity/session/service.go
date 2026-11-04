@@ -19,7 +19,7 @@
 // Rotate memeriksa header Origin lebih dulu (cek CSRF cookie refresh): hilang atau lintas-origin
 // ditolak (ErrOriginNotAllowed) tanpa menyentuh token.
 //
-// Setelah token dikenal, Rotate membatasi laju per family (Config.RefreshLimiter, kunci guard.TargetKey("refresh", ...);
+// Setelah token dikenal dan lolos deteksi reuse (reuse mendahului batas laju), Rotate membatasi laju per family (Config.RefreshLimiter, kunci guard.TargetKey("refresh", ...);
 // ADR-0013 §4): melebihi batas mengembalikan *guard.RateLimitedError (429 + Retry-After) tanpa menyentuh token.
 //
 // # Revokasi
@@ -384,13 +384,16 @@ func (s *Service) Rotate(ctx context.Context, rawRefresh, origin string) (Sessio
 	if err != nil {
 		return Session{}, RefreshToken{}, wrap("muat refresh token", err)
 	}
-	// Batas laju per family (ADR-0013 §4): hanya untuk token dikenal, sebelum reuse/rotasi (tak ada tulisan DB bagi
-	// pembanjir). Penolakan: 429 + Retry-After via *guard.RateLimitedError; token tidak terpakai.
-	if ok, retry := s.refresh.Allow(guard.TargetKey("refresh", t, tok.FamilyID)); !ok {
-		return Session{}, RefreshToken{}, &guard.RateLimitedError{RetryAfter: retry, Cause: ErrRefreshRateLimited}
-	}
+	// Deteksi reuse MENDAHULUI batas laju family (ADR-0013 §2 dan §4): bila tidak, penyerang yang merotasi token curian
+	// pada laju isi ulang menjaga bucket family hampir kosong sehingga pemakaian token lama oleh pengguna sah selalu 429
+	// dan reuse tak pernah terdeteksi. reuse() idempoten dan murah; pembanjir token terpakai tetap dibatasi limiter IP.
 	if tok.UsedAt != nil {
 		return Session{}, RefreshToken{}, s.reuse(ctx, t, tok, "used_token", now)
+	}
+	// Batas laju per family (ADR-0013 §4): hanya untuk token dikenal dan belum terpakai, sebelum rotasi. Penolakan:
+	// 429 + Retry-After via *guard.RateLimitedError; token tidak terpakai.
+	if ok, retry := s.refresh.Allow(guard.TargetKey("refresh", t, tok.FamilyID)); !ok {
+		return Session{}, RefreshToken{}, &guard.RateLimitedError{RetryAfter: retry, Cause: ErrRefreshRateLimited}
 	}
 	sess, err := s.st.GetSession(ctx, t, tok.SessionID)
 	if errors.Is(err, store.ErrNotFound) {

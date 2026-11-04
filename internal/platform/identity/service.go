@@ -275,7 +275,7 @@ func (s *service) ChangePassword(ctx context.Context, in sdkidentity.ChangeInput
 	// reservasi dipertahankan: sandi baru yang lemah tidak memakai jatah tebakan.
 	res, st, err := s.d.Lockout.Reserve(ctx, store.AttemptPassword, p.UserID, ip)
 	if err != nil {
-		return mapErr("periksa lockout", err)
+		return mapPrincipalErr("periksa lockout", err)
 	}
 	if st.AccountLocked {
 		return sdkidentity.ErrAccountLocked
@@ -296,20 +296,20 @@ func (s *service) ChangePassword(ctx context.Context, in sdkidentity.ChangeInput
 	defer release()
 	u, err := s.d.Store.GetUser(ctx, t, p.UserID)
 	if err != nil {
-		return mapErr("muat pengguna", err)
+		return mapPrincipalErr("muat pengguna", err)
 	}
 	ok := false
 	if u.PasswordHash != "" {
 		ok, _, err = s.d.Gate.Verify(ctx, s.d.Hasher, in.CurrentPassword, u.PasswordHash)
 		if err != nil && !errors.Is(err, password.ErrInvalidHash) {
-			return mapErr("verifikasi sandi", err)
+			return mapPrincipalErr("verifikasi sandi", err)
 		}
 	}
 	if !ok {
 		released = true // kegagalan sudah tercatat oleh reservasi; jangan dilepas
 		st, ferr := s.d.Lockout.Fail(ctx, res)
 		if ferr != nil {
-			return mapErr("catat kegagalan", ferr)
+			return mapPrincipalErr("catat kegagalan", ferr)
 		}
 		if st.AccountLocked {
 			return sdkidentity.ErrAccountLocked
@@ -322,11 +322,11 @@ func (s *service) ChangePassword(ctx context.Context, in sdkidentity.ChangeInput
 	release() // sandi lama benar bukan kegagalan
 	phc, err := s.d.Gate.Hash(ctx, s.d.Hasher, in.NewPassword)
 	if err != nil {
-		return mapErr("hash sandi", err)
+		return mapPrincipalErr("hash sandi", err)
 	}
 	revoked, err := s.d.Store.ChangePassword(ctx, t, p.UserID, phc, p.SessionID, s.now().UTC())
 	if err != nil {
-		return mapErr("ganti sandi", err)
+		return mapPrincipalErr("ganti sandi", err)
 	}
 	if len(revoked) > 0 {
 		s.d.Sessions.MarkRevoked(ctx, revoked...)
@@ -348,7 +348,7 @@ func (s *service) BeginMFAEnrollment(ctx context.Context) (sdkidentity.Enrollmen
 	}
 	info, err := s.d.MFA.BeginEnrollment(ctx, p.UserID)
 	if err != nil {
-		return sdkidentity.EnrollmentInfo{}, mapErr("daftar MFA", err)
+		return sdkidentity.EnrollmentInfo{}, mapPrincipalErr("daftar MFA", err)
 	}
 	s.d.MFAState.Invalidate(t, p.UserID)
 	return info, nil
@@ -369,7 +369,7 @@ func (s *service) ConfirmMFA(ctx context.Context, in sdkidentity.ConfirmMFAInput
 	}
 	codes, err := s.d.MFA.ConfirmEnrollment(ctx, p.UserID, in.Code)
 	if err != nil {
-		return sdkidentity.ConfirmMFAResult{}, mapErr("konfirmasi MFA", err)
+		return sdkidentity.ConfirmMFAResult{}, mapPrincipalErr("konfirmasi MFA", err)
 	}
 	s.d.MFAState.Invalidate(t, p.UserID)
 	res := sdkidentity.ConfirmMFAResult{Codes: codes}
@@ -401,7 +401,7 @@ func (s *service) VerifyMFA(ctx context.Context, in sdkidentity.VerifyInput) (sd
 		err = s.d.MFA.Verify(ctx, p.UserID, in.Code)
 	}
 	if err != nil {
-		return sdkidentity.LoginResult{}, mapErr("verifikasi MFA", err)
+		return sdkidentity.LoginResult{}, mapPrincipalErr("verifikasi MFA", err)
 	}
 	// (mfa.Service sudah memanggil Lockout.RegisterSuccess pada verifikasi sukses; tidak dihitung ganda di sini.)
 	res, err := s.upgradeToOTP(ctx, t, p)
@@ -426,7 +426,7 @@ func (s *service) upgradeToOTP(ctx context.Context, t tenancy.TenantID, p sdkide
 	}
 	res, err := s.issue(t, p.UserID, p.SessionID, amr, sdkidentity.MFANone)
 	if err != nil {
-		return sdkidentity.LoginResult{}, mapErr("terbitkan token", err)
+		return sdkidentity.LoginResult{}, mapPrincipalErr("terbitkan token", err)
 	}
 	_, rt, err := s.d.Sessions.Upgrade(ctx, p.UserID, p.SessionID, sdkidentity.AMROTP)
 	switch {
@@ -438,7 +438,7 @@ func (s *service) upgradeToOTP(ctx context.Context, t tenancy.TenantID, p sdkide
 	case errors.Is(err, session.ErrSessionNotFound):
 		return sdkidentity.LoginResult{}, sdkidentity.ErrUnauthenticated
 	}
-	return sdkidentity.LoginResult{}, mapErr("naikkan sesi", err)
+	return sdkidentity.LoginResult{}, mapPrincipalErr("naikkan sesi", err)
 }
 
 // RegenerateRecoveryCodes menerbitkan set recovery code baru dan mencabut yang lama. Menuntut sesi yang sudah
@@ -453,7 +453,7 @@ func (s *service) RegenerateRecoveryCodes(ctx context.Context) (sdkidentity.Reco
 	}
 	codes, err := s.d.MFA.RegenerateRecoveryCodes(ctx, p.UserID)
 	if err != nil {
-		return sdkidentity.RecoveryCodes{}, mapErr("recovery code", err)
+		return sdkidentity.RecoveryCodes{}, mapPrincipalErr("recovery code", err)
 	}
 	return sdkidentity.RecoveryCodes{Codes: codes}, nil
 }

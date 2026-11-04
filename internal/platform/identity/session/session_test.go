@@ -436,3 +436,39 @@ func TestRotateRateLimitedPerFamily(t *testing.T) {
 }
 
 func row0(t *testing.T, w *world, raw string) string { t.Helper(); return w.tokenRow(raw).SessionID }
+
+// ADR-0013 §2/§4: deteksi reuse mendahului batas laju family. Penyerang yang merotasi token curian pada laju isi ulang
+// menjaga bucket family hampir kosong; pengguna sah yang memakai token LAMA harus tetap memicu pencabutan family
+// (bukan 429 yang dicoba ulang klien tanpa henti).
+func TestReuseDetectionPrecedesFamilyRateLimit(t *testing.T) {
+	w := newFakeWorld(t)
+	limiter, err := guard.NewPrincipalLimiter(guard.LimiterConfig{Burst: 2, Every: time.Hour})
+	must(t, err)
+	log := slog.New(slog.NewTextHandler(w.logs, nil))
+	list := session.NewRevocationList(session.RevocationConfig{Loader: w.be, Now: w.clock.Now, Log: log})
+	origins, err := session.NewOriginChecker([]string{goodOrigin})
+	must(t, err)
+	svc, err := session.New(session.Config{Store: w.be, Revocations: list, Notifier: w.notifier, Origin: origins,
+		Now: w.clock.Now, Log: log, RefreshLimiter: limiter})
+	must(t, err)
+	in := &instance{svc: svc, list: list}
+
+	user := w.be.NewUser(t, w.ctx)
+	sess, root := w.start(in, user)
+	_, t1, err := svc.Rotate(w.ctx, root.Value, goodOrigin)
+	must(t, err)
+	_, t2, err := svc.Rotate(w.ctx, t1.Value, goodOrigin) // bucket family kini kosong
+	must(t, err)
+	if _, _, err := svc.Rotate(w.ctx, t2.Value, goodOrigin); !isRateLimited(err) {
+		t.Fatalf("token aktif dengan bucket kosong harus 429, dapat %v", err)
+	}
+	// token lama (sudah terpakai) = reuse: family dicabut walau bucket kosong
+	if _, _, err := svc.Rotate(w.ctx, root.Value, goodOrigin); !errors.Is(err, session.ErrInvalidRefresh) || isRateLimited(err) {
+		t.Fatalf("reuse harus ErrInvalidRefresh (bukan 429), dapat %v", err)
+	}
+	if row := w.sessionRow(sess.ID); row.RevokedAt == nil || row.RevokeReason != session.ReasonRefreshReuse {
+		t.Fatalf("family harus tercabut karena reuse: %+v", row)
+	}
+}
+
+func isRateLimited(err error) bool { _, ok := guard.AsRateLimited(err); return ok }

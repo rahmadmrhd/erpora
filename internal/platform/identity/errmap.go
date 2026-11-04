@@ -82,3 +82,15 @@ func policyError(vs []password.Violation) error {
 	}
 	return &sdkidentity.PasswordPolicyError{Codes: codes}
 }
+
+// mapPrincipalErr adalah mapErr untuk metode yang terikat Principal (ChangePassword, MFA, ...): pengguna, keanggotaan,
+// atau sesi milik Principal yang sudah tidak ada walau token masih berlaku berarti sesi tak lagi berlaku, jadi
+// not-found dijawab ErrUnauthenticated (401), bukan ErrNotFound. ErrNotFound tetap milik operasi lain (mis. Admin pada
+// sasaran tak dikenal; record di luar scope tetap 404 per FR-119).
+func mapPrincipalErr(op string, err error) error {
+	m := mapErr(op, err)
+	if errors.Is(m, sdkidentity.ErrNotFound) {
+		return sdkidentity.ErrUnauthenticated
+	}
+	return m
+}
