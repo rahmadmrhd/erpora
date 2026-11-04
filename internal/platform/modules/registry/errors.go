@@ -53,8 +53,6 @@ const (
 
 	CodeDuplicateSlug        = "duplicate_slug"
 	CodeReservedSlug         = "reserved_slug"
-	CodeDuplicateCapability  = "duplicate_capability"
-	CodeCapabilityPrefix     = "capability_prefix"
 	CodePermissionMissing    = "permission_missing"
 	CodePermissionUndeclared = "permission_undeclared"
 	CodeInvalidRoute         = "invalid_route"
@@ -72,4 +70,6 @@ const (
 	CodeDeskInvalidTo         = "desk_invalid_to"
 	CodeDeskLabelUnknown      = "desk_label_unknown"
 	CodeDeskDashboardLocked   = "desk_dashboard_locked"
+	CodeDeskAccessConflict    = "desk_access_conflict" // permission dan access terisi bersamaan (PRD-000 Q43)
+	CodeDeskAccessInvalid     = "desk_access_invalid"  // nilai access selain "authenticated"
 )

@@ -34,9 +34,9 @@ func TestLifecycleTables_Exist(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		var want int64 = 2 // tenant; control mencapai 4 sejak 0004_desk_overrides
+		var want int64 = 5 // tenant; mencapai 5 sejak 0005_authz (0004_settings, 0003_roles_min); control mencapai 5 sejak 0005_identity
 		if s.Target == migrate.Control {
-			want = 4
+			want = 5
 		}
 		if s.Latest != want || s.Pending != 0 || s.Current != want {
 			t.Errorf("target %s: %+v, want Latest=%d Pending=0", s.Target, s, want)
@@ -101,9 +101,9 @@ func TestMigrateUp_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range st {
-		var want int64 = 2 // tenant; control mencapai 4 sejak 0004_desk_overrides
+		var want int64 = 5 // tenant; mencapai 5 sejak 0005_authz (0004_settings, 0003_roles_min); control mencapai 5 sejak 0005_identity
 		if s.Target == migrate.Control {
-			want = 4
+			want = 5
 		}
 		if s.Current != want || s.Pending != 0 {
 			t.Errorf("target %s: %+v, want Current=%d", s.Target, s, want)

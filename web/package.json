@@ -11,6 +11,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@erpora/module-core": "workspace:*",
     "@erpora/module-example": "workspace:*",
     "@erpora/module-exampleaddon": "workspace:*",
     "@erpora/module-sdk": "workspace:*",

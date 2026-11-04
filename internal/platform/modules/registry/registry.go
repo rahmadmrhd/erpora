@@ -28,9 +28,10 @@ type Options struct {
 	PlatformVersion, SDKVersion string
 	// Platform mendaftarkan route/command milik platform.core (dipakai M2b untuk /api/platform/modules).
 	Platform func(r module.Registrar) error
-	// PlatformCapabilities adalah capability yang dideklarasikan platform.core;
-	// route platform tunduk pada aturan permission_undeclared seperti modul lain.
-	PlatformCapabilities []string
+	// PlatformResources adalah resource yang dideklarasikan platform.core (PRD-001 FR-110; Key berawalan
+	// "platform."); permission-nya diturunkan sebagai <key>.<aksi>. Route platform tunduk pada aturan
+	// permission_undeclared seperti modul lain, dan resource divalidasi dengan aturan yang sama dengan modul.
+	PlatformResources []module.Resource
 	// PlatformContract adalah kontrak OpenAPI platform.core (contracts.PlatformOpenAPI); nil = tanpa kontrak.
 	PlatformContract []byte
 	// PlatformDesk adalah Desk bawaan platform (id "platform"); nil = tanpa Desk platform. Strukturnya diperiksa
@@ -47,6 +48,11 @@ type RouteInfo struct {
 	// MaxBodyBytes sudah diberi default (module.DefaultMaxBodyBytes); Classification kosong = tidak dinyatakan.
 	MaxBodyBytes   int64
 	Classification module.Classification
+	// RequireMFA: route menuntut amr memuat otp (module.RequireMFA; ADR-0013 §4).
+	RequireMFA bool
+	// Authenticated: route hanya mewajibkan Principal terautentikasi, tanpa permission (module.Authenticated; PRD-001 Q29).
+	// Permission kosong dan Public false.
+	Authenticated bool
 	// Deprecated dan DeprecatedParams diisi Build dari kontrak (operasi dengan method dan path persis sama; platform.core
 	// lewat dispatch ServeMux): operasi ditandai deprecated, dan parameter query deprecated (PRD-000 FR-23.3).
 	Deprecated       bool
@@ -73,12 +79,20 @@ type Entry struct {
 
 // Registry adalah katalog modul yang sudah tervalidasi.
 type Registry struct {
-	entries  []Entry
-	byKey    map[string]Entry
-	routes   []RouteInfo
-	commands []CommandInfo
-	caps     []string
-	graph    *resolver.Graph
+	entries   []Entry
+	byKey     map[string]Entry
+	routes    []RouteInfo
+	commands  []CommandInfo
+	caps      []string // permission turunan resource x aksi, terurut
+	resources []ResolvedResource
+	graph     *resolver.Graph
+}
+
+// ResolvedResource adalah satu resource terdeklarasi beserta modul pemiliknya (PRD-001 FR-110).
+type ResolvedResource struct {
+	Module string // key modul pemilik (platform.core untuk resource platform)
+	Slug   string
+	module.Resource
 }
 
 // Build memvalidasi dan merakit katalog. Semua problem dikumpulkan; error
@@ -89,9 +103,12 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 
 	platform := module.Manifest{
 		Key: PlatformKey, Slug: PlatformSlug, Version: opts.PlatformVersion, Trust: "builtin",
-		Capabilities: slices.Clone(opts.PlatformCapabilities), Desk: opts.PlatformDesk,
+		Resources: slices.Clone(opts.PlatformResources), Desk: opts.PlatformDesk,
 	}
 	problems = append(problems, checkDesk(platform, nil)...)
+	for _, p := range manifest.ValidateAuthorization(platform, nil) {
+		problems = append(problems, Problem{Module: p.Module, Field: p.Field, Code: p.Code, Message: p.Message})
+	}
 	byKey := map[string]Entry{PlatformKey: {Manifest: platform, Contract: opts.PlatformContract}}
 	if opts.PlatformContract != nil {
 		if _, err := apicontract.Parse(PlatformSlug, opts.PlatformContract); err != nil {
@@ -121,12 +138,14 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 		catalogs, iproblems := catalogsOf(mf, m)
 		problems = append(problems, iproblems...)
 		problems = append(problems, CheckDesk(mf, catalogs)...)
+		problems = append(problems, CheckAuthorizationLabels(mf, catalogs)...)
 		e := Entry{Manifest: mf, Module: m, Contract: contract, Catalogs: catalogs}
 		byKey[mf.Key] = e
 		unique = append(unique, e)
 	}
 
-	problems = append(problems, checkIdentity(unique, platform)...)
+	problems = append(problems, checkIdentity(unique)...)
+	problems = append(problems, checkAuthorization(unique, platform)...)
 
 	nodes := []resolver.Node{{Key: PlatformKey, Version: platform.Version}}
 	for _, e := range unique {
@@ -184,9 +203,13 @@ func Build(opts Options, mods ...module.Module) (*Registry, error) {
 	})
 	slices.SortFunc(reg.commands, func(a, b CommandInfo) int { return strings.Compare(a.Name, b.Name) })
 	for _, e := range entries {
-		reg.caps = append(reg.caps, e.Manifest.Capabilities...)
+		reg.caps = append(reg.caps, e.Manifest.Permissions()...)
+		for _, r := range e.Manifest.Resources {
+			reg.resources = append(reg.resources, ResolvedResource{Module: e.Manifest.Key, Slug: e.Manifest.Slug, Resource: r})
+		}
 	}
 	slices.Sort(reg.caps)
+	slices.SortFunc(reg.resources, func(a, b ResolvedResource) int { return strings.Compare(a.Key, b.Key) })
 	return reg, nil
 }
 
@@ -337,31 +360,45 @@ func (r *Registry) Entry(key string) (Entry, bool) {
 // Graph mengembalikan graf dependensi hasil resolusi.
 func (r *Registry) Graph() *resolver.Graph { return r.graph }
 
-// Capabilities mengembalikan semua capability, terurut.
-func (r *Registry) Capabilities() []string { return slices.Clone(r.caps) }
+// Permissions mengembalikan semua permission turunan resource x aksi (modul dan platform), terurut.
+func (r *Registry) Permissions() []string { return slices.Clone(r.caps) }
 
+// Resources mengembalikan semua resource terdeklarasi (modul dan platform), terurut Key.
+func (r *Registry) Resources() []ResolvedResource { return slices.Clone(r.resources) }
+
+// capSet adalah himpunan permission sah sebuah modul: turunan resource x aksi manifest (FR-110).
 func capSet(m module.Manifest) map[string]bool {
-	s := make(map[string]bool, len(m.Capabilities))
-	for _, c := range m.Capabilities {
+	perms := m.Permissions()
+	s := make(map[string]bool, len(perms))
+	for _, c := range perms {
 		s[c] = true
 	}
 	return s
 }
 
-// checkIdentity memeriksa keunikan slug, slug tercadang, serta keunikan dan
-// prefix capability. Modul diproses sesuai urutan input.
-func checkIdentity(mods []Entry, platform module.Manifest) []Problem {
+// checkAuthorization memeriksa deklarasi otorisasi (resources, scope_dimensions, default_roles, capabilities)
+// setiap modul terhadap manifest modul lain dan platform lewat manifest.ValidateAuthorization, fungsi yang sama
+// dengan module:check (PRD-001 FR-110).
+func checkAuthorization(mods []Entry, platform module.Manifest) []Problem {
+	peers := make([]module.Manifest, 0, len(mods)+1)
+	peers = append(peers, platform)
+	for _, e := range mods {
+		peers = append(peers, e.Manifest)
+	}
+	var out []Problem
+	for _, e := range mods {
+		for _, p := range manifest.ValidateAuthorization(e.Manifest, peers) {
+			out = append(out, Problem{Module: p.Module, Field: p.Field, Code: p.Code, Message: p.Message})
+		}
+	}
+	return out
+}
+
+// checkIdentity memeriksa keunikan slug, slug tercadang, dan dependensi pada platform.core. Modul diproses
+// sesuai urutan input. Keunikan dan awalan permission dijaga checkAuthorization (kunci resource berawalan slug).
+func checkIdentity(mods []Entry) []Problem {
 	var out []Problem
 	slugOwner := map[string]string{PlatformSlug: PlatformKey}
-	capOwner := map[string]string{}
-	// Capability platform.core: prefix "platform." dan keunikan lintas modul.
-	for _, c := range platform.Capabilities {
-		if !strings.HasPrefix(c, platform.Slug+".") {
-			out = append(out, Problem{Module: platform.Key, Field: "/capabilities", Code: CodeCapabilityPrefix,
-				Message: fmt.Sprintf("capability %q harus berawalan %q", c, platform.Slug+".")})
-		}
-		capOwner[c] = platform.Key
-	}
 	for _, e := range mods {
 		m := e.Manifest
 		if !dependsOnPlatform(m) {
@@ -377,18 +414,6 @@ func checkIdentity(mods []Entry, platform module.Manifest) []Problem {
 				Message: fmt.Sprintf("slug %q dipakai oleh %s dan %s", m.Slug, other, m.Key)})
 		} else {
 			slugOwner[m.Slug] = m.Key
-		}
-		for _, c := range m.Capabilities {
-			if !strings.HasPrefix(c, m.Slug+".") {
-				out = append(out, Problem{Module: m.Key, Field: "/capabilities", Code: CodeCapabilityPrefix,
-					Message: fmt.Sprintf("capability %q harus berawalan %q", c, m.Slug+".")})
-			}
-			if other, dup := capOwner[c]; dup {
-				out = append(out, Problem{Module: m.Key, Field: "/capabilities", Code: CodeDuplicateCapability,
-					Message: fmt.Sprintf("capability %q didefinisikan oleh %s dan %s", c, other, m.Key)})
-			} else {
-				capOwner[c] = m.Key
-			}
 		}
 	}
 	return out

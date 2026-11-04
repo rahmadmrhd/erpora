@@ -65,7 +65,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 1. THE seluruh pemakaian `variant="primary"`, `size="md"`, `BadgeStatus`, `EmptyState`, `ErrorPage`, `Kbd`, dan `LoadingIcon` di `packages/*`, `modules/*/web`, dan `web/` SHALL dimigrasi ke API baru; `bun run typecheck` SHALL lolos tanpa celah tipe.
 2. THE tes komponen SHALL diperbarui ke perilaku shadcn (mis. peran ARIA dan navigasi keyboard Radix) dan SHALL tidak menguji kelas Tailwind internal komponen shadcn.
 3. THE `bun test` SHALL lolos dan jumlah tes yang dihapus SHALL dilaporkan beserta alasannya.
-4. THE entry JS awal SHALL tetap ≤ 200 KB gzip (NFR-04); WHEN komponen baru menambah ukuran, THE bagian berat (Dock Floating, Settings, Awesomebar) SHALL dimuat malas.
+4. THE entry JS awal SHALL tetap ≤ 210 KB gzip (NFR-04; PRD-000 Q43); WHEN komponen baru menambah ukuran, THE bagian berat (Dock Floating, Settings, Awesomebar) SHALL dimuat malas.
 
 ### Requirement 4: Dock
 
@@ -178,7 +178,7 @@ Revisi M3a (PRD-000 Q40, 31 Okt 2026) memperbaiki dua hal pada hasil M3a yang su
 
 #### Acceptance Criteria
 
-1. THE setiap modul **berfrontend** (`modules/<dir>/web`) SHALL mendefinisikan **Desk bawaannya**: label (kunci i18n), ikon, susunan menu (grup, item, rute, permission per item, ikon), item Dashboard, dan pengaturan relevan lain; modul tanpa frontend tidak punya Desk dan tidak diwajibkan (disetujui 31 Okt 2026).
+1. THE setiap modul **berfrontend** (`modules/<dir>/web`) SHALL mendefinisikan **Desk bawaannya**: label (kunci i18n), ikon, susunan menu (grup, item, rute, permission per item atau `access: authenticated` sebagai penggantinya (PRD-000 Q43), ikon), item Dashboard, dan pengaturan relevan lain; modul tanpa frontend tidak punya Desk dan tidak diwajibkan (disetujui 31 Okt 2026).
 2. THE definisi SHALL berada di **manifest** modul sebagai properti `desk` (opsional secara skema, wajib bagi modul berfrontend; tambahan aditif seperti properti `i18n`), karena server memerlukan pemetaan menu ke permission untuk menyaring.
 3. THE `module:check` SHALL menolak modul berfrontend tanpa definisi Desk, tanpa item Dashboard, atau dengan item yang merujuk rute/permission yang tidak terdaftar di modul itu, dengan galat yang menyebut berkas dan kunci.
 4. THE item Dashboard SHALL wajib dan terkunci: tidak dapat dihapus atau disembunyikan oleh timpaan.

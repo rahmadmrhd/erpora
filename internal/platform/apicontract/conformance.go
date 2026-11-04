@@ -19,7 +19,7 @@ type RouteSpec struct {
 }
 
 // Mismatch adalah satu ketidaksesuaian route terdaftar dengan kontrak.
-// Kind: missing_operation | missing_route | permission_mismatch | public_mismatch | undeclared_permission |
+// Kind: missing_operation | missing_route | permission_mismatch | public_mismatch | authenticated_mismatch | undeclared_permission |
 // classification_mismatch | missing_contract.
 type Mismatch struct{ Kind, Module, Method, Path, Detail string }
 
@@ -82,6 +82,11 @@ func CheckConformance(in ConformanceInput) []Mismatch {
 			}
 			if r.Permission != op.Permission {
 				add("permission_mismatch", key, op.Method, op.Path, "route permission %q, kontrak x-erp-permission %q", r.Permission, op.Permission)
+			}
+			// Route non-publik tanpa permission = hanya wajib login; kontrak harus menyatakannya (x-erp-authenticated),
+			// dan penanda itu tidak boleh dipakai pada route publik atau ber-permission.
+			if wantAuth := !r.Public && r.Permission == ""; wantAuth != op.Authenticated {
+				add("authenticated_mismatch", key, op.Method, op.Path, "route terautentikasi-saja=%v, kontrak x-erp-authenticated=%v", wantAuth, op.Authenticated)
 			}
 			opClass, err := in.Set.ResponseClassification(op)
 			if err != nil {

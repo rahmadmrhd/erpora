@@ -76,6 +76,21 @@ jobs:
   integration:
     name: integration
     runs-on: ubuntu-latest # Docker tersedia untuk testcontainers; termasuk TestServe_GracefulShutdown (!windows)
+    # PostgreSQL untuk `metadata:diff` saja (langkah terakhir). Role erp superuser bawaan image: mesin selisih membuat
+    # database sementara dan role migrasi non-superuser (Requirement 10.8) lewat DSN admin ini.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,6 +103,19 @@ jobs:
           version: ${{ env.TASK_VERSION }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: task test:integration
+      # Selisih kosong antara metadata dan skema hasil migrasi (spec resource-metadata, Requirement 10.3, 20.2). Env hanya
+      # untuk langkah ini agar test:integration tetap memakai testcontainers.
+      - name: metadata:diff (selisih metadata dan database)
+        env:
+          ERP_TEST_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/postgres?sslmode=disable
+        run: task metadata:diff
+      # Alur CLI metadata:migrate dan metadata:diff ujung ke ujung (spec resource-metadata, Requirement 10.3, 11.6): tes
+      # bertag integration di internal/devtools/commands hanya berjalan bila ERP_TEST_DATABASE_URL diset, sehingga env
+      # dipasang pada langkah ini saja dan hanya memilih tes CLI metadata (test:integration tetap memakai testcontainers).
+      - name: metadata:migrate dan metadata:diff (tes CLI integrasi)
+        env:
+          ERP_TEST_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/postgres?sslmode=disable
+        run: task test:metadata-cli
 
   # Gate kontrak API (FR-14/FR-23): lint Spectral, hasil generate mutakhir, dan breaking change terhadap tag rilis terakhir.
   contracts:
@@ -277,7 +305,16 @@ jobs:
     env:
       ERP_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/erp?sslmode=disable
       ERP_HTTP_ADDR: 127.0.0.1:8080
+      # serve di production wajib memilih driver surat secara eksplisit (PRD-001 Q21); smoke tidak mengirim surat.
+      ERP_MAIL_DRIVER: log
     steps:
+      # ERP_SECRET_KEY wajib untuk `serve` (semua mode); kunci acak baru per run (bukan nilai tetap), disamarkan di log.
+      - name: Bangkitkan ERP_SECRET_KEY acak
+        shell: bash
+        run: |
+          key="$(openssl rand -base64 32)"
+          echo "::add-mask::$key"
+          echo "ERP_SECRET_KEY=$key" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: erpora-linux-amd64
@@ -286,11 +323,15 @@ jobs:
       - name: Bukti binary release tanpa developer tools
         run: |
           ./erpora version | grep -q "flavor: release"
-          for cmd in "make:module x" "make:handler" "make:migration" "make:entity" "make:usecase" "make:contract" "make:command" "make:repository" "db:fresh" "db:seed" "contracts:lint" "contracts:generate" "contracts:breaking" "module:check" "doctor" "release:verify-tag v1"; do
+          for cmd in "make:module x" "make:handler" "make:migration" "make:entity" "make:usecase" "make:contract" "make:command" "make:repository" "db:fresh" "db:seed" "contracts:lint" "contracts:generate" "contracts:breaking" "module:check" "doctor" "release:verify-tag v1" "metadata:check" "metadata:generate" "metadata:diff" "metadata:migrate"; do
             if out="$(./erpora $cmd 2>&1)"; then echo "perintah dev '$cmd' seharusnya gagal" >&2; exit 1; fi
             echo "$out" | grep -q "unknown command" || { echo "keluaran '$cmd' tidak memuat 'unknown command': $out" >&2; exit 1; }
           done
       - run: ./erpora migrate up
+      # serve di production wajib punya URL publik https di settings platform (PRD-001 Q24). Diisi lewat command core
+      # (PRD-001 C1.12): migrate up sudah memasang modul core (required), dan core:* membutuhkan ERP_SECRET_KEY (ada di env).
+      - name: URL publik platform
+        run: ./erpora core:settings:set --key platform.public_url --value https://erp.example.com
       - name: Serve dan cek /readyz
         run: |
           ./erpora serve &
@@ -308,7 +349,16 @@ jobs:
     env:
       ERP_DATABASE_URL: postgres://erp:erp@127.0.0.1:5432/erp?sslmode=disable
       ERP_HTTP_ADDR: 127.0.0.1:8080
+      # serve di production wajib memilih driver surat secara eksplisit (PRD-001 Q21); smoke tidak mengirim surat.
+      ERP_MAIL_DRIVER: log
     steps:
+      # ERP_SECRET_KEY wajib untuk `serve` (semua mode); kunci acak baru per run (bukan nilai tetap), disamarkan di log.
+      - name: Bangkitkan ERP_SECRET_KEY acak
+        shell: bash
+        run: |
+          key="$(openssl rand -base64 32)"
+          echo "::add-mask::$key"
+          echo "ERP_SECRET_KEY=$key" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: erpora-windows-amd64
@@ -323,6 +373,13 @@ jobs:
         run: |
           .\erpora.exe version
           .\erpora.exe migrate up
+      # serve di production wajib punya URL publik https di settings platform (PRD-001 Q24). Diisi lewat command core
+      # (PRD-001 C1.12): migrate up sudah memasang modul core (required), dan core:* membutuhkan ERP_SECRET_KEY (ada di env).
+      - name: URL publik platform
+        shell: pwsh
+        run: |
+          .\erpora.exe core:settings:set --key platform.public_url --value https://erp.example.com
+          if ($LASTEXITCODE -ne 0) { throw "gagal mengisi URL publik" }
       - name: Bukti binary release tanpa developer tools
         shell: pwsh
         run: |

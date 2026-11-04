@@ -69,7 +69,7 @@ func insertDeskOverride(t *testing.T, db *gorm.DB, tenant uuid.UUID, desk, confi
 // restart, disable menghilangkannya; ETag berubah mengikuti isi dan 304 dilayani untuk ETag yang sama.
 func TestDesks_FollowsModuleLifecycle(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 
 	rec, b := getDesks(t, h)
 	if rec.Code != 200 {
@@ -122,7 +122,7 @@ func TestDesks_FollowsModuleLifecycle(t *testing.T) {
 // Timpaan situs milik tenant dipakai; baris tenant lain tidak pernah memengaruhi respons (isolasi tenant).
 func TestDesks_SiteOverridesAppliedAndTenantIsolated(t *testing.T) {
 	_, a, _, db := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 	enable(t, a, "acme.example")
 
 	insertDeskOverride(t, db, uuid.New(), "example", `{"hidden":["notes"]}`) // tenant lain
@@ -147,7 +147,7 @@ func TestDesks_SiteOverridesAppliedAndTenantIsolated(t *testing.T) {
 // Permission: AuthzStub deny menolak endpoint (403) tanpa membocorkan daftar.
 func TestDesks_DeniedWithoutPermission(t *testing.T) {
 	_, a, _, _ := setupAssemblyWith(t, func(c *config.Config) { c.AuthzStub = "deny" })
-	rec, _ := getDesks(t, a.Router)
+	rec, _ := getDesks(t, a.authed(t))
 	if rec.Code != http.StatusForbidden || errCodeOf(t, rec) != "permission_denied" {
 		t.Fatalf("GET = %d %s, want 403 permission_denied", rec.Code, rec.Body)
 	}

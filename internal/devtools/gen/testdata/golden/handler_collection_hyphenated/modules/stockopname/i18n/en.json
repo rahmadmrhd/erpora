@@ -1,0 +1,12 @@
+{
+  "resource": {
+    "items": "Items",
+    "stock_counts": "Stock counts"
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
+  "errors": {
+    "bad_request": "The list parameter is invalid."
+  }
+}

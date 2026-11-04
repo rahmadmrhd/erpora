@@ -54,6 +54,9 @@ tasks:
       - golangci-lint run --build-tags=generator,integration ./tests/generator/...
       # Katalog terjemahan: galat struktural menggagalkan; peringatan antar bahasa hanya dicetak (i18n Requirement 8.5).
       - task: i18n:check
+      # Metadata resource: galat semantik dan drift hasil bangkitan menggagalkan (modul tanpa metadata/ tidak terpengaruh).
+      - task: metadata:check
+      - task: metadata:generate:check
 
   test:
     desc: Jalankan unit test di setiap Go module
@@ -66,7 +69,13 @@ tasks:
   test:integration:
     desc: Jalankan test integrasi (tag integration) di root module
     cmds:
-      - go test {{if ne OS "windows"}}-race{{end}} -tags integration ./...
+      # -timeout: suite internal/app (argon2 + -race) mendekati batas bawaan 10 menit per paket di CI.
+      - go test {{if ne OS "windows"}}-race{{end}} -timeout 25m -tags integration ./...
+
+  test:metadata-cli:
+    desc: Tes CLI metadata:migrate dan metadata:diff ujung ke ujung (butuh ERP_TEST_DATABASE_URL ke server PostgreSQL pengembangan atau CI)
+    cmds:
+      - go test -tags integration -count=1 -run "TestMetadata(Diff|Migrate)" ./internal/devtools/commands/
 
   test:generator:
     desc: Buktikan make:module lolos semua gate di salinan repo (lama; butuh Docker, Bun, dan jaringan Go module cache)
@@ -188,6 +197,8 @@ tasks:
     cmds:
       - bun install --frozen-lockfile
       - task: shadcn:check
+      # Metadata TS bangkitan (modules/*/web/src/metadata/*.meta.gen.ts) harus sinkron sebelum typecheck dan lint.
+      - task: metadata:generate:check
       - bun run --filter '*' typecheck
       - bun run --filter '*' lint
       - go run -tags devtools ./cmd/erpora i18n:generate --check
@@ -219,6 +230,31 @@ tasks:
     desc: Periksa katalog terjemahan (galat struktural gagal, peringatan dicetak; task i18n:check -- --strict menggagalkan peringatan)
     cmds:
       - go run -tags devtools ./cmd/erpora i18n:check {{.CLI_ARGS}}
+
+  metadata:check:
+    desc: Periksa berkas metadata resource (skema, semantik, relasi, manifest; hanya membaca, peringatan dicetak)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:check
+
+  metadata:generate:
+    desc: Bangkitkan skema OpenAPI, kode Go, dan metadata TS dari berkas metadata resource (task metadata:generate -- <modul> membatasi modul)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:generate {{.CLI_ARGS}}
+
+  metadata:generate:check:
+    desc: Periksa drift hasil bangkitan metadata (tidak menulis; gagal bila ada selisih atau edit tangan)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:generate --check
+
+  metadata:diff:
+    desc: Bandingkan skema database hasil migrasi dengan metadata di database sementara (butuh ERP_TEST_DATABASE_URL; task metadata:diff -- <modul> membatasi modul)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:diff {{.CLI_ARGS}}
+
+  metadata:migrate:
+    desc: Tulis migrasi goose dari selisih metadata dan database, tidak diterapkan (butuh ERP_TEST_DATABASE_URL; task metadata:migrate -- <modul> <nama>)
+    cmds:
+      - go run -tags devtools ./cmd/erpora metadata:migrate {{.CLI_ARGS}}
 
   i18n:generate:
     desc: Bangkitkan tipe kunci terketik keys.gen.ts dari katalog (task i18n:generate -- --check hanya memeriksa drift)

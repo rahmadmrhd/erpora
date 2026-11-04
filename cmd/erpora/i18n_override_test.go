@@ -60,7 +60,7 @@ func canonicalOverrides() []store.Override {
 	at := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
 	return []store.Override{
 		{Namespace: "example", Locale: "id", Key: "note.title", Message: "Klien", UpdatedBy: "cli:budi", UpdatedAt: at},
-		{Namespace: "ui", Locale: "en", Key: "actions.save", Message: "Store \"now\"\nline2", UpdatedBy: "api:dev", UpdatedAt: at.Add(time.Hour)},
+		{Namespace: "ui", Locale: "en", Key: "actions.save", Message: "Store \"now\"\nline2", UpdatedBy: "user:u1", UpdatedAt: at.Add(time.Hour)},
 	}
 }
 

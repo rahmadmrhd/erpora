@@ -1,0 +1,15 @@
+schemaVersion: "1"
+kind: resource
+key: fixturesales.tag
+description: Label bebas yang dapat dipasang pada faktur lewat relasi belongsToMany.
+include:
+  - source: sdk:audit
+labelTemplate: "{name}"
+fields:
+  name:
+    type: string
+    maxLength: 60
+    unique: true
+    sortable: true
+    filterable: true
+    label: fixturesales.tag.name

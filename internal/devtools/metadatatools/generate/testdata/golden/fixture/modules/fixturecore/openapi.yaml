@@ -1,0 +1,373 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.fixturecore
+  version: 1.0.0
+  description: Kontrak API modul fixture fixturecore (spec resource-metadata). Skema komponen disuntikkan pembangkit.
+servers:
+  - url: /
+paths: {}
+components:
+  schemas:
+    Branch:
+      type: object
+      description: Cabang usaha, sumber dimensi scope fixturecore.branch.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, code, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        code:
+          type: string
+          maxLength: 16
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        name:
+          type: string
+          maxLength: 120
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+      x-erp-generated: true
+    BranchCreate:
+      type: object
+      description: Body pembuatan fixturecore.branch; hanya field yang boleh ditulis.
+      required: [code, name]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          maxLength: 16
+          x-erp-classification: internal
+          x-erp-field-group: general
+        name:
+          type: string
+          maxLength: 120
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    BranchUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturecore.branch; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        code:
+          type: string
+          maxLength: 16
+          x-erp-classification: internal
+          x-erp-field-group: general
+        name:
+          type: string
+          maxLength: 120
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    Customer:
+      type: object
+      description: Master pelanggan, target relasi lintas modul dan sumber salinan field.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, billingStreet, billingCity, billingPostalCode, code, name, status, contactEmail, contactPhone, blockedReason, phone, phoneE164]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        billingStreet:
+          type: [string, "null"]
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingCity:
+          type: [string, "null"]
+          maxLength: 100
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingPostalCode:
+          type: [string, "null"]
+          maxLength: 10
+          pattern: ^[0-9]{5}$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        code:
+          type: string
+          maxLength: 32
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        name:
+          type: string
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        contactEmail:
+          type: [string, "null"]
+          format: email
+          maxLength: 254
+          x-erp-classification: confidential
+          x-erp-field-group: general
+        contactPhone:
+          type: [string, "null"]
+          maxLength: 32
+          pattern: ^\+?[0-9][0-9 ()-]{2,30}$
+          x-erp-classification: confidential
+          x-erp-field-group: general
+        creditLimit:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: confidential
+          x-erp-field-group: finance
+          x-erp-sortable: true
+        blockedReason:
+          type: [string, "null"]
+          maxLength: 500
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phone:
+          type: [string, "null"]
+          maxLength: 32
+          deprecated: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phoneE164:
+          type: [string, "null"]
+          maxLength: 20
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    CustomerCreate:
+      type: object
+      description: Body pembuatan fixturecore.customer; hanya field yang boleh ditulis.
+      required: [code, name]
+      additionalProperties: false
+      properties:
+        billingStreet:
+          type: [string, "null"]
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingCity:
+          type: [string, "null"]
+          maxLength: 100
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingPostalCode:
+          type: [string, "null"]
+          maxLength: 10
+          pattern: ^[0-9]{5}$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        code:
+          type: string
+          maxLength: 32
+          x-erp-classification: internal
+          x-erp-field-group: general
+        name:
+          type: string
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          default: active
+          x-erp-classification: internal
+          x-erp-field-group: general
+        contactEmail:
+          type: [string, "null"]
+          format: email
+          maxLength: 254
+          x-erp-classification: confidential
+          x-erp-field-group: general
+        contactPhone:
+          type: [string, "null"]
+          maxLength: 32
+          pattern: ^\+?[0-9][0-9 ()-]{2,30}$
+          x-erp-classification: confidential
+          x-erp-field-group: general
+        creditLimit:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          default: "0.00"
+          x-erp-classification: confidential
+          x-erp-field-group: finance
+        blockedReason:
+          type: [string, "null"]
+          maxLength: 500
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phone:
+          type: [string, "null"]
+          maxLength: 32
+          deprecated: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phoneE164:
+          type: [string, "null"]
+          maxLength: 20
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    CustomerUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturecore.customer; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        billingStreet:
+          type: [string, "null"]
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingCity:
+          type: [string, "null"]
+          maxLength: 100
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingPostalCode:
+          type: [string, "null"]
+          maxLength: 10
+          pattern: ^[0-9]{5}$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        code:
+          type: string
+          maxLength: 32
+          x-erp-classification: internal
+          x-erp-field-group: general
+        name:
+          type: string
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          x-erp-classification: internal
+          x-erp-field-group: general
+        contactEmail:
+          type: [string, "null"]
+          format: email
+          maxLength: 254
+          x-erp-classification: confidential
+          x-erp-field-group: general
+        contactPhone:
+          type: [string, "null"]
+          maxLength: 32
+          pattern: ^\+?[0-9][0-9 ()-]{2,30}$
+          x-erp-classification: confidential
+          x-erp-field-group: general
+        creditLimit:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: confidential
+          x-erp-field-group: finance
+        blockedReason:
+          type: [string, "null"]
+          maxLength: 500
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phone:
+          type: [string, "null"]
+          maxLength: 32
+          deprecated: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        phoneE164:
+          type: [string, "null"]
+          maxLength: 20
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true

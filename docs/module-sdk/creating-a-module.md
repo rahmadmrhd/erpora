@@ -14,7 +14,7 @@ Struktur `modules/example`:
 ```
 modules/example/
 ├── go.mod                      # Go module sendiri: erpora/modules/example
-├── module.json                 # manifest (satu-satunya sumber capability)
+├── module.json                 # manifest (satu-satunya sumber permission: resources x aksi)
 ├── module.go                   # New, Manifest, Register, hook lifecycle, Notes()
 ├── module_test.go              # assertion antarmuka dan tes manifest
 ├── contract/notes.go           # port publik untuk modul lain (tanpa internal/)
@@ -47,15 +47,19 @@ Manifest divalidasi terhadap `contracts/module.schema.json` saat startup. Objek 
   "dependencies": [
     { "module": "platform.core", "version": "^0.1", "optional": false }
   ],
-  "capabilities": ["example.ping.read", "example.notes.read"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" },
+  "resources": [
+    { "key": "example.ping", "label": "resource.ping", "actions": ["read"], "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }] },
+    { "key": "example.note", "label": "resource.note", "actions": ["read"], "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }] }
+  ],
   "desk": {
     "label": "desk.title",
     "icon": "file-text",
     "menus": [
-      { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+      { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.note.read" }
     ]
   }
 }
@@ -67,7 +71,7 @@ Properti `desk` adalah menu Desk modul. Server membacanya untuk menyusun daftar 
 - `icon` memakai nama dari `iconRegistry` di `@erpora/ui`.
 - `menus` berisi item atau grup satu tingkat. Setiap `id` unik dalam satu Desk, termasuk id anak grup.
 - `to` relatif terhadap base route modul (`/notes`), tanpa skema, host, `//`, query, atau fragmen. Tidak boleh `/`: indeks `/<slug>` adalah Dashboard bawaan shell dan tidak dideklarasikan sebagai menu.
-- `permission` harus salah satu `capabilities` modul. Item disembunyikan bila pengguna tidak memilikinya.
+- Setiap item memuat **tepat satu** dari `permission` atau `access` (PRD-000 Q43). `permission` harus salah satu permission turunan `resources` modul (`<resource>.<aksi>`); item disembunyikan bila pengguna tidak memilikinya. `"access": "authenticated"` adalah pengganti eksplisit `permission` (satu-satunya nilai sah): item terlihat bagi setiap pengguna yang login, tanpa permission. Pakai `access` hanya untuk hak yang memang milik semua pengguna login dan endpoint-nya cukup `AuthenticatedOnly` (mis. Ubah sandi); item tanpa keduanya, atau dengan keduanya, ditolak.
 - Dashboard tidak dihitung sebagai menu yang diizinkan. Desk tanpa menu yang diizinkan tidak tampil.
 
 Skema lengkap ada di `contracts/module.schema.json` (`desk`, `deskItem`, `deskGroup`). Rujukan rute dan pengujiannya dijelaskan di [`frontend.md`](frontend.md).
@@ -83,12 +87,14 @@ Aturan yang diperiksa registry:
 | `trust` | Hanya `builtin` yang diterima di fase ini. |
 | `compatibility.platform`, `compatibility.sdk`, `dependencies[].version` | Constraint SemVer. Selama 0.x, gunakan `^0.1`. |
 | `dependencies` | Setiap modul yang diimpor harus tercantum di sini (D8). `platform.core` selalu tersedia. |
-| `capabilities` | Harus berawalan `<slug>.` dan unik antarmodul. Setiap permission di `Handle` harus ada di sini. |
+| `resources` | Resource permission modul (PRD-001 FR-110). `key` berbentuk `<slug>.<nama_snake>` dan unik antarmodul; `label` kunci i18n (bukan teks literal) yang ada di katalog bahasa dasar; `actions` hanya aksi standar (`read`, `create`, `update`, `delete`, `print`, `export`, `report`, `submit`, `cancel`, `amend`, `approve`, `import`, `share`, `email`); aksi lain lewat `custom_actions` (`^[a-z_]+$`, tidak boleh bentrok aksi standar, label wajib); tepat satu `field_groups` bertanda `default`, dan satu field paling banyak di satu grup; `scope_fields` hanya merujuk dimensi terdaftar (milik modul sendiri, `core.org_unit`, atau modul pada `dependencies`). Permission modul = `<resource>.<aksi>` dari semua resource; setiap permission di `Handle` dan menu Desk wajib salah satunya. Resource tanpa data (mis. `example.ping`) tetap dideklarasikan. |
+| `capabilities` | Dipertahankan demi kompatibilitas dan diturunkan otomatis dari `resources`: biarkan `[]`. Entri yang ditulis wajib bagian dari permission turunan (kode `capability_not_derived`). |
+| `scope_dimensions`, `default_roles` | Dimensi scope (`<slug>.<nama>`, label i18n) dan role bawaan modul (kunci berawalan `<slug>.`; baris merujuk resource dan aksi modul sendiri dengan scope `all`, `owner`, `assigned:<dimensi>`, atau `custom:<key>`; daftar scope tidak boleh kosong). |
 | `migrations.strategy` | `versioned` atau `none`. |
 | `offline.mode` | `online-only`, `offline-read`, `offline-draft`, atau `offline-write`. |
-| `desk` | Wajib untuk modul berdirektori `web/` (`module:check`, aturan `DESK`). Id menu unik dalam Desk, `to` bersih dan tidak berupa indeks, `permission` termasuk `capabilities`, dan label ada di katalog. Lihat bagian 2 di atas. |
+| `desk` | Wajib untuk modul berdirektori `web/` (`module:check`, aturan `DESK`). Id menu unik dalam Desk, `to` bersih dan tidak berupa indeks, tiap item punya tepat satu dari `permission` (permission turunan `resources`) atau `access` `authenticated`, dan label ada di katalog. Lihat bagian 2 di atas. |
 
-Field yang sudah dicadangkan untuk marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`, `license`) dan PRD-001 (`resources`, `scope_dimensions`, `default_roles`, `settings`) boleh dibiarkan kosong.
+Field yang sudah dicadangkan untuk marketplace (`artifact`, `checksum`, `signature`, `requested_permissions`, `license`) dan PRD-001 (`settings`) boleh dibiarkan kosong.
 
 ## 3. Memuat manifest dan menyatakan modul
 
@@ -116,7 +122,7 @@ Modul tidak menerima router. Modul memanggil `Registrar` dan platform yang memas
 ```go
 func (m *Module) Register(r module.Registrar) error {
     r.Handle(http.MethodGet, "/ping", "example.ping.read", http.HandlerFunc(m.handlers.Ping))
-    r.Handle(http.MethodGet, "/notes", "example.notes.read", http.HandlerFunc(m.handlers.ListNotes))
+    r.Handle(http.MethodGet, "/notes", "example.note.read", http.HandlerFunc(m.handlers.ListNotes))
     r.Command(module.Command{
         Name:  "recount",
         Short: "Hitung jumlah notes",
@@ -133,16 +139,16 @@ func (m *Module) Register(r module.Registrar) error {
 }
 ```
 
-- `Handle(method, path, permission, h)` memasang route terproteksi. `permission` wajib ada di `capabilities`.
+- `Handle(method, path, permission, h)` memasang route terproteksi. `permission` wajib berupa `<resource>.<aksi>` yang dideklarasikan di `resources` manifest.
 - `Public(method, path, h)` memasang route tanpa permission. Gunakan hanya bila memang publik, karena setiap route publik harus ditinjau.
-- `Command(c)` mendaftarkan perintah CLI. `Name` tanpa prefix slug. Registry menyimpannya sebagai `<slug>:<name>`, misalnya `example:recount`.
+- `Command(c)` mendaftarkan perintah CLI. `Name` tanpa prefix slug. Registry menyimpannya sebagai `<slug>:<name>`, misalnya `example:recount`. Satu segmen grup `<grup>:<aksi>` diizinkan (modul `core`: `core:settings:set`). Command menerima `Invocation.In` (stdin proses) untuk masukan yang tidak boleh lewat flag, mis. sandi, dan `Invocation.Err` (stderr proses; boleh nil) untuk pemberitahuan yang bukan hasil command agar `Out` tetap bersih bagi skrip; ia berjalan di bawah hak sistem `cli:<slug>:<nama>` dan hanya berjalan bila modulnya enabled.
 - `path` relatif terhadap prefix modul. `/ping` dipasang sebagai `/api/example/ping`.
 
 Pelanggaran dikumpulkan dan dilaporkan sekaligus saat startup dengan kode problem, misalnya `permission_undeclared`, `invalid_route`, `route_conflict`, `invalid_command`, dan `command_conflict`. Tabel lengkap ada di `internal/platform/modules/registry/errors.go`.
 
 Urutan middleware pada setiap route adalah `otel`, `recover`, log, authN (kecuali `Public`), tenant context, guard status modul, permission, lalu handler. Modul tidak perlu menulis middleware sendiri.
 
-Catatan M2a: command tercatat di `Registry.Commands()`, tetapi belum dihubungkan ke CLI cobra. Menjalankan `erpora example:recount` belum tersedia.
+Command modul dihubungkan ke CLI cobra (`erpora <slug>:<nama>`) dan hanya berjalan bila modulnya `enabled` (exit `3` bila tidak).
 
 ## 5. Hook lifecycle
 
@@ -259,7 +265,7 @@ Hanya untuk memahami apa yang dilakukan generator. Contoh berikut membuat modul 
 
 3. **Ubah import** dengan mengganti `erpora/modules/example` menjadi `erpora/modules/inventory` pada seluruh file `.go`. Cari dengan `git grep -n "erpora/modules/example"`.
 
-4. **Ubah `module.json`**: `key`, `slug`, `name`, `publisher`, `version` (mulai `1.0.0`), `capabilities` (berawalan `inventory.`), `dependencies` (hanya modul yang benar-benar diimpor), `migrations`, dan `desk` (`label`, `menus[].to`, dan `permission` mengikuti slug serta capabilities baru). Bila `web/` ikut disalin, ubah `package.json` (`@erpora/module-inventory`), dan pastikan `module.ts` tidak memuat `navigation` dan `routes.tsx` tidak mendaftarkan rute indeks. Ganti semua `Handle` agar memakai permission yang ada di `capabilities`.
+4. **Ubah `module.json`**: `key`, `slug`, `name`, `publisher`, `version` (mulai `1.0.0`), `resources` (kunci berawalan `inventory.`), `dependencies` (hanya modul yang benar-benar diimpor), `migrations`, dan `desk` (`label`, `menus[].to`, dan `permission` mengikuti slug serta resources baru). Bila `web/` ikut disalin, ubah `package.json` (`@erpora/module-inventory`), dan pastikan `module.ts` tidak memuat `navigation` dan `routes.tsx` tidak mendaftarkan rute indeks. Ganti semua `Handle` agar memakai permission turunan `resources`.
 
 5. **Daftarkan modul** di tiga tempat:
    - `go.work`: tambahkan `./modules/inventory` pada blok `use`.

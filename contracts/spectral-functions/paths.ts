@@ -12,6 +12,16 @@ function pathsOf(root: unknown): [string, Obj][] {
   return Object.entries(paths).map(([p, v]) => [p, asObj(v) ?? {}]);
 }
 
+/**
+ * Dokumen standar /.well-known/* (RFC 8615; mis. JWKS) berada di luar /api/ dan bentuknya ditentukan standar, bukan
+ * api-guidelines. Dikecualikan dari rule awalan dan kebab-case, hanya pada kontrak platform (keputusan pemilik produk
+ * 3 Nov 2026, PRD-001 Q25). Daftar izin yang ketat (saat ini hanya /.well-known/jwks.json) ditegakkan Go
+ * apicontract.Parse; rule ini hanya melonggarkan awalannya.
+ */
+export const WELL_KNOWN_PREFIX = "/.well-known/";
+
+export const isWellKnownPath = (p: string): boolean => p.startsWith(WELL_KNOWN_PREFIX);
+
 const segs = (p: string): string[] => p.split("/").filter((s) => s !== "");
 
 /** Segmen setelah /api/<slug>; /api/bootstrap tidak punya sisa. */
@@ -26,10 +36,13 @@ export function pathModulePrefix(root: unknown): Result[] {
   for (const [p] of pathsOf(root)) {
     const ok =
       target === "platform"
-        ? p === "/api/bootstrap" || p.startsWith("/api/platform/")
+        ? p === "/api/bootstrap" || isWellKnownPath(p) || p.startsWith("/api/platform/")
         : p.startsWith(`/api/${slug}/`);
     if (!ok) {
-      const want = target === "platform" ? "/api/platform/ atau /api/bootstrap" : `/api/${slug}/`;
+      const want =
+        target === "platform"
+          ? "/api/platform/, /api/bootstrap, atau /.well-known/"
+          : `/api/${slug}/`;
       out.push({
         message: `Path ${p} harus diawali ${want} (api-guidelines §2, PRD-000 FR-23.1)`,
         path: ["paths", p],
@@ -42,6 +55,7 @@ export function pathModulePrefix(root: unknown): Result[] {
 export function pathKebabCase(root: unknown): Result[] {
   const out: Result[] = [];
   for (const [p] of pathsOf(root)) {
+    if (isWellKnownPath(p) && ctx().target === "platform") continue;
     for (const s of segs(p)) {
       const ok = s.startsWith("{") ? PARAM.test(s) : KEBAB.test(s);
       if (!ok) {

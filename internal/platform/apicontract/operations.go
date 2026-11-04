@@ -11,6 +11,8 @@ import (
 type Operation struct {
 	Doc, Method, Path, OperationID, Permission string // Method huruf besar
 	Public, Deprecated                         bool
+	// Authenticated: x-erp-authenticated, wajib login tanpa permission tertentu (mis. GET /api/bootstrap).
+	Authenticated bool
 	// DeprecatedQueryParams: nama parameter query yang ditandai deprecated (FR-23.3).
 	DeprecatedQueryParams []string
 	// Node adalah node operasi (salinan dangkal) dengan "parameters" = parameter level path digabung dengan
@@ -69,6 +71,7 @@ func (d *Doc) operations(resolve func(from, ref string) (string, any, bool)) []O
 			op.OperationID, _ = node["operationId"].(string)
 			op.Permission, _ = node["x-erp-permission"].(string)
 			op.Public, _ = node["x-erp-public"].(bool)
+			op.Authenticated, _ = node["x-erp-authenticated"].(bool)
 			op.Deprecated, _ = node["deprecated"].(bool)
 
 			merged := mergeParams(d.Name, pathParams, asSlice(node["parameters"]), resolve)

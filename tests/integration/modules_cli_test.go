@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib" // driver database/sql untuk memeriksa DB dari test
 
+	"erpora/internal/platform/testsupport/authtest"
 	"erpora/internal/platform/testsupport/pgtest"
 )
 
@@ -75,9 +76,9 @@ func dbQuery(t *testing.T, dsn, query string, args ...any) int64 {
 	return n
 }
 
-func bootstrapState(t *testing.T, base string) (revision int64, etag string, status map[string]string) {
+func bootstrapState(t *testing.T, base string, auth map[string]string) (revision int64, etag string, status map[string]string) {
 	t.Helper()
-	resp, body := getWith(t, base+"/api/bootstrap", nil)
+	resp, body := getWith(t, base+"/api/bootstrap", auth) // wajib login (C1.13)
 	var b struct {
 		Data struct {
 			Modules  []struct{ Key, Status string }
@@ -94,18 +95,19 @@ func bootstrapState(t *testing.T, base string) (revision int64, etag string, sta
 	return b.Data.Revision, resp.Header.Get("ETag"), status
 }
 
-func waitCode(t *testing.T, url string, want int, d time.Duration) {
+func waitCode(t *testing.T, url string, want int, d time.Duration, hdr map[string]string) {
 	t.Helper()
-	waitStatusJSON(t, url, want, d)
+	waitStatusJSON(t, url, want, d, hdr)
 }
 
 // waitStatusJSON seperti waitStatus tetapi tanpa header Accept: text/html (endpoint API).
-func waitStatusJSON(t *testing.T, url string, want int, d time.Duration) string {
+// hdr (opsional) dikirim pada tiap percobaan, mis. Authorization untuk route yang butuh autentikasi.
+func waitStatusJSON(t *testing.T, url string, want int, d time.Duration, hdr map[string]string) string {
 	t.Helper()
 	deadline := time.Now().Add(d)
 	last := 0
 	for time.Now().Before(deadline) {
-		resp, body := getWith(t, url, nil)
+		resp, body := getWith(t, url, hdr)
 		last = resp.StatusCode
 		if last == want {
 			return body
@@ -139,8 +141,10 @@ func TestCLI_ManageBothModules(t *testing.T) {
 	startServe(t, dsn, addr)
 	base := "http://" + addr
 	waitStatus(t, base+"/readyz", 200, 20*time.Second)
-	waitCode(t, base+"/api/example-addon/summary", 200, 5*time.Second)
-	rev0, etag0, st := bootstrapState(t, base)
+	// Autentikasi nyata (C1.10): token uji sah dari kunci penandatangan yang disiapkan server saat start.
+	auth := map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)}
+	waitCode(t, base+"/api/example-addon/summary", 200, 5*time.Second, auth)
+	rev0, etag0, st := bootstrapState(t, base, auth)
 	if st["acme.example"] != "enabled" || st["acme.example-addon"] != "enabled" || rev0 == 0 {
 		t.Fatalf("bootstrap awal: rev=%d %v", rev0, st)
 	}
@@ -155,7 +159,7 @@ func TestCLI_ManageBothModules(t *testing.T) {
 	}
 
 	mustCLI(t, dsn, 0, "modules", "disable", "acme.example-addon")
-	waitCode(t, base+"/api/example-addon/summary", 403, 6*time.Second) // watcher lintas proses (<= 3 x 2s)
+	waitCode(t, base+"/api/example-addon/summary", 403, 6*time.Second, auth) // watcher lintas proses (<= 3 x 2s)
 
 	mustCLI(t, dsn, 0, "modules", "disable", "acme.example")
 	out = mustCLI(t, dsn, 3, "example:recount")
@@ -180,7 +184,7 @@ func TestCLI_ManageBothModules(t *testing.T) {
 
 	deadline := time.Now().Add(6 * time.Second)
 	for {
-		rev, etag, st := bootstrapState(t, base)
+		rev, etag, st := bootstrapState(t, base, auth)
 		if st["acme.example"] == "enabled" && rev > rev0 && etag != etag0 {
 			break
 		}
@@ -251,8 +255,8 @@ func TestCLI_CrashAfterMigrateThenRetry(t *testing.T) {
 	if s := mustCLI(t, dsn, 0, "modules", "status", "acme.example"); !strings.Contains(s, "status: installed") {
 		t.Fatalf("status setelah retry:\n%s", s)
 	}
-	if v := dbQuery(t, dsn, "SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 2 {
-		t.Errorf("versi goose = %d, want 2", v)
+	if v := dbQuery(t, dsn, "SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 3 {
+		t.Errorf("versi goose = %d, want 3", v)
 	}
 	if n := dbQuery(t, dsn, "SELECT count(*) FROM module_migrations"); n != migsBefore {
 		t.Errorf("module_migrations menggandakan baris: %d -> %d", migsBefore, n)

@@ -11,10 +11,24 @@
     { "module": "platform.core", "version": "^0.1", "optional": false }[[range .Dependencies]],
     { "module": "[[.Key]]", "version": "[[.Constraint]]", "optional": false }[[end]]
   ],
-  "capabilities": ["[[.Slug]].items.read"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
-  "offline": { "mode": "online-only" }[[if .Frontend]],
+  "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "[[.Slug]].items",
+      "label": "resource.items",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }[[if .Metadata]],
+    {
+      "key": "[[.Slug]].item",
+      "label": "resource.item",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }[[end]]
+  ][[if .Frontend]],
   "desk": {
     "label": "desk.title",
     "icon": "boxes",

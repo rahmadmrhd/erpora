@@ -21,6 +21,10 @@ type Note struct {
 	Version   int64 // naik setiap perubahan; mulai dari 1 (api-guidelines §4.3)
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	// CreatedBy dan UpdatedBy adalah id pengguna (jejak audit sdk:audit); nil untuk data lama, seed, dan tindakan
+	// sistem tanpa principal.
+	CreatedBy *string
+	UpdatedBy *string
 }
 
 // NewNote membuat Note baru dengan judul yang tervalidasi.

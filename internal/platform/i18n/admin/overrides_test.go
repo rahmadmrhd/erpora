@@ -18,7 +18,25 @@ import (
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/tenancy"
+	sdkidentity "erpora/sdk/identity"
 )
+
+// testUserID adalah pengguna Principal bawaan pada tes ini; header X-Test-User menggantinya, X-Test-Anon menghilangkan Principal.
+const testUserID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01"
+
+// principalMW meniru Authenticate: memasang Principal dari header uji (Authenticate nyata diuji di package identity).
+func principalMW(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Test-Anon") == "" {
+			uid := testUserID
+			if v := r.Header.Get("X-Test-User"); v != "" {
+				uid = v
+			}
+			r = r.WithContext(sdkidentity.WithPrincipal(r.Context(), sdkidentity.Principal{UserID: uid, Kind: sdkidentity.KindHuman}))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 var tenantB = tenancy.TenantID{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x72, 0x22, 0x82, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}
 
@@ -185,17 +203,18 @@ func newEnv(t *testing.T, authz runtime.Authorizer, mutationsEnabled bool) *env 
 	api.Bind(svc)
 	rg, err := registry.Build(registry.Options{
 		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
-		PlatformCapabilities: Capabilities,
-		Platform:             api.Register,
+		PlatformResources: Resources,
+		Platform:          api.Register,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	router := httpserver.NewRouter(httpserver.Deps{
-		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Resolver:  tenantByHeader{},
-		Connector: database.SingleTenantConnector{Default: tenantA},
-		I18n:      svc,
+		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:     tenantByHeader{},
+		Connector:    database.SingleTenantConnector{Default: tenantA},
+		I18n:         svc,
+		Authenticate: principalMW,
 	})
 	var opts []runtime.MountOption
 	if !mutationsEnabled {
@@ -334,7 +353,7 @@ func TestOverrideAPI_PutIsIdempotentAndReturnsETag(t *testing.T) {
 		Data OverrideView
 	}
 	_ = json.Unmarshal(first.Body.Bytes(), &env)
-	if env.Data.Message != "Simpan sekarang" || env.Data.ETag != etag || env.Data.UpdatedBy != Actor || env.Data.Namespace != "ui" ||
+	if env.Data.Message != "Simpan sekarang" || env.Data.ETag != etag || env.Data.UpdatedBy != "user:"+testUserID || env.Data.Namespace != "ui" ||
 		env.Data.Locale != "id" || env.Data.Key != "actions.save" {
 		t.Errorf("data = %+v", env.Data)
 	}
@@ -618,5 +637,45 @@ func TestIsMutation(t *testing.T) {
 		if IsMutation(r) {
 			t.Errorf("%+v bukan mutasi", r)
 		}
+	}
+}
+
+// Aktor audit override berasal dari Principal request (`user:<id>`), bukan nilai tetap: dua pengguna berbeda tercatat
+// sebagai dirinya masing-masing, baik pada PUT maupun DELETE.
+func TestOverrideAPI_ActorFromPrincipal(t *testing.T) {
+	e := newEnv(t, allowAll, true)
+	const userA, userB = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4aa1", "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4bb2"
+	updatedBy := func(r resp) string {
+		t.Helper()
+		var env struct{ Data OverrideView }
+		if err := json.Unmarshal(r.Body.Bytes(), &env); err != nil {
+			t.Fatal(err)
+		}
+		return env.Data.UpdatedBy
+	}
+	if r := e.do(http.MethodPut, putPath, body("A"), "X-Test-User", userA); r.Code != 200 || updatedBy(r) != "user:"+userA {
+		t.Fatalf("PUT oleh A = %d %s", r.Code, r.Body)
+	}
+	if r := e.do(http.MethodPut, putPath, body("B"), "X-Test-User", userB); r.Code != 200 || updatedBy(r) != "user:"+userB {
+		t.Fatalf("PUT oleh B = %d %s", r.Code, r.Body)
+	}
+	if r := e.do(http.MethodDelete, putPath, "", "X-Test-User", userA); r.Code != http.StatusNoContent {
+		t.Fatalf("DELETE = %d %s", r.Code, r.Body)
+	}
+}
+
+// Tanpa Principal (rantai middleware salah rakit) mutasi gagal tertutup 401, tidak jatuh ke aktor bawaan.
+func TestOverrideAPI_MutationWithoutPrincipalFailsClosed(t *testing.T) {
+	e := newEnv(t, allowAll, true)
+	for name, r := range map[string]resp{
+		"PUT":    e.do(http.MethodPut, putPath, body("x"), "X-Test-Anon", "1"),
+		"DELETE": e.do(http.MethodDelete, putPath, "", "X-Test-Anon", "1"),
+	} {
+		if r.Code != http.StatusUnauthorized || r.errBody(t).Error.Code != "unauthenticated" {
+			t.Errorf("%s tanpa principal = %d %s", name, r.Code, r.Body)
+		}
+	}
+	if strings.Contains(e.do(http.MethodGet, "/api/platform/i18n/overrides", "").Body.String(), "api:dev") {
+		t.Error("tidak boleh ada aktor api:dev")
 	}
 }

@@ -54,7 +54,7 @@ func i18nBootstrap(t *testing.T, h http.Handler) (i18nBoot, string) {
 // Katalog platform dan ui disajikan lewat rakitan penuh: bahasa id/en, ETag/304, 404 seragam.
 func TestI18nAPI_PlatformAndUICatalogs(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 
 	id, etagID := catalogOf(t, h, "/api/platform/i18n/id/ui")
 	en, etagEN := catalogOf(t, h, "/api/platform/i18n/en/ui")
@@ -92,7 +92,7 @@ func TestI18nAPI_PlatformAndUICatalogs(t *testing.T) {
 // Bootstrap memuat bahasa dan revisi katalog namespace aktif saja; ETag bootstrap mengikuti revisi.
 func TestI18nAPI_BootstrapCarriesI18n(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	b, etag := i18nBootstrap(t, a.Router)
+	b, etag := i18nBootstrap(t, a.authed(t))
 	if b.Data.I18n == nil || b.Data.I18n.DefaultLocale != "id" || len(b.Data.I18n.Locales) < 2 {
 		t.Fatalf("i18n = %+v", b.Data.I18n)
 	}
@@ -104,11 +104,11 @@ func TestI18nAPI_BootstrapCarriesI18n(t *testing.T) {
 			t.Errorf("modul tanpa katalog / nonaktif tidak boleh punya revisi: %q", ns)
 		}
 	}
-	ui, _ := catalogOf(t, a.Router, "/api/platform/i18n/id/ui")
+	ui, _ := catalogOf(t, a.authed(t), "/api/platform/i18n/id/ui")
 	if ui.Data.Revision != b.Data.I18n.Revisions["ui"] {
 		t.Errorf("revisi katalog %q != bootstrap %q", ui.Data.Revision, b.Data.I18n.Revisions["ui"])
 	}
-	if rec := get(a.Router, "/api/bootstrap", map[string]string{"If-None-Match": etag}); rec.Code != http.StatusNotModified {
+	if rec := get(a.authed(t), "/api/bootstrap", map[string]string{"If-None-Match": etag}); rec.Code != http.StatusNotModified {
 		t.Errorf("bootstrap If-None-Match = %d", rec.Code)
 	}
 }
@@ -121,7 +121,7 @@ func TestI18nAPI_ModuleNamespaceFollowsLifecycle(t *testing.T) {
 			"id.json": `{"note": {"title": "Catatan"}}`, "en.json": `{"note": {"title": "Note"}}`,
 		})}
 	})
-	h := a.Router
+	h := a.authed(t)
 	const target = "/api/platform/i18n/en/notes"
 	if rec := get(h, target, nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("modul belum terpasang: %d, want 404", rec.Code)
@@ -164,7 +164,7 @@ func TestI18nAPI_ErrorMessageFollowsAcceptLanguage(t *testing.T) {
 		if lang != "" {
 			hdr["Accept-Language"] = lang
 		}
-		rec := get(a.Router, "/api/platform/modules/acme.tidak-ada", hdr)
+		rec := get(a.authed(t), "/api/platform/modules/acme.tidak-ada", hdr)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status = %d %s", rec.Code, rec.Body)
 		}

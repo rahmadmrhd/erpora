@@ -1,0 +1,8 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.fixturesales
+  version: 1.0.0
+  description: Kontrak API modul fixture fixturesales (spec resource-metadata). Skema komponen disuntikkan pembangkit.
+servers:
+  - url: /
+paths: {}

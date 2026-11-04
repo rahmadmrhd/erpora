@@ -55,7 +55,7 @@ func addModuleCommandsFrom(root *cobra.Command, opts *rootOpts, cmds []registry.
 					flags[f.Name] = v
 				}
 				return runner(c.Context(), opts, app.CommandRun{
-					Command: info, Args: args, Flags: flags, Out: c.OutOrStdout(), Actor: cliActor(),
+					Command: info, Args: args, Flags: flags, Out: c.OutOrStdout(), In: c.InOrStdin(), Err: c.ErrOrStderr(), Actor: cliActor(),
 				})
 			},
 		}

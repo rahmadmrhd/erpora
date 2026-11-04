@@ -15,6 +15,30 @@ const (
 	requiredToolchain = "go1.27.3"
 )
 
+// GormAllowedPaths: paket platform/SDK (relatif terhadap root repo) yang boleh mengimpor gorm.io/** selain
+// modules/*/internal/infrastructure (aturan D3b). Satu-satunya sumber kebenaran; CLAUDE.md, AGENTS.md, dan
+// PRD-000 §4.2 harus memuat daftar identik (tests/architecture TestD3bAllowlistDocsMatchRules).
+var GormAllowedPaths = []string{
+	"internal/platform/database",
+	"internal/platform/modules/store",
+	"internal/platform/i18n/store",
+	"internal/platform/desks/store",
+	"internal/platform/identity/store",
+	"internal/platform/settings/store",
+	"internal/platform/authorization/store",
+	"sdk/data",
+	"sdk/authz",
+}
+
+func gormAllowedPath(rp string) bool {
+	for _, base := range GormAllowedPaths {
+		if underPath(rp, base) {
+			return true
+		}
+	}
+	return false
+}
+
 var routerPrefixes = []string{
 	"github.com/go-chi/", "github.com/gorilla/mux", "github.com/gin-gonic/",
 	"github.com/labstack/echo", "github.com/gofiber/", "github.com/julienschmidt/httprouter",
@@ -85,11 +109,7 @@ func Check(r Repo) []Violation {
 		isApplication := hasSeg(p.ImportPath, "internal/application")
 		gormOK := isArch ||
 			(isModulePkg && hasSeg(rp, "internal/infrastructure")) ||
-			underPath(rp, "internal/platform/database") ||
-			underPath(rp, "internal/platform/modules/store") ||
-			underPath(rp, "internal/platform/i18n/store") ||
-			underPath(rp, "internal/platform/desks/store") ||
-			underPath(rp, "sdk/data")
+			gormAllowedPath(rp)
 		dbOK := isArch || underPath(rp, "internal/platform/database")
 		sqlOK := dbOK || underPath(rp, "internal/platform/migrate")
 
@@ -197,9 +217,46 @@ func Check(r Repo) []Violation {
 		}
 	}
 
+	// MODNEST: go.mod bersarang di bawah modules/<x>/ dilarang (satu go.mod akar per modul; modul dikelola lewat
+	// go.work + manifest).
+	for _, nested := range r.NestedGoMods {
+		add("MODNEST", nested, "go.mod bersarang dilarang di bawah modules/<x>/ (hanya satu go.mod akar per modul)")
+	}
+
 	// Aturan level go.mod.
 	vers, tcs := map[string][]string{}, map[string][]string{}
 	for _, m := range r.Mods {
+		// MODPATH: path Go module modul bisnis = erpora/modules/<direktori>, dan sebaliknya. Path yang tidak cocok
+		// memungkinkan modul menyamar (mis. berpath erpora/modules/core agar mendapat hak core pada aturan IDENT).
+		if m.Dir != "" && m.Path != rootModule && m.Path != sdkModule {
+			if rel, err := filepath.Rel(r.Root, m.Dir); err == nil {
+				parts := strings.Split(filepath.ToSlash(rel), "/")
+				isModDir := len(parts) == 2 && parts[0] == "modules"
+				switch {
+				case isModDir && m.Path != modulesBase+parts[1]:
+					add("MODPATH", m.Path, "go.mod di modules/"+parts[1]+" harus berpath "+modulesBase+parts[1])
+				case !isModDir && strings.HasPrefix(m.Path, modulesBase):
+					add("MODPATH", m.Path, "modul berpath "+modulesBase+"... harus berada di modules/<nama> (ditemukan di "+filepath.ToSlash(rel)+")")
+				}
+			}
+		}
+		// MODNEST (I-2): replace lokal di go.mod modul bisnis hanya sah ke SDK (../../sdk) dan modul saudara
+		// (../<nama>), persis seperti template generator (GOWORK=off butuh replace itu). Replace lokal lain
+		// (path absolut, modul pihak ketiga, direktori di luar modules/) dilarang.
+		if m.Dir != "" && strings.HasPrefix(m.Path, modulesBase) {
+			for _, rp := range m.Replaces {
+				if rp.NewVersion != "" {
+					continue // bukan path lokal
+				}
+				target := filepath.ToSlash(rp.New)
+				switch {
+				case rp.Old == sdkModule && target == "../../sdk":
+				case strings.HasPrefix(rp.Old, modulesBase) && target == "../"+strings.TrimPrefix(rp.Old, modulesBase):
+				default:
+					add("MODNEST", m.Path, "replace lokal "+rp.Old+" => "+rp.New+" dilarang: hanya erpora/sdk => ../../sdk dan erpora/modules/<x> => ../<x> yang sah")
+				}
+			}
+		}
 		if m.Path == sdkModule {
 			for _, q := range m.Requires {
 				if q != m.Path && underPath(q, rootModule) {

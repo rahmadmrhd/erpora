@@ -101,7 +101,9 @@
     "anonymous": "Pengguna",
     "menu": "Menu akun",
     "manageAccount": "Kelola Akun",
+    "changePassword": "Ubah sandi",
     "signOut": "Keluar",
+    "signOutFailed": "Gagal keluar. Sesi Anda masih aktif; coba lagi.",
     "unavailable": "Belum tersedia di versi ini",
     "settings": "Pengaturan",
     "reload": "Muat ulang"
@@ -169,9 +171,11 @@
     "tenant_unresolved": "Tenant tidak dapat ditentukan.",
     "unauthenticated": "Anda belum masuk.",
     "token_expired": "Sesi Anda telah berakhir.",
+    "invalid_credentials": "Email atau sandi salah.",
     "permission_denied": "Anda tidak memiliki izin untuk aksi ini.",
     "field_forbidden": "Anda tidak boleh mengakses field ini.",
     "mfa_required": "Verifikasi dua langkah diperlukan.",
+    "account_locked": "Akun terkunci. Atur ulang sandi atau hubungi administrator.",
     "module_disabled": "Modul tidak aktif.",
     "not_found": "Data tidak ditemukan.",
     "module_not_found": "Modul tidak ditemukan.",
@@ -182,6 +186,7 @@
     "validation_failed": "Data tidak valid.",
     "business_rule_violated": "Data melanggar aturan bisnis.",
     "idempotency_key_reused": "Kunci idempotensi sudah dipakai untuk permintaan lain.",
+    "password_policy_violation": "Sandi baru tidak memenuhi kebijakan.",
     "rate_limited": "Terlalu banyak permintaan; coba lagi nanti.",
     "unsupported_media_type": "Jenis konten tidak didukung.",
     "internal_error": "Terjadi kesalahan pada server.",
@@ -347,6 +352,17 @@
       "title": "Daftar Desk tidak dapat dimuat",
       "description": "Terjadi kesalahan saat memuat Desk. Coba lagi."
     }
+  },
+  "resource": {
+    "modules": "Modul",
+    "i18n": "Istilah (i18n)",
+    "desks": "Desk"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
+  "action": {
+    "manage": "Kelola"
   },
   "todo": {
     "title": "ToDo",

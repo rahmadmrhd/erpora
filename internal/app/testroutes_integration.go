@@ -12,7 +12,9 @@ import (
 
 // registerTestRoutes menambah route lambat HANYA pada biner yang dibangun dengan tag `integration`
 // (dipakai tests/integration untuk menguji graceful shutdown dengan request yang benar-benar sedang berjalan).
-// Biner release/devtools biasa tidak memuat route ini.
+// Biner release/devtools biasa tidak memuat route ini. Public: fixture graceful shutdown, bukan permukaan
+// autentikasi; tanpa tenant, Authenticate (PRD-001 C1.10) tidak dapat mencocokkan klaim tid sehingga route ini
+// selalu 401 bila tidak publik.
 func registerTestRoutes(r *httpserver.Router) {
 	r.Handle("GET /__test/slow", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ms, _ := strconv.Atoi(req.URL.Query().Get("ms"))
@@ -21,5 +23,5 @@ func registerTestRoutes(r *httpserver.Router) {
 		}
 		time.Sleep(time.Duration(ms) * time.Millisecond)
 		httpserver.WriteData(w, http.StatusOK, map[string]string{"status": "slow-done"})
-	}), httpserver.WithoutTenant())
+	}), httpserver.WithoutTenant(), httpserver.Public())
 }

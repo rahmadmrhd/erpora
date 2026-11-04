@@ -7,11 +7,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"erpora/internal/platform/apicontract"
+	"erpora/sdk/module"
 )
+
+// permissionsOf menggabungkan capabilities yang ditulis di module.json dengan permission turunan resource x aksi
+// (PRD-001 FR-110), tanpa duplikat dan terurut deklarasi.
+func permissionsOf(listed []string, resources []module.Resource) []string {
+	out := append([]string(nil), listed...)
+	for _, p := range module.PermissionsOf(resources) {
+		if !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // ModuleInfo meringkas satu modules/<dir>.
 type ModuleInfo struct {
@@ -76,12 +90,13 @@ func LoadRepo(root string) (*Repo, error) {
 		var mf struct {
 			Key, Slug, Version string
 			Capabilities       []string
+			Resources          []module.Resource
 			Dependencies       []struct{ Module string }
 		}
 		if err := json.Unmarshal(raw, &mf); err != nil {
 			return nil, fmt.Errorf("modules/%s/module.json: %w", e.Name(), err)
 		}
-		info := ModuleInfo{Dir: e.Name(), Key: mf.Key, Slug: mf.Slug, Version: mf.Version, Capabilities: mf.Capabilities}
+		info := ModuleInfo{Dir: e.Name(), Key: mf.Key, Slug: mf.Slug, Version: mf.Version, Capabilities: permissionsOf(mf.Capabilities, mf.Resources)}
 		for _, d := range mf.Dependencies {
 			if d.Module != "platform.core" {
 				info.Dependencies = append(info.Dependencies, d.Module)

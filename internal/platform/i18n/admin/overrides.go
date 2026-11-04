@@ -14,24 +14,30 @@ import (
 	"erpora/internal/platform/httpserver"
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/i18n/store"
+	"erpora/internal/platform/identity"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/tenancy"
 	"erpora/sdk/httpx"
 	"erpora/sdk/module"
 )
 
-// Capabilities adalah capability milik platform.core untuk override istilah (ditambahkan ke daftar capability
-// platform di composition root).
-var Capabilities = []string{PermRead, PermManage}
+// Resources adalah resource milik platform.core untuk override istilah (PRD-001 FR-110); aksi "manage" adalah aksi
+// kustom. Ditambahkan ke resource platform di composition root.
+var Resources = []module.Resource{{
+	Key: "platform.i18n", Label: "resource.i18n",
+	Actions:       []string{"read"},
+	CustomActions: []module.CustomAction{{Key: "manage", Label: "action.manage"}},
+	FieldGroups:   []module.FieldGroup{{Key: "general", Label: "fieldGroup.general", Classification: "internal", Default: true}},
+}}
+
+// Capabilities adalah permission turunan Resources (PermRead, PermManage).
+var Capabilities = module.PermissionsOf(Resources)
 
 // Permission API override.
 const (
 	PermRead   = "platform.i18n.read"
 	PermManage = "platform.i18n.manage"
 )
-
-// Actor adalah actor audit untuk operasi lewat API sebelum PRD-001 (autentikasi) tersedia.
-const Actor = "api:dev"
 
 const (
 	overridesPrefix = "/api/platform/i18n/overrides/"
@@ -174,9 +180,23 @@ type putBody struct {
 	Message *string `json:"message"`
 }
 
+// requireActor menurunkan aktor audit dari Principal request (`user:<id>`). Authenticate sudah menolak request tanpa
+// token; tanpa Principal di sini (rantai middleware salah rakit) jawabannya 401, tidak pernah aktor bawaan.
+func requireActor(w http.ResponseWriter, r *http.Request) (string, bool) {
+	actor, ok := identity.ActorFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, r, http.StatusUnauthorized, "unauthenticated", "autentikasi diperlukan", nil)
+	}
+	return actor, ok
+}
+
 func (a *API) putOverride(w http.ResponseWriter, r *http.Request) {
 	be, t, ok := a.ready(w, r)
 	if !ok || !requireJSON(w, r) {
+		return
+	}
+	actor, ok := requireActor(w, r)
+	if !ok {
 		return
 	}
 	body, err := httpx.DecodeJSON[putBody](w, r)
@@ -191,7 +211,7 @@ func (a *API) putOverride(w http.ResponseWriter, r *http.Request) {
 	}
 	ns, loc, key := r.PathValue("namespace"), r.PathValue("locale"), r.PathValue("key")
 	_, err = be.SetOverride(r.Context(), t, i18n.Override{Namespace: ns, Locale: loc, Key: key, Message: *body.Message},
-		Actor, ifMatchPrecondition(r.Header.Get("If-Match")))
+		actor, ifMatchPrecondition(r.Header.Get("If-Match")))
 	if err != nil {
 		writeOverrideError(w, r, err)
 		return
@@ -211,8 +231,12 @@ func (a *API) deleteOverride(w http.ResponseWriter, r *http.Request) {
 	if !ok || !requireJSON(w, r) {
 		return
 	}
+	actor, ok := requireActor(w, r)
+	if !ok {
+		return
+	}
 	existed, err := be.DeleteOverride(r.Context(), t, r.PathValue("namespace"), r.PathValue("locale"), r.PathValue("key"),
-		Actor, ifMatchPrecondition(r.Header.Get("If-Match")))
+		actor, ifMatchPrecondition(r.Header.Get("If-Match")))
 	if err != nil {
 		writeOverrideError(w, r, err)
 		return

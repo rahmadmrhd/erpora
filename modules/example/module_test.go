@@ -25,7 +25,7 @@ var (
 // (modul tidak boleh mengimpor paket platform).
 func TestOpenAPI_Embedded(t *testing.T) {
 	doc := string(New().OpenAPI())
-	for _, want := range []string{"openapi: 3.1.0", "/api/example/ping", "/api/example/notes", "x-erp-permission: example.ping.read", "x-erp-permission: example.notes.read"} {
+	for _, want := range []string{"openapi: 3.1.0", "/api/example/ping", "/api/example/notes", "x-erp-permission: example.ping.read", "x-erp-permission: example.note.read"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("openapi.yaml tidak memuat %q", want)
 		}
@@ -54,7 +54,8 @@ func TestManifest_Parses(t *testing.T) {
 
 func TestMigrations_Embedded(t *testing.T) {
 	names, err := fs.Glob(New().Migrations(), "*.sql")
-	if err != nil || len(names) != 2 || names[0] != "0001_create_example_notes.sql" || names[1] != "0002_add_example_notes_version.sql" {
+	if err != nil || len(names) != 3 || names[0] != "0001_create_example_notes.sql" || names[1] != "0002_add_example_notes_version.sql" ||
+		names[2] != "0003_add_example_notes_audit_users.sql" {
 		t.Fatalf("names = %v err = %v", names, err)
 	}
 }
@@ -64,7 +65,7 @@ func TestRegister_RoutesAndCommand(t *testing.T) {
 	if err := New().Register(r); err != nil {
 		t.Fatal(err)
 	}
-	if r.Permission("GET", "/ping") != "example.ping.read" || r.Permission("GET", "/notes") != "example.notes.read" {
+	if r.Permission("GET", "/ping") != "example.ping.read" || r.Permission("GET", "/notes") != "example.note.read" {
 		t.Errorf("routes = %+v", r.Routes)
 	}
 	if len(r.Commands) != 1 || r.Commands[0].Name != "recount" || r.Commands[0].Run == nil {

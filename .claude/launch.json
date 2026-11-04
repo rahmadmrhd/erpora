@@ -12,6 +12,16 @@
       "runtimeExecutable": "bun",
       "runtimeArgs": ["web/dev-api.ts"],
       "port": 8080
+    },
+    {
+      "name": "verify-api",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:ERP_DATABASE_URL='postgres://erp:erp@127.0.0.1:15432/erpora_dev_verify?sslmode=disable'; $env:ERP_ENV='development'; $env:ERP_HTTP_ADDR='127.0.0.1:8080'; $env:ERP_TENANCY_MODE='single'; go build -tags devtools -o tmp/erpora-verify.exe ./cmd/erpora; if ($LASTEXITCODE -eq 0) { & ./tmp/erpora-verify.exe serve --env-file .env }"
+      ],
+      "port": 8080
     }
   ]
 }

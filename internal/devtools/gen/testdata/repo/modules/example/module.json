@@ -10,7 +10,21 @@
   "dependencies": [
     { "module": "platform.core", "version": "^0.1", "optional": false }
   ],
-  "capabilities": ["example.ping.read", "example.notes.read"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
-  "offline": { "mode": "online-only" }
+  "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "example.ping",
+      "label": "resource.ping",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    },
+    {
+      "key": "example.note",
+      "label": "resource.note",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }
+  ]
 }

@@ -49,6 +49,8 @@ func newTestRouter(t *testing.T, ready error) (*Router, *tracetest.SpanRecorder)
 		Readiness:  fakeReady{ready},
 		Assets:     fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}},
 		AppVersion: "9.9.9",
+		// Bootstrap wajib autentikasi; tes menyuntik Principal lewat header X-Test-User (bootstrap_auth_test.go).
+		Authenticate: principalFromHeader,
 	}), sr
 }
 
@@ -102,11 +104,14 @@ func TestReadyz_Ready(t *testing.T) {
 
 func TestBootstrap_Envelope(t *testing.T) {
 	r, _ := newTestRouter(t, nil)
-	rec := do(r, "GET", "/api/bootstrap", nil)
+	rec := do(r, "GET", "/api/bootstrap", asUser(testUserA))
 	if rec.Code != 200 {
 		t.Fatalf("code %d", rec.Code)
 	}
 	d := decode(t, rec)["data"].(map[string]any)
+	if u, _ := d["user"].(map[string]any); u["id"] != testUserA {
+		t.Fatalf("user = %v", d["user"])
+	}
 	if d["appVersion"] != "9.9.9" || d["tenantId"] != defaultTenant.String() || d["revision"] != float64(0) {
 		t.Fatalf("data %v", d)
 	}
@@ -116,14 +121,18 @@ func TestBootstrap_Envelope(t *testing.T) {
 			t.Fatalf("%s = %#v", k, d[k])
 		}
 	}
-	if rec.Header().Get("ETag") != `"0"` {
-		t.Fatalf("etag %q", rec.Header().Get("ETag"))
+	// ETag memuat identitas pengguna (bukan lagi hanya revisi): `"<revisi>-<hash>"`.
+	if etag := rec.Header().Get("ETag"); !strings.HasPrefix(etag, `"0-`) {
+		t.Fatalf("etag %q", etag)
 	}
 }
 
 func TestBootstrap_NotModified(t *testing.T) {
 	r, _ := newTestRouter(t, nil)
-	rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"0"`})
+	etag := do(r, "GET", "/api/bootstrap", asUser(testUserA)).Header().Get("ETag")
+	hdr := asUser(testUserA)
+	hdr["If-None-Match"] = etag
+	rec := do(r, "GET", "/api/bootstrap", hdr)
 	if rec.Code != 304 || rec.Body.Len() != 0 {
 		t.Fatalf("%d %q", rec.Code, rec.Body)
 	}
@@ -132,32 +141,39 @@ func TestBootstrap_NotModified(t *testing.T) {
 func newBootstrapRouter(t *testing.T) *Router {
 	t.Helper()
 	return NewRouter(Deps{
-		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Resolver:  tenancy.SingleTenantResolver{ID: defaultTenant},
-		Connector: database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
-		Bootstrap: func(_ context.Context, tn tenancy.TenantID) bootstrap.Manifest {
-			return bootstrap.Build("9.9.9", tn, []bootstrap.ModuleInput{
+		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Resolver:     tenancy.SingleTenantResolver{ID: defaultTenant},
+		Connector:    database.SingleTenantConnector{Default: defaultTenant, DB: database.TenantDB{DB: dryRunDB(t)}},
+		Authenticate: principalFromHeader,
+		Bootstrap: func(ctx context.Context, tn tenancy.TenantID) bootstrap.Manifest {
+			m := userBootstrap(ctx, tn)
+			m.Modules = bootstrap.Build("9.9.9", tn, []bootstrap.ModuleInput{
 				{Key: "acme.example", Slug: "example", Version: "1.0.0", Status: "enabled", OfflineMode: "online-only"},
-			}, 5)
+			}, 5).Modules
+			return m
 		},
 	})
 }
 
 func TestBootstrap_FromDepsHook(t *testing.T) {
 	r := newBootstrapRouter(t)
-	rec := do(r, "GET", "/api/bootstrap", nil)
-	if rec.Code != 200 || rec.Header().Get("ETag") != `"5"` {
-		t.Fatalf("%d etag=%q", rec.Code, rec.Header().Get("ETag"))
+	rec := do(r, "GET", "/api/bootstrap", asUser(testUserA))
+	etag := rec.Header().Get("ETag")
+	if rec.Code != 200 || !strings.HasPrefix(etag, `"5-`) {
+		t.Fatalf("%d etag=%q", rec.Code, etag)
 	}
 	d := decode(t, rec)["data"].(map[string]any)
 	mods := d["modules"].([]any)
 	if len(mods) != 1 || mods[0].(map[string]any)["status"] != "enabled" || d["revision"] != float64(5) {
 		t.Fatalf("data %v", d)
 	}
-	if rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"5"`}); rec.Code != 304 {
+	hdr := asUser(testUserA)
+	hdr["If-None-Match"] = etag
+	if rec := do(r, "GET", "/api/bootstrap", hdr); rec.Code != 304 {
 		t.Fatalf("If-None-Match: %d", rec.Code)
 	}
-	if rec := do(r, "GET", "/api/bootstrap", map[string]string{"If-None-Match": `"4"`}); rec.Code != 200 {
+	hdr["If-None-Match"] = `"4-000000000000"`
+	if rec := do(r, "GET", "/api/bootstrap", hdr); rec.Code != 200 {
 		t.Fatalf("etag lama: %d", rec.Code)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"os"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"erpora/internal/platform/buildinfo"
 	"erpora/internal/platform/config"
+	"erpora/internal/platform/crypto"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 func run(t *testing.T, args ...string) (string, error) {
@@ -25,7 +28,8 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"ERP_DATABASE_URL", "ERP_ENV", "ERP_HTTP_ADDR", "ERP_LOG_FORMAT",
-		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS",
+		"ERP_TENANCY_MODE", "ERP_DEFAULT_TENANT_ID", "ERP_DB_SLOW_QUERY_MS", "ERP_SECRET_KEY", "ERP_SECRET_KEY_PREVIOUS",
+		"ERP_MAIL_DRIVER", "ERP_SMTP_HOST", "ERP_SMTP_PORT", "ERP_SMTP_USERNAME", "ERP_SMTP_PASSWORD", "ERP_SMTP_FROM", "ERP_SMTP_TLS_MODE", "ERP_TRUSTED_PROXIES",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -134,5 +138,102 @@ func TestCompletion_PowerShell(t *testing.T) {
 	}
 	if exitCode(err) != 0 || strings.TrimSpace(out) == "" {
 		t.Fatalf("empty completion output")
+	}
+}
+
+// `serve` butuh ERP_SECRET_KEY di semua mode (tanpa kunci sementara): exit 2 sebelum database disentuh.
+func TestServe_MissingSecretKey_ExitCode2(t *testing.T) {
+	for _, envName := range []string{"production", "development"} {
+		t.Run(envName, func(t *testing.T) {
+			clearEnv(t)
+			t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@127.0.0.1:1/db")
+			t.Setenv("ERP_ENV", envName)
+			t.Setenv("ERP_AUTHZ_STUB", "deny")
+			_, err := run(t, "serve")
+			if err == nil || exitCode(err) != 2 {
+				t.Fatalf("exit = %d err = %v, want 2", exitCode(err), err)
+			}
+			for _, want := range []string{"ERP_SECRET_KEY", "secret:generate"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("pesan harus memuat %q: %v", want, err)
+				}
+			}
+		})
+	}
+}
+
+// Command selain serve tidak butuh kunci; `inspect config` menampilkan status tanpa nilai kunci.
+func TestInspectConfig_SecretKeyOptionalAndRedacted(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@127.0.0.1:1/db")
+	out, err := run(t, "inspect", "config")
+	if err != nil {
+		t.Fatalf("tanpa kunci harus lolos: %v", err)
+	}
+	if !strings.Contains(out, "ERP_SECRET_KEY=\n") {
+		t.Errorf("kunci tak diset harus tampil kosong:\n%s", out)
+	}
+	secretkey.Setenv(t)
+	// Kunci lama harus ber-id (crypto.KeyIDOf) berbeda dari kunci aktif acak; selain itu config menolaknya (peluang 1/256).
+	var previous []byte
+	for b := byte(7); ; b++ {
+		if cand := bytes.Repeat([]byte{b}, 32); crypto.KeyIDOf(cand) != crypto.KeyIDOf(secretkey.Bytes()) && !bytes.Equal(cand, secretkey.Bytes()) {
+			previous = cand
+			break
+		}
+	}
+	t.Setenv("ERP_SECRET_KEY_PREVIOUS", base64.StdEncoding.EncodeToString(previous))
+	out, err = run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_SECRET_KEY=****\n") || !strings.Contains(out, "ERP_SECRET_KEY_PREVIOUS=****\n") {
+		t.Errorf("kunci harus tersamarkan:\n%s", out)
+	}
+	if strings.Contains(out, secretkey.B64()) || strings.Contains(out, os.Getenv("ERP_SECRET_KEY_PREVIOUS")) {
+		t.Errorf("nilai kunci bocor:\n%s", out)
+	}
+}
+
+// Sandi SMTP tidak pernah tercetak oleh `inspect config` (K-C1.6): hanya penanda tersamar.
+func TestInspectConfig_SMTPPasswordRedacted(t *testing.T) {
+	clearEnv(t)
+	const pw = "S3cr3t-sandi-smtp-uji"
+	t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@127.0.0.1:1/db")
+	t.Setenv("ERP_MAIL_DRIVER", "smtp")
+	t.Setenv("ERP_SMTP_HOST", "smtp.example.com")
+	t.Setenv("ERP_SMTP_FROM", "noreply@example.com")
+	t.Setenv("ERP_SMTP_USERNAME", "mailer")
+	t.Setenv("ERP_SMTP_PASSWORD", pw)
+	out, err := run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_SMTP_PASSWORD=****\n") || !strings.Contains(out, "ERP_SMTP_HOST=smtp.example.com\n") {
+		t.Errorf("sandi SMTP harus tersamarkan:\n%s", out)
+	}
+	if strings.Contains(out, pw) {
+		t.Errorf("sandi SMTP bocor:\n%s", out)
+	}
+}
+
+// ERP_TRUSTED_PROXIES tampil di `inspect config` (bentuk ternormalisasi; bukan rahasia) dan kosong secara bawaan.
+func TestInspectConfig_ShowsTrustedProxies(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ERP_DATABASE_URL", "postgres://erp:secret@127.0.0.1:1/db")
+	out, err := run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_TRUSTED_PROXIES=\n") {
+		t.Errorf("bawaan harus kosong:\n%s", out)
+	}
+	t.Setenv("ERP_TRUSTED_PROXIES", "10.0.0.0/8, 192.0.2.5")
+	out, err = run(t, "inspect", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ERP_TRUSTED_PROXIES=10.0.0.0/8,192.0.2.5/32\n") {
+		t.Errorf("proxy tepercaya tidak tampil ternormalisasi:\n%s", out)
 	}
 }

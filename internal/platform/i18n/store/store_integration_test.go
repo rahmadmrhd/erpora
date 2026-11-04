@@ -48,7 +48,7 @@ func setup(t *testing.T) (*gorm.DB, *store.Store) {
 }
 
 func ov(ns, loc, key, msg string) store.Override {
-	return store.Override{Namespace: ns, Locale: loc, Key: key, Message: msg, UpdatedBy: "api:dev"}
+	return store.Override{Namespace: ns, Locale: loc, Key: key, Message: msg, UpdatedBy: "user:u1"}
 }
 
 func revOf(t *testing.T, s *store.Store, tn tenancy.TenantID, ns, loc string) int64 {
@@ -83,7 +83,7 @@ func TestUpsert_IdempotentAndBumpsRevisionOnlyOnChange(t *testing.T) {
 		t.Fatalf("nilai berubah: changed=%v rev=%d err=%v, want true 2", changed, rev, err)
 	}
 	got, err := s.Get(ctx, tenantA, "example", "id", "note.title")
-	if err != nil || got.Message != "Catatan Baru" || got.UpdatedBy != "api:dev" || got.UpdatedAt.IsZero() {
+	if err != nil || got.Message != "Catatan Baru" || got.UpdatedBy != "user:u1" || got.UpdatedAt.IsZero() {
 		t.Fatalf("Get = %+v, %v", got, err)
 	}
 	// bahasa lain: revisi sendiri

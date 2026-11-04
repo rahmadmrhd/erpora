@@ -17,10 +17,18 @@ type Manifest struct {
 	Required      bool          `json:"required,omitempty"`
 	Compatibility Compatibility `json:"compatibility"`
 	Dependencies  []Dependency  `json:"dependencies"`
-	Capabilities  []string      `json:"capabilities"`
-	Provides      []string      `json:"provides,omitempty"`
-	Migrations    Migrations    `json:"migrations"`
-	Offline       Offline       `json:"offline"`
+	// Capabilities dipertahankan demi kompatibilitas (schema_version tetap "1"). Himpunan permission modul
+	// diturunkan dari Resources (Permissions()); entri yang ditulis di sini wajib bagian dari himpunan turunan itu
+	// (PRD-001 FR-110).
+	Capabilities []string `json:"capabilities"`
+	Provides     []string `json:"provides,omitempty"`
+	// Resources, ScopeDimensions, dan DefaultRoles adalah deklarasi otorisasi PRD-001 FR-110 (aditif; manifest
+	// lama tanpa ketiganya tetap terurai).
+	Resources       []Resource       `json:"resources,omitempty"`
+	ScopeDimensions []ScopeDimension `json:"scope_dimensions,omitempty"`
+	DefaultRoles    []DefaultRole    `json:"default_roles,omitempty"`
+	Migrations      Migrations       `json:"migrations"`
+	Offline         Offline          `json:"offline"`
 	// I18n menyatakan bahasa katalog terjemahan modul; nil = modul tanpa namespace i18n.
 	I18n *I18n `json:"i18n,omitempty"`
 	// Desk menyatakan Desk modul (Q40 butir 10-13): label, ikon, dan menu yang dibaca server untuk daftar Desk
@@ -84,14 +92,20 @@ type DeskDashboard struct {
 	Icon  string `json:"icon,omitempty"`
 }
 
-// DeskMenu adalah satu item menu (To dan Permission terisi) atau satu grup satu tingkat (Children terisi).
-// To relatif base route modul (mis. "/notes"); Permission wajib salah satu capabilities modul.
+// DeskAccessAuthenticated adalah nilai DeskMenu.Access: item terlihat bagi setiap pengguna yang login, tanpa
+// permission (PRD-000 Q43).
+const DeskAccessAuthenticated = "authenticated"
+
+// DeskMenu adalah satu item menu (To terisi, plus TEPAT SATU dari Permission atau Access) atau satu grup satu
+// tingkat (Children terisi). To relatif base route modul (mis. "/notes"); Permission wajib salah satu capabilities
+// modul; Access hanya boleh DeskAccessAuthenticated (pengganti eksplisit Permission, PRD-000 Q43).
 type DeskMenu struct {
 	ID         string     `json:"id"`
 	Label      string     `json:"label"`
 	Icon       string     `json:"icon,omitempty"`
 	To         string     `json:"to,omitempty"`
 	Permission string     `json:"permission,omitempty"`
+	Access     string     `json:"access,omitempty"`
 	Children   []DeskMenu `json:"children,omitempty"`
 }
 

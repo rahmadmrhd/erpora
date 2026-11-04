@@ -1,3 +1,4 @@
+import { useNavigate } from "@erpora/module-sdk";
 import {
   safeInternalHref,
   useCurrentUser,
@@ -23,7 +24,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@erpora/ui";
-import { useId } from "react";
+import { useCallback, useId } from "react";
 import { DisabledHint } from "./disabled-hint";
 import { DOCK_BUTTON_CLASS, STRIP_CENTER_CLASS } from "./dock-sizing";
 import { useShellActions } from "./shell-context";
@@ -47,12 +48,29 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
   const actions = useShellActions();
   const anonymous = useMessage({ ns: "platform", key: "user.anonymous" });
   const hintId = useId();
+  const navigate = useNavigate();
+  // Halaman akun (mis. Ubah sandi) hanya bila sumber mendukung dan path-nya internal yang aman.
+  const accountPath = source.capabilities.manageAccount
+    ? safeInternalHref(source.manageAccountPath?.())
+    : null;
 
   const name = user?.displayName ?? anonymous;
   const email = user?.email ?? null;
   const avatarSrc = safeInternalHref(user?.avatarUrl ?? undefined) ?? undefined;
   const canSignOut = source.capabilities.signOut;
   const hint = t("user.unavailable");
+  const signOutFailed = t("user.signOutFailed");
+  const retryLabel = t("shell.retry");
+  // Keluar yang ditolak (server tidak mengakui logout) berarti sesi masih aktif: tampilkan galat dengan opsi coba lagi.
+  // toast dimuat malas (sonner tidak ada di bundel awal, K-12).
+  const signOut = useCallback(async (): Promise<void> => {
+    try {
+      await source.signOut?.();
+    } catch {
+      const { toast } = await import("@erpora/ui/toaster");
+      toast.error(signOutFailed, { action: { label: retryLabel, onClick: () => void signOut() } });
+    }
+  }, [source, signOutFailed, retryLabel]);
 
   // Di Dock (K16, R16.1) dan strip ikon Floating (K21) avatar 32 px mengisi tombol, dengan cincin tipis dan latar
   // secondary agar kontras terhadap sidebar.
@@ -101,13 +119,19 @@ export function UserMenu({ variant }: { variant: "dock" | "panel" | "navbar" }) 
         <Icon name="settings" />
         {t("user.settings")}
       </DropdownMenuItem>
+      {accountPath ? (
+        <DropdownMenuItem onSelect={() => void navigate({ to: accountPath })}>
+          <Icon name="key" />
+          {t("user.changePassword")}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem onSelect={() => actions.reload()}>
         <Icon name="refresh-cw" />
         {t("user.reload")}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       {canSignOut ? (
-        <DropdownMenuItem variant="destructive" onSelect={() => void source.signOut?.()}>
+        <DropdownMenuItem variant="destructive" onSelect={() => void signOut()}>
           <Icon name="log-out" />
           {t("user.signOut")}
         </DropdownMenuItem>

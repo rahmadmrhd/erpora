@@ -32,6 +32,7 @@ func requestLimitsMW(rt registry.RouteInfo, svc Services, next http.Handler) htt
 		}
 		ctx := httpx.WithBodyLimit(r.Context(), limit)
 		ctx = svc.install(ctx)
+		ctx = svc.installIdentity(ctx, rt.Module)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

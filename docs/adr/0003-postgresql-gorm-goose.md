@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Sumber:** PRD-000 Q3 (akses data), PRD-000 FR-07 (database dan migrasi)
+- **Diperbarui 2026-11-01 oleh [ADR-0016](0016-metadata-sumber-kebenaran-pembangkit-kontrak-dan-migrasi.md):** migrasi goose kini dapat dibangkitkan sebagai berkas yang ditinjau dari metadata resource (kerangka `TODO` untuk perubahan merusak); semua keputusan di bawah, termasuk larangan `AutoMigrate` di luar test dan migrasi yang tidak pernah berjalan otomatis, **tetap berlaku tanpa perubahan**.
 
 ## Konteks
 

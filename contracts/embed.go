@@ -8,6 +8,11 @@ import _ "embed"
 //go:embed module.schema.json
 var ModuleSchema []byte
 
+// ResourceSchema adalah JSON Schema (2020-12) untuk berkas metadata resource (modules/<dir>/metadata/*.yaml).
+//
+//go:embed resource.schema.json
+var ResourceSchema []byte
+
 // CommonOpenAPI adalah komponen OpenAPI bersama (openapi/common.yaml); dirujuk kontrak lain lewat erp:common.
 //
 //go:embed openapi/common.yaml

@@ -10,15 +10,29 @@
   "dependencies": [
     { "module": "platform.core", "version": "^0.1", "optional": false }
   ],
-  "capabilities": ["example.ping.read", "example.notes.read"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "example.ping",
+      "label": "resource.ping",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "public", "default": true }]
+    },
+    {
+      "key": "example.note",
+      "label": "resource.note",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }
+  ],
   "desk": {
     "label": "desk.title",
     "icon": "file-text",
     "menus": [
-      { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+      { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.note.read" }
     ]
   }
 }

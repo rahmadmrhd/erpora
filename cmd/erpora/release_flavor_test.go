@@ -42,6 +42,7 @@ func TestReleaseFlavor_UnknownDevCommands(t *testing.T) {
 		{"db:fresh"}, {"db:seed"}, {"contracts:breaking"},
 		{"contracts:lint"}, {"contracts:generate"}, {"module:check"}, {"doctor"},
 		{"release:verify-tag", "v1"},
+		{"metadata:check"}, {"metadata:generate"}, {"metadata:generate", "--check"}, {"metadata:diff"}, {"metadata:migrate", "x", "y"},
 	}
 	for _, args := range cases {
 		var out, errOut bytes.Buffer

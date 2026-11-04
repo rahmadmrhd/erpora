@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 
 	"go.opentelemetry.io/otel/metric"
 
@@ -20,6 +19,8 @@ import (
 	"erpora/internal/platform/i18n"
 	i18nadmin "erpora/internal/platform/i18n/admin"
 	i18nstore "erpora/internal/platform/i18n/store"
+	"erpora/internal/platform/identity"
+	"erpora/internal/platform/identity/token"
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/admin"
 	"erpora/internal/platform/modules/lifecycle"
@@ -27,9 +28,36 @@ import (
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/modules/store"
 	"erpora/internal/platform/observability"
+	"erpora/internal/platform/settings"
 	"erpora/internal/platform/tenancy"
+	sdkmail "erpora/sdk/mail"
 	"erpora/web"
 )
+
+// assembleOption mengubah perakitan (tes dan, kelak, pemasangan settings.Service).
+type assembleOption func(*assembleOptions)
+
+type assembleOptions struct {
+	publicURL PublicURLSource
+	settings  *settings.Service
+	mail      sdkmail.Sender
+}
+
+// withPublicURLSource menimpa sumber URL publik (bawaan: settings platform terikat tenant, newSettingsURLSource).
+func withPublicURLSource(s PublicURLSource) assembleOption {
+	return func(o *assembleOptions) { o.publicURL = s }
+}
+
+// withSettings memasang settings.Service yang sudah dibuat pemanggil (Run memakainya juga untuk pemeriksaan URL
+// publik production sebelum perakitan); bawaan: dibuat di assemble.
+func withSettings(s *settings.Service) assembleOption {
+	return func(o *assembleOptions) { o.settings = s }
+}
+
+// withMailSender menimpa pengirim surat (tes memakai pengirim tiruan); bawaan: newMailSender sesuai ERP_MAIL_DRIVER.
+func withMailSender(m sdkmail.Sender) assembleOption {
+	return func(o *assembleOptions) { o.mail = m }
+}
 
 // assembly adalah hasil perakitan platform + lifecycle modul untuk satu proses serve.
 type assembly struct {
@@ -38,6 +66,8 @@ type assembly struct {
 	Snapshot  *runtime.Snapshot
 	Tenant    tenancy.TenantID
 	I18n      *i18n.Service
+	// Identity adalah mesin identitas (kunci, sesi, MFA, pembatas); dipakai C1.11/C1.12 dan tes.
+	Identity *identityStack
 }
 
 // buildLifecycle merakit lifecycle.Service di atas db. snap dan notifier boleh nil (CLI tidak punya snapshot).
@@ -75,10 +105,25 @@ func defaultTenant(ctx context.Context, cfg config.Config, db *database.DB) (ten
 // assemble merakit router, snapshot, dan lifecycle: reconcile saat startup (FR-19.6), langganan notifikasi
 // revision, watcher antarproses, dan route modul dengan snapshot yang sama. Error reconcile (selain lock
 // timeout, yang dilaporkan sebagai LockSkipped) menggagalkan startup.
-func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, prov observability.Providers, reg *registry.Registry, apis *platformAPIs) (*assembly, error) {
+func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *database.DB, prov observability.Providers, reg *registry.Registry, apis *platformAPIs, opts ...assembleOption) (*assembly, error) {
+	var ao assembleOptions
+	for _, o := range opts {
+		o(&ao)
+	}
 	tid, err := defaultTenant(ctx, cfg, db)
 	if err != nil {
 		return nil, err
+	}
+	if ao.settings == nil {
+		ao.settings = newSettingsService(cfg, db, tid)
+	}
+	if ao.publicURL == nil {
+		ao.publicURL = newSettingsURLSource(cfg, ao.settings, tid)
+	}
+	if ao.mail == nil {
+		if ao.mail, err = newMailSender(cfg, log); err != nil {
+			return nil, &ExitError{Code: 2, Err: err}
+		}
 	}
 	snap := runtime.NewSnapshot()
 	notifier := runtime.NewLocalNotifier()
@@ -89,8 +134,15 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	if err != nil {
 		return nil, &ExitError{Code: 2, Err: fmt.Errorf("katalog terjemahan tidak valid: %w", err)}
 	}
+	// Mesin identitas dirakit sebelum modul: autentikasi nyata menggantikan stub authN sepenuhnya (tanpa flag untuk
+	// mematikannya); ERP_AUTHZ_STUB hanya menentukan keputusan permission sampai C2 (K-C1.9).
+	idStack, err := newIdentityStack(ctx, cfg, log, db, tid, ao.publicURL, identityExtras{Settings: ao.settings, Mail: ao.mail})
+	if err != nil {
+		return nil, fmt.Errorf("mesin identitas: %w", err)
+	}
 	services := platformServices(cfg, log)
 	services.I18n = i18nHook(i18nSvc, reg)
+	services.Identity = idStack.installCoreIdentity
 	svc := buildLifecycle(reg, db, tid, snap, notifier, prov, log, services)
 
 	rep, err := svc.Reconcile(ctx, tid)
@@ -109,6 +161,13 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	})
 	go svc.Watch(ctx, tid, lifecycle.DefaultPollInterval)
 
+	// Keputusan bertipe: Principal wajib, aturan MFA ADR-0013 §4, lalu permission lewat stub (sampai C2). Daftar Desk
+	// tetap memakai stub (Allow bool) karena hanya menyaring menu; route Desk sendiri tetap lewat TypedAuthorizer.
+	stub := authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log)
+	authz, err := runtime.NewTypedAuthorizer(stub, mfaState{idStack.MFAState}, log)
+	if err != nil {
+		return nil, err
+	}
 	router := httpserver.NewRouter(httpserver.Deps{
 		Logger:     log,
 		Tracer:     prov.Tracer,
@@ -121,22 +180,21 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 		// Deteksi N+1 hanya di development (ERP_DB_NPLUSONE_THRESHOLD, 0 = mati).
 		NPlusOneThreshold: cfg.DBNPlusOneThreshold,
 		I18n:              i18nSvc,
-		Bootstrap:         bootstrapFrom(reg, snap, i18nSvc, cfg.ModulesAdminAPIEnabled()),
-		// Autentikasi nyata datang dari PRD-001; sementara pass-through.
-		Authenticate: func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				log.DebugContext(r.Context(), "authN stub")
-				next.ServeHTTP(w, r)
-			})
-		},
+		Bootstrap:         withCurrentUser(bootstrapFrom(reg, snap, i18nSvc, cfg.ModulesAdminAPIEnabled()), idStack.Store, log),
+		// Urutan ADR-0013 §4: tenantContext, batas IP, Authenticate, batas principal, permission.
+		Authenticate:   idStack.authenticate(log),
+		IPLimit:        identity.IPLimit(idStack.IPLimiter),
+		PrincipalLimit: identity.PrincipalLimit(idStack.Principals),
+		TrustedProxies: cfg.TrustedProxies,
 	})
+	// JWKS publik di luar /api/{slug} (K-C1.8): hanya kunci pending/active/retiring, Cache-Control max-age 300.
+	router.Handle(jwksRoute, token.JWKSHandler(idStack.Keyring), httpserver.WithoutTenant(), httpserver.Public())
 	apis.Modules.Bind(svc)
 	apis.I18n.Bind(i18nSvc)
 	// Daftar Desk memakai Authorizer yang sama dengan permission route (stub sampai PRD-001): penyaringan menu
 	// hanya lewat Authorizer.Allow, backend adalah otoritas.
-	authz := authorization.NewStub(authorization.StubMode(cfg.AuthzStub), log)
 	apis.Desks.Bind(desks.NewService(desks.Deps{
-		Registry: reg, Status: snap, Authz: authz, Overrides: desksstore.New(database.ControlDB{DB: db}), Log: log,
+		Registry: reg, Status: snap, Authz: stub, Overrides: desksstore.New(database.ControlDB{DB: db}), Log: log,
 	}))
 	// Gate mutasi (keputusan 8): di luar development tanpa ERP_MODULES_ADMIN_API=true, route aksi mutasi tidak
 	// dilayani (404 sebelum permission), sementara route baca tetap tunduk pada permission.
@@ -152,7 +210,7 @@ func assemble(ctx context.Context, cfg config.Config, log *slog.Logger, db *data
 	}
 	runtime.Mount(router, reg, snap, authz, log, mountOpts...)
 	registerTestRoutes(router)
-	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid, I18n: i18nSvc}, nil
+	return &assembly{Router: router, Lifecycle: svc, Snapshot: snap, Tenant: tid, I18n: i18nSvc, Identity: idStack}, nil
 }
 
 // bootstrapFrom membentuk isi /api/bootstrap dari katalog (tanpa platform.core) dan snapshot runtime.

@@ -57,7 +57,7 @@ Aturan:
 
 - **`PUT` tidak dipakai** untuk resource bisnis (ganti penuh berisiko menghapus field yang tidak dikirim/tidak terlihat oleh user). Pengecualian: dokumen konfigurasi utuh (mis. settings satu modul), dan harus dinyatakan di OpenAPI.
 - `PATCH` memakai semantik **JSON Merge Patch** (RFC 7396): hanya field yang dikirim yang diubah; `null` berarti mengosongkan field.
-- `DELETE` pada dokumen yang sudah `submitted` **ditolak** `409 invalid_state`; gunakan aksi `cancel`.
+- `DELETE` pada dokumen hanya sah pada `draft` (soft-delete: status menjadi `deleted`); pada status lain **ditolak** `409 invalid_state`; dokumen `accepted` dikoreksi lewat aksi `cancel` (§11).
 
 ## 4. Konvensi JSON
 
@@ -104,7 +104,7 @@ Zona waktu: server selalu mengirim UTC. Konversi ke zona waktu user (PRD-001 FR-
 }
 ```
 
-- Respons sukses **selalu** dibungkus `data`, sehingga metadata (`page`, `meta`) bisa ditambahkan tanpa breaking change.
+- Respons sukses **selalu** dibungkus `data`, sehingga metadata (`page`, `meta`) bisa ditambahkan tanpa breaking change. **Satu-satunya pengecualian:** dokumen standar `/.well-known/*` pada kontrak **platform** (saat ini `GET /.well-known/jwks.json`, RFC 7517 `{"keys": [...]}` agar pustaka JWT standar dapat memakainya), yang ditandai `x-erp-raw-response: true` pada operasinya. Penanda ini tidak diterima di kontrak modul maupun path platform lain (linter `erp-success-envelope`); daftar path yang sah dijaga ketat oleh `apicontract.Parse` dan menambah path baru butuh persetujuan pemilik produk (PRD-001 Q25, 3 Nov 2026).
 - Respons error **selalu** berbentuk `{"error": {...}}` (§8). Sebuah respons tidak pernah berisi `data` dan `error` sekaligus.
 
 ### 4.3. Field wajib pada setiap resource
@@ -115,7 +115,7 @@ Zona waktu: server selalu mengirim UTC. Konversi ke zona waktu user (PRD-001 FR-
 | `version` | Integer, naik setiap perubahan (optimistic concurrency, §7) |
 | `createdAt`, `updatedAt` | UTC |
 | `createdBy`, `updatedBy` | ID user (dipakai juga oleh scope `owner`, PRD-001 FR-111) |
-| `status` | Wajib untuk resource berstatus dokumen (`draft`, `submitted`, `cancelled`, …) |
+| `status` | Wajib untuk resource berstatus dokumen: `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done` (§11) |
 
 ### 4.4. Field yang tidak boleh dilihat
 
@@ -179,12 +179,13 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
   - Kunci sama + body berbeda → `422 idempotency_key_reused`.
   - Permintaan pertama masih diproses → `409 request_in_progress`.
 - `operationId` di outbox (`offline-strategy.md` §4) dikirim sebagai `Idempotency-Key`.
+- **Pengecualian endpoint auth modul `core` (PRD-001 Q31):** `Idempotency-Key` diterima tetapi **tidak disimpan**, dan tidak ada replay respons. Alasan: me-replay respons berisi access token, recovery code, atau secret MFA tidak aman; operasi auth sudah sekali pakai lewat rotasi refresh token dan anti-replay. Kontrak tetap mendeklarasikan header (rule `erp-post-idempotency-key`) dengan deskripsi yang menyatakan hal ini.
 
 ### 7.3. Validasi
 
 - Validasi struktur (tipe, wajib, format) → `422 validation_failed` dengan detail per field.
 - Pelanggaran aturan bisnis (stok tidak cukup, periode ditutup) → `422 business_rule_violated` dengan `code` spesifik di `details`.
-- Transisi status yang tidak sah (submit dokumen yang sudah submitted) → `409 invalid_state`.
+- Transisi status yang tidak sah (submit dokumen yang sudah `accepted`) → `409 invalid_state`.
 - Mengubah field tanpa akses `write` → `403 field_forbidden` (tidak diabaikan diam-diam).
 
 ## 8. Error
@@ -215,16 +216,19 @@ Respons cursor: `"page": {"nextCursor": "…", "hasMore": true}`. Cursor bersifa
 | 400 | `tenant_unresolved` | Tenant untuk request tidak dapat ditentukan oleh resolver |
 | 400 | `invalid_i18n_override` | Override istilah terjemahan ditolak (kunci tidak ada di katalog bawaan, sintaks ICU tidak valid, argumen berbeda, HTML, terlalu panjang); `details[].code` memerinci: `unknown_key`, `invalid_syntax`, `param_mismatch`, `html_not_allowed`, `too_long` (PRD-000 FR-25, tahap I5) |
 | 401 | `unauthenticated`, `token_expired` | Token tidak ada/tidak valid/kedaluwarsa |
+| 401 | `invalid_credentials` | Login gagal; seragam untuk email tak dikenal, sandi salah, dan akun nonaktif (modul `core`, PRD-001 FR-101) |
 | 403 | `permission_denied` | Tidak punya permission aksi |
 | 403 | `field_forbidden` | Membaca/memfilter/mengubah field terlarang |
+| 403 | `account_locked` | Akun terkunci karena kegagalan login berulang; tidak membedakan sebab lain agar tidak membocorkan keberadaan akun (modul `core`, PRD-001 FR-101) |
 | 403 | `mfa_required` | Endpoint mensyaratkan MFA (PRD-001 FR-107) |
 | 403 | `module_disabled` | Modul `installed`/`disabled` (PRD-000 FR-19.7) |
 | 404 | `not_found` | Record tidak ada **atau di luar scope user** |
 | 404 | `module_not_found` | Modul belum terpasang |
 | 409 | `invalid_state`, `request_in_progress`, `conflict` | Status dokumen / proses paralel / bentrok unik |
 | 412 | `version_mismatch` | `If-Match` tidak cocok |
-| 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak |
-| 429 | `rate_limited` | Dengan header `Retry-After` |
+| 422 | `validation_failed`, `business_rule_violated`, `idempotency_key_reused` | Data ditolak. Termasuk masukan salah pada endpoint auth yang terautentikasi atau berbody (modul `core`, PRD-001 Q31): sandi saat ini salah (`details[].code` = `wrong_current_password`), kode TOTP/recovery salah (`invalid_code`), token reset tidak sah atau kedaluwarsa (`invalid_token`). **401 hanya untuk kredensial request itu sendiri** (token tidak ada/tidak valid/kedaluwarsa, atau login gagal `invalid_credentials`), agar klien tidak memicu refresh/logout karena masukan salah |
+| 422 | `password_policy_violation` | Sandi baru melanggar kebijakan (modul `core`); `details[].code` hanya memuat pelanggaran generik (`too_short`, `too_long`, `common`), tidak pernah daftar sandi/aturan internal |
+| 429 | `rate_limited` | Dengan header `Retry-After` berupa bilangan bulat detik (dibulatkan ke atas, minimal 1; `httpx.TooManyRequests`). Tidak membedakan sebab (batas IP, identitas sasaran, jeda lockout, pembatas hash) agar tidak membocorkan keberadaan akun (PRD-001 FR-101) |
 | 415 | `unsupported_media_type` | Endpoint yang mewajibkan `Content-Type: application/json` walau body kosong/`{}` (mutasi `/api/platform/modules`, Q32; mutasi `PUT`/`DELETE /api/platform/i18n/overrides/...`, Q34); body JSON biasa yang salah media type tetap `400 bad_request` dengan `details[].code = unsupported_media_type` (Q30) |
 | 500 | `internal_error` | Kesalahan server |
 | 501 | `not_implemented` | Endpoint sudah terdaftar dan terdokumentasi di kontrak tetapi belum disambungkan ke use case (kerangka hasil `make:handler`); sementara, bukan kontrak jangka panjang |
@@ -279,16 +283,23 @@ GET /api/platform/jobs/0193…
 
 ## 11. Dokumen ERP (resource berstatus)
 
-Resource dokumen (pesanan, penyesuaian stok, jurnal) mengikuti siklus standar yang selaras dengan aksi PRD-001:
+Resource dokumen (pesanan, penyesuaian stok, jurnal) mengikuti siklus standar yang selaras dengan aksi PRD-001. Nilai `status` (snake_case, persisten): `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done`.
 
 ```
-draft ──submit──▶ submitted ──cancel──▶ cancelled ──amend──▶ (draft baru, amendedFromId)
-  │                    │
-  └─ PATCH/DELETE      └─ approve (bila modul memakai approval)
+draft ──DELETE──▶ deleted
+  │
+  ├─ submit (tanpa skema persetujuan) ──▶ accepted
+  └─ submit (dengan skema persetujuan) ─▶ pending_approval ──▶ accepted
+                                                       └──▶ rejected
+accepted ──cancel──▶ cancelled
+accepted ──────────▶ done
+cancelled | rejected ──amend──▶ (dokumen baru, status draft, amendedFromId)
 ```
 
-- `PATCH` hanya diizinkan pada `draft`; dokumen `submitted` bersifat tidak dapat diubah (`409 invalid_state`).
-- `amend` membuat dokumen **baru** dengan `amendedFromId`, tidak mengubah dokumen lama (jejak audit tetap utuh).
+- Aksi `submit` tidak menghasilkan status `submitted`: hasilnya langsung `accepted` atau `pending_approval`, ditentukan resource atau kait (skema persetujuan di luar cakupan pedoman ini). Transisi di luar diagram menghasilkan `409 invalid_state`.
+- `PATCH` hanya diizinkan pada `draft`; dokumen berstatus lain bersifat tidak dapat diubah (`409 invalid_state`).
+- `amend` hanya sah dari `cancelled` atau `rejected` dan membuat dokumen **baru** berstatus `draft` dengan `amendedFromId`, tidak mengubah dokumen lama (jejak audit tetap utuh).
+- Dokumen dapat punya **sumbu status tambahan** di luar lifecycle (mis. `billingStatus`, `deliveryStatus` pada pesanan penjualan), masing-masing bernilai enum hanya-baca dengan pasangan transisi sendiri yang boleh mundur (mis. pengiriman sebagian lalu semua barang diretur kembali ke `to_deliver`). Sumbu hanya berubah lewat aksi atau kait server, tidak lewat `PATCH`, dan tetap dapat berubah pada dokumen terkunci hanya dengan pasangan yang sah; perubahan di luar pasangan menghasilkan `409 invalid_state`.
 - Aksi mengembalikan dokumen dalam status terbarunya.
 - Dokumen yang memiliki baris (`lines`) dikirim dan diubah **sebagai satu kesatuan** bersama induknya, bukan lewat endpoint baris terpisah, agar validasi dan total selalu konsisten.
 
@@ -303,6 +314,7 @@ draft ──submit──▶ submitted ──cancel──▶ cancelled ──amen
 | `traceparent` | Request | Propagasi trace OTel (PRD-000 FR-17) |
 | `X-Request-Id` | Respons | Selalu ada (PRD-000 NFR-07) |
 | `ETag` | Respons | Versi record |
+| `X-Erp-Perm-Rev` | Respons | Revisi hak akses (`permission_revision`, bilangan bulat desimal ≥ 1) pada **setiap** respons request yang lolos `Authenticate` (termasuk 403/404/422 setelah autentikasi); tidak ada pada route `Public()` dan pada 401. Klien (hanya UX) memuat ulang `GET /api/bootstrap` bila nilainya lebih besar dari `permRev` tersimpan, agar perubahan role terlihat tanpa login ulang (PRD-001 FR-114, FR-117, Q43). Bukan masukan keputusan otorisasi (server selalu memakai revisi terkininya sendiri) dan tidak memuat data sensitif; aditif (keputusan pemilik produk 4 Nov 2026) |
 | `Location` | Respons | Pada `201`/`202` |
 | `Retry-After` | Respons | Pada `429`/`503` |
 | `Deprecation`, `Sunset` | Respons | Endpoint yang akan dihapus (§14) |
@@ -316,8 +328,9 @@ draft ──submit──▶ submitted ──cancel──▶ cancelled ──amen
 - Skema bersama (amplop `data`, `error`, `page`, tipe desimal, UUID, timestamp) didefinisikan sekali di `contracts/openapi/common.yaml` dan dirujuk lewat `$ref: 'erp:common#/components/schemas/…'`.
 - Route yang didaftarkan lewat `Registrar.Handle` dan operasi di kontrak harus cocok satu-satu (method, path, permission); ketidakcocokan menggagalkan CI.
 - Test kontrak memastikan respons nyata sesuai skema OpenAPI-nya.
-- Ekstensi yang dikenal (semua berawalan `x-erp-`): `permission`, `public`, `classification` (`public|internal|confidential|highly_confidential`; tanpa anotasi = `internal`; klasifikasi route harus sama dengan klasifikasi tertinggi respons 2xx, dihitung rekursif), `singleton` (§2), `allow-put` (§3), `filterable`, `sortable`, `field-group`, `extensible-enum`, dan `allow-highly-confidential` (pengecualian properti respons 2xx `highly_confidential` dengan alasan string tidak kosong, hanya untuk nama data HR `nik`/`npwp`/`bankAccount*`/`salary`, dilarang untuk kredensial dan di luar respons 2xx (Q32 butir 14, 28 Okt 2026); dicetak linter sebagai INFO untuk reviewer; security-guidelines §2, Q32). Daftar rule linter beserta pasalnya ada di [`docs/module-sdk/contracts.md`](../module-sdk/contracts.md).
-- Operasi publik (`x-erp-public`) **tanpa parameter non-header dan tanpa `requestBody`** (mis. `GET /api/bootstrap`) tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); operasi publik dengan parameter path/query atau body tetap wajib mendokumentasikan minimal satu 4xx (tanpa 403, karena tidak ada permission); operasi non-publik wajib 4xx dan 403 (rule `erp-error-codes-documented`, Q32).
+- Ekstensi yang dikenal (semua berawalan `x-erp-`): `permission`, `public`, `classification` (`public|internal|confidential|highly_confidential`; tanpa anotasi = `internal`; klasifikasi route harus sama dengan klasifikasi tertinggi respons 2xx, dihitung rekursif), `singleton` (§2), `allow-put` (§3), `filterable`, `sortable`, `field-group`, `extensible-enum`, dan `allow-highly-confidential` (pengecualian properti respons 2xx `highly_confidential` dengan alasan string tidak kosong, hanya untuk nama data HR `nik`/`npwp`/`bankAccount*`/`salary`, dilarang untuk kredensial dan di luar respons 2xx (Q32 butir 14, 28 Okt 2026); dicetak linter sebagai INFO untuk reviewer; security-guidelines §2, Q32), dan `credential-response` (`x-erp-credential-response: true` **pada properti** respons 2xx: satu-satunya jalan kredensial boleh ada di respons; sah hanya bila (modul, operationId, properti) terdaftar di allowlist linter, saat ini `accessToken` pada login/refresh `secret`/`otpauthUri` pada enroll MFA, dan `codes` (recovery code, tampil sekali sesuai FR-107) pada confirm MFA dan regenerate recovery codes, modul `core`/`platform`; penanda tingkat operasi saja tidak cukup; properti `refresh*` di body selalu ERROR; dicetak INFO; PRD-000 Q42 butir 4, K-C1.4 2 Nov 2026, granularitas 3 Nov 2026, PRD-001 Q16). Daftar rule linter beserta pasalnya ada di [`docs/module-sdk/contracts.md`](../module-sdk/contracts.md).
+- Operasi terautentikasi tanpa permission tertentu (`x-erp-authenticated: true`; keputusan pemilik produk 3 Nov 2026, PRD-001 Q29), mis. `GET /api/bootstrap` (FR-106) dan route auth modul `core` yang dikelola pengguna sendiri (logout, ganti sandi, MFA), tidak punya `x-erp-permission` (dan tidak boleh bersama `x-erp-public`), tidak diwajibkan mendokumentasikan 403 permission, tetapi **wajib** mendokumentasikan 401. Di runtime route ini didaftarkan `Registrar.Handle(method, path, "", h, module.Authenticated())`; Principal dan aturan MFA ADR-0013 §4 tetap ditegakkan, hanya pemeriksaan permission dilewati, dan setiap route berpenanda ini wajib masuk `tests/security/authenticated_routes.txt`.
+- Operasi publik (`x-erp-public`) **tanpa parameter non-header dan tanpa `requestBody`** (mis. `GET /.well-known/jwks.json`) tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); operasi publik dengan parameter path/query atau body tetap wajib mendokumentasikan minimal satu 4xx (tanpa 403, karena tidak ada permission); operasi non-publik wajib 4xx dan 403 (rule `erp-error-codes-documented`, Q32).
 - Tipe TS kontrak dibangkitkan (`erpora contracts:generate`) dan di-commit; CI menggagalkan hasil generate yang basi (`contracts:generate --check`).
 
 ## 14. Evolusi & versioning
@@ -390,11 +403,11 @@ If-Match: "1"
 POST /api/inventory/adjustments/0193…/submit
 If-Match: "2"
 Idempotency-Key: 9a2e…
-→ 200 { "data": { …, "status": "submitted", "version": 3 } }
+→ 200 { "data": { …, "status": "accepted", "version": 3 } }
 
 # 4. Submit ulang (tidak sah)
 POST /api/inventory/adjustments/0193…/submit
-→ 409 { "error": { "code": "invalid_state", "message": "Dokumen sudah disubmit." } }
+→ 409 { "error": { "code": "invalid_state", "message": "Dokumen tidak berstatus draft." } }
 ```
 
 Permission yang terlibat: `inventory.adjustment.create`, `inventory.adjustment.update`, `inventory.adjustment.submit`.

@@ -1,0 +1,10 @@
+schemaVersion: "1"
+kind: fieldType
+key: sdk.money
+export: true
+description: Nilai uang sebagai desimal dua angka di belakang koma. Kode mata uang (currency) ditentukan field pemakai.
+base: {type: decimal, precision: 18, scale: 2}
+classification: internal
+widget: money
+display: money
+operators: [eq, ne, gt, gte, lt, lte, isnull]

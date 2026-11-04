@@ -4,6 +4,7 @@ export {};
 declare module "./types" {
   interface I18nCatalogs {
     platform: {
+      "action.manage": {};
       "app.name": {};
       "breadcrumb.home": {};
       "breadcrumb.pathDescription": {};
@@ -25,12 +26,14 @@ declare module "./types" {
       "dock.label": {};
       "dock.loadError": {};
       "dock.more": { count: string | number };
+      "errors.account_locked": {};
       "errors.bad_request": {};
       "errors.business_rule_violated": {};
       "errors.conflict": {};
       "errors.field_forbidden": {};
       "errors.idempotency_key_reused": {};
       "errors.internal_error": {};
+      "errors.invalid_credentials": {};
       "errors.invalid_filter": {};
       "errors.invalid_i18n_override": {};
       "errors.invalid_sort": {};
@@ -43,6 +46,7 @@ declare module "./types" {
       "errors.not_found": {};
       "errors.not_implemented": {};
       "errors.not_ready": {};
+      "errors.password_policy_violation": {};
       "errors.permission_denied": {};
       "errors.rate_limited": {};
       "errors.request_in_progress": {};
@@ -53,6 +57,7 @@ declare module "./types" {
       "errors.unsupported_media_type": {};
       "errors.validation_failed": {};
       "errors.version_mismatch": {};
+      "fieldGroup.general": {};
       "fixedItems.search": {};
       "fixedItems.todo": {};
       "logoMenu.about": {};
@@ -214,6 +219,9 @@ declare module "./types" {
       "palette.title": {};
       "panel.loadError": {};
       "panel.noDesk": {};
+      "resource.desks": {};
+      "resource.i18n": {};
+      "resource.modules": {};
       "routeError.description": {};
       "routeError.requestId": { requestId: string | number };
       "routeError.title": {};
@@ -251,11 +259,13 @@ declare module "./types" {
       "todo.description": {};
       "todo.title": {};
       "user.anonymous": {};
+      "user.changePassword": {};
       "user.manageAccount": {};
       "user.menu": {};
       "user.reload": {};
       "user.settings": {};
       "user.signOut": {};
+      "user.signOutFailed": {};
       "user.unavailable": {};
     };
     ui: {

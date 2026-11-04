@@ -1,9 +1,12 @@
 package commands
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"erpora/internal/devtools/gen"
+	"erpora/internal/devtools/metadatatools/generate"
 )
 
 // makeFlags adalah flag bersama semua command make:*.
@@ -50,9 +53,9 @@ func newMakeHandler() *cobra.Command {
 	var route, permission string
 	cmd := &cobra.Command{
 		Use:   "make:handler <module> <Name> --route \"METHOD /path\" --permission <slug.resource.action>",
-		Short: "Buat endpoint: handler + test IDOR, route, capability, dan operasi OpenAPI sekaligus",
+		Short: "Buat endpoint: handler + test IDOR, route, resource/aksi manifest, dan operasi OpenAPI sekaligus",
 		Long: "Membuat handler (internal/presentation/http/<name>.go) beserta test (endpoint ber-ID selalu disertai kerangka test IDOR),\n" +
-			"mendaftarkan route di module.go (Classify + MaxBodyBytes), menambah capability di module.json, dan operasi serta skema di openapi.yaml.\n" +
+			"mendaftarkan route di module.go (Classify + MaxBodyBytes), memastikan permission turunan resources module.json (aksi standar atau resource baru ditambahkan; aksi kustom dideklarasikan manual), dan membuat operasi serta skema di openapi.yaml.\n" +
 			"Bentuk route: GET|POST /<koleksi>, GET|PATCH|DELETE /<koleksi>/{id}, POST /<koleksi>/{id}/<aksi>. PUT ditolak (api-guidelines section 3).",
 		GroupID: GroupMake,
 		Args:    cobra.ExactArgs(2),
@@ -66,7 +69,7 @@ func newMakeHandler() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&route, "route", "", "\"METHOD /path\" relatif modul, mis. \"GET /items/{id}\"")
-	cmd.Flags().StringVar(&permission, "permission", "", "permission <slug>.<resource>.<action> (ditambahkan ke capabilities)")
+	cmd.Flags().StringVar(&permission, "permission", "", "permission <slug>.<resource>.<action> (harus turunan resources module.json; resource/aksi standar baru ditambahkan otomatis)")
 	f.bind(cmd)
 	return cmd
 }
@@ -93,24 +96,30 @@ func newMakeLayer(use, args, short string, build func(root string, args []string
 
 func newMakeModule() *cobra.Command {
 	var f makeFlags
-	var frontend bool
+	var frontend, metadata bool
 	var publisher string
 	var depends []string
 	cmd := &cobra.Command{
-		Use:   "make:module <name> [--frontend] [--depends k1,k2] [--publisher id]",
+		Use:   "make:module <name> [--frontend] [--metadata] [--depends k1,k2] [--publisher id]",
 		Short: "Buat modul baru turunan example yang langsung lolos gate",
 		Long: "Membuat modules/<dir> (Go module sendiri) lengkap dengan manifest, kontrak OpenAPI, empat lapisan, migrasi, dan test, lalu\n" +
 			"mendaftarkannya di go.work, go.mod, dan internal/app/modules.go. <name> adalah slug kebab-case (mis. stock-opname); direktori dan package\n" +
-			"memakai slug tanpa tanda hubung (stockopname). --frontend juga membuat modules/<dir>/web (@erpora/module-<dir>) dan mendaftarkannya di web/.",
+			"memakai slug tanpa tanda hubung (stockopname). --frontend juga membuat modules/<dir>/web (@erpora/module-<dir>) dan mendaftarkannya di web/.\n" +
+			"--metadata menambah kerangka metadata resource (metadata/item.resource.yaml, resource <slug>.item) lalu membangkitkan keluarannya\n" +
+			"(metadata:generate) sehingga metadata:check dan metadata:generate --check langsung hijau.",
 		GroupID: GroupMake,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return f.apply(c, func(root string) (gen.Plan, error) {
-				return gen.MakeModule(root, gen.ModuleOptions{Name: args[0], Publisher: publisher, Frontend: frontend, Depends: depends})
+				return gen.MakeModule(root, gen.ModuleOptions{
+					Name: args[0], Publisher: publisher, Frontend: frontend, Depends: depends,
+					Metadata: metadata, MetadataGenerate: generateMetadata,
+				})
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&frontend, "frontend", false, "buat juga paket frontend modules/<dir>/web")
+	cmd.Flags().BoolVar(&metadata, "metadata", false, "tambah kerangka metadata resource dan bangkitkan keluarannya (metadata:generate)")
 	cmd.Flags().StringSliceVar(&depends, "depends", nil, "key modul dependensi, dipisah koma (mis. acme.example); platform.core selalu ditambahkan")
 	cmd.Flags().StringVar(&publisher, "publisher", "acme", "id publisher untuk key modul (<publisher>.<slug>)")
 	f.bind(cmd)
@@ -146,4 +155,11 @@ func newMakeMigration() *cobra.Command {
 	cmd.Flags().StringVar(&platform, "platform", "", "migrasi platform: control atau tenant")
 	f.bind(cmd)
 	return cmd
+}
+
+// generateMetadata membangkitkan keluaran metadata satu modul (langkah Post make:module --metadata); gagal bila
+// metadata:check bergalat.
+func generateMetadata(_ context.Context, root, dir string) error {
+	_, err := generate.GenerateWorkspace(root, generate.Options{Modules: []string{dir}})
+	return err
 }

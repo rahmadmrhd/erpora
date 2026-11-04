@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"erpora/internal/platform/i18n"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
+	"erpora/sdk/httpx"
 )
 
 // ReadinessChecker memeriksa kesiapan layanan; nil = siap. Implementasi WAJIB read-only.
@@ -44,11 +46,21 @@ type Deps struct {
 	// I18n (opsional) menegosiasikan bahasa dari Accept-Language dan memasang locale serta Resolver terjemahan
 	// ke context setiap request (PRD-000 FR-25); nil = tanpa i18n.
 	I18n *i18n.Service
-	// Authenticate membungkus route non-Public; nil = pass-through (autentikasi nyata datang dari PRD-001).
+	// Authenticate membungkus route non-Public dan berjalan SETELAH tenantContext (ADR-0013 §4: klaim tid dicocokkan
+	// dengan tenant context); nil = pass-through (dipakai tes router tanpa autentikasi).
 	Authenticate func(http.Handler) http.Handler
+	// IPLimit membungkus route ber-RateLimited() (endpoint auth/token): batas laju per IP klien, setelah tenantContext
+	// dan SEBELUM Authenticate; nil = tanpa batas.
+	IPLimit func(http.Handler) http.Handler
+	// TrustedProxies (ERP_TRUSTED_PROXIES) adalah proxy yang boleh dipercaya melaporkan IP klien lewat X-Forwarded-For
+	// (lihat resolveClientIP). Kosong (bawaan) = IP klien selalu alamat peer TCP.
+	TrustedProxies []netip.Prefix
+	// PrincipalLimit membungkus route ber-RateLimited() yang non-Public: batas laju per principal, SETELAH Authenticate;
+	// nil = tanpa batas.
+	PrincipalLimit func(http.Handler) http.Handler
 }
 
-type routeConfig struct{ noTenant, public bool }
+type routeConfig struct{ noTenant, public, rateLimited bool }
 
 // RouteOption mengubah perilaku rantai middleware sebuah route.
 type RouteOption func(*routeConfig)
@@ -58,6 +70,11 @@ func WithoutTenant() RouteOption { return func(c *routeConfig) { c.noTenant = tr
 
 // Public melewati Authenticate (endpoint tanpa autentikasi). Tidak memengaruhi tenantContext.
 func Public() RouteOption { return func(c *routeConfig) { c.public = true } }
+
+// RateLimited menandai endpoint auth/token (login, forgot, reset, refresh, change, mfa/*; ADR-0013 §4): Deps.IPLimit
+// berlaku untuk route ini (Public maupun tidak) dan Deps.PrincipalLimit bila route non-Public. Route lain tidak
+// dibatasi di sini: batas per IP untuk seluruh API akan menghambat aplikasi biasa.
+func RateLimited() RouteOption { return func(c *routeConfig) { c.rateLimited = true } }
 
 // Router adalah http.Handler berbasis ServeMux dengan rantai middleware per route.
 type Router struct {
@@ -83,26 +100,38 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Del("Baggage")
 	id := requestIDFor(req)
 	setBaseHeaders(w.Header(), id)
-	req = req.WithContext(observability.WithRequestID(req.Context(), id))
-	r.mux.ServeHTTP(w, req)
+	ctx := observability.WithRequestID(req.Context(), id)
+	// IP klien = peer TCP, atau hop X-Forwarded-For pertama yang bukan proxy tepercaya bila peer termasuk
+	// ERP_TRUSTED_PROXIES (resolveClientIP). Batas laju IP dan lockout bergantung pada ini (docs/operations/deployment.md).
+	ctx = httpx.WithClientIP(ctx, resolveClientIP(req, r.deps.TrustedProxies))
+	r.mux.ServeHTTP(w, req.WithContext(ctx))
 }
 
-// Handle mendaftarkan pattern dengan rantai:
-// otelhttp -> localeEarly -> recover -> requestScope -> Authenticate (kecuali Public) -> tenantContext -> localeContext -> h.
+// Handle mendaftarkan pattern dengan rantai (luar ke dalam; ADR-0013 §4):
+// otelhttp -> localeEarly -> recover -> requestScope -> tenantContext -> localeContext -> IPLimit (hanya RateLimited)
+// -> Authenticate (kecuali Public) -> PrincipalLimit (RateLimited non-Public) -> h.
 // recover berada di dalam span otelhttp agar panic tercatat pada span aktif (lihat recoverMW).
+// Route RateLimited (endpoint auth) dibungkus lapisan terluar yang menandai SEMUA responsnya Cache-Control: no-store
+// (ADR-0013 §1), termasuk respons buatan platform sebelum handler (tenant tak terselesaikan, 401, 429, panic).
 func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 	var cfg routeConfig
 	for _, o := range opts {
 		o(&cfg)
+	}
+	if !cfg.public && cfg.rateLimited && r.deps.PrincipalLimit != nil {
+		h = r.deps.PrincipalLimit(h)
+	}
+	if !cfg.public && r.deps.Authenticate != nil {
+		h = r.deps.Authenticate(h)
+	}
+	if cfg.rateLimited && r.deps.IPLimit != nil {
+		h = r.deps.IPLimit(h)
 	}
 	if r.deps.I18n != nil {
 		h = localeContext(r.deps.I18n, h)
 	}
 	if !cfg.noTenant {
 		h = tenantContext(r.deps.Resolver, r.deps.Connector, h)
-	}
-	if !cfg.public && r.deps.Authenticate != nil {
-		h = r.deps.Authenticate(h)
 	}
 	h = requestScope(r.deps.Logger, pattern, r.nPlusOneThreshold(), h)
 	h = recoverMW(r.deps.Logger, h)
@@ -116,10 +145,22 @@ func (r *Router) Handle(pattern string, h http.Handler, opts ...RouteOption) {
 		// Hanya W3C trace context yang diekstrak; baggage inbound tidak dipercaya.
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 	)
+	if cfg.rateLimited {
+		h = noStoreAuth(h)
+	}
 	r.mux.Handle(pattern, h)
 	if hasMethod(pattern) {
 		r.probe.Handle(pattern, http.NotFoundHandler())
 	}
+}
+
+// noStoreAuth menetapkan Cache-Control: no-store sebelum respons apa pun ditulis, sehingga setiap respons route
+// auth (sukses maupun galat, dari platform maupun modul) tidak boleh disimpan cache (ADR-0013 §1).
+func noStoreAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // hasMethod: pattern berbentuk "METHOD /path".

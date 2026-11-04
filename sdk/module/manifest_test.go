@@ -43,9 +43,9 @@ func TestParseManifest_Desk(t *testing.T) {
     "label": "desk.title", "icon": "file-text",
     "dashboard": {"label": "desk.dashboard", "icon": "gauge"},
     "menus": [
-      {"id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read"},
+      {"id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.note.read"},
       {"id": "more", "label": "nav.more", "icon": "folder", "children": [
-        {"id": "archive", "label": "nav.archive", "icon": "archive", "to": "/archive", "permission": "example.notes.read"}
+        {"id": "archive", "label": "nav.archive", "icon": "archive", "to": "/archive", "permission": "example.note.read"}
       ]}
     ],
     "settings": {"x": 1}
@@ -62,7 +62,7 @@ func TestParseManifest_Desk(t *testing.T) {
 	if d.Dashboard == nil || d.Dashboard.Label != "desk.dashboard" || d.Dashboard.Icon != "gauge" {
 		t.Errorf("Dashboard = %+v", d.Dashboard)
 	}
-	if len(d.Menus) != 2 || d.Menus[0].To != "/notes" || d.Menus[0].Permission != "example.notes.read" {
+	if len(d.Menus) != 2 || d.Menus[0].To != "/notes" || d.Menus[0].Permission != "example.note.read" {
 		t.Fatalf("Menus = %+v", d.Menus)
 	}
 	if g := d.Menus[1]; g.ID != "more" || len(g.Children) != 1 || g.Children[0].To != "/archive" || g.Children[0].Icon != "archive" {

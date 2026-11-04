@@ -5,6 +5,12 @@
   "nav": {
     "summary": "Ringkasan"
   },
+  "resource": {
+    "summary": "Ringkasan"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
   "page": {
     "summary": {
       "title": "Ringkasan",

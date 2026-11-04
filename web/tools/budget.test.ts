@@ -127,8 +127,8 @@ describe("initialJsGzip", () => {
 });
 
 describe("budgetViolation", () => {
-  test("tepat 200 KB lolos, satu byte lebih gagal dengan pesan berisi ukuran", () => {
-    expect(BUDGET).toBe(200 * 1024);
+  test("tepat 210 KB lolos, satu byte lebih gagal dengan pesan berisi ukuran", () => {
+    expect(BUDGET).toBe(210 * 1024);
     expect(budgetViolation(BUDGET)).toBeNull();
     expect(budgetViolation(BUDGET + 1)).toContain(String(BUDGET + 1));
   });

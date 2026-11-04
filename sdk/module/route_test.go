@@ -19,3 +19,12 @@ func TestResolveRouteOptions_InvalidClassificationSticks(t *testing.T) {
 		t.Errorf("kelas tidak valid harus tetap tersimpan, got %q", got.Classification)
 	}
 }
+
+func TestResolveRouteOptions_RequireMFA(t *testing.T) {
+	if ResolveRouteOptions().RequireMFA {
+		t.Fatal("RequireMFA harus mati secara bawaan")
+	}
+	if !ResolveRouteOptions(MaxBodyBytes(10), RequireMFA()).RequireMFA {
+		t.Fatal("RequireMFA() harus menyalakan RouteConfig.RequireMFA")
+	}
+}

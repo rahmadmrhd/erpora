@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"erpora/internal/platform/httpserver"
+	"erpora/internal/platform/identity"
 	"erpora/internal/platform/modules/lifecycle"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/store"
@@ -25,14 +26,20 @@ import (
 	"erpora/sdk/module"
 )
 
-// Capabilities adalah capability milik platform.core untuk manajemen modul.
-var Capabilities = []string{"platform.modules.read", "platform.modules.manage"}
+// Resources adalah resource milik platform.core untuk manajemen modul (PRD-001 FR-110); aksi "manage" adalah aksi
+// kustom. Didaftarkan di composition root lewat registry.Options.PlatformResources.
+var Resources = []module.Resource{{
+	Key: "platform.modules", Label: "resource.modules",
+	Actions:       []string{"read"},
+	CustomActions: []module.CustomAction{{Key: "manage", Label: "action.manage"}},
+	FieldGroups:   []module.FieldGroup{{Key: "general", Label: "fieldGroup.general", Classification: "internal", Default: true}},
+}}
+
+// Capabilities adalah permission turunan Resources (platform.modules.read, platform.modules.manage).
+var Capabilities = module.PermissionsOf(Resources)
 
 // SyncWait adalah batas tunggu aksi mutasi sebelum API membalas 202 + Location (keputusan 7).
 const SyncWait = 30 * time.Second
-
-// APIActor adalah actor audit untuk operasi lewat API sebelum PRD-001 (autentikasi) tersedia.
-const APIActor = "api:dev"
 
 const (
 	permRead   = "platform.modules.read"
@@ -226,6 +233,13 @@ var validOps = map[string]lifecycle.Op{
 }
 
 func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenancy.TenantID) {
+	// Aktor audit selalu dari Principal request (`user:<id>`), bukan nilai tetap atau masukan klien. Authenticate sudah
+	// menolak request tanpa token; pemeriksaan ini gagal tertutup bila rantai middleware salah rakit (tanpa Principal).
+	actor, ok := identity.ActorFromContext(r.Context())
+	if !ok {
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "unauthenticated", "autentikasi diperlukan", nil)
+		return
+	}
 	key := r.PathValue("key")
 	op, ok := validOps[r.PathValue("operation")]
 	if !ok {
@@ -279,12 +293,12 @@ func (a *API) action(w http.ResponseWriter, r *http.Request, be Backend, t tenan
 			}
 		}
 		if op == lifecycle.OpRetry {
-			res, err := be.RetryModule(ctx, t, key, APIActor, onStarted, ifMatch)
+			res, err := be.RetryModule(ctx, t, key, actor, onStarted, ifMatch)
 			o = outcome{results: []lifecycle.Result{res}, err: err}
 			return
 		}
 		res, err := be.Execute(ctx, lifecycle.Request{
-			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: APIActor, OnStarted: onStarted, IfMatch: ifMatch,
+			Tenant: t, Op: op, Key: key, WithDeps: body.WithDeps, Enable: body.Enable, Actor: actor, OnStarted: onStarted, IfMatch: ifMatch,
 		})
 		o = outcome{results: res, err: err}
 	}()

@@ -58,3 +58,29 @@ func TestRegister_InvalidRouteOptionsCollected(t *testing.T) {
 		t.Errorf("invalid_route_option = %d, want 4", n)
 	}
 }
+
+func TestRegister_RequireMFAOptionRecordedAndRejectedOnPublic(t *testing.T) {
+	reg, err := Build(testOpts(), notes(func(r module.Registrar) error {
+		r.Handle("GET", "/a", "notes.items.read", okHandler)
+		r.Handle("POST", "/b", "notes.items.read", okHandler, module.RequireMFA())
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, rt := range reg.Routes() {
+		got[rt.Method] = rt.RequireMFA
+	}
+	if got["GET"] || !got["POST"] {
+		t.Errorf("RequireMFA per route = %v", got)
+	}
+	_, err = Build(testOpts(), notes(func(r module.Registrar) error {
+		r.Public("GET", "/c", okHandler, module.RequireMFA())
+		return nil
+	}))
+	var be *Error
+	if !errors.As(err, &be) || len(be.Problems) != 1 || be.Problems[0].Code != CodeInvalidRouteOption {
+		t.Fatalf("RequireMFA pada Public harus invalid_route_option, err = %v", err)
+	}
+}

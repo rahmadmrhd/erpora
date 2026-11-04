@@ -1,0 +1,10 @@
+schemaVersion: "1"
+kind: fieldType
+key: sdk.percentage
+export: true
+description: Persentase 0 sampai 100 dengan dua desimal. Resource yang butuh rentang lain menimpa minimum atau maximum.
+base: {type: decimal, precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+classification: internal
+widget: percentage
+display: percent
+operators: [eq, ne, gt, gte, lt, lte, isnull]

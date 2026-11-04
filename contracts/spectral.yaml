@@ -18,7 +18,7 @@ rules:
   oas3-unused-component: off
 
   erp-path-module-prefix:
-    description: Path modul diawali /api/{slug}/; path platform /api/platform/ atau /api/bootstrap (api-guidelines §2, FR-23.1).
+    description: Path modul diawali /api/{slug}/; path platform /api/platform/ atau /api/bootstrap, ditambah dokumen standar /.well-known/* (api-guidelines §2, FR-23.1; PRD-001 Q25).
     severity: error
     message: "{{error}}"
     given: $
@@ -95,7 +95,7 @@ rules:
     resolved: false
     then: { function: erpDecimalNotNumber }
   erp-success-envelope:
-    description: Respons sukses JSON berbentuk {data} (api-guidelines §4.2).
+    description: Respons sukses JSON berbentuk {data} (api-guidelines §4.2); satu-satunya pengecualian adalah x-erp-raw-response pada dokumen /.well-known/* kontrak platform (PRD-001 Q25).
     severity: error
     message: "{{error}}"
     given: $
@@ -201,3 +201,18 @@ rules:
     given: $
     resolved: false
     then: { function: erpHighlyExceptions }
+  erp-credential-response-valid:
+    description: x-erp-credential-response hanya pada properti respons 2xx yang terdaftar di allowlist (modul, operationId, properti); properti refresh* di body respons selalu error (PRD-000 Q42 butir 4, security-guidelines §2).
+    severity: error
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpCredentialResponseValid }
+  # Rule erp-* berseverity info kedua: setiap operasi yang mengembalikan kredensial dicetak agar reviewer meninjaunya.
+  erp-credential-response-exception:
+    description: Daftar operasi yang mengembalikan kredensial lewat x-erp-credential-response untuk ditinjau reviewer (PRD-000 Q42 butir 4, security-guidelines §2).
+    severity: info
+    message: "{{error}}"
+    given: $
+    resolved: false
+    then: { function: erpCredentialResponseExceptions }

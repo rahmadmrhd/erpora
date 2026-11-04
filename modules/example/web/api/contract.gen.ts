@@ -77,29 +77,35 @@ export type components = {
       /** Format: int64 */
       total: number;
     };
-    /**
-     * Format: date-time
-     * @description ISO 8601 UTC, mis. 2026-10-21T07:15:00Z.
-     */
-    "common.Timestamp": string;
-    /**
-     * Format: uuid
-     * @description UUID (v7 untuk ID baru).
-     */
-    "common.Uuid": string;
+    /** @description Catatan sederhana modul referensi example (tabel example_notes). */
     Note: {
-      createdAt: components["schemas"]["common.Timestamp"];
-      id: components["schemas"]["common.Uuid"];
+      /** Format: date-time */
+      readonly createdAt: string;
+      /** Format: uuid */
+      readonly createdBy: string | null;
+      /** Format: uuid */
+      readonly id: string;
       title: string;
-      updatedAt: components["schemas"]["common.Timestamp"];
+      /** Format: date-time */
+      readonly updatedAt: string;
+      /** Format: uuid */
+      readonly updatedBy: string | null;
       /** Format: int64 */
-      version: number;
+      readonly version: number;
     };
     /**
      * Format: int64
      * @description API publik untuk modul lain (contract.Notes.Count); jumlah notes tenant aktif.
      */
     NoteCount: number;
+    /** @description Body pembuatan example.note; hanya field yang boleh ditulis. */
+    NoteCreate: {
+      title: string;
+    };
+    /** @description Body perubahan sebagian (PATCH) example.note; semua field opsional. */
+    NoteUpdate: {
+      title?: string;
+    };
   };
   responses: {
     /** @description Parameter atau body salah (bad_request). */
@@ -158,9 +164,11 @@ export interface operations {
            *       "data": [
            *         {
            *           "createdAt": "2026-10-21T07:15:00Z",
+           *           "createdBy": null,
            *           "id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
            *           "title": "Catatan pertama",
            *           "updatedAt": "2026-10-21T07:15:00Z",
+           *           "updatedBy": null,
            *           "version": 1
            *         }
            *       ],

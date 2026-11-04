@@ -5,6 +5,13 @@
   "nav": {
     "notes": "Catatan"
   },
+  "resource": {
+    "ping": "Ping",
+    "note": "Catatan"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
   "page": {
     "notes": {
       "title": "Catatan",

@@ -8,7 +8,7 @@ Panduan kontrak untuk penulis modul (PRD-000 FR-23). Bentuk wajib endpoint ada d
 | Pemilik | File | Isi |
 | --- | --- | --- |
 | Platform (bersama) | `contracts/openapi/common.yaml` | Hanya komponen: amplop, `Decimal`, `Uuid`, `Timestamp`, parameter/header standar, respons error |
-| Platform | `contracts/openapi/platform.yaml` | `/api/bootstrap`, `/api/platform/*` |
+| Platform | `contracts/openapi/platform.yaml` | `/api/bootstrap`, `/api/platform/*`, `/.well-known/jwks.json` |
 | Setiap modul | `modules/<dir>/openapi.yaml` | Path di bawah `/api/<slug>/` saja; di-embed lewat `module.ContractSource` (`OpenAPI() []byte`) |
 
 Semua kontrak memakai `openapi: 3.1.0`; YAML dengan anchor/alias ditolak. Rujukan lintas dokumen hanya `erp:<common|platform|slug>#/<pointer>`
@@ -19,34 +19,38 @@ Pada spec gabungan nama skema diberi namespace `<slug>.<NamaSkema>` (`common` da
 
 | Ekstensi | Dipakai pada | Arti |
 | --- | --- | --- |
-| `x-erp-permission` | operasi | Permission `<slug>.<resource>.<action>` (platform: `platform.<resource>.<action>`); harus ada di `capabilities` manifest |
+| `x-erp-permission` | operasi | Permission `<slug>.<resource>.<action>` (platform: `platform.<resource>.<action>`); harus berupa permission turunan `resources` manifest (`<resource>.<aksi>`) |
 | `x-erp-public` | operasi | Route tanpa permission (`Registrar.Public`) |
+| `x-erp-authenticated` | operasi | Route yang cukup dengan login, tanpa permission tertentu (PRD-001 Q29, disetujui pemilik produk 3 Nov 2026): `Registrar.Handle(method, path, "", h, module.Authenticated())` pada modul, atau route platform langsung di router (`GET /api/bootstrap`). Tanpa `x-erp-permission` dan tanpa 403 permission, tetapi 401 wajib didokumentasikan; Principal dan aturan MFA tetap berlaku. Test kesesuaian memeriksa route non-publik tanpa permission ↔ penanda ini, dan route berpenanda ini wajib masuk `tests/security/authenticated_routes.txt` |
 | `x-erp-classification` | properti, parameter | `public`, `internal`, `confidential`, `highly_confidential` (security-guidelines §2). Tanpa anotasi dianggap `internal` |
 | `x-erp-singleton` | path item | Resource tunggal atau nama tetap yang tidak dijamakkan (`/api/example/ping`, `…/modules/{key}/history`); api-guidelines §2 |
 | `x-erp-allow-put` | operasi | Mengizinkan `PUT` (api-guidelines §3) |
 | `x-erp-filterable`, `x-erp-sortable` | properti | Field yang boleh difilter/diurutkan (api-guidelines §5) |
 | `x-erp-field-group` | properti | Field group untuk masking (security-guidelines §2) |
 | `x-erp-extensible-enum` | enum | Nilai baru boleh ditambah tanpa breaking (api-guidelines §14.1) |
+| `x-erp-generated` | skema (`components.schemas`) | Skema dibangkitkan `metadata:generate` dari berkas metadata; tidak boleh diedit tangan (§9) |
+| `x-erp-decimal` | properti desimal | `{precision, scale, minimum?, maximum?}` dari metadata; kontrak hanya informasi, server menegakkan presisi, skala, dan rentang |
+| `x-erp-credential-response` | properti respons 2xx (K-C1.4; allowlist 3 Nov 2026, PRD-001 Q16) | Penanda `true` agar properti kredensial boleh tampil di respons 2xx. Sah hanya bila (modul, operationId, properti) terdaftar di allowlist linter: `accessToken` pada `login`, `refreshSession`, `verifyMfa`, `recoverMfa`, dan `confirmMfa` (di `session`); `secret`/`otpauthUri` pada `enrollMfa`; `codes` (recovery code, tampil sekali sesuai FR-107) pada `confirmMfa` dan `regenerateRecoveryCodes`; semuanya modul `core` (modul `platform` belum punya entri). Penanda tingkat operasi saja tidak cukup; ERROR di luar allowlist, pada requestBody, parameter, atau respons non-2xx. Properti `refresh*` di body **selalu ERROR** (refresh token hanya cookie). Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store`). Dicetak INFO `erp-credential-response-exception` (PRD-000 Q42 butir 4; security-guidelines §2) |
 | `x-erp-allow-highly-confidential` | properti respons 2xx | Pengecualian eksplisit agar properti `highly_confidential` boleh tampil di respons; hanya untuk nama data HR (`nik`, `npwp`, `bankAccount*`, `salary`), ERROR pada nama kredensial/nama lain dan di luar properti respons 2xx (Q32 butir 14). Nilai: alasan string tidak kosong; wajib bersama `x-erp-classification: highly_confidential`. Tidak menurunkan klasifikasi (route tetap `highly_confidential`, `no-store` berlaku). Dicetak linter sebagai INFO `erp-highly-confidential-exception` untuk ditinjau reviewer (Q32) |
 
 ## 3. Linter: rule → pasal
 
 `erpora contracts:lint [module]` menjalankan Spectral (terpin di `web/package.json`, dijalankan Bun; tanpa `bun x`/`npx`) dengan ruleset
 `contracts/spectral.yaml` + fungsi kustom `contracts/spectral-functions/`. Seluruh rule `erp-*` berseverity `error` dan pesannya menyebut pasalnya.
-Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`info`: dicetak sebagai `INFO …`, exit code tetap 0). Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, `oas3-api-servers`, `operation-tags`, `openapi-tags`, dan
+Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` dan `erp-credential-response-exception` (`info`: dicetak sebagai `INFO …`, exit code tetap 0). Dasarnya `spectral:oas` (`recommended`), dengan `info-contact`, `info-license`, `oas3-api-servers`, `operation-tags`, `openapi-tags`, dan
 `oas3-unused-component` dimatikan (yang terakhir karena komponen diekspor ke dokumen lain lewat `erp:`).
 
 | Rule | Menegakkan | Pasal |
 | --- | --- | --- |
-| `erp-path-module-prefix` | Path modul `/api/<slug>/…`; platform `/api/platform/` atau `/api/bootstrap` | api-guidelines §2; FR-23.1 |
+| `erp-path-module-prefix` | Path modul `/api/<slug>/…`; platform `/api/platform/`, `/api/bootstrap`, atau dokumen standar `/.well-known/*` (daftar izin ketat di `apicontract.Parse`: hanya `/.well-known/jwks.json`) | api-guidelines §2; FR-23.1; PRD-001 Q25 |
 | `erp-path-kebab-case`, `erp-path-no-trailing-slash`, `erp-path-no-crud-verb` | Segmen kebab-case, parameter camelCase, tanpa `/`, tanpa kata kerja CRUD | §2 |
 | `erp-path-collection-plural` | Koleksi terakhir jamak (kecuali `x-erp-singleton` atau aksi `POST`) | §2 |
 | `erp-path-max-nesting` | Maksimal satu sub-koleksi setelah `{id}` | §2 |
-| `erp-operation-permission` | `x-erp-permission` berformat benar atau `x-erp-public` | §1, §13 |
+| `erp-operation-permission` | `x-erp-permission` berformat benar, `x-erp-public`, atau `x-erp-authenticated` | §1, §13 |
 | `erp-operation-id` | `operationId` ada, camelCase, unik | §13 |
 | `erp-property-camel-case`, `erp-enum-snake-case` | Nama properti dan nilai enum | §4.1 |
-| `erp-decimal-not-number` | Uang/kuantitas string desimal, bukan `number` | §4.1 |
-| `erp-success-envelope` | Respons sukses JSON berbentuk `{data}` | §4.2 |
+| `erp-decimal-not-number` | Uang/kuantitas string desimal, bukan `number`: `$ref` ke `Decimal`, atau `oneOf` berisi `$ref` Decimal dan `{type: 'null'}` untuk yang nullable (K21, 1 Nov 2026); `number` dan `oneOf` tanpa Decimal ditolak | §4.1 |
+| `erp-success-envelope` | Respons sukses JSON berbentuk `{data}`; pengecualian hanya operasi `/.well-known/*` kontrak platform yang bertanda `x-erp-raw-response: true` (bentuk RFC, mis. JWKS `{keys}`) | §4.2; PRD-001 Q25 |
 | `erp-error-standard` | 4xx/5xx memakai komponen error `erp:common` | §8 |
 | `erp-collection-pagination` | `GET` koleksi memakai `page`+`pageSize` atau `cursor`+`limit` | §6 |
 | `erp-post-idempotency-key` | `POST` punya header `Idempotency-Key` | §7.2 |
@@ -54,12 +58,14 @@ Rule `erp-*` berseverity `error` kecuali `erp-highly-confidential-exception` (`i
 | `erp-no-put` | `PUT` hanya dengan `x-erp-allow-put` | §3 |
 | `erp-ref-dependency` | `erp:<slug>` hanya ke dependensi manifest | FR-23.1 |
 | `erp-examples` | Respons 2xx dan `requestBody` JSON punya contoh | §13 |
-| `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tanpa parameter non-header dan tanpa `requestBody` tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); publik dengan masukan tetap wajib minimal satu 4xx | §13 |
+| `erp-error-codes-documented` | Operasi mendokumentasikan 4xx dan `403`; `404` bila ada parameter path; `400` dan `422` bila ada `requestBody`. **Operasi publik** (`x-erp-public`) tanpa parameter non-header dan tanpa `requestBody` tidak diwajibkan mendokumentasikan 4xx/403 (tidak ada jalur error klien); publik dengan masukan tetap wajib minimal satu 4xx. Operasi `x-erp-authenticated` tanpa 403 tetapi wajib `401` | §13 |
 | `erp-classification-valid` | `x-erp-classification` salah satu dari empat kelas | security-guidelines §2 |
-| `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential` | FR-24.2; security-guidelines §2, §3.4 |
+| `erp-no-highly-confidential-in-response` | Respons tidak memuat properti `highly_confidential`, kecuali pengecualian `x-erp-allow-highly-confidential` (data HR) atau `x-erp-credential-response: true` pada properti (kredensial, allowlist modul/operationId/properti) | FR-24.2; security-guidelines §2, §3.4 |
 | `erp-no-sensitive-in-url` | Data sensitif (mis. `token`, `password`) tidak lewat path atau query | FR-24.2 |
 | `erp-sensitive-needs-classification` | Properti/parameter bernama sensitif (dicocokkan **per token camelCase**: `newPassword`, `clientSecret`, `resetToken`, `bankAccountNumber`, …) wajib `x-erp-classification: highly_confidential`: `password`, `secret`, `token`, `apiKey`, `privateKey`, `nik`, `npwp`, `bankAccount`, `salary` (Q32) | FR-24.2; security-guidelines §2 |
-| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama; hanya pada properti respons 2xx bernama data HR (bukan kredensial) | FR-24.2; security-guidelines §2 |
+| `erp-allow-highly-confidential-valid` | `x-erp-allow-highly-confidential` berisi alasan string tidak kosong dan menyertai `x-erp-classification: highly_confidential` pada elemen yang sama; hanya pada properti respons 2xx bernama data HR (bukan kredensial; kredensial hanya lewat `x-erp-credential-response`) | FR-24.2; security-guidelines §2 |
+| `erp-credential-response-valid` | `x-erp-credential-response: true` hanya pada properti respons 2xx yang (modul, operationId, properti)-nya terdaftar di allowlist linter untuk modul `core`/`platform`, dan menyertai `x-erp-classification: highly_confidential`; ERROR di luar itu, bila dipasang pada tingkat operasi saja, dan **selalu ERROR** untuk properti `refresh*` di body respons | PRD-000 Q42 butir 4; security-guidelines §2 |
+| `erp-credential-response-exception` (**INFO**) | Mencetak setiap operasi berpenanda `x-erp-credential-response` untuk ditinjau reviewer; tidak menggagalkan lint | PRD-000 Q42 butir 4; security-guidelines §2 |
 | `erp-highly-confidential-exception` (**INFO**) | Mencetak setiap pengecualian beserta alasannya untuk ditinjau reviewer; tidak menggagalkan lint (satu-satunya rule berseverity info) | FR-24.2; security-guidelines §2 |
 
 ## 4. Klasifikasi respons dan `module.Classify`
@@ -73,7 +79,7 @@ aman terhadap siklus) dan diambil yang tertinggi; properti tanpa anotasi diangga
 
 - `internal/app/contract_conformance_test.go`: `TestContracts_RoutesMatchOperations` (method, path penuh, `x-erp-permission`, `x-erp-public`; `platform.core` dicocokkan lewat kesetaraan dispatch karena route gabungan `{key}/{sub}`, Q29), `TestContracts_PermissionsDeclaredInManifest`, `TestContracts_ClassificationMatchesRoute`, `TestContracts_ErpRefsOnlyToDependencies`, `TestContracts_EveryEntryHasContract`.
 - `internal/app/contract_response_integration_test.go`: respons nyata modul referensi divalidasi terhadap skema kontraknya.
-- Menambah `Handle` tanpa operasi (atau sebaliknya) menggagalkan test di atas; `make:handler` menjaga ketiganya (route, capability, operasi) sinkron.
+- Menambah `Handle` tanpa operasi (atau sebaliknya) menggagalkan test di atas; `make:handler` menjaga ketiganya (route, resource/aksi, operasi) sinkron.
 
 ## 6. `contracts:generate` dan `--check`
 
@@ -103,3 +109,25 @@ Operasi `deprecated: true` di kontrak: respons membawa header `Deprecation: true
 Parameter **query** `deprecated: true` yang benar-benar dikirim klien menambah counter yang sama dengan `kind=parameter` dan `erp.api.deprecated.name`. Dipasang setelah pemeriksaan permission,
 sehingga request yang ditolak tidak dihitung. Belum dicakup (PRD-000 Q31 ★5): properti body request deprecated (menuntut parse body dua kali; ditegakkan di `DecodeJSON` bila ada konsumen),
 atribut klien (identitas klien baru ada di PRD-001), dan properti respons (tidak terukur di server).
+
+## 9. Skema bangkitan dari metadata (`x-erp-generated`)
+
+Untuk modul bermetadata (lihat [`generators.md`](generators.md) §10), `metadata:generate` menyuntikkan tiga skema per resource ke `components.schemas` `modules/<dir>/openapi.yaml`: `<Nama>` (baca), `<Nama>Create` (hanya field yang boleh ditulis, `additionalProperties: false`, `required` = tidak nullable dan tanpa default), dan `<Nama>Update` (PATCH: semua opsional, `minProperties: 1`). Setiap skema bangkitan ditandai `x-erp-generated: true` dan **tidak boleh diedit tangan**: `metadata:generate --check` menganggap perbedaan apa pun sebagai drift, dan skema tulis tangan bernama sama menghentikan pembangkitan (tidak pernah ditimpa). Penyuntikan memakai splice berbasis node YAML sehingga komentar dan bagian lain berkas tetap utuh. `contracts:lint`, `contracts:generate`, dan `contracts:breaking` bekerja atas hasilnya seperti atas skema tulis tangan; setelah `metadata:generate`, jalankan `task erpora -- contracts:generate <modul>` untuk memperbarui tipe TS.
+
+| Metadata | OpenAPI |
+| --- | --- |
+| `string`, `text` | `type: string`; `minLength`, `maxLength`, `pattern`; `format: email` atau `uri` (dari `format: url`) |
+| `integer` | `type: integer`, `format: int64`, `minimum`, `maximum` |
+| `decimal` | `$ref: erp:common#/components/schemas/Decimal` (nullable: `oneOf: [{$ref Decimal}, {type: 'null'}]`, K21) beserta `x-erp-decimal` |
+| `boolean`, `date`, `datetime`, `uuid` | `boolean`; `format: date`; `format: date-time`; `format: uuid` |
+| `enum` | `enum` (nullable menambah `null`); `x-erp-extensible-enum: true` bila `extensible` |
+| kolom tipe `morphTo` | `type: string` dengan `pattern` daftar putih kunci resource (kunci bertitik tidak lolos `erp-enum-snake-case`) |
+| `nullable` | `type: [tipe, 'null']` (OpenAPI 3.1) |
+| `readOnly` | `readOnly: true` pada skema baca; field hanya-baca tidak ada di `Create` dan `Update` |
+| `deprecated` | `deprecated: true` |
+| `fieldGroup`, `classification` | `x-erp-field-group` (kunci manifest, snake_case), `x-erp-classification` pada setiap properti |
+| `filterable`, `sortable` | `x-erp-filterable`, `x-erp-sortable` (skema baca) |
+| `default` | `default` (hanya skema `Create`) |
+| relasi `belongsTo` | properti `<nama>Id` (uuid; nullable bila relasi tidak `required`) |
+
+Catatan: field di luar grup field default tidak masuk `required` pada skema baca, karena field group yang tidak boleh dilihat dihilangkan dari JSON (api-guidelines §4.4). Field `highly_confidential` belum didukung (K17) dan ditolak sebelum pembangkitan. Relasi koleksi (`hasMany` termasuk `embedded`, `hasOne`, `belongsToMany`, `morphMany`) dan skema baca bertipe untuk masking belum dibangkitkan; keduanya menyusul bersama T4.

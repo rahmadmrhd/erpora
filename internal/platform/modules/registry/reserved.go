@@ -7,7 +7,7 @@ import (
 )
 
 // reservedSlugs adalah slug yang dicadangkan untuk platform (keputusan rencana 4,
-// ADR-006 keputusan 7; "ui" ditambahkan karena namespace i18n "ui" milik komponen generik, PRD-000 FR-25; "sdk" karena package @erpora/module-sdk adalah SDK frontend platform; "desks" karena /desks/<slug-desk> dicadangkan untuk Desk kustom, revisi M3a). Slug dipakai di /api/{slug}, basePath frontend /{slug},
+// ADR-006 keputusan 7; "ui" ditambahkan karena namespace i18n "ui" milik komponen generik, PRD-000 FR-25; "sdk" karena package @erpora/module-sdk adalah SDK frontend platform; "desks" karena /desks/<slug-desk> dicadangkan untuk Desk kustom, revisi M3a; "login", "logout", "forgot-password", dan "reset-password" karena gerbang autentikasi pra-bootstrap shell memakai jalur tingkat atas itu, PRD-001 Q33 butir 2). Slug dipakai di /api/{slug}, basePath frontend /{slug},
 // dan nama command <slug>:<name>, sehingga tidak boleh bentrok dengan platform.
 var reservedSlugs = func() map[string]bool {
 	m := map[string]bool{}
@@ -15,6 +15,7 @@ var reservedSlugs = func() map[string]bool {
 		"platform", "api", "assets", "settings", "bootstrap", "healthz", "readyz", "sw", "make", "db",
 		"module", "modules", "contracts", "route", "permission", "migrate", "serve", "inspect",
 		"version", "list", "doctor", "completion", "help", "ui", "sdk", "desks",
+		"login", "logout", "forgot-password", "reset-password",
 	} {
 		m[s] = true
 	}
@@ -24,7 +25,9 @@ var reservedSlugs = func() map[string]bool {
 // allowedMethods adalah method HTTP yang boleh didaftarkan modul.
 var allowedMethods = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 
-var commandNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+// commandNameRE: nama command modul (tanpa slug); satu segmen grup `<grup>:<aksi>` diizinkan sejak C1.12 (core:settings:set,
+// PRD-001 Q24; perluasan aditif ADR-0006 yang disetujui pemilik produk, PRD-001 Q32 butir 1).
+var commandNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$`)
 
 // validRoutePath memeriksa path relatif modul: diawali "/", sudah bersih
 // (path.Clean), tanpa trailing slash, tanpa "//", host, query, fragmen, atau spasi.

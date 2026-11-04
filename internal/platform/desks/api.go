@@ -20,9 +20,16 @@ const (
 	PermUpdate = "platform.desks.update"
 )
 
-// Capabilities adalah capability milik platform.core untuk Desk (ditambahkan ke daftar capability platform di
-// composition root).
-var Capabilities = []string{PermRead, PermUpdate}
+// Resources adalah resource milik platform.core untuk Desk (PRD-001 FR-110). Ditambahkan ke resource platform di
+// composition root.
+var Resources = []module.Resource{{
+	Key: "platform.desks", Label: "resource.desks",
+	Actions:     []string{"read", "update"},
+	FieldGroups: []module.FieldGroup{{Key: "general", Label: "fieldGroup.general", Classification: "internal", Default: true}},
+}}
+
+// Capabilities adalah permission turunan Resources (PermRead, PermUpdate).
+var Capabilities = module.PermissionsOf(Resources)
 
 // Backend dipenuhi *Service; fake pada test. List tidak menerima tenant atau pengguna: keduanya dari context.
 type Backend interface {

@@ -70,7 +70,7 @@ Kandidat cakupan (difinalisasi saat PRD-002 ditulis):
 | Lokasi | **Mesin di platform** (approval gate di pipeline aksi dokumen, `sdk/doc`); **layar konfigurasi skema & kotak masuk approval di modul Core** |
 | Skema approval (diatur di Core) | Per resource + aksi (`submit`, `post`, `cancel`, …): tingkat bertahap (sekuensial/paralel), penentuan approver (role, unit organisasi, user tertentu, atasan pembuat), kondisi/batas nilai (mis. total > Rp 10 juta → tambah level), maker-checker, delegasi saat berhalangan, eskalasi/batas waktu. Perubahan skema tercatat di audit dan **di-snapshot** ke permintaan approval yang sedang berjalan |
 | Deklarasi di manifest | Resource dengan aksi dokumen (`submit`/`post`/`cancel`/`amend`) mendeklarasikan aksinya; platform otomatis memasang approval gate pada aksi tersebut. Registry menolak aksi dokumen yang didaftarkan di luar pipeline (mis. lewat `Registrar.Handle` biasa) |
-| Penegakan | **Struktural**: aksi dokumen hanya bisa dijalankan lewat pipeline platform, sehingga approval tidak mungkin terlewat. Template test: aksi dengan skema aktif tidak boleh langsung `submitted`; audit mencatat setiap keputusan |
+| Penegakan | **Struktural**: aksi dokumen hanya bisa dijalankan lewat pipeline platform, sehingga approval tidak mungkin terlewat. Template test: aksi dengan skema aktif tidak boleh langsung `accepted` (harus `pending_approval`); audit mencatat setiap keputusan |
 | Status dokumen | Tambahan `pending_approval`; `reject` mengembalikan ke `draft` dengan alasan (transaction-data-standards §2) |
 | Bergantung pada PRD-001 | Principal, role & matriks (aksi `approve`), unit organisasi (approver per cabang/departemen), audit, mailer, settings |
 

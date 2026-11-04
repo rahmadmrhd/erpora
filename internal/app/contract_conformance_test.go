@@ -15,7 +15,8 @@ import (
 )
 
 // buildConformance merakit masukan CheckConformance dari katalog terkompilasi: kontrak common + setiap Entry.Contract,
-// route registry ditambah GET /api/bootstrap (route httpserver, bukan registry) sebagai route publik platform.core.
+// route registry ditambah GET /api/bootstrap (terautentikasi tanpa permission) dan GET /.well-known/jwks.json (publik);
+// keduanya route router langsung, bukan registry, milik platform.core.
 func buildConformance(t *testing.T) (*registry.Registry, apicontract.ConformanceInput) {
 	t.Helper()
 	reg, err := BuildRegistry()
@@ -30,7 +31,7 @@ func buildConformance(t *testing.T) (*registry.Registry, apicontract.Conformance
 	docOf := map[string]string{}
 	caps := map[string][]string{}
 	for _, e := range reg.Entries() {
-		caps[e.Manifest.Key] = e.Manifest.Capabilities
+		caps[e.Manifest.Key] = e.Manifest.Permissions()
 		if e.Contract == nil {
 			continue
 		}
@@ -56,7 +57,9 @@ func buildConformance(t *testing.T) (*registry.Registry, apicontract.Conformance
 			Public: r.Public, Classification: r.Classification,
 		})
 	}
-	routes = append(routes, apicontract.RouteSpec{Module: registry.PlatformKey, Method: http.MethodGet, Pattern: httpserver.BootstrapPath, Public: true})
+	routes = append(routes, apicontract.RouteSpec{Module: registry.PlatformKey, Method: http.MethodGet, Pattern: httpserver.BootstrapPath})
+	// JWKS: route platform langsung di router (K-C1.8), publik, di luar /api/{slug}.
+	routes = append(routes, apicontract.RouteSpec{Module: registry.PlatformKey, Method: http.MethodGet, Pattern: jwksPath, Public: true})
 	return reg, apicontract.ConformanceInput{
 		Set: set, DocOf: docOf, Routes: routes, Capabilities: caps,
 		DispatchEquivalent: map[string]bool{registry.PlatformKey: true},

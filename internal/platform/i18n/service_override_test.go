@@ -203,7 +203,7 @@ func newClock() *fakeClock { return &fakeClock{t: time.Date(2026, 10, 29, 12, 0,
 
 func set(t *testing.T, s *Service, tn tenancy.TenantID, ns, loc, key, msg string) bool {
 	t.Helper()
-	changed, err := s.SetOverride(context.Background(), tn, Override{Namespace: ns, Locale: loc, Key: key, Message: msg}, "api:dev", nil)
+	changed, err := s.SetOverride(context.Background(), tn, Override{Namespace: ns, Locale: loc, Key: key, Message: msg}, "user:u1", nil)
 	if err != nil {
 		t.Fatalf("SetOverride(%s/%s/%s): %v", ns, loc, key, err)
 	}
@@ -283,14 +283,14 @@ func TestOverrideIdempotentRevision(t *testing.T) {
 	if r2 := s.Revisions(ctx, tenantA)["example"]; r2 != r1 {
 		t.Errorf("revisi kedua kali naik: %s -> %s", r1, r2)
 	}
-	existed, err := s.DeleteOverride(ctx, tenantA, "example", "id", "tidak.ada", "api:dev", nil)
+	existed, err := s.DeleteOverride(ctx, tenantA, "example", "id", "tidak.ada", "user:u1", nil)
 	if err != nil || existed {
 		t.Fatalf("Delete kunci tak ada: %v %v", existed, err)
 	}
 	if r3 := s.Revisions(ctx, tenantA)["example"]; r3 != r1 {
 		t.Errorf("Delete tak ada menaikkan revisi: %s -> %s", r1, r3)
 	}
-	existed, err = s.DeleteOverride(ctx, tenantA, "example", "id", "a", "api:dev", nil)
+	existed, err = s.DeleteOverride(ctx, tenantA, "example", "id", "a", "user:u1", nil)
 	if err != nil || !existed {
 		t.Fatalf("Delete ada: %v %v", existed, err)
 	}
@@ -326,7 +326,7 @@ func TestOverrideValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			changed, err := s.SetOverride(ctx, tenantA, c.o, "api:dev", nil)
+			changed, err := s.SetOverride(ctx, tenantA, c.o, "user:u1", nil)
 			if changed || overrideErrCode(t, err) != c.code {
 				t.Errorf("changed=%v err=%v, want code %s", changed, err, c.code)
 			}
@@ -343,7 +343,7 @@ func TestOverrideValidation(t *testing.T) {
 		}
 	}
 	// R-4: untuk override, jenis argumen harus SAMA PERSIS: arg dan plural TIDAK saling menggantikan
-	_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: "n.count", Message: "{n} catatan"}, "api:dev", nil)
+	_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: "n.count", Message: "{n} catatan"}, "user:u1", nil)
 	if overrideErrCode(t, err) != CodeParamMismatch {
 		t.Errorf("plural -> arg harus param_mismatch: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestOverrideStrictParamKinds(t *testing.T) {
 		"arg -> tag":       {"rich", "<name>x</name>"},
 	}
 	for name, c := range reject {
-		_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: c[0], Message: c[1]}, "api:dev", nil)
+		_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: c[0], Message: c[1]}, "user:u1", nil)
 		if overrideErrCode(t, err) != CodeParamMismatch {
 			t.Errorf("%s: err = %v, want param_mismatch", name, err)
 		}
@@ -379,7 +379,7 @@ func TestOverrideStrictParamKinds(t *testing.T) {
 		"tag -> tag":       {"rich", "<b>Halo {name}</b>!"},
 	}
 	for name, c := range accept {
-		if _, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: c[0], Message: c[1]}, "api:dev", nil); err != nil {
+		if _, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: c[0], Message: c[1]}, "user:u1", nil); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -392,7 +392,7 @@ func TestPropertyAcceptedOverrideKeepsParams(t *testing.T) {
 	base, _ := sdki18n.Compile("{n, plural, other {# catatan}}", sdki18n.DefaultLimits())
 	candidates := []string{"x", "{n}", "{n} {n}", "{n, plural, one {a} other {b}}", "{m}", "{n}{m}", "<b>{n}</b>", "{n, select, a {x} other {y}}", "", "{"}
 	for _, msg := range candidates {
-		_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: "n.count", Message: msg}, "api:dev", nil)
+		_, err := s.SetOverride(ctx, tenantA, Override{Namespace: "example", Locale: "id", Key: "n.count", Message: msg}, "user:u1", nil)
 		if err != nil {
 			continue
 		}
@@ -445,7 +445,7 @@ func TestOverrideRevisionChangesETagAndViewRevision(t *testing.T) {
 		t.Error("Revisions harus sama dengan View.Revision")
 	}
 	// hapus override mengembalikan isi efektif awal (ETag kembali sama dengan isi semula)
-	if _, err := s.DeleteOverride(ctx, tenantA, "example", "id", "a", "api:dev", nil); err != nil {
+	if _, err := s.DeleteOverride(ctx, tenantA, "example", "id", "a", "user:u1", nil); err != nil {
 		t.Fatal(err)
 	}
 	v2, _ := s.Catalog(ctx, tenantA, "example", "id")
@@ -522,7 +522,7 @@ func TestOverrideStoreDownServesBuiltin(t *testing.T) {
 	if !strings.Contains(buf.String(), WarnOverrideStoreMessage) {
 		t.Errorf("peringatan DB tak terjangkau tidak tercatat:\n%s", buf.String())
 	}
-	if _, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "id", Key: "b", Message: "x"}, "api:dev", nil); err == nil {
+	if _, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "id", Key: "b", Message: "x"}, "user:u1", nil); err == nil {
 		t.Error("mutasi saat DB mati harus gagal")
 	}
 	// DB mati dari awal (tanpa cache): bawaan murni
@@ -536,11 +536,11 @@ func TestOverrideStoreDownServesBuiltin(t *testing.T) {
 
 func TestOverrideWithoutStoreIsUnavailable(t *testing.T) {
 	s := newTestService(t, Options{})
-	_, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "id", Key: "a", Message: "x"}, "api:dev", nil)
+	_, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "id", Key: "a", Message: "x"}, "user:u1", nil)
 	if !errors.Is(err, ErrOverridesUnavailable) {
 		t.Errorf("err = %v, want ErrOverridesUnavailable", err)
 	}
-	if _, err := s.DeleteOverride(context.Background(), tenantA, "example", "id", "a", "api:dev", nil); !errors.Is(err, ErrOverridesUnavailable) {
+	if _, err := s.DeleteOverride(context.Background(), tenantA, "example", "id", "a", "user:u1", nil); !errors.Is(err, ErrOverridesUnavailable) {
 		t.Errorf("Delete err = %v", err)
 	}
 	if got, o := resolve(s, tenantA, "example", "id", "a"); got != "A-id" || o != OriginBuiltin {
@@ -558,7 +558,7 @@ func TestOverrideChangeIsLogged(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, w := range []string{"i18n_override_changed", "namespace=example", "locale=id", "key=a", "actor=api:dev", "actor=cli:budi", "action=set", "action=delete", "tenant=" + tenantA.String()} {
+	for _, w := range []string{"i18n_override_changed", "namespace=example", "locale=id", "key=a", "actor=user:u1", "actor=cli:budi", "action=set", "action=delete", "tenant=" + tenantA.String()} {
 		if !strings.Contains(out, w) {
 			t.Errorf("log tidak memuat %q:\n%s", w, out)
 		}
@@ -579,7 +579,7 @@ func TestOverridePreconditionPassesThroughAndAborts(t *testing.T) {
 	s := newOverrideService(t, newFakeStore(), newClock())
 	set(t, s, tenantA, "example", "id", "a", "satu")
 	stale := errors.New("basi")
-	_, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "id", Key: "a", Message: "dua"}, "api:dev",
+	_, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "id", Key: "a", Message: "dua"}, "user:u1",
 		func(cur *store.Override) error {
 			if cur == nil || cur.Message != "satu" {
 				t.Errorf("precondition melihat %+v", cur)
@@ -592,7 +592,7 @@ func TestOverridePreconditionPassesThroughAndAborts(t *testing.T) {
 	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "satu" {
 		t.Errorf("precondition gagal tidak boleh mengubah: %q", got)
 	}
-	if _, err := s.DeleteOverride(context.Background(), tenantA, "example", "id", "a", "api:dev", func(*store.Override) error { return stale }); !errors.Is(err, stale) {
+	if _, err := s.DeleteOverride(context.Background(), tenantA, "example", "id", "a", "user:u1", func(*store.Override) error { return stale }); !errors.Is(err, stale) {
 		t.Errorf("Delete err = %v", err)
 	}
 	if got, _ := resolve(s, tenantA, "example", "id", "a"); got != "satu" {
@@ -626,7 +626,7 @@ func TestOverrideKeyOnlyInNonDefaultLocaleIsUnknown(t *testing.T) {
 	ex := exampleSource()
 	ex.FS = mapFS(map[string]string{"id.json": `{"a": "A-id"}`, "en.json": `{"a": "A-en", "only_en": "E"}`, "en-GB.json": `{}`})
 	s := newTestService(t, Options{Overrides: newFakeStore(), Now: newClock().Now, Sources: []Source{platformSource(), uiSource(), ex}})
-	_, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "en", Key: "only_en", Message: "x"}, "api:dev", nil)
+	_, err := s.SetOverride(context.Background(), tenantA, Override{Namespace: "example", Locale: "en", Key: "only_en", Message: "x"}, "user:u1", nil)
 	if overrideErrCode(t, err) != CodeUnknownKey {
 		t.Errorf("err = %v", err)
 	}

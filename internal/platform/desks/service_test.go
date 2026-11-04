@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"erpora/internal/platform/desks/store"
+	"erpora/internal/platform/modules/modtest"
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/tenancy"
@@ -28,7 +29,8 @@ var (
 
 // catalogJSON memuat semua kunci label yang dipakai test (id.json).
 const catalogJSON = `{"desk":{"title":"Judul","dashboard":"Beranda Kustom"},
- "nav":{"a":"A","b":"B","c":"C","d":"D","e":"E","g":"G","h":"H"}}`
+ "nav":{"a":"A","b":"B","c":"C","d":"D","e":"E","g":"G","h":"H"},
+ "resource":{"items":"Item"},"fieldGroup":{"general":"Umum"},"action":{"write":"Tulis","admin":"Admin"}}`
 
 type testModule struct {
 	m   module.Manifest
@@ -49,6 +51,7 @@ func newModule(t *testing.T, slug string, desk *module.Desk) module.Module {
 		"compatibility": map[string]string{"platform": "^0.1", "sdk": "^0.1"},
 		"dependencies":  []module.Dependency{{Module: registry.PlatformKey, Version: "^0.1"}},
 		"capabilities":  []string{slug + ".items.read", slug + ".items.write", slug + ".items.admin"},
+		"resources":     modtest.Resources(slug+".items.read", slug+".items.write", slug+".items.admin"),
 		"migrations":    map[string]string{"strategy": "none"},
 		"offline":       map[string]string{"mode": "online-only"},
 		"i18n":          map[string]any{"locales": []string{"id"}, "defaultLocale": "id"},
@@ -82,8 +85,8 @@ func buildRegistry(t *testing.T, mods ...module.Module) *registry.Registry {
 	t.Helper()
 	reg, err := registry.Build(registry.Options{
 		PlatformVersion: "0.1.0", SDKVersion: "0.1.0",
-		PlatformCapabilities: []string{"platform.modules.read", "platform.desks.read", "platform.desks.update"},
-		PlatformDesk:         PlatformDesk(),
+		PlatformResources: modtest.Resources("platform.modules.read", "platform.desks.read", "platform.desks.update"),
+		PlatformDesk:      PlatformDesk(),
 	}, mods...)
 	if err != nil {
 		t.Fatalf("registry.Build: %v", err)

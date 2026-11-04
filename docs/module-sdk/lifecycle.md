@@ -58,8 +58,10 @@ Migrasi modul (`migrations/*.sql`, goose, diekspos lewat `module.MigrationSource
 - **Satu file = satu transaksi.** File yang gagal di-rollback penuh (tidak ada tabel/kolom parsial); file sebelumnya tetap diterapkan, dan `retry` hanya menerapkan sisanya. Jejak per file ada di `module_migrations` (tenant DB) dengan checksum.
 - **Jangan menulis penanda anotasi goose di komentar** (tanda plus diikuti kata goose di luar `Up`/`Down` yang sebenarnya): goose mem-parse-nya.
 - **Backfill besar dilakukan bertahap.** Satu `UPDATE` seperti `migrations/0002_add_example_notes_version.sql` hanya pantas untuk tabel kecil, karena mengunci dan menulis ulang semua baris dalam satu transaksi. Untuk tabel besar gunakan migrasi tanpa transaksi dengan batch.
+- **Perubahan aditif (expand) memakai kolom nullable tanpa backfill.** `migrations/0003_add_example_notes_audit_users.sql` menambah `created_by` dan `updated_by` (nullable) ke `example_notes`; baris lama, seed, dan tindakan sistem tanpa principal bernilai NULL. `modules/example` kini punya tiga migrasi (`0001` sampai `0003`).
+- **Backup wajib sebelum migrasi MAJOR yang menghapus kolom.** Penghapusan kolom pada modul yang sudah memiliki tag rilis hanya pada rilis MAJOR, setelah `deprecated` dan `removeAfter` (K18; modul tanpa tag rilis dikecualikan, K34); migrasi penghapusan bangkitan `metadata:migrate` memuat penjaga yang menggagalkan migrasi bila masih ada baris dengan kolom lama terisi dan kolom pengganti kosong, `Down`-nya tidak dapat dibalik, sehingga backup database sebelum upgrade adalah satu-satunya jalan kembali. Upgrade yang melompati versi tetap menjalankan semua migrasi berurutan.
 - Migrasi tidak pernah berjalan saat `serve` atau pada request HTTP; hanya lewat `migrate up` (modul `required`) dan operasi lifecycle.
-- `down` hanya untuk pengembangan; produksi memulihkan dari backup (deployment.md §7.1).
+- `down` hanya untuk pengembangan; produksi memulihkan dari backup (deployment.md §7.1). `metadata:migrate` menandai `Down` yang berisi `DROP` pembalik expand dengan komentar "HANYA DEVELOPMENT" (K32).
 
 ## 6. Upgrade dan downgrade
 

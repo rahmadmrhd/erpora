@@ -85,7 +85,7 @@ export function operation(over: Partial<OperationView> = {}): OperationView {
       },
     ],
     failure: null,
-    actor: "api:dev",
+    actor: "user:u1",
     startedAt: "2026-10-29T07:00:00Z",
     finishedAt: "2026-10-29T07:00:02Z",
     ...over,

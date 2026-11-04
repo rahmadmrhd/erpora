@@ -39,7 +39,7 @@ func validateResponse(t *testing.T, set *apicontract.Set, op apicontract.Operati
 
 func TestContractResponses_ReferenceModules(t *testing.T) {
 	_, a, _, _ := setupAssembly(t)
-	h := a.Router
+	h := a.authed(t)
 	_, in := buildConformance(t)
 
 	for _, key := range []string{"acme.example", "acme.example-addon"} {

@@ -1,12 +1,19 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { CurrentUserSource } from "@erpora/platform-web";
-import { screen } from "@testing-library/react";
+import { Toaster } from "@erpora/ui/toaster";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderShell, type ShellHarnessOptions } from "./shell-test-support";
 import { UserMenu } from "./user-menu";
 
 beforeEach(() => {
   localStorage.clear();
+});
+
+// Toast sonner bersifat global antar tes: bersihkan agar galat satu tes tidak terbaca tes berikutnya.
+afterEach(async () => {
+  const { toast } = await import("@erpora/ui/toaster");
+  toast.dismiss();
 });
 
 const person = {
@@ -27,7 +34,13 @@ function source(over: Partial<CurrentUserSource> = {}): CurrentUserSource {
 
 async function openMenu(variant: "dock" | "panel" = "panel", opts: ShellHarnessOptions = {}) {
   const user = userEvent.setup();
-  const result = renderShell(<UserMenu variant={variant} />, opts);
+  const result = renderShell(
+    <>
+      <UserMenu variant={variant} />
+      <Toaster />
+    </>,
+    opts,
+  );
   await user.click(await screen.findByRole("button", { name: /^Menu akun/ }));
   return { user, ...result };
 }
@@ -80,11 +93,60 @@ describe("UserMenu", () => {
     );
   });
 
+  test("Ubah sandi: tautan ke halaman akun dari sumber pengguna (C1.14); tanpa path tidak tampil", async () => {
+    const { user, router } = await openMenu("panel", {
+      user: source({ manageAccountPath: () => "/core/change-password" }),
+    });
+    const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent?.trim());
+    expect(items).toEqual(["Pengaturan", "Ubah sandi", "Muat ulang", "Keluar"]);
+    await user.click(screen.getByRole("menuitem", { name: "Ubah sandi" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/core/change-password"));
+  });
+
+  test("Ubah sandi tidak tampil bila kemampuan manageAccount mati atau path bukan path internal aman", async () => {
+    const off = await openMenu("panel", {
+      user: source({
+        capabilities: { manageAccount: false, signOut: true },
+        manageAccountPath: () => "/core/change-password",
+      }),
+    });
+    expect(screen.queryByRole("menuitem", { name: "Ubah sandi" })).toBeNull();
+    off.unmount();
+    await openMenu("panel", { user: source({ manageAccountPath: () => "https://evil.test/x" }) });
+    expect(screen.queryByRole("menuitem", { name: "Ubah sandi" })).toBeNull();
+  });
+
   test("Keluar aktif memanggil sumber pengguna bila didukung", async () => {
     const signOut = mock(async () => {});
     const { user } = await openMenu("panel", { user: source({ signOut }) });
     await user.click(await screen.findByRole("menuitem", { name: "Keluar" }));
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("UserMenu: Keluar gagal (I-1 review C1.14)", () => {
+  test("signOut ditolak: galat i18n tampil dengan Coba lagi; Coba lagi memanggil signOut lagi dan sukses tidak menampilkan galat", async () => {
+    let n = 0;
+    const signOut = mock(async () => {
+      n++;
+      if (n === 1) throw new Error("signout_failed");
+    });
+    const { user } = await openMenu("panel", { user: source({ signOut }) });
+    await user.click(await screen.findByRole("menuitem", { name: "Keluar" }));
+    expect(
+      await screen.findByText("Gagal keluar. Sesi Anda masih aktif; coba lagi."),
+    ).toBeInTheDocument();
+    expect(signOut).toHaveBeenCalledTimes(1);
+    await user.click(await screen.findByRole("button", { name: "Coba lagi" }));
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(2));
+  });
+
+  test("signOut berhasil tidak menampilkan galat", async () => {
+    const signOut = mock(async () => {});
+    const { user } = await openMenu("panel", { user: source({ signOut }) });
+    await user.click(await screen.findByRole("menuitem", { name: "Keluar" }));
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/Gagal keluar/)).toBeNull();
   });
 });
 

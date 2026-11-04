@@ -20,12 +20,12 @@ Semua command dijalankan dari dalam repo (`task erpora -- make:... ` atau binary
 
 | Command | Hasil |
 | --- | --- |
-| `make:module <name> [--frontend] [--depends k1,k2] [--publisher id]` | Modul baru turunan `example` di `modules/<dir>`: go.mod, `module.json`, `openapi.yaml`, empat lapisan Clean Architecture, migrasi, command `recount`, `DevSeeder`, dan test. Didaftarkan di `go.work`, `go.mod` root (`replace`), dan `internal/app/modules.go` |
+| `make:module <name> [--frontend] [--metadata] [--depends k1,k2] [--publisher id]` | Modul baru turunan `example` di `modules/<dir>`: go.mod, `module.json`, `openapi.yaml`, empat lapisan Clean Architecture, migrasi, command `recount`, `DevSeeder`, dan test. Didaftarkan di `go.work`, `go.mod` root (`replace`), dan `internal/app/modules.go`. `--metadata` menambah kerangka metadata resource (bagian 10) |
 | `make:migration <module> <name>` | `migrations/NNNN_<name>.sql` goose bernomor berikutnya (modul, atau `--platform control\|tenant`) |
 | `make:entity <module> <Name>` | Entity + test di `internal/domain` |
 | `make:usecase <module> <Name> [--query]` | Use case (command atau query) + test di `internal/application` |
 | `make:repository <module> <Name>` | Port repository, model GORM, implementasi, mapping, dan test mapping |
-| `make:handler <module> <Name> --route "METHOD /path" --permission <cap>` | Handler + test (endpoint ber-ID disertai kerangka test IDOR), route di `module.go`, capability di `module.json`, dan operasi + skema di `openapi.yaml` |
+| `make:handler <module> <Name> --route "METHOD /path" --permission <cap>` | Handler + test (endpoint ber-ID disertai kerangka test IDOR), route di `module.go`, resource/aksi di `module.json` (permission harus turunan `resources`; aksi standar ditambahkan otomatis, aksi kustom dideklarasikan manual; resource baru beserta label katalog i18n ikut dibuat), dan operasi + skema di `openapi.yaml` |
 | `make:contract <module> <Name>` | Interface + DTO di `contract/` (tanpa impor `internal/`) |
 | `make:command <module> <name>` | Command CLI modul (`<slug>:<name>`) dan pendaftarannya di `module.go` |
 
@@ -104,8 +104,9 @@ Aturan penanda untuk command tulis lain pada binary dev (`serve`, `migrate up`, 
 
 ## 7. `module:check` dan `doctor`
 
-- `module:check [name]`: per modul (atau satu modul: direktori, slug, atau key) memeriksa manifest (`SCHEMA`: JSON Schema + SemVer + constraint), `require` go.mod ↔ `dependencies` manifest dan impor (`D8`), versi go/toolchain seragam (`GOVERSION`), dan awalan capability = slug (`CAPABILITY_PREFIX`). Mencetak `<module> <rule> <detail>`; exit 1 bila ada temuan, `OK` bila bersih.
-- `doctor`: tabel `NAMA STATUS DETAIL` untuk go (≥ toolchain di go.mod), bun (= `packageManager`), task (≥ 3.54.0), docker (hanya untuk `task db:up` dan test integrasi: `warn`), PostgreSQL (`ERP_DATABASE_URL`; password tidak pernah dicetak), dan `.env`. Exit 1 hanya bila ada `fail`.
+- `module:check [name]`: per modul (atau satu modul: direktori, slug, atau key) memeriksa manifest (`SCHEMA`: JSON Schema + SemVer + constraint), `require` go.mod ↔ `dependencies` manifest dan impor (`D8`), versi go/toolchain seragam (`GOVERSION`), deklarasi otorisasi manifest (kunci resource berawalan slug, aksi standar, grup field default, dimensi scope, role bawaan; `SCHEMA`, kode `invalid_resource` dan sejenisnya, fungsi yang sama dengan registry), label otorisasi ada di katalog bahasa dasar, dan awalan capability = slug (`CAPABILITY_PREFIX`). Mencetak `<module> <rule> <detail>`; exit 1 bila ada temuan, `OK` bila bersih.
+- `doctor`: tabel `NAMA STATUS DETAIL` untuk go (≥ toolchain di go.mod), bun (= `packageManager`), task (≥ 3.54.0), docker (hanya untuk `task db:up` dan test integrasi: `warn`), PostgreSQL (`ERP_DATABASE_URL`; password tidak pernah dicetak), `ERP_SECRET_KEY` (temuan tersendiri: `fail` bila kosong atau format salah karena `serve` akan gagal; nilai tidak pernah dicetak), dan `.env`. Exit 1 hanya bila ada `fail`.
+- `secret:generate`: mencetak satu baris nilai `ERP_SECRET_KEY` baru (32 byte acak `crypto/rand`, base64 standar, setara `openssl rand -base64 32`); tidak menyimpan apa pun dan tidak membaca konfigurasi. Jalankan sekali per lingkungan.
 
 ## 8. Bukti dan CI
 
@@ -135,3 +136,86 @@ Isi yang dibuat `make:module` (sumber: `internal/devtools/templates/module`):
 
 Konvensi isi halaman dan teks ada di [`frontend.md`](frontend.md) dan [`i18n.md`](i18n.md).
 - **★2 Integration test repository.** `make:repository` membuat unit test mapping, bukan integration test (Q28 menghapus driver Postgres dari `go.mod` modul). Integration test repository ditulis manual; keputusan generik ditinjau di PRD-001.
+
+## 10. Metadata resource: `metadata:check` dan `metadata:generate`
+
+Sistem metadata resource (spec `docs/specs/resource-metadata/`, [ADR-0016](../adr/0016-metadata-sumber-kebenaran-pembangkit-kontrak-dan-migrasi.md)) menjadikan satu berkas YAML per resource sebagai sumber kebenaran bentuk datanya. Skema OpenAPI, DTO dan validasi Go, dan metadata TypeScript dibangkitkan darinya; bentuk berkas dan aturan evaluasinya ada di [`metadata.md`](metadata.md) (sisi frontend) dan skema `contracts/resource.schema.json`. Bagian ini hanya menjelaskan perintahnya. Perintah `metadata:*` hanya ada di flavor dev (tidak ada di binary rilis, sama seperti `make:*`).
+
+| Perintah | Isi | Status |
+| --- | --- | --- |
+| `metadata:check` | Memuat `modules/*/metadata/**` dan `modules/*/module.json`, menyelesaikan penyertaan, timpaan, tipe domain, dan blok, lalu memeriksa skema, tipe dan batasan, kondisi, accessor, templat label, relasi, integrasi manifest, penamaan, dan aturan deprecated, salinan, dan penguncian. Hanya membaca. Exit 0 (peringatan boleh ada), 2 ada galat, 3 root repo tidak ditemukan | tersedia |
+| `metadata:generate [modul...] [--check]` | Menjalankan `metadata:check` lalu membangkitkan keluaran di bawah. Argumen modul (nama direktori, mis. `sales`) membatasi cakupan; kosong berarti semua modul bermetadata. `--check` hanya membandingkan dan tidak menulis. Exit 0, 2 (galat check, drift, edit tangan, bentrok, masukan tidak sah), 3, 4 (penulisan gagal) | tersedia |
+| `make:module <name> --metadata` | Kerangka metadata pada modul baru: lihat di bawah | tersedia |
+| `metadata:diff`, `metadata:migrate` | Selisih metadata terhadap skema database hasil migrasi dan pembangkit migrasi goose (T2) | menyusul |
+| `metadata:eject` | Menyalin keluaran bangkitan menjadi kode biasa (jalan keluar tanpa kunci mati) | menyusul |
+
+Task: `task metadata:check`, `task metadata:generate` (`-- <modul>` membatasi), dan `task metadata:generate:check`. Kedua yang bersifat memeriksa ikut `task lint`, dan `task metadata:generate:check` ikut `task web:check` karena berkas `*.meta.gen.ts` harus sinkron sebelum typecheck dan lint. Modul tanpa `metadata/` tidak terpengaruh.
+
+Aturan penulisan metadata hasil konfirmasi pemilik produk 2 Nov 2026 (requirements K25 sampai K34):
+
+- **Identifier** camelCase ketat: akronim ditulis `taxId`, bukan `taxID` (pesan galat menyarankan bentuk yang benar). Kata seperti `type`, `order`, `user`, `group` sah sebagai nama field; `metadata:check` hanya menolak nama yang benar-benar menghasilkan kode tidak valid atau bentrok dengan anggota bangkitan di suatu target.
+- **Include `set`** (memperketat maupun melonggarkan) wajib memuat `reason` (string tidak kosong), dicetak di keluaran `metadata:check`; tanpa itu `metadata:check` melaporkan `include_set_missing_reason`.
+- **`unmanagedColumns`** berupa daftar objek `{name, classification: highly_confidential, reason}`; selain itu ditolak (`unmanaged_column_classification`, `unmanaged_column_reason_missing`).
+- **Bentrok identifier bangkitan Go** (mis. field tulis `validate`/`present`, atau nama resource yang bertabrakan dengan tipe runtime bangkitan seperti `StatusSpec`) ditolak dengan `name_reserved_go`; kode `name_reserved_sql` dan `name_reserved_typescript` kini berarti bentrok nyata, bukan daftar kata terlarang.
+- **`lockWhen`** hanya sah pada resource dokumen konkret (`lockwhen_not_document` untuk selain itu).
+- **Pemetaan kunci resource** (K35): kunci selalu tunggal. Identitas dan permission tunggal snake_case (`sales.invoiceLine` menjadi kunci manifest `sales.invoice_line`, permission `sales.invoice_line.read`); tabel dan URL jamak (`sales_invoice_lines`, `/api/sales/invoice-lines`). Capability jamak tulis-tangan `example.notes.read` milik modul `example` adalah peninggalan sebelum metadata dan **diganti** menjadi `example.note.read` di PRD-001 C2.1 (Q36, 4 Nov 2026); resource bangkitan memakai bentuk tunggal.
+- **Status lifecycle** baku: `draft`, `deleted`, `pending_approval`, `accepted`, `rejected`, `cancelled`, `done`.
+- **Pemicu dokumen** mencakup `BEFORE TRUNCATE` (statement-level; juga pada tabel anak/pivot) yang menolak `TRUNCATE` bila ada baris terkunci dan bila isolation bukan `read committed`; semua fungsi pemicu bangkitan memakai `SET search_path = pg_catalog, pg_temp`; `Down` bangkitan yang berisi `DROP` pembalik expand diberi penanda "HANYA DEVELOPMENT", sedangkan `Down` penghapusan kolom tetap tidak dapat dibalik.
+- **Modul tanpa tag rilis** boleh menghapus field tanpa `deprecated`/`removeAfter`/MAJOR; penjaga data migrasi tetap berlaku.
+
+### Keluaran per modul
+
+Semua jalur relatif `modules/<dir>/`; `<nama>` adalah bagian nama pada kunci resource (`sales.invoiceLine` menjadi `invoice_line` untuk Go dan `invoiceLine` untuk TS).
+
+| Berkas | Isi |
+| --- | --- |
+| `internal/domain/<nama>_meta.gen.go` | Konstanta kunci, nama field, dan nilai enum; `<Nama>Spec` (field, aturan lintas field, penguncian; AST kondisi tertanam lewat konstruktor `sdk/metadata`). Domain tanpa I/O |
+| `internal/domain/meta_runtime.gen.go` | Validator domain bersama satu modul (tipe, wajib, nullable, panjang, rentang, pola, enum, desimal, `requiredWhen`, `readonlyWhen`, `rules`) |
+| `internal/presentation/http/<nama>_dto.gen.go` | `<Nama>Create` dan `<Nama>Update` (hanya field yang boleh ditulis), `Decode<Nama>Create/Update`, dan `Validate` |
+| `internal/presentation/http/meta_runtime.gen.go` | Pembacaan body lewat `httpx.DecodeJSON` dan pemetaan pelanggaran ke amplop galat |
+| `openapi.yaml` | Skema `<Nama>`, `<Nama>Create`, `<Nama>Update` pada `components.schemas`, bertanda `x-erp-generated: true` (lihat [`contracts.md`](contracts.md) §9) |
+| `web/src/metadata/<nama>.meta.gen.ts` | `resourceMeta` untuk antarmuka generik; hanya bila modul punya `web/package.json` (lihat [`frontend.md`](frontend.md)) |
+
+Perilaku DTO bangkitan (api-guidelines §7.3, §8): body dibaca lewat `httpx.DecodeJSON` (batas ukuran, kedalaman, panjang array, kunci ganda, tipe skalar); field tak dikenal menghasilkan `422 validation_failed` dengan `details[].code = unknown_field`, field hanya-baca `read_only`. `Validate` menghasilkan `422 validation_failed` untuk pelanggaran struktur atau `422 business_rule_violated` (kode aturan snake_case pada `details[].code`, pesan dari katalog modul). Pesan galat tidak pernah memuat nilai field. Kode struktur yang stabil: `required`, `null_not_allowed`, `read_only`, `invalid_type`, `too_short`, `too_long`, `pattern_mismatch`, `invalid_format`, `invalid_enum_value`, `invalid_decimal`, `decimal_scale_exceeded`, `decimal_precision_exceeded`, `below_minimum`, `above_maximum`, `invalid_uuid`, `invalid_date`, `invalid_datetime`, `invalid_characters`, `conflicting_deprecated_field`. Validasi sisi server tetap otoritas; keluaran tahap ini tidak membaca atau menulis data (CRUD, repository, dan otorisasi per record adalah T4, menyusul).
+
+### Penanda `Code generated` dan aturan tulis
+
+- Setiap berkas `.gen.go` dan `.gen.ts` berkepala `// Code generated by erpora metadata:generate. DO NOT EDIT.`; jangan diedit tangan. Keluaran deterministik (urutan stabil, tanpa cap waktu).
+- Bila `metadata:check` bergalat, atau berkas keluaran yang sudah ada tidak berkepala itu (diubah tangan atau milik orang lain), `metadata:generate` gagal **sebelum menulis apa pun**; berkas bernama sama tanpa penanda tidak pernah ditimpa. `--check` gagal bila ada keluaran yang berbeda, belum ada, atau yatim.
+- Berkas bangkitan yang tidak lagi punya resource (yatim, masih berkepala) dihapus pada mode tulis dan dilaporkan `basi` pada `--check`. Skema `x-erp-generated` yang yatim dibuang dari `openapi.yaml`; skema tulis tangan bernama sama menghentikan pembangkitan.
+- Penulisan hanya di bawah `modules/<dir>/`, tidak mengikuti symlink atau junction, atomik dengan rollback; galat tidak membocorkan isi di luar modul. Literal di keluaran melewati satu fungsi kutip per bahasa (`strconv.Quote`, pengodean JSON, dan node YAML); golden masukan berbahaya ada di tes pembangkit.
+- Bagian yang sengaja tidak dipancarkan ke klien (aturan `scope: server`, kondisi yang merujuk field `confidential` ke atas atau di luar grup default, field `clientVisible: false`, ekspresi accessor `stored`) dicetak sebagai `tidak dipancarkan ke klien: ...`.
+- **Jalan keluar:** `metadata:eject` (menyusul) menyalin keluaran menjadi kode biasa. Sampai tersedia, resource yang perlu ditulis tangan dikeluarkan dengan memindahkan berkas ke nama tanpa `.gen`, menghapus baris kepala, dan menghapus resource dari metadata; berkas tanpa kepala tidak pernah disentuh generator.
+
+## 11. Dokumen transaksional (metadata)
+
+Resource transaksional menyertakan `sdk:document` (field `status`, `amendedFromId`, dan `lockWhen` bawaan "status bukan draft"). Pemetaan checklist `transaction-data-standards.md` §15 terhadap sistem metadata (design Komponen 9):
+
+| Butir §15 | Dicakup sistem metadata | Tetap per resource (tidak dibangkitkan) |
+| --- | --- | --- |
+| 1 Status dan transisi | `sdk:document`; transisi dinyatakan metadata. `lockWhen` tersedia di `<Nama>Spec.Locked` (tahap ini) | Status khusus dan aturan transisi |
+| 2 Immutabilitas dan ledger append-only | Pemicu database pengunci dokumen (T2, menyusul) | Ledger append-only |
+| 3 Satu transaksi data, ledger, nomor, idempotensi, outbox, audit | Data, idempotensi, dan audit pada CRUD bangkitan (T4, menyusul) | Ledger, nomor, outbox |
+| 4 Konkurensi (`version`, `If-Match`) | CRUD bangkitan (T4, menyusul) | Kunci baris berurutan |
+| 5 Referensi sumber unik, `Idempotency-Key` | Idempotensi pada `POST` (T4, menyusul) | Referensi sumber ledger |
+| 6 Seri penomoran | Tidak | Ya |
+| 7 Uang dan kuantitas desimal | Ya: tipe `decimal` (string desimal, perbandingan desimal di Go dan TS) | Titik dan metode pembulatan |
+| 8 Snapshot data referensi | Salinan field (T4, menyusul) | Pemilihan field yang disalin |
+| 9 Periode akuntansi dan tanggal | Tidak | Ya |
+| 10 Maker-checker | Tidak | Ya |
+| 11 Rekonsiliasi saldo | Tidak | Ya |
+| 12 Retensi dan penghapusan | Tidak | Ya |
+| 13 Tes properti, konkurensi, idempotensi, immutabilitas | Tes validasi dan paritas; tes immutabilitas dan idempotensi bangkitan menyusul (T2, T4) | Properti dan konkurensi domain |
+
+Perkara yang **selalu tetap per resource dan wajib ditulis tangan serta dicakup spec resource itu**: penomoran, ledger append-only, maker-checker (pemisahan tugas), periode akuntansi, dan rekonsiliasi saldo (juga retensi dan pembulatan domain). Sistem metadata tidak membangkitkan dan tidak menggantikannya.
+
+### Kerangka metadata pada `make:module --metadata`
+
+Tanpa `--metadata` keluaran `make:module` tidak berubah. Dengan flag itu modul baru juga memuat (spec `resource-metadata`, task 18.3):
+
+- `metadata/item.resource.yaml`: resource `<slug>.item` dengan satu field `title` (`string` 1 sampai 200, `sortable`, `filterable`) dan `labelTemplate: "{title}"`. Field audit (`id`, `version`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`) ikut otomatis dari `sdk:audit`.
+- Capability `<slug>.item.read` di `module.json` (awalan kunci resource yang diminta `metadata:check` sebelum manifest memakai `resources`), di samping `<slug>.items.read` bawaan.
+- Skema `Item` pada `openapi.yaml` bertanda `x-erp-generated: true`, sehingga digantikan pembangkit di tempatnya.
+- Langkah akhir `metadata:generate <dir>` (sebelum `contracts:generate` bila `--frontend`): membangkitkan skema `ItemCreate` dan `ItemUpdate`, `internal/domain/item_meta.gen.go`, `internal/presentation/http/item_dto.gen.go` beserta runtime per modul, dan (dengan `--frontend`) `web/src/metadata/item.meta.gen.ts`. Hasilnya langsung hijau untuk `metadata:check`, `metadata:generate --check`, dan `module:check`. Bila `metadata:check` bergalat (di modul mana pun pada repo), langkah ini gagal dan modul sudah tertulis; perbaiki lalu jalankan `task erpora -- metadata:generate <dir>`.
+
+Kerangka ini hanya titik awal: tabel awal belum memuat `created_by`/`updated_by` dan handler belum mengirimnya (tambahkan migrasi dan handler, atau lihat selisihnya dengan `metadata:diff`, menyusul penuh di T2).

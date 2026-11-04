@@ -8,7 +8,7 @@ const nestedPathBlock = `  /api/example/notes/{id}/lines/{lineId}/taxes:
       operationId: listExampleNoteLineTaxes
       summary: Pajak baris
       description: Terlalu bersarang.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
         - { name: lineId, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
@@ -31,7 +31,7 @@ const otherPrefixBlock = `  /api/other/things:
       operationId: listOtherThings
       summary: Milik modul lain
       description: Path di luar /api/example/.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { $ref: 'erp:common#/components/parameters/Page' }
         - { $ref: 'erp:common#/components/parameters/PageSize' }
@@ -89,7 +89,7 @@ const patchBlock = `  /api/example/notes/{id}:
       operationId: patchExampleNote
       summary: Ubah note
       description: Tanpa If-Match.
-      x-erp-permission: example.notes.read
+      x-erp-permission: example.note.read
       parameters:
         - { name: id, in: path, required: true, schema: { $ref: 'erp:common#/components/schemas/Uuid' } }
       requestBody:
@@ -104,7 +104,7 @@ const patchBlock = `  /api/example/notes/{id}:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Note' } } }
-              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 2, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z' } }
+              example: { data: { id: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b, title: a, version: 2, createdAt: '2026-10-21T07:15:00Z', updatedAt: '2026-10-21T07:15:00Z', createdBy: null, updatedBy: null } }
         '400': { $ref: 'erp:common#/components/responses/BadRequest' }
         '403': { $ref: 'erp:common#/components/responses/PermissionDenied' }
         '404': { $ref: 'erp:common#/components/responses/NotFound' }

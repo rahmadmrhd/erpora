@@ -1,9 +1,13 @@
 package moduletest
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
+	"gorm.io/gorm"
+
+	"erpora/sdk/authz"
 	"erpora/sdk/module"
 )
 
@@ -46,5 +50,18 @@ func TestRecorder_RecordsRouteOptions(t *testing.T) {
 	st, _ := r.Route("GET", "/status")
 	if st.Options != (module.RouteConfig{}) {
 		t.Errorf("Options publik = %+v", st.Options)
+	}
+}
+
+func TestRecorder_RecordsScopeProviders(t *testing.T) {
+	r := NewRecorder()
+	var reg module.Registrar = r
+	p := authz.ScopeProvider{Key: "x.recent", Label: "x.scope.recent",
+		Filter: func(_ context.Context, db *gorm.DB) *gorm.DB { return db },
+		Match:  func(context.Context, authz.Record) (bool, error) { return true, nil },
+	}
+	reg.Scope(p)
+	if len(r.Scopes) != 1 || r.Scopes[0].Key != "x.recent" {
+		t.Fatalf("Scopes = %+v", r.Scopes)
 	}
 }

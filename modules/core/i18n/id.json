@@ -1,0 +1,128 @@
+{
+  "desk": {
+    "title": "Core"
+  },
+  "nav": {
+    "change_password": "Ubah sandi"
+  },
+  "resource": {
+    "user": "Pengguna",
+    "role": "Role",
+    "org_unit": "Unit organisasi"
+  },
+  "fieldGroup": {
+    "general": "Umum"
+  },
+  "dimension": {
+    "org_unit": "Unit organisasi"
+  },
+  "password": {
+    "violation": {
+      "too_short": "Sandi terlalu pendek (minimal 12 karakter).",
+      "too_long": "Sandi terlalu panjang.",
+      "common": "Sandi terlalu umum dan mudah ditebak.",
+      "unknown": "Sandi tidak memenuhi kebijakan."
+    }
+  },
+  "detail": {
+    "wrong_current_password": "Sandi saat ini salah.",
+    "invalid_token": "Tautan tidak valid atau sudah tidak berlaku.",
+    "invalid_code": "Kode tidak valid."
+  },
+  "auth": {
+    "brand": "ERPora",
+    "common": {
+      "loading": "Memuat…",
+      "email": "Email",
+      "password": "Sandi",
+      "showPassword": "Tampilkan sandi",
+      "hidePassword": "Sembunyikan sandi",
+      "backToLogin": "Kembali ke halaman masuk",
+      "signOut": "Keluar",
+      "signOutFailed": "Gagal keluar. Sesi Anda masih aktif; coba lagi.",
+      "passwordHint": "Minimal 12 karakter."
+    },
+    "validation": {
+      "required": "Wajib diisi.",
+      "email": "Masukkan alamat email yang valid.",
+      "mismatch": "Kedua sandi tidak sama.",
+      "code": "Masukkan 6 digit kode.",
+      "recovery": "Masukkan recovery code."
+    },
+    "login": {
+      "title": "Masuk",
+      "description": "Masuk ke akun ERPora Anda.",
+      "forgot": "Lupa sandi?",
+      "submit": "Masuk"
+    },
+    "mfa": {
+      "verify": {
+        "title": "Verifikasi dua langkah",
+        "description": "Masukkan 6 digit kode dari aplikasi autentikator Anda.",
+        "codeLabel": "Kode verifikasi",
+        "submit": "Verifikasi",
+        "useRecovery": "Gunakan recovery code",
+        "useTotp": "Gunakan kode autentikator",
+        "recoveryLabel": "Recovery code",
+        "recoveryHint": "Setiap recovery code hanya dapat dipakai satu kali."
+      },
+      "enroll": {
+        "title": "Aktifkan verifikasi dua langkah",
+        "description": "Akun administrator wajib memakai verifikasi dua langkah. Pindai kode QR dengan aplikasi autentikator, lalu masukkan 6 digit kode yang tampil.",
+        "qrLabel": "Kode QR untuk aplikasi autentikator",
+        "secretLabel": "Atau masukkan kunci ini secara manual",
+        "codeLabel": "Kode dari aplikasi autentikator",
+        "submit": "Aktifkan",
+        "retry": "Coba lagi"
+      },
+      "recoveryCodes": {
+        "title": "Simpan recovery code Anda",
+        "warning": "Kode ini hanya ditampilkan sekali. Simpan di tempat yang aman: tanpa kode ini Anda tidak dapat masuk bila kehilangan akses ke aplikasi autentikator.",
+        "listLabel": "Recovery code",
+        "acknowledge": "Saya sudah menyimpan recovery code ini",
+        "continue": "Lanjutkan"
+      }
+    },
+    "forgot": {
+      "title": "Lupa sandi",
+      "description": "Masukkan email akun Anda. Bila terdaftar, kami akan mengirim tautan untuk mengatur ulang sandi.",
+      "submit": "Kirim tautan",
+      "sentTitle": "Periksa email Anda",
+      "sent": "Bila email tersebut terdaftar, tautan untuk mengatur ulang sandi telah dikirim. Tautan berlaku selama 30 menit."
+    },
+    "reset": {
+      "title": "Atur ulang sandi",
+      "description": "Buat sandi baru untuk akun Anda.",
+      "newPassword": "Sandi baru",
+      "confirmPassword": "Ulangi sandi baru",
+      "submit": "Simpan sandi baru",
+      "successTitle": "Sandi berhasil diubah",
+      "success": "Semua sesi Anda telah keluar. Silakan masuk dengan sandi baru.",
+      "toLogin": "Ke halaman masuk",
+      "missingToken": "Tautan pengaturan ulang sandi tidak lengkap atau sudah tidak berlaku.",
+      "requestNew": "Minta tautan baru"
+    },
+    "errors": {
+      "invalid_credentials": "Email atau sandi salah.",
+      "account_locked": "Akun terkunci. Atur ulang sandi atau hubungi administrator.",
+      "rate_limited": "Terlalu banyak percobaan. Coba lagi dalam {seconds} detik.",
+      "rate_limited_generic": "Terlalu banyak percobaan. Coba lagi nanti.",
+      "validation_failed": "Data yang Anda masukkan tidak valid.",
+      "mfa_required": "Verifikasi dua langkah diperlukan.",
+      "unauthenticated": "Sesi Anda telah berakhir. Silakan masuk kembali.",
+      "conflict": "Verifikasi dua langkah sudah aktif.",
+      "invalid_state": "Verifikasi dua langkah belum didaftarkan.",
+      "network": "Tidak dapat terhubung ke server. Periksa koneksi Anda lalu coba lagi.",
+      "generic": "Terjadi kesalahan. Silakan coba lagi."
+    }
+  },
+  "changePassword": {
+    "title": "Ubah sandi",
+    "description": "Ganti sandi akun Anda. Sesi Anda di perangkat lain akan keluar.",
+    "current": "Sandi saat ini",
+    "new": "Sandi baru",
+    "confirm": "Ulangi sandi baru",
+    "submit": "Simpan sandi baru",
+    "success": "Sandi berhasil diubah. Sesi di perangkat lain telah keluar."
+  }
+}

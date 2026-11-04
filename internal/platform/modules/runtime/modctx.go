@@ -26,6 +26,7 @@ func ModuleContext(ctx context.Context, t tenancy.TenantID, key string, conn dat
 	ctx = data.WithProvider(ctx, database.DataProvider(conn))
 	ctx = observability.WithModule(ctx, key)
 	ctx = svc.install(ctx)
+	ctx = svc.installIdentity(ctx, key)
 	ctx = svc.installI18n(ctx, t, key)
 	trace.SpanFromContext(ctx).SetAttributes(attribute.String("erp.module.key", key))
 	if systemReason != "" {

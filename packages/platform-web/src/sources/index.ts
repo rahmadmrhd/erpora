@@ -1,3 +1,4 @@
+export { type BootstrapUserSourceOptions, createBootstrapUserSource } from "./bootstrap-user";
 export {
   CurrentUserSourceProvider,
   useCurrentUser,

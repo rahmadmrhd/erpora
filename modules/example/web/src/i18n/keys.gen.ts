@@ -7,6 +7,7 @@ declare module "@erpora/platform-web" {
       "actions.refresh": {};
       "desk.title": {};
       "errors.bad_request": {};
+      "fieldGroup.general": {};
       "nav.notes": {};
       "page.notes.columns.title": {};
       "page.notes.columns.updated": {};
@@ -16,6 +17,8 @@ declare module "@erpora/platform-web" {
       "page.notes.empty": {};
       "page.notes.error": {};
       "page.notes.title": {};
+      "resource.note": {};
+      "resource.ping": {};
     };
   }
 }

@@ -78,6 +78,31 @@ func TestNotes_DefaultsAndEnvelope(t *testing.T) {
 	}
 }
 
+// sdk:audit (K19): createdBy dan updatedBy ikut respons; null untuk data lama, seed, dan tindakan sistem.
+func TestNotes_AuditUsersAreNullOrString(t *testing.T) {
+	ts := time.Date(2026, 10, 22, 7, 0, 0, 0, time.UTC)
+	author, editor := "0193a6c2-0000-7000-8000-0000000000aa", "0193a6c2-0000-7000-8000-0000000000bb"
+	lister := &fakeLister{items: []domain.Note{
+		{ID: "0193a6c2-0000-7000-8000-000000000001", Title: "lama", Version: 1, CreatedAt: ts, UpdatedAt: ts},
+		{ID: "0193a6c2-0000-7000-8000-000000000002", Title: "baru", Version: 2, CreatedAt: ts, UpdatedAt: ts, CreatedBy: &author, UpdatedBy: &editor},
+	}, total: 2}
+	rec := serve(New(lister).ListNotes, "/notes")
+	var body struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Data) != 2 {
+		t.Fatalf("body = %s (%v)", rec.Body.String(), err)
+	}
+	for _, k := range []string{"createdBy", "updatedBy"} {
+		if v, ok := body.Data[0][k]; !ok || v != nil {
+			t.Errorf("data lama: %s harus ada dan null, dapat %v (ada=%v)", k, v, ok)
+		}
+	}
+	if body.Data[1]["createdBy"] != author || body.Data[1]["updatedBy"] != editor {
+		t.Errorf("data baru = %+v", body.Data[1])
+	}
+}
+
 func TestNotes_EmptyListIsArray(t *testing.T) {
 	rec := serve(New(&fakeLister{}).ListNotes, "/notes")
 	var raw map[string]json.RawMessage

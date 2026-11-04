@@ -20,7 +20,7 @@ const item = (id: string, to: string) => ({
   id,
   label: `nav.${id}`,
   to,
-  permission: "example.notes.read",
+  permission: "example.note.read",
 });
 
 describe("assertDeskRoutes", () => {

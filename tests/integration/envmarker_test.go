@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 // prodEnv: ERP_ENV=production wajib berpasangan dengan stub deny (config menolak allow di production).
@@ -37,7 +38,7 @@ func TestDevBinary_ProductionMarker(t *testing.T) {
 	}
 	for _, args := range writes {
 		cmd := append([]string{}, args...)
-		out, code := cliRunBin(t, erpBin, dsn, []string{"ERP_HTTP_ADDR=" + addr}, "", cmd...)
+		out, code := cliRunBin(t, erpBin, dsn, []string{"ERP_HTTP_ADDR=" + addr, secretkey.Env()}, "", cmd...) // serve butuh kunci agar sampai ke pemeriksaan penanda
 		if code != 3 {
 			t.Errorf("dev %s: exit %d, want 3\n%s", strings.Join(args, " "), code, out)
 		}

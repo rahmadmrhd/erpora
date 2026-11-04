@@ -24,8 +24,26 @@ import (
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/modules/store"
 	"erpora/internal/platform/tenancy"
+	sdkidentity "erpora/sdk/identity"
 	"erpora/sdk/module"
 )
+
+// testUserID adalah pengguna Principal bawaan; header X-Test-User menggantinya, X-Test-Anon menghilangkan Principal.
+const testUserID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01"
+
+// principalMW meniru Authenticate (yang nyata diuji di package identity): memasang Principal dari header uji.
+func principalMW(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Test-Anon") == "" {
+			uid := testUserID
+			if v := r.Header.Get("X-Test-User"); v != "" {
+				uid = v
+			}
+			r = r.WithContext(sdkidentity.WithPrincipal(r.Context(), sdkidentity.Principal{UserID: uid, Kind: sdkidentity.KindHuman}))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 var (
 	testTenant = tenancy.TenantID(uuid.MustParse("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"))
@@ -58,7 +76,7 @@ func newFakeBE() *fakeBE {
 				Incompatible: []resolver.Issue{{Code: resolver.CodePlatformIncompatible, Module: "acme.third"}}},
 		},
 		ops: map[uuid.UUID]store.Operation{
-			opID: {ID: opID, TenantID: testTenant, ModuleKey: "acme.example", Operation: "enable", Status: "succeeded", Actor: "api:dev", StartedAt: fixedTime,
+			opID: {ID: opID, TenantID: testTenant, ModuleKey: "acme.example", Operation: "enable", Status: "succeeded", Actor: "cli:test", StartedAt: fixedTime,
 				Steps: []store.Step{{Name: "health", Status: "succeeded", StartedAt: fixedTime, DurationMS: 3}}},
 		},
 	}
@@ -136,16 +154,17 @@ func setup(t *testing.T, authz runtime.Authorizer, opts ...runtime.MountOption) 
 	be := newFakeBE()
 	api.Bind(be)
 	reg, err := registry.Build(registry.Options{
-		PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformCapabilities: Capabilities,
+		PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformResources: Resources,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	router := httpserver.NewRouter(httpserver.Deps{
-		Logger:    log,
-		Resolver:  resolverFunc(func(*http.Request) (tenancy.TenantID, error) { return testTenant, nil }),
-		Connector: database.SingleTenantConnector{Default: testTenant},
+		Logger:       log,
+		Resolver:     resolverFunc(func(*http.Request) (tenancy.TenantID, error) { return testTenant, nil }),
+		Connector:    database.SingleTenantConnector{Default: testTenant},
+		Authenticate: principalMW,
 	})
 	runtime.Mount(router, reg, runtime.NewSnapshot(), authz, log, opts...)
 	return fixtureAPI{api: api, be: be, h: router}
@@ -255,7 +274,7 @@ func TestHistoryAndOperationShareRoute(t *testing.T) {
 	f := setup(t, allow{})
 	other := tenancy.TenantID(uuid.New())
 	f.be.events = []store.Event{
-		{ID: uuid.New(), TenantID: testTenant, ModuleKey: "acme.example", Event: "enabled", Actor: "api:dev", OperationID: opID, OccurredAt: fixedTime},
+		{ID: uuid.New(), TenantID: testTenant, ModuleKey: "acme.example", Event: "enabled", Actor: "cli:test", OperationID: opID, OccurredAt: fixedTime},
 		{ID: uuid.New(), TenantID: other, ModuleKey: "acme.example", Event: "disabled", Actor: "x", OccurredAt: fixedTime},
 	}
 	rec := f.do("GET", "/api/platform/modules/acme.example/history", "", nil)
@@ -360,7 +379,7 @@ func TestAction_UnknownOperationAndNotBound(t *testing.T) {
 	}
 
 	api := New() // belum di-bind
-	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformCapabilities: Capabilities})
+	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: api.Register, PlatformResources: Resources})
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	router := httpserver.NewRouter(httpserver.Deps{Logger: log,
 		Resolver:  resolverFunc(func(*http.Request) (tenancy.TenantID, error) { return testTenant, nil }),
@@ -383,7 +402,7 @@ func TestAction_Success(t *testing.T) {
 		t.Fatal("Execute tidak dipanggil")
 	}
 	r := f.be.execReqs[0]
-	if r.Op != lifecycle.OpInstall || r.Key != "acme.example" || !r.WithDeps || !r.Enable || r.All || r.Actor != "api:dev" || r.Tenant != testTenant {
+	if r.Op != lifecycle.OpInstall || r.Key != "acme.example" || !r.WithDeps || !r.Enable || r.All || r.Actor != "user:"+testUserID || r.Tenant != testTenant {
 		t.Errorf("request = %+v", r)
 	}
 	var body struct {
@@ -398,8 +417,8 @@ func TestAction_Success(t *testing.T) {
 	if body.Data.Module["key"] != "acme.example" || len(body.Data.Operations) != 1 || body.Data.Operations[0]["id"] != opID.String() {
 		t.Errorf("body = %s", rec.Body)
 	}
-	// retry memakai operasi terakhir modul dengan actor api:dev.
-	if rec := f.do("POST", "/api/platform/modules/acme.example/retry", "", nil); rec.Code != 200 || len(f.be.retried) != 1 || f.be.retried[0] != "acme.example|api:dev" {
+	// retry memakai operasi terakhir modul dengan aktor dari Principal.
+	if rec := f.do("POST", "/api/platform/modules/acme.example/retry", "", nil); rec.Code != 200 || len(f.be.retried) != 1 || f.be.retried[0] != "acme.example|user:"+testUserID {
 		t.Fatalf("retry: %d %s %v", rec.Code, rec.Body, f.be.retried)
 	}
 }
@@ -407,7 +426,7 @@ func TestAction_Success(t *testing.T) {
 func TestAction_FailedOperationReturns200(t *testing.T) {
 	f := setup(t, allow{})
 	failedID := uuid.New()
-	f.be.ops[failedID] = store.Operation{ID: failedID, TenantID: testTenant, ModuleKey: "acme.example", Operation: "enable", Status: "failed", Actor: "api:dev", StartedAt: fixedTime,
+	f.be.ops[failedID] = store.Operation{ID: failedID, TenantID: testTenant, ModuleKey: "acme.example", Operation: "enable", Status: "failed", Actor: "cli:test", StartedAt: fixedTime,
 		Error: &store.OpError{Code: "health_failed", Message: "sakit", Step: "health"}}
 	f.be.execFn = func(context.Context, lifecycle.Request) ([]lifecycle.Result, error) {
 		return []lifecycle.Result{{Module: "acme.example", Op: lifecycle.OpEnable, Status: "failed", OperationID: failedID, Error: &store.OpError{Code: "health_failed", Message: "sakit", Step: "health"}}}, nil
@@ -617,7 +636,7 @@ func TestMutationGate_Production404(t *testing.T) {
 func TestIsMutation_OnlyActionRoute(t *testing.T) {
 	f := setup(t, allow{})
 	_ = f
-	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: New().Register, PlatformCapabilities: Capabilities})
+	reg, _ := registry.Build(registry.Options{PlatformVersion: "0.1.0", SDKVersion: "0.1.0", Platform: New().Register, PlatformResources: Resources})
 	n := 0
 	for _, rt := range reg.Routes() {
 		if IsMutation(rt) {
@@ -631,5 +650,33 @@ func TestIsMutation_OnlyActionRoute(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("jumlah route mutasi = %d, want 1", n)
+	}
+}
+
+// Aktor audit aksi modul adalah `user:<id>` dari Principal request: dua pengguna tercatat sebagai dirinya masing-masing.
+func TestAction_ActorFromPrincipalPerUser(t *testing.T) {
+	f := setup(t, allow{})
+	const userB = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4bb2"
+	for _, uid := range []string{testUserID, userB} {
+		if rec := f.do("POST", "/api/platform/modules/acme.example/enable", "", map[string]string{"X-Test-User": uid}); rec.Code != 200 {
+			t.Fatalf("%s: %d %s", uid, rec.Code, rec.Body)
+		}
+	}
+	if len(f.be.execReqs) != 2 || f.be.execReqs[0].Actor != "user:"+testUserID || f.be.execReqs[1].Actor != "user:"+userB {
+		t.Errorf("aktor = %+v", f.be.execReqs)
+	}
+}
+
+// Tanpa Principal (rantai middleware salah rakit) aksi mutasi gagal tertutup 401 dan tidak pernah menjalankan operasi.
+func TestAction_WithoutPrincipalFailsClosed(t *testing.T) {
+	f := setup(t, allow{})
+	for _, op := range []string{"install", "retry", "enable"} {
+		rec := f.do("POST", "/api/platform/modules/acme.example/"+op, "", map[string]string{"X-Test-Anon": "1"})
+		if rec.Code != http.StatusUnauthorized || errOf(t, rec).Error.Code != "unauthenticated" {
+			t.Errorf("%s tanpa principal = %d %s", op, rec.Code, rec.Body)
+		}
+	}
+	if len(f.be.execReqs) != 0 || len(f.be.retried) != 0 {
+		t.Errorf("operasi tidak boleh berjalan: %+v %v", f.be.execReqs, f.be.retried)
 	}
 }

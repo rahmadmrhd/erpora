@@ -1,0 +1,164 @@
+schemaVersion: "1"
+kind: resource
+key: fixturesales.invoice
+description: Faktur penjualan, dokumen transaksional dengan baris embedded, relasi lintas modul, morph, dan salinan field.
+include:
+  - source: sdk:document
+  - source: fixturesales.pricing
+    omit: [withholdingRate]
+    reason: Pajak hanya wajib bila faktur kena pajak
+    set:
+      taxRate:
+        requiredWhen: { field: taxable, op: eq, value: true }
+  - source: fixturecore.address
+    prefix: shipping
+    reason: Kode pos hanya wajib bila dikirim ke pelanggan
+    set:
+      postalCode:
+        requiredWhen: { field: shipToCustomer, op: eq, value: true }
+labelTemplate: "{number} - {customerName}"
+layout: { section: general, columns: 2, order: [number, issuedOn, dueOn, customerName, paymentTerm] }
+ownerField: createdBy
+scopeFields:
+  fixturecore.branch: branchId
+fields:
+  number:
+    type: string
+    maxLength: 32
+    readOnly: true
+    unique: true
+    sortable: true
+    filterable: true
+    label: fixturesales.invoice.number
+  issuedOn:
+    type: date
+    sortable: true
+    filterable: true
+    label: fixturesales.invoice.issuedOn
+  dueOn:
+    type: date
+    sortable: true
+    filterable: true
+    label: fixturesales.invoice.dueOn
+  paymentTerm:
+    type: enum
+    values: [cash, net_15, net_30, net_60]
+    extensible: true
+    default: net_30
+    filterable: true
+    groupable: true
+    label: fixturesales.invoice.paymentTerm
+  branchId:
+    type: uuid
+    nullable: true
+    filterable: true
+    label: fixturesales.invoice.branchId
+  taxable:
+    type: boolean
+    default: true
+    label: fixturesales.invoice.taxable
+  shipToCustomer:
+    type: boolean
+    default: false
+    label: fixturesales.invoice.shipToCustomer
+  customerName:
+    type: string
+    maxLength: 200
+    readOnly: true
+    fieldGroup: general
+    classification: internal
+    sortable: true
+    filterable: true
+    label: fixturesales.invoice.customerName
+  total:
+    type: decimal
+    precision: 18
+    scale: 2
+    currency: IDR
+    fieldGroup: pricing
+    classification: confidential
+    aggregatable: true
+    sortable: true
+    filterable: true
+    label: fixturesales.invoice.total
+  approvalNote:
+    type: text
+    nullable: true
+    maxLength: 1000
+    requiredWhen: { field: total, op: gte, value: "50000000.00" }
+    visibleWhen:
+      any:
+        - { field: total, op: gte, value: "50000000.00" }
+        - not: { field: status, op: eq, value: draft }
+    label: fixturesales.invoice.approvalNote
+  summary:
+    type: string
+    maxLength: 300
+    readOnly: true
+    label: fixturesales.invoice.summary
+    accessor:
+      kind: expr
+      expr:
+        concat:
+          - { field: number }
+          - { lit: " / " }
+          - { field: customerName }
+  lineCount:
+    type: integer
+    readOnly: true
+    fieldGroup: general
+    classification: internal
+    label: fixturesales.invoice.lineCount
+    accessor:
+      kind: func
+      func: countLines
+relations:
+  customer:
+    type: belongsTo
+    to: fixturecore.customer
+    required: true
+    onDelete: restrict
+    filter: { field: status, op: eq, value: active }
+    snapshot:
+      - { from: name, to: customerName }
+  lines:
+    type: hasMany
+    of: fixturesales.invoiceLine
+    embedded: true
+  tags:
+    type: belongsToMany
+    to: fixturesales.tag
+    pivotFields:
+      remark: { type: string, maxLength: 100, nullable: true }
+  notes:
+    type: morphMany
+    of: fixturesales.note
+    as: subject
+rules:
+  - id: dueAfterIssue
+    assert: { field: dueOn, op: gte, ref: issuedOn }
+    field: dueOn
+    message: fixturesales.invoice.error.dueBeforeIssued
+  - id: discountWithinCap
+    assert: { field: discountRate, op: lte, value: "50" }
+    field: discountRate
+    message: fixturesales.invoice.error.discountTooHigh
+    scope: server
+statusAxes:
+  billingStatus:
+    values: [to_bill, billed]
+    initial: to_bill
+    transitions:
+      - { from: to_bill, to: billed }
+  deliveryStatus:
+    values: [to_deliver, partially_delivered, delivered]
+    initial: to_deliver
+    transitions:
+      - { from: to_deliver, to: partially_delivered }
+      - { from: to_deliver, to: delivered }
+      - { from: partially_delivered, to: delivered }
+      - { from: partially_delivered, to: to_deliver }
+      - { from: delivered, to: partially_delivered }
+      - { from: delivered, to: to_deliver }
+indexes:
+  - fields: [status, issuedOn]

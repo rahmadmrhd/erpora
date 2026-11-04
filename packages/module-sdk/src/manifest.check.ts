@@ -12,7 +12,17 @@ const example: ModuleManifest = {
   trust: "builtin",
   compatibility: { platform: "^0.1", sdk: "^0.1" },
   dependencies: [{ module: "platform.core", version: "^0.1", optional: false }],
-  capabilities: ["example.ping.read", "example.notes.read"],
+  capabilities: [],
+  resources: [
+    {
+      key: "example.note",
+      label: "resource.note",
+      actions: ["read"],
+      field_groups: [
+        { key: "general", label: "fieldGroup.general", classification: "internal", default: true },
+      ],
+    },
+  ],
   migrations: { strategy: "versioned" },
   offline: { mode: "online-only" },
 };
@@ -23,4 +33,10 @@ const badTrust: ModuleManifest = { ...example, trust: "community" };
 // @ts-expect-error slug harus string
 const badSlug: ModuleManifest = { ...example, slug: 1 };
 
-export type Checked = [typeof example, typeof badTrust, typeof badSlug];
+const badResource: ModuleManifest = {
+  ...example,
+  // @ts-expect-error resource wajib punya field_groups
+  resources: [{ key: "example.note", label: "resource.note", actions: ["read"] }],
+};
+
+export type Checked = [typeof example, typeof badTrust, typeof badSlug, typeof badResource];

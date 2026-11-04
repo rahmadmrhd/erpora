@@ -23,6 +23,7 @@ import (
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 func testProviders() observability.Providers {
@@ -96,7 +97,7 @@ func setupAssemblyWith(t *testing.T, mutate func(*config.Config)) (context.Conte
 	t.Helper()
 	dsn := pgtest.Start(t)
 	db := openTestDB(t, dsn)
-	cfg := config.Config{DatabaseURL: dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond}
+	cfg := config.Config{DatabaseURL: dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond, SecretKey: secretkey.Bytes()}
 	mutate(&cfg)
 	if err := migrate.Up(context.Background(), db, cfg.Env); err != nil {
 		t.Fatal(err)
@@ -116,7 +117,7 @@ func setupAssemblyWith(t *testing.T, mutate func(*config.Config)) (context.Conte
 
 func TestAssemble_BootstrapReflectsLifecycle(t *testing.T) {
 	ctx, a, _, _ := setupAssembly(t)
-	b, etag0 := bootstrapOf(t, a.Router)
+	b, etag0 := bootstrapOf(t, a.authed(t))
 	if b.Data.Revision != 0 || statusOf(b, "acme.example") != "available" || statusOf(b, "acme.example-addon") != "available" {
 		t.Fatalf("bootstrap awal = %+v", b)
 	}
@@ -133,14 +134,14 @@ func TestAssemble_BootstrapReflectsLifecycle(t *testing.T) {
 	if err != nil || len(res) != 2 || res[1].Status != "succeeded" {
 		t.Fatalf("Execute = %+v, %v", res, err)
 	}
-	b, etag1 := bootstrapOf(t, a.Router)
+	b, etag1 := bootstrapOf(t, a.authed(t))
 	if statusOf(b, "acme.example") != "enabled" || b.Data.Revision == 0 || etag1 == etag0 {
 		t.Fatalf("bootstrap = %+v etag %s -> %s", b, etag0, etag1)
 	}
-	if rec := get(a.Router, "/api/example/ping", nil); rec.Code != 200 {
+	if rec := get(a.authed(t), "/api/example/ping", nil); rec.Code != 200 {
 		t.Fatalf("ping = %d %s", rec.Code, rec.Body)
 	}
-	if rec := get(a.Router, "/api/bootstrap", map[string]string{"If-None-Match": etag1}); rec.Code != 304 {
+	if rec := get(a.authed(t), "/api/bootstrap", map[string]string{"If-None-Match": etag1}); rec.Code != 304 {
 		t.Errorf("If-None-Match = %d", rec.Code)
 	}
 }
@@ -151,7 +152,7 @@ func TestAssemble_CrossProcessChangeVisibleViaWatch(t *testing.T) {
 	if _, err := a.Lifecycle.Execute(ctx, lifecycle.Request{Tenant: a.Tenant, Op: lifecycle.OpInstall, Key: "acme.example", Enable: true, Actor: "cli:a"}); err != nil {
 		t.Fatal(err)
 	}
-	if rec := get(a.Router, "/api/example/ping", nil); rec.Code != 200 {
+	if rec := get(a.authed(t), "/api/example/ping", nil); rec.Code != 200 {
 		t.Fatalf("ping = %d", rec.Code)
 	}
 
@@ -165,7 +166,7 @@ func TestAssemble_CrossProcessChangeVisibleViaWatch(t *testing.T) {
 
 	deadline := time.Now().Add(3*lifecycle.DefaultPollInterval + 500*time.Millisecond)
 	for {
-		rec := get(a.Router, "/api/example/ping", nil)
+		rec := get(a.authed(t), "/api/example/ping", nil)
 		if rec.Code == http.StatusForbidden {
 			break
 		}
@@ -176,14 +177,19 @@ func TestAssemble_CrossProcessChangeVisibleViaWatch(t *testing.T) {
 	}
 }
 
-func TestMigrateUp_EnsureRequiredNoRequiredModules(t *testing.T) {
+// core adalah satu-satunya modul required (C1.11): EnsureRequired memasangnya (idempoten pada pemanggilan kedua).
+func TestMigrateUp_EnsureRequiredInstallsCore(t *testing.T) {
 	ctx, a, _, db := setupAssembly(t)
 	res, err := a.Lifecycle.EnsureRequired(ctx, a.Tenant, "system:migrate")
-	if err != nil || len(res) != 0 {
+	if err != nil || len(res) != 2 || res[0].Module != "erp.core" || res[0].Op != "install" || res[1].Op != "enable" || res[1].Status != "succeeded" {
 		t.Fatalf("EnsureRequired = %+v, %v", res, err)
 	}
 	var n int64
-	if err := db.Raw("SELECT count(*) FROM module_installations").Scan(&n).Error; err != nil || n != 0 {
+	if err := db.Raw("SELECT count(*) FROM module_installations").Scan(&n).Error; err != nil || n != 1 {
 		t.Errorf("module_installations = %d (%v)", n, err)
+	}
+	again, err := a.Lifecycle.EnsureRequired(ctx, a.Tenant, "system:migrate")
+	if err != nil || len(again) == 0 || again[len(again)-1].Status != "noop" {
+		t.Fatalf("EnsureRequired kedua = %+v, %v", again, err)
 	}
 }

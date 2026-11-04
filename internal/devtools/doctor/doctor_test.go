@@ -79,8 +79,13 @@ func TestRun_Table(t *testing.T) {
 		want   map[string]Status
 		failed bool
 	}{
-		{"semua ok", func(*fakeProbe) {}, func(r string) Inputs { return Inputs{Root: r, DSN: secretDSN, Ping: ok} },
-			map[string]Status{"go": StatusOK, "bun": StatusOK, "task": StatusOK, "docker": StatusOK, "postgres": StatusOK, ".env": StatusOK}, false},
+		{"semua ok", func(*fakeProbe) {}, func(r string) Inputs { return Inputs{Root: r, DSN: secretDSN, Ping: ok, SecretKeyChecked: true} },
+			map[string]Status{"go": StatusOK, "bun": StatusOK, "task": StatusOK, "docker": StatusOK, "postgres": StatusOK, ".env": StatusOK, "ERP_SECRET_KEY": StatusOK}, false},
+		{"kunci rahasia belum valid", func(*fakeProbe) {}, func(r string) Inputs {
+			return Inputs{Root: r, DSN: secretDSN, Ping: ok, SecretKeyChecked: true, SecretKeyErr: "ERP_SECRET_KEY: wajib diisi; buat dengan `erpora secret:generate`"}
+		}, map[string]Status{"ERP_SECRET_KEY": StatusFail, "postgres": StatusOK}, true},
+		{"kunci rahasia belum diperiksa", func(*fakeProbe) {}, func(r string) Inputs { return Inputs{Root: r, DSN: secretDSN, Ping: ok} },
+			map[string]Status{"ERP_SECRET_KEY": StatusWarn, "postgres": StatusOK}, false},
 		{"go lebih rendah", func(p *fakeProbe) { p.outputs["go version"] = "go version go1.26.9 linux/amd64" },
 			func(r string) Inputs { return Inputs{Root: r, DSN: secretDSN, Ping: ok} }, map[string]Status{"go": StatusFail}, true},
 		{"go lebih tinggi", func(p *fakeProbe) { p.outputs["go version"] = "go version go1.28.0 linux/amd64" },
@@ -112,8 +117,8 @@ func TestRun_Table(t *testing.T) {
 			p.failing = map[string]bool{}
 			tc.mutate(&p)
 			rs := Run(context.Background(), tc.in(root), p)
-			if len(rs) != 6 {
-				t.Fatalf("harus 6 hasil, got %d: %+v", len(rs), rs)
+			if len(rs) != 7 {
+				t.Fatalf("harus 7 hasil, got %d: %+v", len(rs), rs)
 			}
 			for name, want := range tc.want {
 				if got, detail := statusOf(rs, name); got != want {
@@ -157,5 +162,24 @@ func TestRun_PostgresDetailRedactsPassword(t *testing.T) {
 	st, detail := statusOf(rs, "postgres")
 	if st != StatusFail || strings.Contains(detail, "S3cr3tPass") || !strings.Contains(detail, "db.local") {
 		t.Fatalf("status=%s detail=%q", st, detail)
+	}
+}
+
+// Kunci tak valid adalah temuan tersendiri: detailnya memuat petunjuk dan pemeriksaan postgres tetap berjalan.
+func TestRun_SecretKeyFindingIsSeparate(t *testing.T) {
+	root := fixtureRoot(t)
+	var pinged bool
+	ping := func(context.Context, string) error { pinged = true; return nil }
+	const msg = "ERP_SECRET_KEY: wajib diisi di semua mode; buat satu kali dengan `erpora secret:generate`"
+	rs := Run(context.Background(), Inputs{Root: root, DSN: secretDSN, Ping: ping, SecretKeyChecked: true, SecretKeyErr: msg}, goodProbe(root))
+	if !pinged {
+		t.Error("ping postgres harus tetap dijalankan walau kunci tidak valid")
+	}
+	st, detail := statusOf(rs, "ERP_SECRET_KEY")
+	if st != StatusFail || !strings.Contains(detail, "secret:generate") {
+		t.Errorf("status=%s detail=%q", st, detail)
+	}
+	if st, d := statusOf(rs, "postgres"); st != StatusOK || strings.Contains(d, "ERP_SECRET_KEY") {
+		t.Errorf("postgres harus ok dan tidak tercampur: %s %q", st, d)
 	}
 }

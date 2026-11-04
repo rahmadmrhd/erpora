@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="id">
+<body>
+<p>Halo{{if .Name}} {{.Name}}{{end}},</p>
+<p>Kami menerima permintaan untuk mengatur ulang kata sandi akun {{.AppName}} Anda.</p>
+<p>Untuk memilih kata sandi baru, buka tautan berikut. Tautan ini berlaku {{.ExpiresMinutes}} menit dan hanya dapat dipakai satu kali:</p>
+<p><a href="{{.Link}}">Atur ulang kata sandi</a></p>
+<p>Setelah kata sandi diganti, semua sesi masuk Anda yang lain akan dikeluarkan.</p>
+<p>Jika Anda tidak meminta pengaturan ulang kata sandi, abaikan email ini; kata sandi Anda tidak berubah.</p>
+</body>
+</html>

@@ -10,8 +10,16 @@
   "dependencies": [
     { "module": "platform.core", "version": "^0.1", "optional": false }
   ],
-  "capabilities": ["inventory.items.read", "inventory.items.approve"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
-  "offline": { "mode": "online-only" }
+  "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "inventory.items",
+      "label": "resource.items",
+      "actions": ["read", "approve"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }
+  ]
 }

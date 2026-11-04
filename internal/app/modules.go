@@ -1,6 +1,7 @@
 package app
 
 import (
+	"erpora/modules/core"
 	"erpora/modules/example"
 	"erpora/modules/exampleaddon"
 	"erpora/sdk/module"
@@ -14,6 +15,7 @@ func compiledModules() []module.Module {
 	return []module.Module{
 		ex,
 		exampleaddon.New(ex.Notes()),
+		core.New(),
 		// erp:generated:modules
 	}
 }

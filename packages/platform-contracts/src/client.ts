@@ -12,7 +12,13 @@ export interface ApiError {
 
 export type ApiResult<T> =
   | { ok: true; status: number; data: T; page?: unknown; etag?: string }
-  | { ok: false; status: number; error: ApiError };
+  | {
+      ok: false;
+      status: number;
+      error: ApiError;
+      /** Detik dari header `Retry-After` pada 429 (bilangan bulat positif); tidak ada bila header kosong atau tidak valid. */
+      retryAfter?: number;
+    };
 
 export interface ClientOptions {
   baseUrl?: string;
@@ -23,6 +29,24 @@ export interface ClientOptions {
 }
 
 type Method = "get" | "post" | "patch" | "delete";
+
+/**
+ * Transport bawaan untuk klien yang dibuat tanpa `fetch` atau `headers` eksplisit. Dipasang aplikasi (klien token di
+ * `@erpora/platform-web`, C1.14) agar SEMUA klien modul, termasuk `client` hasil generate, otomatis membawa access
+ * token dan menyegarkannya saat kedaluwarsa tanpa setiap modul memasangnya sendiri. Opsi eksplisit klien menang
+ * (`fetch`); `headers` bawaan digabung di bawah `headers` eksplisit dan header per panggilan.
+ */
+export interface DefaultTransport {
+  fetch?: typeof fetch;
+  headers?: () => Record<string, string>;
+}
+
+let defaultTransport: DefaultTransport | undefined;
+
+/** Memasang (atau, dengan `undefined`, melepas) transport bawaan. Hanya satu yang aktif. */
+export function setDefaultTransport(transport: DefaultTransport | undefined): void {
+  defaultTransport = transport;
+}
 
 /** Path pada `Paths` yang punya method M. */
 export type PathsWith<Paths, M extends Method> = {
@@ -111,11 +135,12 @@ export function createClient<Paths>(opts: ClientOptions = {}): TypedClient<Paths
     path: string,
     init: RawInit = {},
   ): Promise<ApiResult<unknown>> => {
-    const doFetch = opts.fetch ?? globalThis.fetch;
+    const doFetch = opts.fetch ?? defaultTransport?.fetch ?? globalThis.fetch;
     const locale = opts.getLocale?.();
     const headers: Record<string, string> = {
       Accept: "application/json",
       ...(locale ? { "Accept-Language": locale } : {}),
+      ...defaultTransport?.headers?.(),
       ...opts.headers?.(),
       ...init.headers,
     };
@@ -148,6 +173,8 @@ export function createClient<Paths>(opts: ClientOptions = {}): TypedClient<Paths
       const etag = res.headers.get("ETag") ?? undefined;
       return { ok: true, status: res.status, data: parsed?.data, page: parsed?.page, etag };
     }
+    // Retry-After hanya dalam detik (bilangan bulat positif); bentuk tanggal HTTP diabaikan.
+    const retryAfter = res.status === 429 ? Number(res.headers.get("Retry-After")) : 0;
     return {
       ok: false,
       status: res.status,
@@ -155,6 +182,7 @@ export function createClient<Paths>(opts: ClientOptions = {}): TypedClient<Paths
         code: "http_error",
         message: res.statusText || `HTTP ${res.status}`,
       },
+      ...(Number.isSafeInteger(retryAfter) && retryAfter > 0 ? { retryAfter } : {}),
     };
   };
   return {

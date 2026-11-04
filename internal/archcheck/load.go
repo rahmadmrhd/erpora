@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,13 @@ func Load(root string) (Repo, error) {
 			return repo, err
 		}
 		repo.Mods = append(repo.Mods, gm)
+		if rel, err := filepath.Rel(abs, dir); err == nil && strings.HasPrefix(filepath.ToSlash(rel), "modules/") {
+			nested, err := findNestedGoMods(dir)
+			if err != nil {
+				return repo, err
+			}
+			repo.NestedGoMods = append(repo.NestedGoMods, nested...)
+		}
 		mf, ok, err := loadManifest(dir)
 		if err != nil {
 			return repo, err
@@ -106,6 +114,9 @@ func loadGoMod(dir string) (GoMod, error) {
 	}
 	if f.Toolchain != nil {
 		gm.Toolchain = f.Toolchain.Name
+	}
+	for _, r := range f.Replace {
+		gm.Replaces = append(gm.Replaces, Replace{Old: r.Old.Path, New: r.New.Path, NewVersion: r.New.Version})
 	}
 	for _, r := range f.Require {
 		gm.Requires = append(gm.Requires, r.Mod.Path)
@@ -375,4 +386,27 @@ func unionStrings(a, b []string) []string {
 		}
 	}
 	return a
+}
+
+// findNestedGoMods mengembalikan path semua go.mod di bawah dir selain go.mod akar dir itu sendiri (MODNEST).
+// node_modules dan .git dilewati; testdata TIDAK dilewati: fixture archcheck berada di internal/archcheck/testdata
+// (bukan di bawah modules/), sehingga tidak ada pengecualian untuknya di sini.
+func findNestedGoMods(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if n := d.Name(); n == "node_modules" || n == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == "go.mod" && filepath.Dir(path) != filepath.Clean(dir) {
+			out = append(out, path)
+		}
+		return nil
+	})
+	return out, err
 }

@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { createClient } from "./client";
+import { afterEach, describe, expect, test } from "bun:test";
+import { createClient, setDefaultTransport } from "./client";
 import type { paths } from "./platform.gen";
 
 interface Seen {
@@ -165,5 +165,83 @@ describe("client: getLocale dan Accept-Language (i18n 12.6)", () => {
     const b = localeClient(() => "id");
     await b.client.get("/api/bootstrap", { headers: { "Accept-Language": "en" } });
     expect(b.seen[0]?.get("Accept-Language")).toBe("en");
+  });
+});
+
+describe("client: Retry-After pada galat (C1.14)", () => {
+  const limited = (retryAfter?: string) => () =>
+    new Response(JSON.stringify({ error: { code: "rate_limited", message: "x" } }), {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        ...(retryAfter === undefined ? {} : { "Retry-After": retryAfter }),
+      },
+    });
+
+  test("429 dengan Retry-After bilangan bulat: retryAfter dalam detik", async () => {
+    const { client } = harness(limited("42"));
+    const res = await client.get("/api/bootstrap");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.retryAfter).toBe(42);
+  });
+
+  test("Retry-After tidak ada, bukan bilangan bulat positif, atau bukan 429: retryAfter tidak ada", async () => {
+    for (const value of [undefined, "0", "-3", "abc", "1.5", "Wed, 21 Oct 2026 07:28:00 GMT"]) {
+      const { client } = harness(limited(value));
+      const res = await client.get("/api/bootstrap");
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.retryAfter, String(value)).toBeUndefined();
+    }
+    const { client } = harness(
+      () =>
+        new Response(JSON.stringify({ error: { code: "internal_error", message: "x" } }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", "Retry-After": "7" },
+        }),
+    );
+    const res = await client.get("/api/bootstrap");
+    if (!res.ok) expect(res.retryAfter).toBeUndefined();
+  });
+});
+
+describe("client: transport bawaan (C1.14)", () => {
+  afterEach(() => setDefaultTransport(undefined));
+
+  test("klien tanpa fetch/headers eksplisit memakai transport bawaan; opsi eksplisit menang", async () => {
+    const seen: Array<{ via: string; auth: string | null }> = [];
+    const make = (via: string) =>
+      (async (_url: string | URL | Request, init?: RequestInit) => {
+        seen.push({ via, auth: new Headers(init?.headers).get("Authorization") });
+        return new Response(JSON.stringify(bootstrapBody), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }) as unknown as typeof fetch;
+    setDefaultTransport({
+      fetch: make("default"),
+      headers: () => ({ Authorization: "Bearer dari-transport" }),
+    });
+
+    await createClient<paths>().get("/api/bootstrap");
+    await createClient<paths>({ fetch: make("eksplisit") }).get("/api/bootstrap");
+    await createClient<paths>({ headers: () => ({ Authorization: "Bearer eksplisit" }) }).get(
+      "/api/bootstrap",
+    );
+    expect(seen).toEqual([
+      { via: "default", auth: "Bearer dari-transport" },
+      { via: "eksplisit", auth: "Bearer dari-transport" },
+      { via: "default", auth: "Bearer eksplisit" },
+    ]);
+
+    setDefaultTransport(undefined);
+    seen.length = 0;
+    const raw = globalThis.fetch;
+    globalThis.fetch = make("global");
+    try {
+      await createClient<paths>().get("/api/bootstrap");
+    } finally {
+      globalThis.fetch = raw;
+    }
+    expect(seen).toEqual([{ via: "global", auth: null }]);
   });
 });

@@ -17,7 +17,7 @@ type HandlerOptions struct {
 var (
 	kebabSegRe = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 	permRe     = func(slug string) *regexp.Regexp {
-		return regexp.MustCompile(`^` + regexp.QuoteMeta(slug) + `\.[a-z][a-z0-9-]*\.[a-z][a-z0-9_]*$`)
+		return regexp.MustCompile(`^` + regexp.QuoteMeta(slug) + `\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`)
 	}
 )
 
@@ -88,8 +88,8 @@ type handlerData struct {
 	FailFunc       string
 }
 
-// MakeHandler membangun Plan satu endpoint: handler + test (OpCreate), registrasi route di module.go, capability di
-// module.json, dan operasi + skema di openapi.yaml (yaml.Node). Validasi (method, path, permission, operasi sudah ada)
+// MakeHandler membangun Plan satu endpoint: handler + test (OpCreate), registrasi route di module.go, resource/aksi di
+// module.json (permission = turunan resource x aksi, FR-110), dan operasi + skema di openapi.yaml (yaml.Node). Validasi (method, path, permission, operasi sudah ada)
 // dilakukan sebelum Plan. Handler ber-ID selalu disertai kerangka test IDOR.
 func MakeHandler(root string, o HandlerOptions) (Plan, error) {
 	ref, mod, err := resolveLayerModule(root, o.Module)
@@ -188,16 +188,25 @@ func MakeHandler(root string, o HandlerOptions) (Plan, error) {
 	}
 	plan.Ops = append(plan.Ops, FileOp{Path: modPath, Kind: OpModify, Content: out})
 
-	// module.json: capability.
+	// module.json: permission harus turunan resource x aksi (PRD-001 FR-110); resource/aksi baru ditambahkan, beserta
+	// label resource di katalog i18n.
 	manPath := "modules/" + ref.Dir + "/module.json"
 	man, err := readRepoFile(root, manPath)
 	if err != nil {
 		return Plan{}, err
 	}
-	if man, err = AppendJSONArrayString(man, "capabilities", o.Permission); err != nil {
+	man, newResource, err := EnsureManifestPermission(man, o.Permission)
+	if err != nil {
 		return Plan{}, fmt.Errorf("%s: %w", manPath, err)
 	}
 	plan.Ops = append(plan.Ops, FileOp{Path: manPath, Kind: OpModify, Content: man})
+	if newResource != "" {
+		catOps, err := resourceLabelOps(root, ref.Dir, newResource)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.Ops = append(plan.Ops, catOps...)
+	}
 
 	// openapi.yaml: operasi dan skema.
 	opText, err := Render("handler/operation.yaml.tmpl", d)
@@ -258,4 +267,28 @@ func failFunc(kind, name string) string {
 	default: // delete
 		return "func(context.Context, string, string) error { return " + boom + " }"
 	}
+}
+
+// resourceLabelOps menambah label resource baru (resource.<nama>) dan grup field default (fieldGroup.general) ke
+// katalog id dan en modul bila berkasnya ada; teks awal diturunkan dari nama resource agar dapat disunting.
+func resourceLabelOps(root, dir, resourceKey string) ([]FileOp, error) {
+	_, name, _ := strings.Cut(resourceKey, ".")
+	title := titleCase(strings.NewReplacer("-", " ", "_", " ").Replace(name))
+	var ops []FileOp
+	for _, loc := range []struct{ code, general string }{{"id", "Umum"}, {"en", "General"}} {
+		rel := "modules/" + dir + "/i18n/" + loc.code + ".json"
+		src, err := readRepoFile(root, rel)
+		if err != nil {
+			continue // modul tanpa katalog bahasa ini: tidak ada yang diubah
+		}
+		out, err := AddJSONDependency(src, "resource", name, title)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", rel, err)
+		}
+		if out, err = AddJSONDependency(out, "fieldGroup", "general", loc.general); err != nil {
+			return nil, fmt.Errorf("%s: %w", rel, err)
+		}
+		ops = append(ops, FileOp{Path: rel, Kind: OpModify, Content: out})
+	}
+	return ops, nil
 }

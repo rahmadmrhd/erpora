@@ -11,10 +11,18 @@
     { "module": "platform.core", "version": "^0.1", "optional": false },
     { "module": "acme.example", "version": "^1.0", "optional": false }
   ],
-  "capabilities": ["inventory.items.read"],
+  "capabilities": [],
   "migrations": { "strategy": "versioned" },
   "i18n": { "locales": ["id", "en"], "defaultLocale": "id" },
   "offline": { "mode": "online-only" },
+  "resources": [
+    {
+      "key": "inventory.items",
+      "label": "resource.items",
+      "actions": ["read"],
+      "field_groups": [{ "key": "general", "label": "fieldGroup.general", "classification": "internal", "default": true }]
+    }
+  ],
   "desk": {
     "label": "desk.title",
     "icon": "boxes",

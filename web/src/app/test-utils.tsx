@@ -11,6 +11,7 @@ import {
   lazyRouteComponent,
 } from "@erpora/module-sdk";
 import type {
+  AuthController,
   Bootstrap,
   BootstrapModule,
   CurrentUserSource,
@@ -19,6 +20,7 @@ import type {
   NotificationSource,
 } from "@erpora/platform-web";
 import {
+  createAuthController,
   createPlatformClient,
   getActiveLocale,
   makeBootstrap,
@@ -370,6 +372,15 @@ export interface RenderAppOptions {
   bootstrap?: Partial<Bootstrap>;
   /** Penanganan galat tertangkap batas galat; bawaan sama dengan produksi (`handleCaughtError`). */
   onCaughtError?: (error: unknown, info: { componentStack?: string }) => void;
+  /** Klien token; bawaan sesi penuh yang sudah login (gerbang autentikasi dibahas di auth-gate.test.tsx). */
+  auth?: AuthController;
+}
+
+/** Klien token dengan sesi penuh (tanpa MFA tertunda): aplikasi langsung melewati gerbang autentikasi. */
+export function signedInAuth(): AuthController {
+  const auth = createAuthController({ initial: "anonymous" });
+  auth.acceptSession({ accessToken: "token-uji", expiresIn: 600, mfaState: "none" });
+  return auth;
 }
 
 /** Merakit `Providers` penuh dengan server tiruan; `refreshBootstrap` memicu refetch (fokus jendela). */
@@ -396,6 +407,7 @@ export function renderApp(opts: RenderAppOptions = {}) {
       history={history}
       notificationSource={opts.notificationSource}
       currentUserSource={opts.currentUserSource}
+      auth={opts.auth ?? signedInAuth()}
       bootstrapOptions={{ retry: false, staleTime: 0 }}
     />,
     { onCaughtError: opts.onCaughtError ?? handleCaughtError },

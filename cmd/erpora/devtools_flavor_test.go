@@ -20,7 +20,7 @@ var wantDevCommands = map[string][]string{
 	"Database":        {"db:fresh", "db:seed"},
 	"Kontrak":         {"contracts:lint", "contracts:generate", "contracts:breaking"},
 	"Modul":           {"module:check"},
-	"Developer tools": {"doctor", "release:verify-tag"},
+	"Developer tools": {"doctor", "release:verify-tag", "metadata:check", "metadata:generate", "metadata:diff", "metadata:migrate"},
 }
 
 func TestDevFlavor_BannerAndVersion(t *testing.T) {

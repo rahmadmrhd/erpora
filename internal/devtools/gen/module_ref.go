@@ -7,12 +7,27 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"golang.org/x/mod/modfile"
+
+	"erpora/sdk/module"
 )
+
+// permissionsOf menggabungkan capabilities yang ditulis di module.json dengan permission turunan resource x aksi
+// (PRD-001 FR-110), tanpa duplikat dan terurut deklarasi.
+func permissionsOf(listed []string, resources []module.Resource) []string {
+	out := append([]string(nil), listed...)
+	for _, p := range module.PermissionsOf(resources) {
+		if !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // ModuleRef meringkas satu modul yang sudah ada (dari module.json dan go.mod).
 type ModuleRef struct {
@@ -59,12 +74,13 @@ func listModules(root string) ([]ModuleRef, error) {
 		var mf struct {
 			Key, Slug, Version string
 			Capabilities       []string
+			Resources          []module.Resource
 			Migrations         struct{ Strategy string }
 		}
 		if err := json.Unmarshal(raw, &mf); err != nil {
 			return nil, fmt.Errorf("modules/%s/module.json: %w", e.Name(), err)
 		}
-		ref := ModuleRef{Dir: e.Name(), Slug: mf.Slug, Key: mf.Key, Version: mf.Version, Strategy: mf.Migrations.Strategy, Capabilities: mf.Capabilities}
+		ref := ModuleRef{Dir: e.Name(), Slug: mf.Slug, Key: mf.Key, Version: mf.Version, Strategy: mf.Migrations.Strategy, Capabilities: permissionsOf(mf.Capabilities, mf.Resources)}
 		if gm, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil { //nolint:gosec // path dari ReadDir repo
 			if f, err := modfile.Parse("go.mod", gm, nil); err == nil && f.Module != nil {
 				ref.GoPath = f.Module.Mod.Path

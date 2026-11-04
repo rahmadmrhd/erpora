@@ -12,7 +12,7 @@
     { "module": "platform.core", "version": "^0.1", "optional": false },
     { "module": "acme.other", "version": "~1.2", "optional": true }
   ],
-  "capabilities": ["example.read", "example.write_all"],
+  "capabilities": ["example.note.read", "example.note.adjust_price"],
   "provides": ["example.service"],
   "migrations": { "strategy": "versioned" },
   "offline": { "mode": "offline-read" },
@@ -23,16 +23,27 @@
   "license": "MIT",
   "resources": [
     {
-      "key": "x.note",
-      "name": "orders",
+      "key": "example.note",
+      "label": "resource.note",
       "actions": ["read", "create"],
+      "custom_actions": [{ "key": "adjust_price", "label": "action.adjust_price" }],
+      "owner_field": "created_by",
+      "scope_fields": { "example.branch": "branch_id" },
       "field_groups": [
-        { "key": "general", "fields": ["title"], "classification": "internal" },
-        { "key": "pricing", "fields": ["cost"], "classification": "confidential" }
-      ]
+        { "key": "general", "label": "fieldGroup.general", "fields": ["title"], "classification": "internal", "default": true },
+        { "key": "pricing", "label": "fieldGroup.pricing", "fields": ["cost"], "classification": "confidential" }
+      ],
+      "audit": { "data_changes": true }
     }
   ],
-  "scope_dimensions": [{ "key": "branch" }],
-  "default_roles": [{ "key": "example.manager", "permissions": ["orders.read"] }],
+  "scope_dimensions": [{ "key": "example.branch", "label": "dimension.branch" }],
+  "default_roles": [
+    {
+      "key": "example.manager",
+      "label": "role.manager",
+      "permissions": [{ "resource": "example.note", "actions": ["read"], "scope": ["owner", "assigned:example.branch"] }],
+      "field_access": [{ "resource": "example.note", "field_group": "pricing", "access": "read" }]
+    }
+  ],
   "settings": { "example.limit": { "type": "integer", "default": 10 } }
 }

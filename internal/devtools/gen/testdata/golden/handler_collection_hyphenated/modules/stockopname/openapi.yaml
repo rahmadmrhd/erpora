@@ -48,7 +48,7 @@ paths:
       summary: ListStockCounts
       description: >
         Kerangka operasi ListStockCounts dibuat `erpora make:handler`; lengkapi deskripsi, skema, dan contoh sesuai perilaku sebenarnya.
-      x-erp-permission: stock-opname.stock-counts.read
+      x-erp-permission: stock-opname.stock_counts.read
       parameters:
         - { $ref: 'erp:common#/components/parameters/Page' }
         - { $ref: 'erp:common#/components/parameters/PageSize' }

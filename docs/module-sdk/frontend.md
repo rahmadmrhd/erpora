@@ -80,7 +80,7 @@ Contoh properti `desk` di `modules/example/module.json` (sumber menu, dibaca ser
   "label": "desk.title",
   "icon": "file-text",
   "menus": [
-    { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.notes.read" }
+    { "id": "notes", "label": "nav.notes", "to": "/notes", "permission": "example.note.read" }
   ]
 }
 ```
@@ -88,7 +88,7 @@ Contoh properti `desk` di `modules/example/module.json` (sumber menu, dibaca ser
 - `label` dan `menus[].label` adalah kunci i18n di namespace modul; `icon` memakai nama dari `iconRegistry`.
 - `menus` berisi item atau grup satu tingkat (grup tidak boleh bersarang, anak grup minimal satu).
 - `to` relatif terhadap base route modul (`/notes` menjadi `/example/notes`). Tanpa skema, host, `//`, query, atau fragmen. **Tidak boleh `/`**: indeks adalah Dashboard shell.
-- `permission` harus salah satu `capabilities` modul; item disembunyikan bila pengguna tidak memilikinya.
+- Setiap item memuat tepat satu dari `permission` atau `access` (PRD-000 Q43). `permission` harus salah satu permission turunan `resources` modul (`<resource>.<aksi>`); item disembunyikan bila pengguna tidak memilikinya. `"access": "authenticated"` menggantikan `permission` untuk item yang terlihat bagi semua pengguna yang login (server menyaringnya dari Principal, bukan dari permission); keduanya sekaligus atau tak satu pun ditolak.
 - `dashboard` (opsional) hanya mengisi `label` dan `icon` item Dashboard bawaan. Dashboard sendiri dibangkitkan platform di `/<slug>`, tidak dideklarasikan sebagai menu.
 
 Registry di shell (`@erpora/platform-web`, `registry/`) mencocokkan modul dengan bootstrap berdasarkan `key`:
@@ -185,13 +185,22 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 
 ## Anggaran bundle dan performa
 
-- Anggaran entry shell: **200 KB gzip** (NFR-04). Build (`web/build.ts`) gagal bila JS awal melampauinya (`BUDGET` di `web/tools/budget.ts`). Build juga melaporkan JS awal, chunk lazy, CSS, font, dan 15 kontributor terbesar.
+- Anggaran entry shell: **210 KB gzip** (NFR-04). Build (`web/build.ts`) gagal bila JS awal melampauinya (`BUDGET` di `web/tools/budget.ts`). Build juga melaporkan JS awal, chunk lazy, CSS, font, dan 15 kontributor terbesar.
 - Entry terukur pada 29 Okt 2026: 187,9 KB gzip (Q38). Ruang tersisa sempit.
 - Aturan untuk modul:
   - Halaman dan komponen berat dimuat lewat `lazyRouteComponent(() => import(...))`.
   - TanStack DB dimuat malas lewat `useDb()` (K-21); modul yang memakai koleksi tidak boleh mengimpornya statis.
   - Hindari dependensi baru di entry; bila perlu, taruh di chunk halaman.
 - Periksa dengan `bun run --filter @erpora/web build`.
+
+## Metadata resource (form, daftar, dan filter generik)
+
+Bentuk data satu resource (field, tipe, batasan, grup, kondisi tampil/wajib/hanya-baca, relasi, penguncian) dinyatakan sekali di `modules/<dir>/metadata/*.resource.yaml` dan dibangkitkan ke frontend sebagai berkas statis `modules/<dir>/web/src/metadata/<nama>.meta.gen.ts` (hanya untuk modul ber-`web/`). Berkas itu **tidak diedit tangan** (berkepala `Code generated ...`; lihat [`generators.md`](generators.md) §10) dan diperiksa drift-nya oleh `task metadata:generate:check`, yang ikut `task web:check`.
+
+- Setiap berkas mengekspor satu konstanta `resourceMeta` bertipe `ResourceMeta`, diimpor dari `@erpora/platform-web/metadata`. Paket itu **bukan** bagian barrel `@erpora/platform-web` agar tidak masuk bundel awal; muat malas, satu chunk per resource, lewat `resourceMetaLoader.register("<slug>.<nama>", () => import("./metadata/<nama>.meta.gen"))` saat registrasi modul.
+- Isi paket (tipe, evaluator kondisi dan ekspresi, templat label, desimal berbasis `BigInt`, validator record, registri tipe field dengan editor form dan filter, pemuat malas) dan seluruh aturan evaluasinya dijelaskan di [`metadata.md`](metadata.md). Komponen perender generik (form, tabel data, FilterBuilder) dibuat di M3c dan M3d di atas paket ini.
+- Chunk metadata bersifat publik (SPA statis tanpa autentikasi), sehingga pembangkit tidak memancarkan aturan `scope: server`, kondisi yang merujuk field `confidential` ke atas atau di luar grup default, field `clientVisible: false`, dan ekspresi accessor `stored`; pemuat menolak chunk yang tetap memuatnya (`checkClientMeta`). Server tetap otoritas atas semua validasi, otorisasi, dan penguncian; validasi klien hanya kenyamanan.
+- Label dan pesan aturan berupa kunci i18n pada katalog namespace modul pemilik resource (`labelRef(meta, key)`); tidak ada teks UI bebas di metadata.
 
 ## Perintah
 
@@ -202,7 +211,7 @@ Aturan lengkap kunci, katalog, dan alur penerjemah ada di [`i18n.md`](i18n.md).
 | `bun run --filter @erpora/web deps` | dependency-cruiser: aturan F1 sampai F4 |
 | `bun test --pass-with-no-tests` | Uji dari root |
 | `bun run --filter @erpora/web build` | Build, anggaran bundle, dan csp-check |
-| `task web:check` | Gabungan: install beku, typecheck, lint, `i18n:generate --check`, deps, test, build |
+| `task web:check` | Gabungan: install beku, `metadata:generate --check` (drift `*.meta.gen.ts`), typecheck, lint, `i18n:generate --check`, deps, test, build |
 | `task web:test` | Hanya uji frontend |
 | `task i18n:check` / `task i18n:generate` | Lihat [`i18n.md`](i18n.md) |
 

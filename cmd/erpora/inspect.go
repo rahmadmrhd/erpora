@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -68,6 +69,8 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				tenant = c.DefaultTenantID.String()
 			}
 			kv := map[string]string{
+				"ERP_SECRET_KEY":            config.RedactSecret(c.SecretKey),
+				"ERP_SECRET_KEY_PREVIOUS":   config.RedactSecret(c.SecretKeyPrevious),
 				"ERP_DATABASE_URL":          config.RedactDSN(c.DatabaseURL),
 				"ERP_ENV":                   string(c.Env),
 				"ERP_HTTP_ADDR":             c.HTTPAddr,
@@ -78,6 +81,14 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 				"ERP_MODULES_ADMIN_API":     strconv.FormatBool(c.ModulesAdminAPI),
 				"ERP_DB_NPLUSONE_THRESHOLD": strconv.Itoa(c.DBNPlusOneThreshold),
 				"ERP_DB_SLOW_QUERY_MS":      strconv.FormatInt(c.DBSlowQuery.Milliseconds(), 10),
+				"ERP_MAIL_DRIVER":           c.MailDriver,
+				"ERP_SMTP_HOST":             c.SMTP.Host,
+				"ERP_SMTP_PORT":             strconv.Itoa(c.SMTP.Port),
+				"ERP_SMTP_USERNAME":         c.SMTP.Username,
+				"ERP_SMTP_PASSWORD":         config.RedactSecret(c.SMTP.Password),
+				"ERP_SMTP_FROM":             c.SMTP.From,
+				"ERP_SMTP_TLS_MODE":         c.SMTP.TLSMode,
+				"ERP_TRUSTED_PROXIES":       trustedProxiesString(c),
 				"flavor":                    buildinfo.Flavor(),
 				"database.environment":      databaseEnvironment(cmd.Context(), c),
 			}
@@ -94,4 +105,13 @@ func newInspectCmd(opts *rootOpts) *cobra.Command {
 	})
 	inspect.AddCommand(newInspectRoutesCmd("routes", false), newInspectModulesCmd(), newInspectPermissionsCmd("permissions", false))
 	return inspect
+}
+
+// trustedProxiesString mencetak ERP_TRUSTED_PROXIES dalam bentuk ternormalisasi (dipisah koma; kosong bila tidak diisi).
+func trustedProxiesString(c config.Config) string {
+	parts := make([]string, len(c.TrustedProxies))
+	for i, p := range c.TrustedProxies {
+		parts[i] = p.String()
+	}
+	return strings.Join(parts, ",")
 }

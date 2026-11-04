@@ -13,6 +13,7 @@ import (
 	"erpora/internal/platform/modules/registry"
 	"erpora/internal/platform/modules/runtime"
 	"erpora/internal/platform/tenancy"
+	sdkidentity "erpora/sdk/identity"
 	"erpora/sdk/module"
 )
 
@@ -59,6 +60,21 @@ func NewService(d Deps) *Service {
 
 func (s *Service) allow(ctx context.Context, permission string) bool {
 	return s.authz != nil && s.authz.Allow(ctx, permission)
+}
+
+// visible memutuskan apakah item menu dikirim: access "authenticated" lolos untuk Principal yang login (tanpa
+// permission; PRD-000 Q43), selain itu permission item harus diizinkan. Fail closed: access selain
+// "authenticated" tidak pernah lolos (registry sudah menolaknya saat build), dan tanpa Principal item
+// authenticated tidak dikirim.
+func (s *Service) visible(ctx context.Context, dm module.DeskMenu) bool {
+	if dm.Access != "" {
+		if dm.Access != module.DeskAccessAuthenticated || dm.Permission != "" {
+			return false
+		}
+		p, ok := sdkidentity.FromContext(ctx)
+		return ok && p.UserID != ""
+	}
+	return s.allow(ctx, dm.Permission)
 }
 
 // List mengembalikan Desk yang boleh dilihat prinsipal pada ctx untuk tenant pada ctx: Desk Platform lebih dulu,
@@ -139,14 +155,14 @@ func (s *Service) build(ctx context.Context, m module.Manifest, cfg Config) (Des
 	menus := make([]Menu, 0, len(d.Menus))
 	for _, dm := range d.Menus {
 		if len(dm.Children) == 0 {
-			if s.allow(ctx, dm.Permission) {
+			if s.visible(ctx, dm) {
 				menus = append(menus, menuItem(slug, dm))
 			}
 			continue
 		}
 		var kids []Menu
 		for _, c := range dm.Children {
-			if s.allow(ctx, c.Permission) {
+			if s.visible(ctx, c) {
 				kids = append(kids, menuItem(slug, c))
 			}
 		}

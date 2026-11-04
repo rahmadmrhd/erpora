@@ -1,0 +1,25 @@
+schemaVersion: "1"
+kind: resource
+key: fixturesales.note
+description: Catatan yang dapat menempel pada faktur atau produk lewat relasi morph.
+include:
+  - source: sdk:audit
+labelTemplate: "{title}"
+fields:
+  title:
+    type: string
+    maxLength: 120
+    sortable: true
+    filterable: true
+    label: fixturesales.note.title
+  body:
+    type: text
+    nullable: true
+    maxLength: 4000
+    label: fixturesales.note.body
+relations:
+  subject:
+    type: morphTo
+    types: [fixturesales.invoice, fixturesales.product]
+    as: subject
+    required: true

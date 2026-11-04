@@ -86,7 +86,20 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return errors.New("migrasi platform belum diterapkan: jalankan erpora migrate up")
 	}
 
-	a, err := assemble(ctx, cfg, log, db, prov, reg, api)
+	// Production gagal start tanpa URL publik (keputusan pemilik produk 3 Nov 2026; sumber: settings platform).
+	// Production tanpa ERP_MAIL_DRIVER eksplisit juga gagal start (surat reset sandi tidak akan terkirim; Config.RequireMailDriver).
+	if err := cfg.RequireMailDriver(); err != nil {
+		return &ExitError{Code: 2, Err: err}
+	}
+	tid, err := defaultTenant(ctx, cfg, db)
+	if err != nil {
+		return err
+	}
+	settingsSvc := newSettingsService(cfg, db, tid)
+	if err := checkPublicURL(ctx, cfg, newSettingsURLSource(cfg, settingsSvc, tid)); err != nil {
+		return &ExitError{Code: 2, Err: err}
+	}
+	a, err := assemble(ctx, cfg, log, db, prov, reg, api, withSettings(settingsSvc))
 	if err != nil {
 		return err
 	}
@@ -113,10 +126,33 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	log.Info("menghentikan server", "timeout", shutdownTimeout.String())
 	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := srv.Shutdown(sctx); err != nil {
-		return fmt.Errorf("shutdown tidak tuntas: %w", err)
+	shutdownErr := srv.Shutdown(sctx)
+	// Pekerjaan latar reset sandi (pengiriman surat) harus selesai SEBELUM database ditutup (defer di atas), dibatasi sisa
+	// shutdownTimeout (reset/doc.go: Wait dipanggil saat penutupan proses).
+	if a.Identity != nil && a.Identity.Reset != nil {
+		if !waitWithin(sctx, a.Identity.Reset.Wait) {
+			log.Warn("pekerjaan latar reset sandi belum selesai saat batas shutdown habis")
+		}
+	}
+	if shutdownErr != nil {
+		return fmt.Errorf("shutdown tidak tuntas: %w", shutdownErr)
 	}
 	return nil
+}
+
+// waitWithin menjalankan wait dan menunggunya paling lama sampai ctx selesai; true bila wait selesai tepat waktu.
+func waitWithin(ctx context.Context, wait func()) bool {
+	done := make(chan struct{})
+	go func() {
+		wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // dbReadiness: ping DB (2 dtk) + semua migrasi sudah diterapkan. Read-only.

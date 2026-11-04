@@ -101,7 +101,9 @@
     "anonymous": "User",
     "menu": "Account menu",
     "manageAccount": "Manage Account",
+    "changePassword": "Change password",
     "signOut": "Sign Out",
+    "signOutFailed": "Could not sign out. Your session is still active; try again.",
     "unavailable": "Not available in this version",
     "settings": "Settings",
     "reload": "Reload"
@@ -169,9 +171,11 @@
     "tenant_unresolved": "The tenant could not be determined.",
     "unauthenticated": "You are not signed in.",
     "token_expired": "Your session has expired.",
+    "invalid_credentials": "Incorrect email or password.",
     "permission_denied": "You do not have permission to do this.",
     "field_forbidden": "You are not allowed to access this field.",
     "mfa_required": "Two-step verification is required.",
+    "account_locked": "Account locked. Reset your password or contact an administrator.",
     "module_disabled": "The module is not enabled.",
     "not_found": "The record was not found.",
     "module_not_found": "The module was not found.",
@@ -182,6 +186,7 @@
     "validation_failed": "The data is not valid.",
     "business_rule_violated": "The data violates a business rule.",
     "idempotency_key_reused": "The idempotency key was already used for another request.",
+    "password_policy_violation": "The new password does not meet the policy.",
     "rate_limited": "Too many requests; try again later.",
     "unsupported_media_type": "The content type is not supported.",
     "internal_error": "Something went wrong on the server.",
@@ -347,6 +352,17 @@
       "title": "The Desk list could not be loaded",
       "description": "An error occurred while loading Desks. Try again."
     }
+  },
+  "resource": {
+    "modules": "Modules",
+    "i18n": "Terminology (i18n)",
+    "desks": "Desks"
+  },
+  "fieldGroup": {
+    "general": "General"
+  },
+  "action": {
+    "manage": "Manage"
   },
   "todo": {
     "title": "ToDo",

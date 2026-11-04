@@ -20,6 +20,7 @@ import (
 	"erpora/internal/platform/migrate"
 	"erpora/internal/platform/modules/lifecycle"
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 	"erpora/modules/example"
 	"erpora/modules/exampleaddon"
 	"erpora/sdk/module"
@@ -57,7 +58,7 @@ func (e *refEnv) assemble(mods func() []module.Module) (context.Context, *assemb
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e.t.Cleanup(cancel)
-	cfg := config.Config{DatabaseURL: e.dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond}
+	cfg := config.Config{DatabaseURL: e.dsn, Env: config.EnvDevelopment, AuthzStub: "allow", DBSlowQuery: 200 * time.Millisecond, SecretKey: secretkey.Bytes()}
 	a, err := assemble(ctx, cfg, testLog(), e.db, testProviders(), reg, api)
 	if err != nil {
 		e.t.Fatal(err)
@@ -104,20 +105,20 @@ func TestExample_InstallViaPlatformMigrations(t *testing.T) {
 	if r := run(t, ctx, a, lifecycle.OpInstall, "acme.example"); r.Status != "succeeded" {
 		t.Fatalf("install = %+v", r)
 	}
-	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 2 {
-		t.Errorf("versi goose = %d, want 2", v)
+	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 3 {
+		t.Errorf("versi goose = %d, want 3", v)
 	}
-	if n := e.count("SELECT count(*) FROM module_migrations WHERE module_key = 'acme.example' AND execution_status = 'succeeded' AND length(checksum) = 64"); n != 2 {
-		t.Errorf("module_migrations = %d, want 2 berchecksum", n)
+	if n := e.count("SELECT count(*) FROM module_migrations WHERE module_key = 'acme.example' AND execution_status = 'succeeded' AND length(checksum) = 64"); n != 3 {
+		t.Errorf("module_migrations = %d, want 3 berchecksum", n)
 	}
 	if n := e.count("SELECT count(*) FROM example_notes"); n != 3 {
 		t.Errorf("notes tersemai = %d, want 3", n)
 	}
-	if rec := call(a.Router, "GET", "/api/example/notes", ""); rec.Code != http.StatusForbidden {
+	if rec := call(a.authed(t), "GET", "/api/example/notes", ""); rec.Code != http.StatusForbidden {
 		t.Errorf("notes sebelum enable = %d", rec.Code)
 	}
 	run(t, ctx, a, lifecycle.OpEnable, "acme.example")
-	rec := call(a.Router, "GET", "/api/example/notes", "")
+	rec := call(a.authed(t), "GET", "/api/example/notes", "")
 	if rec.Code != 200 {
 		t.Fatalf("notes = %d %s", rec.Code, rec.Body)
 	}
@@ -139,7 +140,7 @@ func TestExample_InstallViaPlatformMigrations(t *testing.T) {
 
 func bootstrapRev(t *testing.T, a *assembly) int64 {
 	t.Helper()
-	b, _ := bootstrapOf(t, a.Router)
+	b, _ := bootstrapOf(t, a.authed(t))
 	return b.Data.Revision
 }
 
@@ -165,7 +166,7 @@ func TestExample_Upgrade_1_0_0_to_1_1_0(t *testing.T) {
 	if err != nil || st.Status != "upgrade_pending" {
 		t.Fatalf("status setelah reconcile = %+v, %v", st.Status, err)
 	}
-	resp := call(a2.Router, "GET", "/api/example/ping", "")
+	resp := call(a2.authed(t), "GET", "/api/example/ping", "")
 	if resp.Code != 503 || errCodeOf(t, resp) != "module_unavailable" {
 		t.Fatalf("ping saat upgrade_pending = %d %s", resp.Code, resp.Body)
 	}
@@ -177,21 +178,22 @@ func TestExample_Upgrade_1_0_0_to_1_1_0(t *testing.T) {
 	if r.Status != "succeeded" || r.To != "enabled" {
 		t.Fatalf("upgrade = %+v", r)
 	}
-	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 2 {
-		t.Errorf("versi goose = %d, want 2", v)
+	if v := e.count("SELECT max(version_id) FROM goose_module_example WHERE is_applied"); v != 3 {
+		t.Errorf("versi goose = %d, want 3", v)
 	}
 	var row struct {
-		Version int64
-		Same    bool
+		Version  int64
+		Same     bool
+		NoAuthor bool
 	}
-	if err := e.db.Raw("SELECT version, updated_at = created_at AS same FROM example_notes WHERE id = ?", oldNote).Scan(&row).Error; err != nil || row.Version != 1 || !row.Same {
-		t.Errorf("note lama = %+v (%v), want version=1 dan updated_at=created_at", row, err)
+	if err := e.db.Raw("SELECT version, updated_at = created_at AS same, (created_by IS NULL AND updated_by IS NULL) AS no_author FROM example_notes WHERE id = ?", oldNote).Scan(&row).Error; err != nil || row.Version != 1 || !row.Same || !row.NoAuthor {
+		t.Errorf("note lama = %+v (%v), want version=1, updated_at=created_at, created_by dan updated_by NULL", row, err)
 	}
 	if len(rec.calls) != 1 || rec.calls[0] != [2]string{"1.0.0", "1.1.0"} {
 		t.Errorf("Upgrade calls = %v", rec.calls)
 	}
 	// Request in-process setelah ALTER TABLE tidak boleh gagal akibat statement cache (PrepareStmt).
-	resp = call(a2.Router, "GET", "/api/example/notes", "")
+	resp = call(a2.authed(t), "GET", "/api/example/notes", "")
 	if resp.Code != 200 {
 		t.Fatalf("notes setelah upgrade = %d %s", resp.Code, resp.Body)
 	}
@@ -213,7 +215,7 @@ func TestExample_DowngradeRejected(t *testing.T) {
 		st.LastOperation.Error.Code != lifecycle.CodeDowngradeNotSupported {
 		t.Fatalf("modul = %+v, %v", st, err)
 	}
-	if rec := call(a2.Router, "GET", "/api/example/ping", ""); rec.Code != 503 {
+	if rec := call(a2.authed(t), "GET", "/api/example/ping", ""); rec.Code != 503 {
 		t.Fatalf("ping = %d %s", rec.Code, rec.Body)
 	}
 }
@@ -237,7 +239,7 @@ func TestExampleModules_DependencyRules(t *testing.T) {
 	if !errors.As(err, &le) || le.Code != lifecycle.CodeDependentsActive || len(le.Related) != 1 || le.Related[0] != "acme.example-addon" {
 		t.Fatalf("disable example saat addon enabled: %v", err)
 	}
-	rec := call(a.Router, "GET", "/api/example-addon/summary", "")
+	rec := call(a.authed(t), "GET", "/api/example-addon/summary", "")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"noteCount":3`) {
 		t.Fatalf("summary = %d %s", rec.Code, rec.Body)
 	}
@@ -252,7 +254,7 @@ func TestExample_DisableKeepsDataAndAudits(t *testing.T) {
 	before := e.count("SELECT count(*) FROM example_notes")
 	r := run(t, ctx, a, lifecycle.OpDisable, "acme.example")
 
-	rec := call(a.Router, "GET", "/api/example/notes", "")
+	rec := call(a.authed(t), "GET", "/api/example/notes", "")
 	if rec.Code != http.StatusForbidden || errCodeOf(t, rec) != "module_disabled" {
 		t.Fatalf("notes = %d %s", rec.Code, rec.Body)
 	}
@@ -348,4 +350,53 @@ func TestExampleMigration0002_BackfillDownUp(t *testing.T) {
 	if res, err := p.Up(ctx); err != nil || len(res) != 0 {
 		t.Fatalf("up kedua: %d hasil, err=%v; want no-op", len(res), err)
 	}
+}
+
+// Task 8.2 (K19): migrasi 0003 menambah created_by dan updated_by (sdk:audit) secara aditif; baris lama bernilai NULL;
+// down lalu up idempoten.
+func TestExampleMigration0003_NullableAuditUsers(t *testing.T) {
+	ctx := context.Background()
+	e := newRefEnv(t)
+	sqlDB, err := e.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := newGoose(sqlDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 2); err != nil {
+		t.Fatalf("up 0002: %v", err)
+	}
+	old := uuid.New()
+	if err := e.db.Exec("INSERT INTO example_notes (id, title) VALUES (?, 'lama')", old).Error; err != nil {
+		t.Fatal(err)
+	}
+	if hasColumn(e, "created_by") || hasColumn(e, "updated_by") {
+		t.Fatal("kolom 0003 tidak boleh ada sebelum migrasi 0003")
+	}
+	if _, err := p.UpTo(ctx, 3); err != nil {
+		t.Fatalf("up 0003: %v", err)
+	}
+	check := func(when string) {
+		t.Helper()
+		var row struct{ NoAuthor bool }
+		if err := e.db.Raw("SELECT (created_by IS NULL AND updated_by IS NULL) AS no_author FROM example_notes WHERE id = ?", old).Scan(&row).Error; err != nil || !row.NoAuthor {
+			t.Fatalf("baris lama %s: %+v (%v)", when, row, err)
+		}
+		if n := e.count("SELECT count(*) FROM information_schema.columns WHERE table_name = 'example_notes' AND column_name IN ('created_by', 'updated_by') AND is_nullable = 'YES' AND data_type = 'uuid'"); n != 2 {
+			t.Fatalf("kolom created_by/updated_by harus uuid nullable %s: %d", when, n)
+		}
+	}
+	check("setelah 0003")
+	if _, err := p.DownTo(ctx, 2); err != nil {
+		t.Fatalf("down 0003: %v", err)
+	}
+	if hasColumn(e, "created_by") || hasColumn(e, "updated_by") {
+		t.Fatal("kolom 0003 harus hilang setelah down")
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatalf("up ulang: %v", err)
+	}
+	check("setelah up ulang")
 }

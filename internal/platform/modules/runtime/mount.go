@@ -15,9 +15,11 @@ import (
 	"erpora/internal/platform/observability"
 	"erpora/internal/platform/tenancy"
 	sdki18n "erpora/sdk/i18n"
+	"erpora/sdk/identity"
 )
 
-// Authorizer memutuskan apakah request pada ctx boleh memakai permission.
+// Authorizer memutuskan apakah request pada ctx boleh memakai permission. Bentuk bool ini dipertahankan agar stub dan
+// modul tidak berubah; keputusan bertipe (401/403/mfa_required) ada di Decider (lihat TypedAuthorizer).
 type Authorizer interface {
 	Allow(ctx context.Context, permission string) bool
 }
@@ -50,8 +52,10 @@ func SkipRoute(skip func(registry.RouteInfo) bool) MountOption {
 // dibungkus batas request (body limit, no-store), pengecekan permission (kecuali Public), lalu
 // guard status modul.
 // Route platform.core ikut dipasang di sini: guard selalu enabled, permission tetap berlaku.
-// Rantai penuh: otel -> recover -> requestScope -> Authenticate (kecuali Public)
-// -> tenantContext -> guard -> permission -> deprecation -> batas request -> handler.
+// Rantai penuh (ADR-0013 §4): otel -> recover -> requestScope -> tenantContext -> batas IP (hanya endpoint auth
+// core: route yang memenuhi isAuthEndpoint dipasang dengan httpserver.RateLimited(), sehingga Deps.IPLimit berlaku)
+// -> Authenticate (kecuali Public) -> batas principal (endpoint auth non-Public, Deps.PrincipalLimit) -> guard ->
+// permission/Decide -> deprecation -> batas request -> handler.
 func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, log *slog.Logger, opts ...MountOption) {
 	var cfg mountConfig
 	for _, o := range opts {
@@ -76,12 +80,18 @@ func Mount(m Mounter, reg *registry.Registry, snap *Snapshot, authz Authorizer, 
 		h := requestLimitsMW(rt, cfg.services, rt.Handler)
 		h = deprecationMW(rt, deprecated, h)
 		if !rt.Public {
-			h = permissionMW(authz, rt.Permission, log, h)
+			h = permissionMW(authz, rt.Permission, routeOptionsFor(rt), log, h)
 		}
 		h = guardMW(snap, rt.Module, scopes[rt.Module], h)
 		var ropts []httpserver.RouteOption
 		if rt.Public {
 			ropts = append(ropts, httpserver.Public())
+		}
+		// Endpoint auth/token modul core (login, forgot, reset, refresh, change, mfa/*, logout; NFR-105, ADR-0013 §4):
+		// batas laju per IP untuk semuanya (juga yang Public), ditambah batas per principal untuk yang terautentikasi.
+		// Rantai efektifnya dirakit httpserver.Router.Handle dari Deps.IPLimit/PrincipalLimit.
+		if isAuthEndpoint(rt) {
+			ropts = append(ropts, httpserver.RateLimited())
 		}
 		m.Handle(rt.Method+" "+rt.Pattern, h, ropts...)
 	}
@@ -132,16 +142,50 @@ func guardMW(snap *Snapshot, key, scope string, next http.Handler) http.Handler 
 	})
 }
 
-func permissionMW(authz Authorizer, permission string, log *slog.Logger, next http.Handler) http.Handler {
+// permissionMW memetakan Decision ke respons (api-guidelines §12): 401 unauthenticated/token_expired, 403
+// permission_denied/mfa_required. Authorizer yang hanya punya Allow (stub, fake tes) dipetakan Allow false -> 403
+// permission_denied seperti sebelumnya; tanpa Authorizer gagal tertutup.
+func permissionMW(authz Authorizer, permission string, opts RouteOptions, log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if authz == nil {
 			// Tanpa Authorizer: tolak (fail closed). Penolakan oleh Authorizer dicatat Authorizer itu sendiri.
 			log.WarnContext(r.Context(), "permission ditolak: authorizer tidak dikonfigurasi", "permission", permission)
-		}
-		if authz == nil || !authz.Allow(r.Context(), permission) {
 			httpserver.WriteError(w, r, http.StatusForbidden, "permission_denied", "tidak memiliki izin", nil)
 			return
 		}
-		next.ServeHTTP(w, r)
+		var d Decision
+		if dec, ok := authz.(Decider); ok {
+			d = dec.Decide(r.Context(), permission, opts)
+		} else if opts.AuthenticatedOnly {
+			// Authorizer lama (hanya Allow) tidak mengenal route tanpa permission: Principal tetap wajib, permission dilewati.
+			if p, ok := identity.FromContext(r.Context()); ok && p.UserID != "" {
+				d = Allow
+			} else {
+				d = Unauthenticated
+			}
+		} else if authz.Allow(r.Context(), permission) {
+			d = Allow
+		} else {
+			d = Forbidden
+		}
+		serveDecision(d, w, r, next)
 	})
+}
+
+// serveDecision memetakan Decision ke respons (api-guidelines §12); Allow meneruskan ke next.
+func serveDecision(d Decision, w http.ResponseWriter, r *http.Request, next http.Handler) {
+	switch d {
+	case Allow:
+		next.ServeHTTP(w, r)
+	case Unauthenticated:
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "unauthenticated", "autentikasi diperlukan", nil)
+	case TokenExpired:
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "token_expired", "token kedaluwarsa", nil)
+	case MFARequired:
+		httpserver.WriteError(w, r, http.StatusForbidden, "mfa_required", "verifikasi dua langkah diperlukan", nil)
+	default: // Forbidden dan nilai tak dikenal: gagal tertutup
+		httpserver.WriteError(w, r, http.StatusForbidden, "permission_denied", "tidak memiliki izin", nil)
+	}
 }

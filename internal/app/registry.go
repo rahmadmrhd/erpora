@@ -46,9 +46,9 @@ func buildRegistry() (*registry.Registry, *platformAPIs, error) {
 			}
 			return apis.Desks.Register(r)
 		},
-		PlatformCapabilities: slices.Concat(admin.Capabilities, i18nadmin.Capabilities, desks.Capabilities),
-		PlatformContract:     contracts.PlatformOpenAPI,
-		PlatformDesk:         desks.PlatformDesk(),
+		PlatformResources: slices.Concat(admin.Resources, i18nadmin.Resources, desks.Resources),
+		PlatformContract:  contracts.PlatformOpenAPI,
+		PlatformDesk:      desks.PlatformDesk(),
 	}, compiledModulesFn()...)
 	return reg, apis, err
 }

@@ -1,0 +1,13 @@
+schemaVersion: "1"
+kind: resource
+key: [[.Slug]].item
+description: Item contoh modul [[.Title]]. Ganti dengan resource Anda. Field audit (id, version, createdAt, updatedAt, createdBy, updatedBy) ikut otomatis dari sdk:audit.
+labelTemplate: "{title}"
+fields:
+  title:
+    type: string
+    minLength: 1
+    maxLength: 200
+    sortable: true
+    filterable: true
+    label: fields.item.title

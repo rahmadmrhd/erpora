@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -16,7 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"erpora/internal/platform/testsupport/authtest"
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 var (
@@ -99,7 +102,8 @@ func startServe(t *testing.T, dsn, addr string) *proc {
 func startServeBin(t *testing.T, bin, dsn, addr string) *proc {
 	t.Helper()
 	cmd := exec.Command(bin, "serve")
-	cmd.Env = baseEnv(dsn, addr)
+	// serve butuh ERP_SECRET_KEY (semua mode); kunci acak per proses uji, command lain tidak membutuhkannya.
+	cmd.Env = append(baseEnv(dsn, addr), secretkey.Env())
 	p := &proc{cmd: cmd, stderr: &bytes.Buffer{}, stdout: &bytes.Buffer{}, done: make(chan error, 1)}
 	cmd.Stderr = p.stderr
 	cmd.Stdout = p.stdout
@@ -125,9 +129,30 @@ func (p *proc) waitExit(t *testing.T, d time.Duration) error {
 		p.done <- err
 		return err
 	case <-time.After(d):
-		t.Fatalf("proses tidak keluar dalam %v; stderr:\n%s", d, p.stderr)
+		t.Fatalf("proses tidak keluar dalam %v; stderr:\n%s", d, p.logs(t))
 		return nil
 	}
+}
+
+// logs mengembalikan stderr proses untuk pesan kegagalan. Selagi proses masih berjalan, cmd.Wait belum menutup
+// penyalinan stdout/stderr ke buffer, jadi membaca p.stderr langsung adalah data race (laporan menyesatkan di
+// -race). Karena itu proses dihentikan dulu dan ditunggu keluar; hasilnya dikembalikan ke kanal done seperti
+// waitExit sehingga Cleanup dan waitExit berikutnya tetap bekerja. Hanya untuk jalur kegagalan: proses mati.
+func (p *proc) logs(t *testing.T) string {
+	t.Helper()
+	select {
+	case err := <-p.done:
+		p.done <- err
+	default:
+		_ = p.cmd.Process.Kill()
+		select {
+		case err := <-p.done:
+			p.done <- err
+		case <-time.After(10 * time.Second):
+			return "(proses tidak berhenti setelah Kill; log tidak dibaca agar tidak race)"
+		}
+	}
+	return "stdout:\n" + p.stdout.String() + "\nstderr:\n" + p.stderr.String()
 }
 
 // getWith melakukan GET dengan header tertentu dan mengembalikan respons + body.
@@ -297,15 +322,54 @@ func TestServe_HTTPContract(t *testing.T) {
 	base := "http://" + addr
 	waitStatus(t, base+"/readyz", 200, 20*time.Second)
 
-	t.Run("bootstrap ETag -> 304", func(t *testing.T) {
-		resp, _ := getWith(t, base+"/api/bootstrap", nil)
-		etag := resp.Header.Get("ETag")
-		if resp.StatusCode != 200 || etag == "" {
-			t.Fatalf("status=%d etag=%q", resp.StatusCode, etag)
+	t.Run("bootstrap wajib login; ETag per pengguna -> 304", func(t *testing.T) {
+		if resp, body := getWith(t, base+"/api/bootstrap", nil); resp.StatusCode != 401 || !strings.Contains(body, `"unauthenticated"`) {
+			t.Fatalf("tanpa token: status=%d body=%s", resp.StatusCode, body)
 		}
-		resp, body := getWith(t, base+"/api/bootstrap", map[string]string{"If-None-Match": etag})
+		auth := map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)}
+		resp, body := getWith(t, base+"/api/bootstrap", auth)
+		etag := resp.Header.Get("ETag")
+		if resp.StatusCode != 200 || etag == "" || !strings.Contains(body, `"user":{`) || !strings.Contains(body, `"permRev":0`) {
+			t.Fatalf("status=%d etag=%q body=%s", resp.StatusCode, etag, body)
+		}
+		if !strings.Contains(resp.Header.Get("Cache-Control"), "private") || !strings.Contains(resp.Header.Get("Vary"), "Authorization") {
+			t.Errorf("Cache-Control=%q Vary=%q", resp.Header.Get("Cache-Control"), resp.Header.Get("Vary"))
+		}
+		resp, body = getWith(t, base+"/api/bootstrap", map[string]string{"Authorization": auth["Authorization"], "If-None-Match": etag})
 		if resp.StatusCode != 304 || body != "" {
 			t.Fatalf("status=%d body=%q", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("JWKS publik tanpa material privat", func(t *testing.T) {
+		resp, body := getWith(t, base+"/.well-known/jwks.json", nil)
+		if resp.StatusCode != 200 || resp.Header.Get("Cache-Control") != "public, max-age=300" {
+			t.Fatalf("status=%d Cache-Control=%q body=%s", resp.StatusCode, resp.Header.Get("Cache-Control"), body)
+		}
+		var jwks struct{ Keys []map[string]any }
+		if err := json.Unmarshal([]byte(body), &jwks); err != nil || len(jwks.Keys) == 0 {
+			t.Fatalf("JWKS tidak valid: %v %s", err, body)
+		}
+		for _, k := range jwks.Keys {
+			if _, hasPrivate := k["d"]; hasPrivate || k["kty"] != "OKP" || k["crv"] != "Ed25519" || k["alg"] != "EdDSA" {
+				t.Fatalf("kunci tidak sesuai atau membocorkan material privat: %v", k)
+			}
+		}
+	})
+
+	t.Run("autentikasi nyata: tanpa token 401, token sah lolos, token buruk 401", func(t *testing.T) {
+		const target = "/api/platform/modules" // butuh autentikasi; stub permission development = allow
+		resp, body := getWith(t, base+target, nil)
+		if resp.StatusCode != 401 || !strings.Contains(body, `"unauthenticated"`) || resp.Header.Get("WWW-Authenticate") != "Bearer" {
+			t.Fatalf("tanpa token: status=%d body=%s", resp.StatusCode, body)
+		}
+		resp, body = getWith(t, base+target, map[string]string{"Authorization": "Bearer bukan.token.sah"})
+		if resp.StatusCode != 401 || !strings.Contains(body, `"unauthenticated"`) {
+			t.Fatalf("token buruk: status=%d body=%s", resp.StatusCode, body)
+		}
+		resp, body = getWith(t, base+target, map[string]string{"Authorization": "Bearer " + authtest.BearerFromDB(t, dsn)})
+		if resp.StatusCode != 200 {
+			t.Fatalf("token sah: status=%d body=%s", resp.StatusCode, body)
 		}
 	})
 

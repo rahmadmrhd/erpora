@@ -13,6 +13,8 @@ const notes = [
     version: 1,
     createdAt: "2026-10-21T07:15:00Z",
     updatedAt: "2026-10-21T07:15:00Z",
+    createdBy: null,
+    updatedBy: null,
   },
   {
     id: "0190a1b2-0000-7e5f-8a9b-0c1d2e3f4a02",
@@ -20,6 +22,8 @@ const notes = [
     version: 3,
     createdAt: "2026-10-22T07:15:00Z",
     updatedAt: "2026-10-23T09:00:00Z",
+    createdBy: null,
+    updatedBy: null,
   },
 ];
 

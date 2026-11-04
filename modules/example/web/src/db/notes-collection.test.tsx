@@ -16,6 +16,8 @@ const notes = [
     version: 1,
     createdAt: "2026-10-21T07:15:00Z",
     updatedAt: "2026-10-21T07:15:00Z",
+    createdBy: null,
+    updatedBy: null,
   },
   {
     id: "n2",
@@ -23,6 +25,8 @@ const notes = [
     version: 2,
     createdAt: "2026-10-22T07:15:00Z",
     updatedAt: "2026-10-22T07:15:00Z",
+    createdBy: null,
+    updatedBy: null,
   },
 ];
 

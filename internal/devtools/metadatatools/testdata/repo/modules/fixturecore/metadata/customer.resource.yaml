@@ -1,0 +1,82 @@
+schemaVersion: "1"
+kind: resource
+key: fixturecore.customer
+export: true
+description: Master pelanggan, target relasi lintas modul dan sumber salinan field.
+include:
+  - source: sdk:audit
+  - source: fixturecore.address
+    prefix: billing
+labelTemplate: "{code} - {name}"
+layout: { section: general, columns: 2, order: [code, name, status] }
+fields:
+  code:
+    type: string
+    maxLength: 32
+    unique: true
+    sortable: true
+    filterable: true
+    snapshotSource: true
+    label: fixturecore.customer.code
+  name:
+    type: string
+    maxLength: 200
+    sortable: true
+    filterable: true
+    snapshotSource: true
+    label: fixturecore.customer.name
+  status:
+    type: enum
+    values: [active, inactive, blocked]
+    default: active
+    filterable: true
+    sortable: true
+    groupable: true
+    label: fixturecore.customer.status
+  contactEmail:
+    type: fixturecore.email
+    nullable: true
+    label: fixturecore.customer.contactEmail
+  contactPhone:
+    type: "sdk:phone"
+    nullable: true
+    label: fixturecore.customer.contactPhone
+  creditLimit:
+    type: decimal
+    precision: 18
+    scale: 2
+    currency: IDR
+    minimum: "0"
+    default: "0.00"
+    fieldGroup: finance
+    classification: confidential
+    aggregatable: true
+    sortable: true
+    label: fixturecore.customer.creditLimit
+  blockedReason:
+    type: text
+    nullable: true
+    maxLength: 500
+    visibleWhen: { field: status, op: eq, value: blocked }
+    requiredWhen: { field: status, op: eq, value: blocked }
+    label: fixturecore.customer.blockedReason
+  phone:
+    type: string
+    maxLength: 32
+    nullable: true
+    deprecated: { since: "1.1.0", replacedBy: phoneE164 }
+    label: fixturecore.customer.phone
+  phoneE164:
+    type: string
+    maxLength: 20
+    nullable: true
+    migrateFrom: phone
+    label: fixturecore.customer.phoneE164
+rules:
+  - id: creditLimitNonNegative
+    assert: { field: creditLimit, op: gte, value: "0" }
+    field: creditLimit
+    message: fixturecore.customer.error.creditLimitNegative
+    scope: server
+indexes:
+  - fields: [status, name]

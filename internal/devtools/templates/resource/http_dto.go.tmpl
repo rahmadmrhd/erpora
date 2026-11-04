@@ -1,0 +1,169 @@
+<% .Header %>
+
+package <% .Pkg %>
+
+import (
+	"context"
+	"net/http"
+
+	<% .DomainImport %>
+	"erpora/sdk/metadata"
+)
+
+// <% .Pascal %>Create adalah body pembuatan <% .Pascal %>. Hanya field yang boleh ditulis; field hanya-baca
+// dan field tak dikenal ditolak decoder. Present berisi kunci yang benar-benar dikirim klien (membedakan field
+// hilang dari null eksplisit).
+type <% .Pascal %>Create struct {
+<%- range .Writable %>
+	<% .GoName %> *<% .GoType %> <% .Tag %>
+<%- end %>
+	Present map[string]bool `json:"-"`
+}
+
+// <% .Pascal %>Update adalah body perubahan sebagian (PATCH) <% .Pascal %>; semua field opsional.
+type <% .Pascal %>Update struct {
+<%- range .Writable %>
+	<% .GoName %> *<% .GoType %> <% .Tag %>
+<%- end %>
+	Present map[string]bool `json:"-"`
+}
+
+// Decode<% .Pascal %>Create membaca dan memeriksa bentuk body: batas ukuran dan kedalaman, kunci ganda, tipe, field
+// tak dikenal, dan field hanya-baca (422 validation_failed dengan rincian per field).
+func Decode<% .Pascal %>Create(w http.ResponseWriter, r *http.Request) (<% .Pascal %>Create, error) {
+	d, present, err := decodeBody[<% .Pascal %>Create](w, r, domain.<% .Pascal %>Spec.ReadOnlyNames())
+	if err != nil {
+		return d, err
+	}
+	d.Present = present
+	return d, nil
+}
+
+// Decode<% .Pascal %>Update seperti Decode<% .Pascal %>Create untuk body perubahan sebagian.
+func Decode<% .Pascal %>Update(w http.ResponseWriter, r *http.Request) (<% .Pascal %>Update, error) {
+	d, present, err := decodeBody[<% .Pascal %>Update](w, r, domain.<% .Pascal %>Spec.ReadOnlyNames())
+	if err != nil {
+		return d, err
+	}
+	d.Present = present
+	return d, nil
+}
+
+func (d <% .Pascal %>Create) presence() map[string]bool {
+	if d.Present != nil {
+		return d.Present
+	}
+	p := map[string]bool{}
+<%- range .Writable %>
+	if d.<% .GoName %> != nil {
+		p[<% .NameLiteral %>] = true
+	}
+<%- end %>
+	return p
+}
+
+func (d <% .Pascal %>Create) record(present map[string]bool) metadata.Record {
+	rec := metadata.Record{}
+<%- range .Writable %>
+	if present[<% .NameLiteral %>] {
+		rec[<% .NameLiteral %>] = val(d.<% .GoName %>)
+	}
+<%- end %>
+	return rec
+}
+
+// Validate memeriksa DTO terhadap spesifikasi resource: tipe, wajib, nullable, panjang, rentang, pola, enum,
+// dan aturan lintas field. Hasilnya nil, atau *httpx.Error 422 validation_failed (struktur) atau 422
+// business_rule_violated (aturan bisnis). Galat tidak pernah memuat nilai field.
+func (d <% .Pascal %>Create) Validate(ctx context.Context) error {
+	present := d.presence()
+	return violationsError(ctx, domain.<% .Pascal %>Spec.Validate(domain.ModeCreate, d.record(present), present))
+}
+
+func (d <% .Pascal %>Update) presence() map[string]bool {
+	if d.Present != nil {
+		return d.Present
+	}
+	p := map[string]bool{}
+<%- range .Writable %>
+	if d.<% .GoName %> != nil {
+		p[<% .NameLiteral %>] = true
+	}
+<%- end %>
+	return p
+}
+
+func (d <% .Pascal %>Update) record(present map[string]bool) metadata.Record {
+	rec := metadata.Record{}
+<%- range .Writable %>
+	if present[<% .NameLiteral %>] {
+		rec[<% .NameLiteral %>] = val(d.<% .GoName %>)
+	}
+<%- end %>
+	return rec
+}
+
+// Validate memeriksa perubahan sebagian. current adalah nilai record tersimpan (boleh nil): kondisi dan aturan
+// dievaluasi atas record gabungan (nilai tersimpan ditimpa perubahan), field yang tidak dikirim tidak
+// diperiksa nilainya.
+func (d <% .Pascal %>Update) Validate(ctx context.Context, current metadata.Record) error {
+	present := d.presence()
+	merged := make(metadata.Record, len(current)+len(present))
+	for k, v := range current {
+		merged[k] = v
+	}
+	for k, v := range d.record(present) {
+		merged[k] = v
+	}
+	return violationsError(ctx, domain.<% .Pascal %>Spec.Validate(domain.ModeUpdate, merged, present))
+}
+<%- if .Pairs %>
+
+// FillRenamePairs mengisi kedua bentuk pasangan rename selama masa transisi (Requirement 12.2, 12.3): bila klien
+// hanya mengirim salah satu bentuk (bentuk baru atau lama, termasuk null eksplisit), bentuk lainnya diisi dengan
+// salinan nilainya dan dicatat di Present. Panggil sesudah Validate (yang menolak kedua bentuk bernilai berbeda).
+// Otorisasi field (CheckWrite dan MaskFields) dihitung atas field kanonik, yaitu bentuk baru.
+func (d *<% .Pascal %>Create) FillRenamePairs() {
+	src := d.presence()
+	present := make(map[string]bool, len(src))
+	for k, v := range src {
+		present[k] = v
+	}
+<%- range .Pairs %>
+	switch {
+	case present[<% .NewLit %>] && !present[<% .OldLit %>]:
+		d.<% .OldGo %> = clone(d.<% .NewGo %>)
+		present[<% .OldLit %>] = true
+	case present[<% .OldLit %>] && !present[<% .NewLit %>]:
+		d.<% .NewGo %> = clone(d.<% .OldGo %>)
+		present[<% .NewLit %>] = true
+	}
+<%- end %>
+	d.Present = present
+}
+<%- end %>
+<%- if .Pairs %>
+
+// FillRenamePairs mengisi kedua bentuk pasangan rename selama masa transisi (Requirement 12.2, 12.3): bila klien
+// hanya mengirim salah satu bentuk (bentuk baru atau lama, termasuk null eksplisit), bentuk lainnya diisi dengan
+// salinan nilainya dan dicatat di Present. Panggil sesudah Validate (yang menolak kedua bentuk bernilai berbeda).
+// Otorisasi field (CheckWrite dan MaskFields) dihitung atas field kanonik, yaitu bentuk baru.
+func (d *<% .Pascal %>Update) FillRenamePairs() {
+	src := d.presence()
+	present := make(map[string]bool, len(src))
+	for k, v := range src {
+		present[k] = v
+	}
+<%- range .Pairs %>
+	switch {
+	case present[<% .NewLit %>] && !present[<% .OldLit %>]:
+		d.<% .OldGo %> = clone(d.<% .NewGo %>)
+		present[<% .OldLit %>] = true
+	case present[<% .OldLit %>] && !present[<% .NewLit %>]:
+		d.<% .NewGo %> = clone(d.<% .OldGo %>)
+		present[<% .NewLit %>] = true
+	}
+<%- end %>
+	d.Present = present
+}
+<%- end %>

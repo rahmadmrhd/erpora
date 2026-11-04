@@ -1,0 +1,838 @@
+openapi: 3.1.0
+info:
+  title: ERPora acme.fixturesales
+  version: 1.0.0
+  description: Kontrak API modul fixture fixturesales (spec resource-metadata). Skema komponen disuntikkan pembangkit.
+servers:
+  - url: /
+paths: {}
+components:
+  schemas:
+    Invoice:
+      type: object
+      description: Faktur penjualan, dokumen transaksional dengan baris embedded, relasi lintas modul, morph, dan salinan field.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, status, amendedFromId, shippingStreet, shippingCity, shippingPostalCode, number, issuedOn, dueOn, paymentTerm, branchId, taxable, shipToCustomer, customerName, approvalNote, summary, lineCount, billingStatus, deliveryStatus, customerId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        status:
+          type: string
+          enum: [draft, deleted, pending_approval, accepted, rejected, cancelled, done]
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        amendedFromId:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        discountRate:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        taxRate:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        shippingStreet:
+          type: [string, "null"]
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shippingCity:
+          type: [string, "null"]
+          maxLength: 100
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shippingPostalCode:
+          type: [string, "null"]
+          maxLength: 10
+          pattern: ^[0-9]{5}$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        number:
+          type: string
+          maxLength: 32
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        issuedOn:
+          type: string
+          format: date
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        dueOn:
+          type: string
+          format: date
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        paymentTerm:
+          type: string
+          enum: [cash, net_15, net_30, net_60]
+          x-erp-extensible-enum: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        branchId:
+          type: [string, "null"]
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        taxable:
+          type: boolean
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shipToCustomer:
+          type: boolean
+          x-erp-classification: internal
+          x-erp-field-group: general
+        customerName:
+          type: string
+          maxLength: 200
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        total:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+          x-erp-filterable: true
+          x-erp-sortable: true
+        approvalNote:
+          type: [string, "null"]
+          maxLength: 1000
+          x-erp-classification: internal
+          x-erp-field-group: general
+        summary:
+          type: string
+          maxLength: 300
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        lineCount:
+          type: integer
+          format: int64
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        billingStatus:
+          type: string
+          enum: [to_bill, billed]
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        deliveryStatus:
+          type: string
+          enum: [to_deliver, partially_delivered, delivered]
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        customerId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    InvoiceCreate:
+      type: object
+      description: Body pembuatan fixturesales.invoice; hanya field yang boleh ditulis.
+      required: [issuedOn, dueOn, total, customerId]
+      additionalProperties: false
+      properties:
+        discountRate:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+          default: "0"
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        taxRate:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+          default: "11"
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        shippingStreet:
+          type: [string, "null"]
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shippingCity:
+          type: [string, "null"]
+          maxLength: 100
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shippingPostalCode:
+          type: [string, "null"]
+          maxLength: 10
+          pattern: ^[0-9]{5}$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        issuedOn:
+          type: string
+          format: date
+          x-erp-classification: internal
+          x-erp-field-group: general
+        dueOn:
+          type: string
+          format: date
+          x-erp-classification: internal
+          x-erp-field-group: general
+        paymentTerm:
+          type: string
+          enum: [cash, net_15, net_30, net_60]
+          x-erp-extensible-enum: true
+          default: net_30
+          x-erp-classification: internal
+          x-erp-field-group: general
+        branchId:
+          type: [string, "null"]
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+        taxable:
+          type: boolean
+          default: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shipToCustomer:
+          type: boolean
+          default: false
+          x-erp-classification: internal
+          x-erp-field-group: general
+        total:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        approvalNote:
+          type: [string, "null"]
+          maxLength: 1000
+          x-erp-classification: internal
+          x-erp-field-group: general
+        customerId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    InvoiceUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturesales.invoice; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        discountRate:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        taxRate:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 5, scale: 2, minimum: "0.00", maximum: "100.00"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        shippingStreet:
+          type: [string, "null"]
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shippingCity:
+          type: [string, "null"]
+          maxLength: 100
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shippingPostalCode:
+          type: [string, "null"]
+          maxLength: 10
+          pattern: ^[0-9]{5}$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        issuedOn:
+          type: string
+          format: date
+          x-erp-classification: internal
+          x-erp-field-group: general
+        dueOn:
+          type: string
+          format: date
+          x-erp-classification: internal
+          x-erp-field-group: general
+        paymentTerm:
+          type: string
+          enum: [cash, net_15, net_30, net_60]
+          x-erp-extensible-enum: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        branchId:
+          type: [string, "null"]
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+        taxable:
+          type: boolean
+          x-erp-classification: internal
+          x-erp-field-group: general
+        shipToCustomer:
+          type: boolean
+          x-erp-classification: internal
+          x-erp-field-group: general
+        total:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        approvalNote:
+          type: [string, "null"]
+          maxLength: 1000
+          x-erp-classification: internal
+          x-erp-field-group: general
+        customerId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    InvoiceLine:
+      type: object
+      description: Baris faktur, anak embedded dari invoice.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, lineNo, productSku, description, quantity, invoiceId, productId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        lineNo:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-sortable: true
+        productSku:
+          type: string
+          maxLength: 40
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        description:
+          type: string
+          maxLength: 200
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        quantity:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 3, minimum: "0.001"}
+          x-erp-classification: internal
+          x-erp-field-group: general
+        unitPrice:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        lineTotal:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2}
+          readOnly: true
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+          x-erp-sortable: true
+        invoiceId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+        productId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    InvoiceLineCreate:
+      type: object
+      description: Body pembuatan fixturesales.invoiceLine; hanya field yang boleh ditulis.
+      required: [quantity, unitPrice, invoiceId, productId]
+      additionalProperties: false
+      properties:
+        quantity:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 3, minimum: "0.001"}
+          x-erp-classification: internal
+          x-erp-field-group: general
+        unitPrice:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        invoiceId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+        productId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    InvoiceLineUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturesales.invoiceLine; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        quantity:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 3, minimum: "0.001"}
+          x-erp-classification: internal
+          x-erp-field-group: general
+        unitPrice:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: confidential
+          x-erp-field-group: pricing
+        invoiceId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+        productId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    Note:
+      type: object
+      description: Catatan yang dapat menempel pada faktur atau produk lewat relasi morph.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, title, body, subjectType, subjectId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        title:
+          type: string
+          maxLength: 120
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        body:
+          type: [string, "null"]
+          maxLength: 4000
+          x-erp-classification: internal
+          x-erp-field-group: general
+        subjectType:
+          type: string
+          pattern: ^(?:fixturesales\.invoice|fixturesales\.product)$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        subjectId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    NoteCreate:
+      type: object
+      description: Body pembuatan fixturesales.note; hanya field yang boleh ditulis.
+      required: [title, subjectType, subjectId]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 120
+          x-erp-classification: internal
+          x-erp-field-group: general
+        body:
+          type: [string, "null"]
+          maxLength: 4000
+          x-erp-classification: internal
+          x-erp-field-group: general
+        subjectType:
+          type: string
+          pattern: ^(?:fixturesales\.invoice|fixturesales\.product)$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        subjectId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    NoteUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturesales.note; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          maxLength: 120
+          x-erp-classification: internal
+          x-erp-field-group: general
+        body:
+          type: [string, "null"]
+          maxLength: 4000
+          x-erp-classification: internal
+          x-erp-field-group: general
+        subjectType:
+          type: string
+          pattern: ^(?:fixturesales\.invoice|fixturesales\.product)$
+          x-erp-classification: internal
+          x-erp-field-group: general
+        subjectId:
+          type: string
+          format: uuid
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    Product:
+      type: object
+      description: Master produk, target relasi satu modul dari baris faktur dan sasaran morph.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, sku, name, unitPrice, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        sku:
+          type: string
+          maxLength: 40
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        name:
+          type: string
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        unitPrice:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-sortable: true
+        active:
+          type: boolean
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+      x-erp-generated: true
+    ProductCreate:
+      type: object
+      description: Body pembuatan fixturesales.product; hanya field yang boleh ditulis.
+      required: [sku, name, unitPrice]
+      additionalProperties: false
+      properties:
+        sku:
+          type: string
+          maxLength: 40
+          x-erp-classification: internal
+          x-erp-field-group: general
+        name:
+          type: string
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        unitPrice:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: internal
+          x-erp-field-group: general
+        active:
+          type: boolean
+          default: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    ProductUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturesales.product; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        sku:
+          type: string
+          maxLength: 40
+          x-erp-classification: internal
+          x-erp-field-group: general
+        name:
+          type: string
+          maxLength: 200
+          x-erp-classification: internal
+          x-erp-field-group: general
+        unitPrice:
+          $ref: erp:common#/components/schemas/Decimal
+          x-erp-decimal: {precision: 18, scale: 2, minimum: "0"}
+          x-erp-classification: internal
+          x-erp-field-group: general
+        active:
+          type: boolean
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    Tag:
+      type: object
+      description: Label bebas yang dapat dipasang pada faktur lewat relasi belongsToMany.
+      required: [id, version, createdAt, updatedAt, createdBy, updatedBy, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+        createdBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        updatedBy:
+          type: [string, "null"]
+          format: uuid
+          readOnly: true
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+        name:
+          type: string
+          maxLength: 60
+          x-erp-classification: internal
+          x-erp-field-group: general
+          x-erp-filterable: true
+          x-erp-sortable: true
+      x-erp-generated: true
+    TagCreate:
+      type: object
+      description: Body pembuatan fixturesales.tag; hanya field yang boleh ditulis.
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true
+    TagUpdate:
+      type: object
+      description: Body perubahan sebagian (PATCH) fixturesales.tag; semua field opsional.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          x-erp-classification: internal
+          x-erp-field-group: general
+      x-erp-generated: true

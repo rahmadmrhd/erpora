@@ -18,7 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"erpora/internal/platform/testsupport/authtest"
 	"erpora/internal/platform/testsupport/pgtest"
+	"erpora/internal/platform/testsupport/secretkey"
 )
 
 func freeAddr(t *testing.T) string {
@@ -95,7 +97,7 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 		t.Fatal("make:module yang ditolak mengubah pohon file")
 	}
 
-	// 4. Modul bernama dengan tanda hubung, lalu satu handler tambahan (route + kontrak + capability).
+	// 4. Modul bernama dengan tanda hubung, lalu satu handler tambahan (route + kontrak + aksi resource).
 	run(t, repo, env, bin, "make:module", "stock-opname")
 	run(t, repo, env, bin, "make:handler", "inventory", "Approve",
 		"--route", "POST /items/{id}/approve", "--permission", "inventory.items.approve")
@@ -129,7 +131,7 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 	// 6. Install, enable, command CLI, dan serve terhadap PostgreSQL sungguhan.
 	dsn := pgtest.Start(t)
 	addr := freeAddr(t)
-	dbEnv := append(env, "ERP_DATABASE_URL="+dsn, "ERP_HTTP_ADDR="+addr, "ERP_ENV=development", "ERP_LOG_FORMAT=text", "OTEL_EXPORTER_OTLP_ENDPOINT=")
+	dbEnv := append(env, "ERP_DATABASE_URL="+dsn, "ERP_HTTP_ADDR="+addr, "ERP_ENV=development", "ERP_LOG_FORMAT=text", "OTEL_EXPORTER_OTLP_ENDPOINT=", secretkey.Env())
 	run(t, repo, dbEnv, bin, "migrate", "up")
 	run(t, repo, dbEnv, bin, "modules", "install", "acme.inventory", "--with-deps", "--enable")
 	run(t, repo, dbEnv, bin, "modules", "install", "acme.stock-opname", "--enable")
@@ -172,7 +174,13 @@ func TestMakeModule_PassesAllGates(t *testing.T) {
 	})
 	base := "http://" + addr
 	waitOK(t, base+"/readyz", 30*time.Second, &srvOut)
-	resp, err := http.Get(base + "/api/stock-opname/items") //nolint:gosec,noctx // alamat lokal acak milik test
+	// Route modul wajib login sejak PRD-001 C1.10: token uji diterbitkan dengan kunci penandatangan yang dibuat serve.
+	req, err := http.NewRequest(http.MethodGet, base+"/api/stock-opname/items", nil) //nolint:noctx // alamat lokal acak milik test
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+authtest.BearerFromDB(t, dsn))
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // alamat lokal acak milik test
 	if err != nil {
 		t.Fatal(err)
 	}

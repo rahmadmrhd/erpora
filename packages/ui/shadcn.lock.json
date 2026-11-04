@@ -62,6 +62,10 @@
       "file": "input.tsx",
       "sha256": "ad770b8ab5f3ef2c32c2901306d349f3aa65faf035f455a821305293bb24a496"
     },
+    "input-otp": {
+      "file": "input-otp.tsx",
+      "sha256": "501a2d9fd0f22e4dc70171fc53c0e3a9cb4a743a2af577a5c16a03bb18dc46e1"
+    },
     "kbd": {
       "file": "kbd.tsx",
       "sha256": "784515fbba57d633046cb4b9460626aa8de0a860cd30a8527bea5a0fd2c2c86d"

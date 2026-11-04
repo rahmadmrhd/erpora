@@ -6,12 +6,14 @@ declare module "@erpora/platform-web" {
     "example-addon": {
       "actions.refresh": {};
       "desk.title": {};
+      "fieldGroup.general": {};
       "nav.summary": {};
       "page.summary.description": {};
       "page.summary.error": {};
       "page.summary.note_count": { count: number };
       "page.summary.title": {};
       "page.summary.view_notes": {};
+      "resource.summary": {};
     };
   }
 }

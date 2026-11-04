@@ -30,12 +30,16 @@ func HasFieldMasker(ctx context.Context) bool {
 // map[string]any (disalin) atau struct/pointer struct (dikonversi lewat JSON dengan UseNumber). Tanpa
 // masker di ctx, atau dto bukan objek, hasilnya map[string]any{} (gagal tertutup).
 func MaskFields(ctx context.Context, resource string, dto any) any {
-	m, ok := ctx.Value(fieldMaskerKey{}).(FieldMasker)
-	if !ok || m == nil {
-		return map[string]any{}
-	}
 	fields, ok := toFieldMap(dto)
 	if !ok {
+		return map[string]any{}
+	}
+	// Urutan: Engine (mesin otorisasi), lalu FieldMasker lama (seam sebelum C2.5), lalu kosong.
+	if out, used := maskWithEngine(ctx, resource, fields); used {
+		return out
+	}
+	m, ok := ctx.Value(fieldMaskerKey{}).(FieldMasker)
+	if !ok || m == nil {
 		return map[string]any{}
 	}
 	out := m.MaskFields(ctx, resource, fields)
