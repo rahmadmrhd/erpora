@@ -24,7 +24,9 @@ var reservedSlugs = func() map[string]bool {
 // allowedMethods adalah method HTTP yang boleh didaftarkan modul.
 var allowedMethods = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 
-var commandNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+// commandNameRE: nama command modul (tanpa slug); satu segmen grup `<grup>:<aksi>` diizinkan sejak C1.12 (core:settings:set,
+// PRD-001 Q24; perluasan aditif ADR-0006 yang disetujui pemilik produk, PRD-001 Q32 butir 1).
+var commandNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$`)
 
 // validRoutePath memeriksa path relatif modul: diawali "/", sudah bersih
 // (path.Clean), tanpa trailing slash, tanpa "//", host, query, fragmen, atau spasi.

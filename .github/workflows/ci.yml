@@ -328,10 +328,10 @@ jobs:
             echo "$out" | grep -q "unknown command" || { echo "keluaran '$cmd' tidak memuat 'unknown command': $out" >&2; exit 1; }
           done
       - run: ./erpora migrate up
-      # serve di production wajib punya URL publik https di settings platform (PRD-001 Q24). Diisi lewat SQL sampai
-      # command core:settings:set (rencana C1.12) tersedia di biner release.
+      # serve di production wajib punya URL publik https di settings platform (PRD-001 Q24). Diisi lewat command core
+      # (PRD-001 C1.12): migrate up sudah memasang modul core (required), dan core:* membutuhkan ERP_SECRET_KEY (ada di env).
       - name: URL publik platform
-        run: psql "$ERP_DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO settings (scope, key, value, updated_by) VALUES ('platform', 'platform.public_url', to_jsonb('https://erp.example.com'::text), 'ci:smoke')"
+        run: ./erpora core:settings:set --key platform.public_url --value https://erp.example.com
       - name: Serve dan cek /readyz
         run: |
           ./erpora serve &
@@ -373,12 +373,12 @@ jobs:
         run: |
           .\erpora.exe version
           .\erpora.exe migrate up
-      # serve di production wajib punya URL publik https di settings platform (PRD-001 Q24). Diisi lewat SQL sampai
-      # command core:settings:set (rencana C1.12) tersedia di biner release.
+      # serve di production wajib punya URL publik https di settings platform (PRD-001 Q24). Diisi lewat command core
+      # (PRD-001 C1.12): migrate up sudah memasang modul core (required), dan core:* membutuhkan ERP_SECRET_KEY (ada di env).
       - name: URL publik platform
         shell: pwsh
         run: |
-          & "$env:PGBIN\psql.exe" -U postgres -d erp -v ON_ERROR_STOP=1 -c "INSERT INTO settings (scope, key, value, updated_by) VALUES ('platform', 'platform.public_url', to_jsonb('https://erp.example.com'::text), 'ci:smoke')"
+          .\erpora.exe core:settings:set --key platform.public_url --value https://erp.example.com
           if ($LASTEXITCODE -ne 0) { throw "gagal mengisi URL publik" }
       - name: Bukti binary release tanpa developer tools
         shell: pwsh

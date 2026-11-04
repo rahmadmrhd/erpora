@@ -86,6 +86,7 @@ func newBufLogger(w io.Writer) *slog.Logger {
 // identity.Service dan identity.Admin ujung ke ujung.
 type svcEnv struct {
 	t    *testing.T
+	cfg  config.Config // konfigurasi yang dipakai perakitan (juga untuk command CLI)
 	a    *assembly
 	ctx  context.Context // tenant
 	mail *captureMail
@@ -119,7 +120,7 @@ func newSvcEnv(t *testing.T) *svcEnv {
 	if a.Identity.Service == nil || a.Identity.Admin == nil {
 		t.Fatal("identityStack.Service/Admin harus terisi")
 	}
-	e := &svcEnv{t: t, a: a, ctx: tenancy.WithTenant(ctx, a.Tenant), mail: mailer, logs: logs}
+	e := &svcEnv{t: t, cfg: cfg, a: a, ctx: tenancy.WithTenant(ctx, a.Tenant), mail: mailer, logs: logs}
 	t.Cleanup(e.assertNoSecretsInLogs)
 	return e
 }

@@ -48,7 +48,7 @@ Pustaka `github.com/Masterminds/semver/v3` dipakai untuk parsing versi (`StrictN
    - `Handle(method, path, permission, h, opts...)` wajib memakai permission yang ada di `capabilities` manifest modul. Pelanggaran menghasilkan `permission_undeclared` atau `permission_missing`.
    - `Public(method, path, h, opts...)` untuk route tanpa permission. Route ini tetap tunduk pada status modul.
    - `opts ...RouteOption` (M2c, Q26 butir 13, PRD-000 Q30): `module.MaxBodyBytes(n)` dan `module.Classify(c)`. Parameter variadik ditambahkan agar pemanggil modul tidak berubah; opsi tidak valid menjadi problem registry `invalid_route_option`. `SDKVersion` tetap `0.1.0` karena SDK belum pernah di-tag (Q24); aturan 0.x ADR ini mulai berlaku pada tag pertama.
-   - `Command(c)` untuk perintah CLI. Nama harus cocok `^[a-z][a-z0-9-]*$`, `Run` wajib diisi, dan nama tidak boleh ganda dalam satu modul. Nama yang tercatat berbentuk `<slug>:<name>`.
+   - `Command(c)` untuk perintah CLI. Nama harus cocok `^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$`: satu segmen grup `<grup>:<aksi>` diizinkan (perluasan aditif dari `^[a-z][a-z0-9-]*$`, disetujui pemilik produk 4 Nov 2026, PRD-001 Q32 butir 1, agar `core:settings:set` sesuai PRD-001 Q24), `Run` wajib diisi, dan nama tidak boleh ganda dalam satu modul. Nama yang tercatat berbentuk `<slug>:<name>`.
    - `path` harus diawali `/`, sudah bersih (`path.Clean`), dan tidak memuat host, query, fragmen, atau spasi. Method yang diizinkan: GET, POST, PUT, PATCH, DELETE.
    - Penyimpangan dari contoh `RegisterRoutes` disetujui dan dicatat di PRD-000 FR-05.
 

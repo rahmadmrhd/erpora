@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	clicmd "erpora/modules/core/internal/presentation/cli"
 	httpapi "erpora/modules/core/internal/presentation/http"
 	"erpora/sdk/module"
 )
@@ -81,6 +82,10 @@ func (m *Module) Register(r module.Registrar) error {
 	own("/auth/mfa/recovery", h.RecoverMFA, secret)
 	own("/auth/mfa/recovery-codes", h.RegenerateRecoveryCodes, secret, module.RequireMFA())
 	// erp:generated:routes
+	// Command CLI `core:*` (C1.12): memakai identity.Admin di bawah hak sistem `cli:core:<nama>` (PRD-001 Q30 butir 1).
+	for _, c := range clicmd.Commands() {
+		r.Command(c)
+	}
 	// erp:generated:commands
 	return nil
 }

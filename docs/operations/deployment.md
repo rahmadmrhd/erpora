@@ -133,7 +133,19 @@ URL publik aplikasi (dipakai untuk tautan reset sandi di email dan pemeriksaan `
 
 - **Production:** `serve` gagal start (exit 2) bila `platform.public_url` belum diisi. Nilainya harus http(s) absolut dengan host, **https wajib**, tanpa userinfo, query, atau fragmen, maksimum 512 karakter.
 - **Development:** bila belum diisi, nilai bawaan diturunkan dari `ERP_HTTP_ADDR`.
-- **Pengisian awal:** lewat `erpora core:settings:set --key platform.public_url --value <url>`. Command ini **dijadwalkan pada PRD-001 C1.12 dan belum tersedia**. Sampai C1.12 selesai, belum ada command resmi untuk mengisi nilai ini di production.
+- **Pengisian awal:** lewat `erpora core:settings:set --key platform.public_url --value <url>` (PRD-001 C1.12; lihat §3.4a). Nilai divalidasi dan dinormalisasi (production menolak `http`), dan perubahan tercatat di log dengan pelaku `cli:core:settings:set`. `serve` yang sedang berjalan membaca nilai baru tanpa restart.
+
+### 3.4a. Command CLI `core:*` (PRD-001 C1.12)
+
+Berlaku untuk binary release maupun dev. Semua command ini **hanya berjalan bila modul `core` enabled** (`erpora migrate up` memasangnya) dan **mewajibkan `ERP_SECRET_KEY` valid** di semua mode (tanpa kunci: exit `2` sebelum database dibuka). Mereka berjalan di bawah hak sistem teraudit `cli:core:<command>` dan mencatat aksinya di log (`identity.admin_created`, `identity.signing_key_rotated`, `identity.mfa_reset`, `identity.account_unlocked`, `identity.public_url_set`).
+
+| Command | Fungsi |
+| --- | --- |
+| `core:create-admin --email <e> [--name <n>]` | Membuat administrator. **Sandi tidak pernah lewat flag**: dibaca dari prompt tersembunyi (dua kali) bila stdin terminal, atau satu baris dari stdin (`printf '%s\n' "$PW" \| erpora core:create-admin --email ...`). Kebijakan sandi FR-101 berlaku. Memanggil ulang dengan email yang sama hanya melanjutkan sisa pembuatan yang terputus (PRD-001 Q28); akun yang sudah aktif atau berrole ditolak. |
+| `core:rotate-keys` | Membuat kunci penandatangan JWT baru berstatus `pending` (terpublikasi di JWKS, belum menandatangani) dan melaporkan waktu aktivasinya. Promosi menjadi `active` dilakukan oleh `serve` yang berjalan, atau saat `serve` dimulai bila waktu aktivasi sudah lewat. |
+| `core:reset-mfa --email <e>` | Menghapus faktor MFA dan recovery code pengguna serta mencabut seluruh sesinya. Instance `serve` yang berjalan menerima pencabutan sesi lewat muat ulang daftar tercabut (paling lama 1 menit; risiko diterima, PRD-001 Q32 butir 2). |
+| `core:unlock --email <e>` | Membuka akun `locked` dan menghapus jeda login pasangannya. |
+| `core:settings:set --key platform.public_url --value <url>` | Mengisi URL publik (satu-satunya kunci di C1). |
 
 ### 3.4. Retensi `login_attempts`
 
@@ -175,7 +187,9 @@ sudo -u erpora /opt/erpora/bin/erpora migrate up --env-file /etc/erpora/erpora.e
 sudo -u erpora /opt/erpora/bin/erpora modules install --all --enable --env-file /etc/erpora/erpora.env
 sudo -u erpora /opt/erpora/bin/erpora modules list --env-file /etc/erpora/erpora.env
 
-# Administrator pertama (sejak PRD-001); password diminta secara interaktif
+# URL publik aplikasi (wajib di production sebelum serve; lihat §3.3) dan administrator pertama (PRD-001 C1.12);
+# sandi diminta secara interaktif (prompt tersembunyi) atau dibaca dari stdin; core:* membutuhkan ERP_SECRET_KEY di env file
+sudo -u erpora /opt/erpora/bin/erpora core:settings:set --key platform.public_url --value https://erp.example.com --env-file /etc/erpora/erpora.env
 sudo -u erpora /opt/erpora/bin/erpora core:create-admin --email admin@example.com --env-file /etc/erpora/erpora.env
 ```
 

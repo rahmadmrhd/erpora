@@ -95,7 +95,7 @@ func (r *recorder) Public(method, path string, h http.Handler, opts ...module.Ro
 func (r *recorder) Command(c module.Command) {
 	valid := true
 	if !commandNameRE.MatchString(c.Name) {
-		r.problem(CodeInvalidCommand, "nama command %q tidak valid (harus cocok ^[a-z][a-z0-9-]*$)", c.Name)
+		r.problem(CodeInvalidCommand, "nama command %q tidak valid (harus cocok ^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$)", c.Name)
 		valid = false
 	}
 	if c.Run == nil {

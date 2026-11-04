@@ -153,6 +153,10 @@ func lazyOriginChecker(cfg config.Config, src PublicURLSource) session.OriginChe
 type identityExtras struct {
 	Settings *settings.Service
 	Mail     sdkmail.Sender
+	// CLI merakit varian command CLI (PRD-001 Q28, C1.12): hanya yang dibutuhkan identity.Admin. Tanpa pekerja latar
+	// (promosi kunci, retensi login_attempts: milik `serve`), tanpa langganan notifikasi, tanpa Reset/Service (Mail boleh
+	// nil); Service hasilnya nil.
+	CLI bool
 }
 
 // identityStack adalah perakitan mesin identitas untuk satu proses serve (PRD-001 C1): kunci dan token, sesi dan
@@ -216,6 +220,8 @@ func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, 
 	if err := s.Keyring.Reload(ctx); err != nil {
 		return nil, fmt.Errorf("muat kunci penandatangan: %w", err)
 	}
+	// Juga di varian CLI: instalasi baru tanpa kunci aktif tidak boleh berakhir hanya dengan kunci pending setelah
+	// core:rotate-keys (belum ada yang dapat menandatangani sampai promosi). Dua proses yang berlomba konvergen.
 	if created, err := s.Keyring.EnsureActive(ctx); err != nil {
 		return nil, fmt.Errorf("siapkan kunci penandatangan: %w", err)
 	} else if created {
@@ -227,15 +233,19 @@ func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, 
 	if s.Verifier, err = token.NewVerifier(token.VerifierConfig{Keyring: s.Keyring, Issuer: identity.ClaimIssuer, Audience: identity.ClaimAudience}); err != nil {
 		return nil, err
 	}
-	if s.Promoter, err = token.NewPromoter(token.PromoterConfig{Keyring: s.Keyring, Log: log}); err != nil {
-		return nil, err
+	if !ext.CLI {
+		if s.Promoter, err = token.NewPromoter(token.PromoterConfig{Keyring: s.Keyring, Log: log}); err != nil {
+			return nil, err
+		}
+		go s.Promoter.Run(ctx) // promosi pending -> active, retiring -> retired; berhenti bersama ctx
 	}
-	go s.Promoter.Run(ctx) // promosi pending -> active, retiring -> retired; berhenti bersama ctx
 	// Retensi login_attempts (data pribadi; PRD-001 Q30 butir 3): pangkas baris > 30 hari tiap jam; berhenti bersama ctx.
-	if s.Retention, err = guard.NewRetentionWorker(guard.RetentionConfig{Store: st, Tenant: tid, Log: log}); err != nil {
-		return nil, err
+	if !ext.CLI {
+		if s.Retention, err = guard.NewRetentionWorker(guard.RetentionConfig{Store: st, Tenant: tid, Log: log}); err != nil {
+			return nil, err
+		}
+		go s.Retention.Run(ctx)
 	}
-	go s.Retention.Run(ctx)
 
 	// Daftar sesi tercabut: muat awal (gagal = startup gagal), lalu langganan notifikasi + muat ulang berkala.
 	tctx := tenancy.WithTenant(ctx, tid)
@@ -243,7 +253,9 @@ func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, 
 	if err := s.Revocations.Load(tctx); err != nil {
 		return nil, fmt.Errorf("muat daftar sesi tercabut: %w", err)
 	}
-	s.cancel = append(s.cancel, s.Revocations.Subscribe(tctx, notifier, 0))
+	if !ext.CLI {
+		s.cancel = append(s.cancel, s.Revocations.Subscribe(tctx, notifier, 0))
+	}
 	go func() {
 		<-ctx.Done()
 		for _, c := range s.cancel {
@@ -294,20 +306,24 @@ func newIdentityStack(ctx context.Context, cfg config.Config, log *slog.Logger, 
 	if s.MFAState, err = identity.NewMFAStateReader(st, 0, nil); err != nil {
 		return nil, err
 	}
-	if ext.Settings == nil || ext.Mail == nil {
+	if ext.Settings == nil || (ext.Mail == nil && !ext.CLI) {
 		return nil, errors.New("identitas: Settings dan Mail wajib")
 	}
-	if s.Reset, err = reset.New(reset.Config{
-		Store: st, Sessions: s.Sessions, Gate: s.Gate, Sender: ext.Mail, PublicURL: urls, Argon2: params, Logger: log,
-	}); err != nil {
-		return nil, fmt.Errorf("reset sandi: %w", err)
+	if !ext.CLI {
+		if s.Reset, err = reset.New(reset.Config{
+			Store: st, Sessions: s.Sessions, Gate: s.Gate, Sender: ext.Mail, PublicURL: urls, Argon2: params, Logger: log,
+		}); err != nil {
+			return nil, fmt.Errorf("reset sandi: %w", err)
+		}
 	}
 	deps := identity.Deps{
 		Login: s.Authenticator, Gate: s.Gate, Hasher: s.Hasher, Lockout: s.Lockout, Sessions: s.Sessions, Issuer: s.Issuer,
 		Keys: s.Keyring, MFA: s.MFA, MFAState: s.MFAState, Reset: s.Reset, Settings: ext.Settings, Store: st, Log: log,
 	}
-	if s.Service, err = identity.NewService(deps); err != nil {
-		return nil, err
+	if !ext.CLI {
+		if s.Service, err = identity.NewService(deps); err != nil {
+			return nil, err
+		}
 	}
 	if s.Admin, err = identity.NewAdmin(deps); err != nil {
 		return nil, err

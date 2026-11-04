@@ -78,8 +78,13 @@ func TestRegister_RoutesVisibilityAndOptions(t *testing.T) {
 			t.Errorf("%s %s batas body = %d, want kecil", rt.Method, rt.Path, rt.Options.MaxBodyBytes)
 		}
 	}
-	if len(r.Commands) != 0 {
-		t.Errorf("command core:* baru ditambahkan pada C1.12: %+v", r.Commands)
+	// Command CLI (C1.12): lima command core:*; nama tercatat tanpa slug (registry menambahkannya).
+	var names []string
+	for _, c := range r.Commands {
+		names = append(names, c.Name)
+	}
+	if got, want := strings.Join(names, ","), "create-admin,rotate-keys,reset-mfa,unlock,settings:set"; got != want {
+		t.Errorf("command = %s, want %s", got, want)
 	}
 }
 

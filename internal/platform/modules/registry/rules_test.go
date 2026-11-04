@@ -185,9 +185,13 @@ func TestRules_InvalidRoute(t *testing.T) {
 func TestRules_Commands(t *testing.T) {
 	run := func(context.Context, module.Invocation) error { return nil }
 	for name, c := range map[string]module.Command{
-		"nama besar":  {Name: "Recount", Run: run},
-		"nama kosong": {Name: "", Run: run},
-		"run nil":     {Name: "recount"},
+		"nama besar":    {Name: "Recount", Run: run},
+		"nama kosong":   {Name: "", Run: run},
+		"run nil":       {Name: "recount"},
+		"dua grup":      {Name: "a:b:c", Run: run},
+		"akhiran titik": {Name: "settings:", Run: run},
+		"awalan titik":  {Name: ":set", Run: run},
+		"segmen besar":  {Name: "settings:Set", Run: run},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Build(testOpts(), newFake(spec("acme.a", "a"), registerWith(func(r module.Registrar) { r.Command(c) })))
@@ -199,6 +203,21 @@ func TestRules_Commands(t *testing.T) {
 		r.Command(module.Command{Name: "recount", Run: run})
 	})))
 	expect(t, problemsOf(t, err), "command_conflict", "acme.a")
+}
+
+// Satu segmen grup `<grup>:<aksi>` diizinkan (C1.12: core:settings:set, PRD-001 Q24); nama tercatat `<slug>:<grup>:<aksi>`.
+func TestRules_CommandWithGroupSegment(t *testing.T) {
+	run := func(context.Context, module.Invocation) error { return nil }
+	reg, err := Build(testOpts(), newFake(spec("acme.a", "a"), registerWith(func(r module.Registrar) {
+		r.Command(module.Command{Name: "settings:set", Run: run})
+	})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmds := reg.Commands()
+	if len(cmds) != 1 || cmds[0].Name != "a:settings:set" {
+		t.Fatalf("commands = %+v", cmds)
+	}
 }
 
 // Pola rusak yang datang SETELAH route valid harus invalid_route, bukan route_conflict.

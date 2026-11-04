@@ -135,14 +135,14 @@ func (m *Module) Register(r module.Registrar) error {
 
 - `Handle(method, path, permission, h)` memasang route terproteksi. `permission` wajib ada di `capabilities`.
 - `Public(method, path, h)` memasang route tanpa permission. Gunakan hanya bila memang publik, karena setiap route publik harus ditinjau.
-- `Command(c)` mendaftarkan perintah CLI. `Name` tanpa prefix slug. Registry menyimpannya sebagai `<slug>:<name>`, misalnya `example:recount`.
+- `Command(c)` mendaftarkan perintah CLI. `Name` tanpa prefix slug. Registry menyimpannya sebagai `<slug>:<name>`, misalnya `example:recount`. Satu segmen grup `<grup>:<aksi>` diizinkan (modul `core`: `core:settings:set`). Command menerima `Invocation.In` (stdin proses) untuk masukan yang tidak boleh lewat flag, mis. sandi; ia berjalan di bawah hak sistem `cli:<slug>:<nama>` dan hanya berjalan bila modulnya enabled.
 - `path` relatif terhadap prefix modul. `/ping` dipasang sebagai `/api/example/ping`.
 
 Pelanggaran dikumpulkan dan dilaporkan sekaligus saat startup dengan kode problem, misalnya `permission_undeclared`, `invalid_route`, `route_conflict`, `invalid_command`, dan `command_conflict`. Tabel lengkap ada di `internal/platform/modules/registry/errors.go`.
 
 Urutan middleware pada setiap route adalah `otel`, `recover`, log, authN (kecuali `Public`), tenant context, guard status modul, permission, lalu handler. Modul tidak perlu menulis middleware sendiri.
 
-Catatan M2a: command tercatat di `Registry.Commands()`, tetapi belum dihubungkan ke CLI cobra. Menjalankan `erpora example:recount` belum tersedia.
+Command modul dihubungkan ke CLI cobra (`erpora <slug>:<nama>`) dan hanya berjalan bila modulnya `enabled` (exit `3` bila tidak).
 
 ## 5. Hook lifecycle
 
