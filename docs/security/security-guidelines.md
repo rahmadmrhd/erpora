@@ -222,7 +222,7 @@ Butir umum di atas berlaku untuk setiap PR. Status penegakan autentikasi dan ses
 - [x] Cookie refresh `HttpOnly; Secure; SameSite=Strict; Path=/api/core/auth/refresh`. Refresh dengan header `Origin` hilang atau tidak diizinkan ditolak 403. (`modules/core/internal/presentation/http/cookie.go`, `session/origin.go`)
 - [x] Logout mencabut sesi aktif. `Admin.LogoutAllDevices` mencabut seluruh sesi pengguna. `core:reset-mfa` mencabut sesi pengguna yang bersangkutan. (`identity/service.go`, `identity/admin.go`)
 - [x] Pencabutan dipatuhi lintas instance: setiap instance memuat ulang daftar sesi tercabut paling lama tiap 1 menit dan menerima notifikasi `ChannelSessionRevoked`. Notifikasi yang hilang tidak membuat sesi tercabut berlaku selamanya karena muat ulang berkala. (`session/revocation.go`; PRD-001 Q32 butir 2)
-- [x] Status `locked` tidak mencabut sesi yang sudah ada (PRD-001 Q30 butir 4). Pembaruan sesi menolak pengguna yang tidak aktif (`ErrUserNotActive`). (`session/service.go`)
+- [x] Status `locked` tidak mencabut sesi yang sudah ada (PRD-001 Q30 butir 4); sesi itu tetap tidak dapat mengganti sandi atau memverifikasi MFA selama akun `locked` (PRD-001 Q34). Pembaruan sesi menolak pengguna yang tidak aktif (`ErrUserNotActive`). (`session/service.go`)
 - [ ] Penonaktifan akun mencabut seluruh sesinya (`OnUserDisabled`, alasan `user_disabled`): hook sudah ada, tetapi belum ada jalur penonaktifan akun di C1 yang memanggilnya. Menyusul bersama operasi pengguna di C2/C3.
 - [x] Access token hanya di memori klien. Refresh token hanya di cookie HttpOnly. Tidak ada `localStorage`, `sessionStorage`, `document.cookie`, atau IndexedDB untuk token (V3). (`packages/platform-web/src/auth/controller.ts`)
 
