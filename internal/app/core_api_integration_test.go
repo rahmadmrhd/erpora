@@ -24,9 +24,12 @@ const (
 )
 
 // newCoreEnv merakit lingkungan dan memasang modul required (core) seperti yang dilakukan migrate pada deployment.
-func newCoreEnv(t *testing.T) *svcEnv {
+func newCoreEnv(t *testing.T) *svcEnv { return newCoreEnvWith(t, false) }
+
+// newCoreEnvWith: lihat newSvcEnvWith untuk arti slogDefault.
+func newCoreEnvWith(t *testing.T, slogDefault bool) *svcEnv {
 	t.Helper()
-	e := newSvcEnv(t)
+	e := newSvcEnvWith(t, slogDefault)
 	res, err := e.a.Lifecycle.EnsureRequired(e.ctx, e.a.Tenant, "system:migrate")
 	if err != nil {
 		t.Fatalf("EnsureRequired: %v", err)

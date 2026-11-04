@@ -323,7 +323,7 @@ describe("logout dan keadaan", () => {
     expect(auth.getState()).toEqual({ status: "authenticated" });
   });
 
-  test("refresh: 401 = rejected (cookie ditolak, sesi berakhir); 403 = error (tidak berarti cookie tidak berlaku, sesi tidak berakhir)", async () => {
+  test("refresh: 401 = rejected (cookie ditolak, sesi berakhir); 403 = forbidden (outcome tersendiri; refresh() sendiri tidak mengakhiri sesi, pemanggil yang memutuskan)", async () => {
     const a = createAuthController({
       fetch: fakeServer({ [REFRESH]: () => apiError(401, "unauthenticated") }).fetch,
     });
@@ -335,9 +335,23 @@ describe("logout dan keadaan", () => {
       fetch: fakeServer({ [REFRESH]: () => apiError(403, "origin_not_allowed") }).fetch,
     });
     b.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
-    expect(await b.refresh()).toBe("error");
+    expect(await b.refresh()).toBe("forbidden");
     expect(b.getState()).toEqual({ status: "authenticated" });
     expect(b.getAccessToken()).toBe("t");
+  });
+
+  test("request biasa 401 token_expired + refresh 403: sesi lokal berakhir (kembali ke gerbang login), tidak tertahan memukul refresh berulang (Minor-F)", async () => {
+    const server = fakeServer({
+      [PROTECTED]: () => apiError(401, "token_expired"),
+      [REFRESH]: () => apiError(403, "origin_not_allowed"),
+    });
+    const auth = createAuthController({ fetch: server.fetch });
+    auth.acceptSession({ accessToken: "t", expiresIn: 600, mfaState: "none" });
+    const res = await auth.fetch(PROTECTED);
+    expect(res.status).toBe(401); // respons asli dikembalikan
+    expect(auth.getState()).toEqual({ status: "anonymous" });
+    expect(auth.getAccessToken()).toBeUndefined();
+    expect(server.count(REFRESH)).toBe(1);
   });
 
   test("boot dengan refresh 403 (Origin ditolak): tidak masuk aplikasi (anonymous, tanpa token)", async () => {

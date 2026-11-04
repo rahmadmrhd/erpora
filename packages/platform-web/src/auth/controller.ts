@@ -20,7 +20,12 @@ export type AuthState =
 /** Bentuk `fetch` tanpa anggota statis (`preconnect`) agar fungsi biasa dapat memenuhinya. */
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export type RefreshOutcome = "ok" | "rejected" | "error";
+/**
+ * ok = token baru; rejected = 401 (cookie refresh ditolak server, sesi lokal sudah diakhiri); forbidden = 403 (mis.
+ * Origin ditolak, SEBELUM cookie diperiksa: tidak membuktikan sesi server hilang, jadi refresh() tidak mengakhiri sesi
+ * lokal, tetapi pemanggil yang tak dapat melanjutkan akan mengakhirinya); error = jaringan, 429, 5xx, timeout.
+ */
+export type RefreshOutcome = "ok" | "rejected" | "forbidden" | "error";
 
 export interface AuthControllerOptions {
   /** Bawaan: `globalThis.fetch` pada saat dipanggil (agar uji dapat menggantinya). */
@@ -145,12 +150,13 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
         signal: abort.signal,
       });
       // Hanya 401 membuktikan server menolak cookie refresh. 403 (mis. Origin ditolak, ADR-0013 §1) terjadi SEBELUM cookie
-      // diperiksa: sesi server mungkin masih hidup, jadi diperlakukan sebagai "error" (sesi lokal tidak diakhiri; saat
-      // boot tetap tidak masuk aplikasi, dan logout tidak dianggap berhasil).
+      // diperiksa: sesi server mungkin masih hidup, jadi hasilnya tersendiri ("forbidden"), bukan "rejected": logout
+      // tidak menganggapnya keluar, sedangkan boot dan request biasa tidak dapat melanjutkan tanpa token baru.
       if (res.status === 401) {
         endSession();
         return "rejected";
       }
+      if (res.status === 403) return "forbidden";
       if (!res.ok) return "error";
       const body = (await res.json()) as { data?: unknown } | null;
       if (!isSessionPayload(body?.data)) return "error";
@@ -183,8 +189,12 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
     const code = await peekErrorCode(res);
     if (res.status === 401) {
       // 401 token_expired/unauthenticated: refresh single-flight lalu ulang SEKALI (gagal: respons asli).
-      if ((code === "token_expired" || code === "unauthenticated") && (await refresh()) === "ok") {
-        return baseFetch(input, withAuth(init, token));
+      if (code === "token_expired" || code === "unauthenticated") {
+        const outcome = await refresh();
+        if (outcome === "ok") return baseFetch(input, withAuth(init, token));
+        // 403: refresh tidak akan pernah berhasil dari sini (mis. Origin ditolak). Akhiri sesi lokal agar app kembali ke
+        // gerbang login alih-alih menahan 401 berulang yang memakan batas laju refresh.
+        if (outcome === "forbidden") endSession();
       }
     } else if (code === "mfa_required" && state.status === "authenticated") {
       // Keadaan sebenarnya HANYA dari refresh (server tahu none/enroll/verify; acceptSession memasangnya). Bila server
@@ -210,7 +220,8 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
     boot() {
       if (state.status !== "booting") return Promise.resolve();
       booting ??= refresh().then((outcome) => {
-        if (outcome === "error" && state.status === "booting") setState(ANONYMOUS);
+        if ((outcome === "error" || outcome === "forbidden") && state.status === "booting")
+          setState(ANONYMOUS);
       });
       return booting;
     },
@@ -230,7 +241,7 @@ export function createAuthController(options: AuthControllerOptions = {}): AuthC
           // berarti sesi server dan cookie refresh mungkin masih hidup.
           const outcome = await refresh();
           if (outcome === "rejected") return true;
-          if (outcome === "error") return false;
+          if (outcome === "error" || outcome === "forbidden") return false;
           res = await post(token); // refresh berhasil: ulangi sekali dengan token baru
           if (res !== null && res.status === 401 && (await peekErrorCode(res)) === "token_expired")
             return false;

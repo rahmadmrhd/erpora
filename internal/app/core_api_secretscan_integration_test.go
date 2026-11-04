@@ -4,7 +4,6 @@ package app
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -139,16 +138,13 @@ func TestSecretScanner_DetectsLeaksAndStaysQuiet(t *testing.T) {
 }
 
 func TestCoreAPI_NoSecretsInLogs_FullAuthFlow(t *testing.T) {
-	e := newCoreEnv(t)
+	// slog.Default() ke penampung yang SAMA dengan logger stack, dipasang SEBELUM assemble seperti production
+	// (cmd/erpora/serve.go): komponen yang menyimpan slog.Default() saat dikonstruksi ikut tertangkap.
+	// Tes ini tidak boleh memakai t.Parallel (default slog adalah state proses); tidak ada tes lain di paket ini yang
+	// memakai t.Parallel. Pekerja latar tes sebelumnya sudah berhenti (context dibatalkan di Cleanup) dan, kalaupun masih menulis,
+	// hanya menambah baris tanpa rahasia milik tes ini. Pemulihan default lewat t.Cleanup di newSvcEnvWith.
+	e := newCoreEnvWith(t, true)
 	probes := secretProbes{t: t}
-
-	// slog.Default() ke penampung yang SAMA dengan logger stack (handler identik). Tes ini tidak boleh memakai t.Parallel: default
-	// slog adalah state proses. Tidak ada tes lain di paket ini yang memakai t.Parallel; pekerja latar dari tes
-	// sebelumnya sudah berhenti (context dibatalkan di Cleanup) dan, kalaupun masih menulis, hanya menambah baris
-	// tanpa rahasia milik tes ini. Dipulihkan lewat Cleanup (berjalan sebelum assertNoSecretsInLogs milik newSvcEnv).
-	prev := slog.Default()
-	slog.SetDefault(newBufLogger(e.logs))
-	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	// ---- Pengguna biasa: login gagal, login sukses, refresh lewat cookie, ubah sandi, logout ----
 	const (

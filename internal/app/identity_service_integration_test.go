@@ -93,8 +93,20 @@ type svcEnv struct {
 	logs *syncBuffer
 }
 
-func newSvcEnv(t *testing.T) *svcEnv {
+func newSvcEnv(t *testing.T) *svcEnv { return newSvcEnvWith(t, false) }
+
+// newSvcEnvWith: slogDefault true memasang slog.SetDefault(logger penampung) SEBELUM perakitan, seperti production
+// (cmd/erpora/serve.go memasang default sebelum assemble), sehingga komponen yang menyimpan slog.Default() saat
+// dikonstruksi (fallback logger nil) memegang logger penampung. Dipulihkan lewat t.Cleanup. Hanya untuk tes yang
+// tidak boleh memakai t.Parallel (slog default adalah state proses).
+func newSvcEnvWith(t *testing.T, slogDefault bool) *svcEnv {
 	t.Helper()
+	logs := &syncBuffer{}
+	if slogDefault {
+		prev := slog.Default()
+		slog.SetDefault(newBufLogger(logs))
+		t.Cleanup(func() { slog.SetDefault(prev) })
+	}
 	dsn := pgtest.Start(t)
 	db := openTestDB(t, dsn)
 	cfg := config.Config{
@@ -111,7 +123,6 @@ func newSvcEnv(t *testing.T) *svcEnv {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	logs := &syncBuffer{}
 	mailer := &captureMail{}
 	a, err := assemble(ctx, cfg, newBufLogger(logs), db, testProviders(), reg, api, withMailSender(mailer))
 	if err != nil {
