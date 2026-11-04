@@ -105,7 +105,8 @@ func TestCoreCLI_ReleaseBinaryCreateAdminThenLoginViaAPI(t *testing.T) {
 	}
 
 	// Sandi tidak pernah muncul di keluaran CLI maupun log serve (stdout dan stderr).
-	p.cmd.Process.Kill()
+	_ = p.cmd.Process.Kill()
+	_ = p.waitExit(t, 10*time.Second) // cmd.Wait selesai = goroutine penyalin stdout/stderr selesai; baru aman dibaca (-race)
 	for name, s := range map[string]string{"cli": allOut, "serve stdout": p.stdout.String(), "serve stderr": p.stderr.String()} {
 		if strings.Contains(s, cliPassword) {
 			t.Errorf("sandi bocor di %s", name)
