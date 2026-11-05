@@ -15,4 +15,5 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
 )
